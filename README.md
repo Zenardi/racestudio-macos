@@ -12,7 +12,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > with the **decode-strategy decision**
 > ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
 > validated against the `libxrk` oracle, after a spike rejected wrapping the
-> proprietary-linked `xdrk` crate. No decode or analysis logic ships yet.
+> proprietary-linked `xdrk` crate. The first decoder now ships —
+> **`open_container`** parses the `.xrk` container header into session
+> **metadata** (driver, vehicle, venue, session date/time) plus the structural
+> counts (channels, GPS presence, lap markers) the later decoders consume,
+> reproducing the libxrk golden byte-for-value. Channel/GPS/lap sample decoding
+> is next.
 
 ## Architecture
 
@@ -58,7 +63,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
-  racestudio-decode/           # stub crate + placeholder test
+  racestudio-decode/           # .xrk decoder — open_container + header metadata
   racestudio-analysis/         # stub crate + placeholder test
   racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/

@@ -18,9 +18,11 @@ Usage: gen_goldens.py OUT_DIR FILE.xrk [FILE2.xrk ...]
 from __future__ import annotations
 
 import contextlib
+import datetime
 import json
 import math
 import os
+import struct
 import sys
 
 import numpy as np
@@ -104,6 +106,153 @@ def _laps_golden(log, fname):
     return {"file": fname, "lap_count": len(laps), "laps": laps}
 
 
+# --------------------------------------------------------------------------- #
+# Container metadata golden (issue 1.2).
+#
+# Metadata *strings* come from libxrk's public `log.metadata` (the authoritative
+# oracle); structural *counts* come from a byte-level walk of the message framing
+# that mirrors the Rust `open_container` decoder exactly (distinct CHS channel
+# definitions, GPS-message presence, raw LAP-marker count). Keeping both in one
+# golden lets 1.2 assert the decoder reproduces libxrk's metadata AND the
+# structural facts 1.3-1.5 consume.
+# --------------------------------------------------------------------------- #
+
+_META_TOKENS = ("RCR", "VEH", "TMD", "TMT", "VTY", "CMP")
+
+
+def _tokstr(token):
+    out = ""
+    while token:
+        out += chr(token & 0xFF)
+        token >>= 8
+    return out.rstrip(" ")
+
+
+def _epoch_utc(date_str, time_str):
+    """`MM/DD/YYYY` + `HH:MM:SS` (logger wall-clock, treated as UTC) -> epoch s."""
+    if not date_str or not time_str:
+        return 0
+    try:
+        naive = datetime.datetime.strptime(f"{date_str} {time_str}", "%m/%d/%Y %H:%M:%S")
+    except ValueError:
+        return 0
+    return int(naive.replace(tzinfo=datetime.timezone.utc).timestamp())
+
+
+def _container_walk(data):
+    """Byte-level structural walk of the XRK message framing (mirrors Rust).
+
+    Returns distinct CHS channel count, GPS presence, and raw LAP-marker count.
+    Skips data messages ((S/(M/(G/(c) using per-channel data sizes so the walk
+    reaches EOF and sees the late (last-wins) header re-transmissions.
+    """
+    channel_sizes = {}
+    group_sizes = {}
+    chs_indices = set()
+    counts = {"gps": 0, "lap": 0}
+
+    def u16(off):
+        return struct.unpack_from("<H", data, off)[0]
+
+    def register(buf, top):
+        off, n = 0, len(buf)
+        while off + 2 <= n:
+            op = buf[off : off + 2]
+            if op == b"\x3c\x68":  # '<h' header
+                if off + 12 > n:
+                    break
+                token = struct.unpack_from("<I", buf, off + 2)[0]
+                plen = struct.unpack_from("<i", buf, off + 6)[0]
+                start, end = off + 12, off + 12 + plen
+                if plen < 0 or end + 8 > n:
+                    break
+                payload = buf[start:end]
+                tok = _tokstr(token)
+                if tok in ("CNF", "ENF"):
+                    register(payload, top=False)
+                elif tok == "CHS" and len(payload) >= 73:
+                    idx = struct.unpack_from("<H", payload, 0)[0]
+                    channel_sizes[idx] = payload[72]
+                    chs_indices.add(idx)
+                elif tok == "GRP" and len(payload) >= 4:
+                    gidx = struct.unpack_from("<H", payload, 0)[0]
+                    cnt = struct.unpack_from("<H", payload, 2)[0]
+                    total = 0
+                    for i in range(cnt):
+                        if 4 + 2 * i + 2 <= len(payload):
+                            total += channel_sizes.get(
+                                struct.unpack_from("<H", payload, 4 + 2 * i)[0], 0
+                            )
+                    group_sizes[gidx] = total
+                elif tok in ("GPS", "GPS1"):
+                    counts["gps"] += 1
+                elif tok == "LAP":
+                    counts["lap"] += 1
+                off = end + 8
+            elif top and buf[off] == 0x28:  # '(' data message
+                nxt = _skip_data(buf, off, channel_sizes, group_sizes)
+                if nxt is None or nxt <= off:
+                    break
+                off = nxt
+            else:
+                break
+
+    register(data, top=True)
+    return {
+        "channels": len(chs_indices),
+        "has_gps": counts["gps"] > 0,
+        "lap_markers": counts["lap"],
+    }
+
+
+def _skip_data(buf, off, channel_sizes, group_sizes):
+    """Return the offset just past the data message at `off`, or None."""
+    op = buf[off + 1]
+    if op == 0x53:  # (S
+        size = channel_sizes.get(struct.unpack_from("<H", buf, off + 6)[0])
+        return None if size is None else off + 9 + size
+    if op == 0x4D:  # (M
+        size = channel_sizes.get(struct.unpack_from("<H", buf, off + 6)[0])
+        if size is None:
+            return None
+        count = struct.unpack_from("<H", buf, off + 8)[0]
+        return off + 11 + size * count
+    if op == 0x47:  # (G
+        size = group_sizes.get(struct.unpack_from("<H", buf, off + 6)[0])
+        return None if size is None else off + 9 + size
+    if op == 0x63:  # (c expansion channel (unk1 at byte 2, unk4 at byte 6)
+        unk1, unk4 = buf[off + 2], buf[off + 6]
+        if unk1 == 0x00 and unk4 == 0x06:
+            size = channel_sizes.get(struct.unpack_from("<H", buf, off + 3)[0] >> 3)
+            return None if size is None else off + 12 + size
+        if unk1 == 0x00 and unk4 == 0x08:
+            return off + 16
+        if unk1 == 0x01 and unk4 == 0x02:
+            return off + 10
+    return None
+
+
+def _metadata_golden(log, data, fname):
+    md = log.metadata
+    walk = _container_walk(data)
+    log_date = md.get("Log Date", "")
+    log_time = md.get("Log Time", "")
+    return {
+        "file": fname,
+        "driver": md.get("Driver", ""),
+        "vehicle": md.get("Vehicle", ""),
+        "track": md.get("Venue", ""),
+        "session": md.get("Session", ""),
+        "series": md.get("Series", ""),
+        "log_date": log_date,
+        "log_time": log_time,
+        "datetime_utc": _epoch_utc(log_date, log_time),
+        "channel_count": walk["channels"],
+        "has_gps": walk["has_gps"],
+        "lap_marker_count": walk["lap_markers"],
+    }
+
+
 def _write_json(path, obj):
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(obj, handle, indent=2, sort_keys=True, allow_nan=False)
@@ -122,10 +271,13 @@ def main(argv):
         # libxrk prints channel chatter to stdout; keep our output clean.
         with contextlib.redirect_stdout(sys.stderr):
             log = aim_xrk(xrk)
+        with open(xrk, "rb") as handle:
+            raw = handle.read()
         _write_json(os.path.join(out_dir, f"{stem}.channels.json"), _channels_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.gps.json"), _gps_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(log, fname))
-        print(f"  golden  {stem}.{{channels,gps,laps}}.json")
+        _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))
+        print(f"  golden  {stem}.{{channels,gps,laps,metadata}}.json")
     return 0
 
 
