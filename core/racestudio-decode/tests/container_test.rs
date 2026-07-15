@@ -14,18 +14,22 @@ use std::path::PathBuf;
 use racestudio_decode::{open_container, DecodeError};
 use support::fixtures::{fixture_path, load_golden, MetadataGolden};
 
-/// Resolve a committed `.xrk` sample, or `None` (with a skip note) when the
-/// git-ignored sample has not been fetched.
+/// Resolve a real `.xrk` sample, or `None` (with a skip note) when the
+/// git-ignored sample has not been fetched — or when what is present is not an
+/// actual `.xrk` (a placeholder, LFS pointer, or a partial download). The
+/// decoder's own logic is covered by the `src/container.rs` unit tests; these
+/// oracle tests only run when a genuine sample is available.
 fn xrk_or_skip(name: &str) -> Option<PathBuf> {
     let path = fixture_path(name);
-    if path.exists() {
-        Some(path)
-    } else {
-        eprintln!(
-            "skipping: {} not present — run `make fixtures` to fetch it",
-            path.display()
-        );
-        None
+    match std::fs::read(&path) {
+        Ok(bytes) if bytes.starts_with(b"<h") => Some(path),
+        _ => {
+            eprintln!(
+                "skipping: {} is not a real .xrk sample — run `make fixtures` to fetch it",
+                path.display()
+            );
+            None
+        }
     }
 }
 
