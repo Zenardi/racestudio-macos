@@ -10,6 +10,13 @@ app/.build/
 # checked in; the xcframework is rebuilt on demand by the coverage gate.
 app/*.xcframework/
 
+# Test fixtures: large .xrk samples + reference CSV stay local (fetched by
+# scripts/fetch_fixtures.sh); the small deterministic goldens in
+# fixtures/golden/ ARE committed as the decode oracle.
+fixtures/*.xrk
+fixtures/*.csv
+.venv-fixtures/
+
 # Caches & build artifacts
 .cache*
 dist/

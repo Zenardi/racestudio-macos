@@ -1,0 +1,25 @@
+{
+  "altitude": {
+    "count": 4749,
+    "first": 43.06609662,
+    "last": 45.79210192,
+    "max": 51.11884036,
+    "min": 41.76292678
+  },
+  "file": "aim_official_test.xrk",
+  "has_gps": true,
+  "latitude": {
+    "count": 4749,
+    "first": 45.0453297,
+    "last": 45.04506647,
+    "max": 45.04685556,
+    "min": 45.04473694
+  },
+  "longitude": {
+    "count": 4749,
+    "first": 12.14901811,
+    "last": 12.14897173,
+    "max": 12.15195085,
+    "min": 12.14897173
+  }
+}

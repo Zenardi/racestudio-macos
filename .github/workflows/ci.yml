@@ -38,6 +38,9 @@ jobs:
       - name: Run Rust coverage-gate self-tests
         run: bash tests/gate_test.sh
 
+      - name: Run fetch-fixtures self-tests
+        run: bash tests/fixtures_test.sh
+
       - name: Run Rust quality + coverage gate
         run: bash scripts/coverage.sh --rust-only
         env:
