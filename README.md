@@ -93,9 +93,10 @@ Makefile                       # `make coverage`, `make xcframework`, `make fixt
 ## Development
 
 Requires the Rust toolchain (`rustup` + `cargo-llvm-cov` + the
-`llvm-tools-preview` component), the Swift toolchain, and `swiftlint`. A full
-Xcode install is **not** required — the tooling also works with just Apple's
-Command Line Tools.
+`llvm-tools-preview` component), the Swift toolchain, `swiftlint`, and
+[`trivy`](https://trivy.dev) (the security scanner). A full Xcode install is
+**not** required — the tooling also works with just Apple's Command Line Tools.
+`make setup` installs the toolchains.
 
 ```sh
 # Rust core
@@ -159,6 +160,7 @@ One command per intent — `make ci` is the exact sequence CI runs, so a green
 | `make test` | Rust + Swift test suites (`test-rust`, `test-swift`) |
 | `make coverage` | the ≥95% line-coverage gate (Rust + Swift) |
 | `make lint` | `clippy -D warnings` + `cargo fmt --check` + `swiftlint` |
+| `make security` | Trivy scan (vulns / secrets / IaC misconfig); fails on HIGH/CRITICAL |
 | `make e2e` | build the pipeline + validate the decode oracle |
 | `make ci` | `lint` → `coverage` → `e2e` (what CI runs) |
 | `make fixtures` | fetch `.xrk` samples + regenerate goldens |
@@ -173,6 +175,11 @@ The shared bar is [`docs/DEFINITION_OF_DONE.md`](docs/DEFINITION_OF_DONE.md) —
 single source of truth that [the PR template](.github/PULL_REQUEST_TEMPLATE.md)
 embeds and every issue pastes. New issues use
 [`.github/ISSUE_TEMPLATE/feature.md`](.github/ISSUE_TEMPLATE/feature.md).
+
+CI also runs a **[Trivy](https://trivy.dev) security scan** (`make security`) —
+known-vulnerable dependencies, committed secrets, and IaC misconfigurations —
+which fails the build on HIGH/CRITICAL findings. Run it (with the rest of the
+gates) before pushing.
 
 `main` is protected: changes land via PR, and the `make ci (lint, coverage, e2e)`
 check plus 1 review are required before merge (linear history, no direct pushes).
