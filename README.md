@@ -3,12 +3,16 @@
 A native macOS re-implementation of AiM **RaceStudio 3** telemetry analysis —
 successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter).
 
-> **Status:** milestone **M0 — Foundations, Tooling & TDD Harness**.
-> Done so far: the scaffold (0.1), the Rust + Swift **coverage gates** (0.2, 0.3),
-> the **UniFFI xcframework pipeline** (0.4), and the **golden-fixtures harness**
-> (0.5) — libxrk-derived oracle JSON + Rust/Swift loaders for decode tests.
-> Green, warning-free, ≥95% line coverage on the logic core, enforced in CI. No
-> decode or analysis logic ships yet.
+> **Status:** **M0 — Foundations, Tooling & TDD Harness** complete (0.1–0.7);
+> **M1 — Rust Core: XRK Decode** has begun. M0 shipped the scaffold, the Rust +
+> Swift **coverage gates**, the **UniFFI xcframework pipeline**, the
+> **golden-fixtures harness** (libxrk-derived oracle JSON + Rust/Swift loaders),
+> the shared DoD/CI/Makefile, and enforceable branch protection — green,
+> warning-free, ≥95% line coverage on the logic core, enforced in CI. M1 opens
+> with the **decode-strategy decision**
+> ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
+> validated against the `libxrk` oracle, after a spike rejected wrapping the
+> proprietary-linked `xdrk` crate. No decode or analysis logic ships yet.
 
 ## Architecture
 
@@ -34,6 +38,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 
 - **`racestudio-decode`** — clean-room Rust decoder for AiM `.xrk` files,
   validated against XRKConverter's `libxrk` output as the golden oracle (M1).
+  The strategy — a clean-room port over wrapping the proprietary-linked `xdrk`
+  crate — is recorded in
+  [`docs/adr/0002-xrk-decode-strategy.md`](docs/adr/0002-xrk-decode-strategy.md).
 - **`racestudio-analysis`** — telemetry analysis engine: channels, math,
   resampling (M3).
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
@@ -70,6 +77,7 @@ scripts/
   build_xcframework.sh         # universal xcframework + Swift bindings
   fetch_fixtures.sh            # fetch .xrk samples + regenerate goldens
   gen_goldens.py               # libxrk -> deterministic golden JSON
+  spike_xdrk_linkage.sh        # reproducible xdrk-crate linkage probe (ADR 0002)
 tests/
   gate_test.sh                 # Rust gate self-tests
   swift_gate_test.sh           # Swift gate self-tests
@@ -77,7 +85,8 @@ tests/
   fixtures_test.sh             # fetch-fixtures self-tests
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
-docs/adr/                      # architecture decision records
+docs/adr/                      # architecture decision records (0001 FFI, 0002 decode)
+docs/spike/                    # spike evidence (xdrk linkage finding)
 Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
 ```
 
