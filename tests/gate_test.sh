@@ -50,7 +50,7 @@ EOF
 run_gate() {
   local ws="$1" thr="$2"
   shift 2
-  GATE_OUT="$(COVERAGE_THRESHOLD="$thr" RUST_WORKSPACE="$ws" bash "$GATE" "$@" 2>&1)"
+  GATE_OUT="$(COVERAGE_THRESHOLD="$thr" RUST_WORKSPACE="$ws" bash "$GATE" --rust-only "$@" 2>&1)"
   GATE_EXIT=$?
 }
 
