@@ -1,0 +1,4 @@
+module racestudio_ffiFFI {
+    header "racestudio_ffiFFI.h"
+    export *
+}

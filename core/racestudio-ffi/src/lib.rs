@@ -1,14 +1,20 @@
 //! UniFFI boundary exposing the RaceStudio Rust core to the SwiftUI frontend.
 //!
-//! Milestone M0 (issue 0.1) ships only a compiling stub; the `uniffi`
-//! dependencies, scaffolding, and `build.rs` arrive in issue 0.4.
+//! Milestone M0 (issue 0.4) proves the Rust→Swift pipeline end-to-end with the
+//! smallest possible surface: a single exported `core_version()`. Real
+//! decode/analysis exports arrive in M1+.
 
-/// Compiling stub proving the crate builds, links, and is testable.
+uniffi::setup_scaffolding!();
+
+/// The RaceStudio Rust core version, exported across the UniFFI boundary.
 ///
-/// Returns an inert sentinel (`0`). The UniFFI surface arrives in issue 0.4.
+/// Returns the `racestudio-ffi` crate version (`CARGO_PKG_VERSION`). Swift calls
+/// this as `coreVersion()`; a round-trip test asserts the string crosses the
+/// boundary unchanged, proving the FFI pipeline works.
+#[uniffi::export]
 #[must_use]
-pub fn placeholder() -> u32 {
-    0
+pub fn core_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 #[cfg(test)]
@@ -16,7 +22,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ffi_crate_placeholder() {
-        assert_eq!(placeholder(), 0);
+    fn test_core_version_returns_crate_version() {
+        assert_eq!(core_version(), env!("CARGO_PKG_VERSION"));
     }
 }

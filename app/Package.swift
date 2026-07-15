@@ -25,6 +25,39 @@ if needsTestingPaths {
     ]))
 }
 
+// The RaceStudioFFI.xcframework is a build artifact produced by
+// scripts/build_xcframework.sh (git-ignored — the static library is ~34 MB).
+// Wire the UniFFI targets in only when it is present, so a fresh checkout still
+// builds (with the FFI surface gated behind `#if canImport(RaceStudioFFIBindings)`)
+// and the coverage gate — which builds the xcframework first — always exercises it.
+let ffiXcframework = "RaceStudioFFI.xcframework"
+let ffiEnabled = FileManager.default.fileExists(atPath: ffiXcframework)
+
+var coreDependencies: [Target.Dependency] = []
+var ffiTargets: [Target] = []
+var testExcludes: [String] = []
+if ffiEnabled {
+    coreDependencies.append("RaceStudioFFIBindings")
+    ffiTargets = [
+        .binaryTarget(name: "RaceStudioFFI", path: ffiXcframework),
+        // The uniffi-generated high-level Swift bindings. Kept out of the
+        // RaceStudioCore coverage scope (Sources/RaceStudioCore) on purpose —
+        // generated glue is not hand-written logic.
+        .target(
+            name: "RaceStudioFFIBindings",
+            dependencies: ["RaceStudioFFI"],
+            path: "Generated",
+            exclude: [
+                "racestudio_ffiFFI.h",
+                "racestudio_ffiFFI.modulemap",
+                "module.modulemap"
+            ]
+        )
+    ]
+} else {
+    testExcludes.append("FFIRoundTripTests.swift")
+}
+
 let package = Package(
     name: "RaceStudio",
     platforms: [
@@ -37,7 +70,8 @@ let package = Package(
     targets: [
         // The 95%-coverage logic library. All testable behaviour lives here.
         .target(
-            name: "RaceStudioCore"
+            name: "RaceStudioCore",
+            dependencies: coreDependencies
         ),
         // Thin @main SwiftUI shell. Holds no logic and is excluded from the
         // coverage metric by target (wired in issue 0.3).
@@ -48,8 +82,9 @@ let package = Package(
         .testTarget(
             name: "RaceStudioCoreTests",
             dependencies: ["RaceStudioCore"],
+            exclude: testExcludes,
             swiftSettings: testSwiftSettings,
             linkerSettings: testLinkerSettings
         )
-    ]
+    ] + ffiTargets
 )

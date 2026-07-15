@@ -52,7 +52,17 @@ swift_locate_prof() {
   find "$SWIFT_APP/.build" -name 'default.profdata' 2>/dev/null | head -1 || true
 }
 
+# The UniFFI xcframework is a git-ignored build artifact; build it on demand so
+# the Swift package can link the RaceStudioFFI binary target (issue 0.4).
+ensure_xcframework() {
+  if [[ ! -d "$SWIFT_APP/RaceStudioFFI.xcframework" ]]; then
+    echo "==> [swift 0/2] building RaceStudioFFI.xcframework (missing)"
+    bash "$SCRIPT_DIR/build_xcframework.sh"
+  fi
+}
+
 swift_build_coverage() {
+  ensure_xcframework
   echo "==> [swift 1/2] swift test --enable-code-coverage (via scripts/swift_test.sh)"
   bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage
 }
