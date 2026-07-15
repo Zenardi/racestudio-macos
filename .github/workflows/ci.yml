@@ -31,6 +31,9 @@ jobs:
       - name: Install SwiftLint
         run: brew install swiftlint
 
+      - name: Install Trivy
+        run: brew install trivy
+
       - name: Cache cargo & SwiftPM build
         uses: actions/cache@v4
         with:
@@ -50,6 +53,13 @@ jobs:
           bash tests/fixtures_test.sh
           bash tests/make_test.sh
           bash tests/branch_protection_test.sh
+          bash tests/security_test.sh
+
+      # Scan the source tree for known-vulnerable deps, secrets, and IaC
+      # misconfigurations before the long build. Same command as `make security`
+      # run locally, so a green local scan predicts a green CI scan.
+      - name: Security scan (Trivy)
+        run: make security
 
       - name: make ci
         run: make ci

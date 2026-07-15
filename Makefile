@@ -10,13 +10,14 @@ export COVERAGE_THRESHOLD
 # active developer dir; omitted otherwise (e.g. the CI runner, which has Xcode).
 SWIFTLINT_ENV := $(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/usr/lib,)
 
-.PHONY: setup test test-rust test-swift coverage e2e lint fixtures xcframework ci clean
+.PHONY: setup test test-rust test-swift coverage e2e lint security fixtures xcframework ci clean
 
 setup: ## Install toolchains + fetch test fixtures
 	rustup target add aarch64-apple-darwin x86_64-apple-darwin
 	rustup component add llvm-tools-preview clippy rustfmt
 	command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
 	command -v swiftlint >/dev/null 2>&1 || brew install swiftlint
+	command -v trivy >/dev/null 2>&1 || brew install trivy
 	bash scripts/fetch_fixtures.sh
 
 test: test-rust test-swift ## Run the Rust + Swift test suites
@@ -38,6 +39,12 @@ lint: ## clippy -D warnings + cargo fmt --check + swiftlint
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo fmt --all --check
 	cd app && $(SWIFTLINT_ENV) swiftlint lint --strict
+
+security: ## Scan the tree with Trivy (vuln/secret/misconfig); fail on HIGH/CRITICAL
+	trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL \
+		--ignore-unfixed --exit-code 1 --no-progress \
+		--skip-dirs target --skip-dirs app/.build --skip-dirs .venv-fixtures --skip-dirs dist \
+		.
 
 fixtures: ## Fetch .xrk samples + regenerate libxrk golden JSON oracle
 	bash scripts/fetch_fixtures.sh
