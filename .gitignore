@@ -4,7 +4,11 @@ core/**/target/
 
 # Swift Package Manager build output
 app/.build/
-app/Generated/
+
+# UniFFI xcframework — a build artifact from scripts/build_xcframework.sh
+# (~34 MB static lib). The generated Swift bindings in app/Generated/ ARE
+# checked in; the xcframework is rebuilt on demand by the coverage gate.
+app/*.xcframework/
 
 # Caches & build artifacts
 .cache*

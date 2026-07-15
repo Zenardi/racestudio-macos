@@ -4,9 +4,10 @@ A native macOS re-implementation of AiM **RaceStudio 3** telemetry analysis —
 successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter).
 
 > **Status:** milestone **M0 — Foundations, Tooling & TDD Harness**.
-> Done so far: the scaffold (0.1) and the Rust + Swift **coverage gates** (0.2,
-> 0.3) — a green, warning-free build with a ≥95% line-coverage floor enforced in
-> CI on the logic core. No decode or analysis logic ships yet.
+> Done so far: the scaffold (0.1), the Rust + Swift **coverage gates** (0.2, 0.3),
+> and the **UniFFI xcframework pipeline** (0.4) — a Rust→Swift boundary that
+> round-trips `coreVersion()`. Green, warning-free, ≥95% line coverage on the
+> logic core, enforced in CI. No decode or analysis logic ships yet.
 
 ## Architecture
 
@@ -35,7 +36,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 - **`racestudio-analysis`** — telemetry analysis engine: channels, math,
   resampling (M3).
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
-  Swift, packaged as a universal `.xcframework` (0.4).
+  Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
+  As of 0.4 it exports `core_version()`, round-tripped by a Swift test. See
+  [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
@@ -49,22 +52,27 @@ rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # stub crate + placeholder test
   racestudio-analysis/         # stub crate + placeholder test
-  racestudio-ffi/              # stub crate + placeholder test
+  racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/
-  Package.swift                # three-target split
-  Sources/RaceStudioCore/      # logic library
+  Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
+  Sources/RaceStudioCore/      # logic library (wraps the FFI bindings)
   Sources/RaceStudio/          # @main SwiftUI shell
-  Tests/RaceStudioCoreTests/   # swift-testing smoke tests
+  Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip tests
+  Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
+  RaceStudioFFI.xcframework/   # built artifact (git-ignored, ~34 MB)
 scripts/
   coverage.sh                  # Rust + Swift quality + coverage gate
   swift_test.sh                # `swift test` wrapper (CLT framework paths)
+  build_xcframework.sh         # universal xcframework + Swift bindings
 tests/
   gate_test.sh                 # Rust gate self-tests
   swift_gate_test.sh           # Swift gate self-tests
+  ffi_test.sh                  # FFI pipeline tests
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
-Makefile                       # `make coverage` runs the gate
+docs/adr/                      # architecture decision records
+Makefile                       # `make coverage`, `make xcframework`
 ```
 
 ## Development
@@ -81,11 +89,20 @@ cargo test  --workspace          # runs the placeholder unit tests
 cargo clippy -- -D warnings      # lint gate
 cargo fmt --check                # format gate
 
+# Rust→Swift FFI boundary
+make xcframework                 # build RaceStudioFFI.xcframework + Swift bindings
+
 # Swift app
 cd app
 swift build                      # compiles RaceStudioCore + the @main shell
-bash ../scripts/swift_test.sh    # runs the RaceStudioCore smoke tests
+bash ../scripts/swift_test.sh    # runs the smoke + FFI round-trip tests
 ```
+
+The Swift package links the `RaceStudioFFI` binary target, so `swift build`/
+`swift test` need `RaceStudioFFI.xcframework` present. It is a git-ignored
+artifact; the coverage gate builds it on demand, or run `make xcframework`. A
+fresh checkout without it still builds — the FFI surface is gated behind
+`#if canImport(RaceStudioFFIBindings)`.
 
 ### Coverage gate
 

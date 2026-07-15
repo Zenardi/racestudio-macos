@@ -8,5 +8,22 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lib]
+# staticlib: linked into the Swift xcframework; cdylib: read by uniffi-bindgen
+# for metadata; lib: the Rust rlib used by unit tests.
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[features]
+# Pulls in the bundled uniffi-bindgen CLI. Kept off by default so the shipped
+# static library does not carry the bindgen dependencies (clap, askama, …).
+bindgen = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+required-features = ["bindgen"]
+
+[dependencies]
+uniffi = { version = "0.28" }
+
 [lints.clippy]
 all = "warn"

@@ -49,15 +49,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Rust is needed to build the RaceStudioFFI.xcframework the Swift package
+      # links (issue 0.4). x86_64 is cross-compiled for the universal slice.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
       - name: Install SwiftLint
         run: brew install swiftlint
 
-      - name: Cache SwiftPM build
+      - name: Cache cargo & SwiftPM build
         uses: actions/cache@v4
         with:
-          path: app/.build
-          key: ${{ runner.os }}-spm-${{ hashFiles('app/Package.swift') }}
-          restore-keys: ${{ runner.os }}-spm-
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            app/.build
+          key: ${{ runner.os }}-swift-${{ hashFiles('app/Package.swift', '**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-swift-
+
+      - name: Build RaceStudioFFI.xcframework
+        run: bash scripts/build_xcframework.sh
+
+      - name: Run FFI pipeline tests
+        run: bash tests/ffi_test.sh
 
       - name: Run Swift coverage-gate self-tests
         run: bash tests/swift_gate_test.sh

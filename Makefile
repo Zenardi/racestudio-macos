@@ -3,10 +3,13 @@
 # `coverage` is wired (Rust gate 0.2 + Swift gate 0.3). The remaining targets
 # are placeholders fleshed out in issue 0.6 (DoD wiring).
 
-.PHONY: setup test coverage e2e lint ci
+.PHONY: setup test coverage e2e lint ci xcframework
 
 setup:   ## Install toolchains & dev dependencies (wired in 0.6)
 	@echo "setup: placeholder — wired in issue 0.6"
+
+xcframework: ## Build the universal RaceStudioFFI.xcframework + Swift bindings
+	bash scripts/build_xcframework.sh
 
 test:    ## Run Rust + Swift test suites (wired in 0.6)
 	@echo "test: placeholder — wired in issue 0.6"
