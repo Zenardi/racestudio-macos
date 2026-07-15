@@ -139,11 +139,31 @@ search paths are supplied. **`scripts/swift_test.sh`** injects those paths
 developer dir, so `swift test` builds *and runs* on both CLT-only and full-Xcode
 hosts. On full Xcode it is a transparent pass-through.
 
-## Testing philosophy
+## Make targets
+
+One command per intent — `make ci` is the exact sequence CI runs, so a green
+`make ci` locally predicts a green pipeline.
+
+| Target | Does |
+| --- | --- |
+| `make setup` | install toolchains + fetch fixtures |
+| `make test` | Rust + Swift test suites (`test-rust`, `test-swift`) |
+| `make coverage` | the ≥95% line-coverage gate (Rust + Swift) |
+| `make lint` | `clippy -D warnings` + `cargo fmt --check` + `swiftlint` |
+| `make e2e` | build the pipeline + validate the decode oracle |
+| `make ci` | `lint` → `coverage` → `e2e` (what CI runs) |
+| `make fixtures` | fetch `.xrk` samples + regenerate goldens |
+| `make xcframework` | build the universal `RaceStudioFFI.xcframework` |
+| `make clean` | remove build artifacts |
+
+## Contributing
 
 Test-first (Red → Green → Refactor) with a **≥95% line-coverage floor** on the
-logic core, enforced by an automatic gate in CI (`.github/workflows/ci.yml`,
-`macos-15`). See [`docs/DEFINITION_OF_DONE.md`](docs/DEFINITION_OF_DONE.md).
+logic core, enforced by `make ci` in CI (`.github/workflows/ci.yml`, `macos-15`).
+The shared bar is [`docs/DEFINITION_OF_DONE.md`](docs/DEFINITION_OF_DONE.md) — the
+single source of truth that [the PR template](.github/PULL_REQUEST_TEMPLATE.md)
+embeds and every issue pastes. New issues use
+[`.github/ISSUE_TEMPLATE/feature.md`](.github/ISSUE_TEMPLATE/feature.md).
 
 ## License
 

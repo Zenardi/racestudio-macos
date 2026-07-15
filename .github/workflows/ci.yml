@@ -11,8 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  rust:
-    name: Rust gate (fmt · clippy · test · coverage ≥95%)
+  # A green `make ci` locally predicts a green pipeline: CI runs the exact same
+  # sequence (lint -> coverage -> e2e), preceded by the tooling self-tests.
+  ci:
+    name: make ci (lint · coverage · e2e)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -21,43 +23,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview, clippy, rustfmt
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Cache cargo registry & build
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Run Rust coverage-gate self-tests
-        run: bash tests/gate_test.sh
-
-      - name: Run fetch-fixtures self-tests
-        run: bash tests/fixtures_test.sh
-
-      - name: Run Rust quality + coverage gate
-        run: bash scripts/coverage.sh --rust-only
-        env:
-          COVERAGE_THRESHOLD: "95"
-
-  swift:
-    name: Swift gate (swiftlint · swift test · coverage ≥95% on RaceStudioCore)
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      # Rust is needed to build the RaceStudioFFI.xcframework the Swift package
-      # links (issue 0.4). x86_64 is cross-compiled for the universal slice.
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -70,19 +39,18 @@ jobs:
             ~/.cargo/git
             target
             app/.build
-          key: ${{ runner.os }}-swift-${{ hashFiles('app/Package.swift', '**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-swift-
+          key: ${{ runner.os }}-ci-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-ci-
 
-      - name: Build RaceStudioFFI.xcframework
-        run: bash scripts/build_xcframework.sh
+      - name: Tooling self-tests
+        run: |
+          bash tests/gate_test.sh
+          bash tests/swift_gate_test.sh
+          bash tests/ffi_test.sh
+          bash tests/fixtures_test.sh
+          bash tests/make_test.sh
 
-      - name: Run FFI pipeline tests
-        run: bash tests/ffi_test.sh
-
-      - name: Run Swift coverage-gate self-tests
-        run: bash tests/swift_gate_test.sh
-
-      - name: Run Swift quality + coverage gate
-        run: bash scripts/coverage.sh --swift-only
+      - name: make ci
+        run: make ci
         env:
           COVERAGE_THRESHOLD: "95"
