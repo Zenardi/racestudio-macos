@@ -1,30 +1,51 @@
-# RaceStudio-macOS — developer task runner.
+# RaceStudio-macOS — developer task runner. One command per intent.
 #
-# `coverage` is wired (Rust gate 0.2 + Swift gate 0.3). The remaining targets
-# are placeholders fleshed out in issue 0.6 (DoD wiring).
+# `make ci` is the exact sequence CI runs, so a green `make ci` locally predicts
+# a green pipeline. See docs/DEFINITION_OF_DONE.md for the shared bar.
 
-.PHONY: setup test coverage e2e lint ci xcframework fixtures
+COVERAGE_THRESHOLD ?= 95
+export COVERAGE_THRESHOLD
 
-setup:   ## Install toolchains & dev dependencies (wired in 0.6)
-	@echo "setup: placeholder — wired in issue 0.6"
+# SwiftLint needs the Command-Line-Tools SourceKit only when no full Xcode is the
+# active developer dir; omitted otherwise (e.g. the CI runner, which has Xcode).
+SWIFTLINT_ENV := $(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/usr/lib,)
 
-xcframework: ## Build the universal RaceStudioFFI.xcframework + Swift bindings
-	bash scripts/build_xcframework.sh
+.PHONY: setup test test-rust test-swift coverage e2e lint fixtures xcframework ci clean
+
+setup: ## Install toolchains + fetch test fixtures
+	rustup target add aarch64-apple-darwin x86_64-apple-darwin
+	rustup component add llvm-tools-preview clippy rustfmt
+	command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
+	command -v swiftlint >/dev/null 2>&1 || brew install swiftlint
+	bash scripts/fetch_fixtures.sh
+
+test: test-rust test-swift ## Run the Rust + Swift test suites
+
+test-rust: ## Run the Rust test suite
+	cargo test --workspace
+
+test-swift: ## Run the Swift test suite (builds the xcframework if missing)
+	@[ -d app/RaceStudioFFI.xcframework ] || bash scripts/build_xcframework.sh
+	bash scripts/swift_test.sh
+
+coverage: ## Enforce the >=95% line-coverage gate (Rust + Swift)
+	bash scripts/coverage.sh
+
+e2e: ## Build the shipping pipeline + validate the decode oracle
+	bash scripts/e2e.sh
+
+lint: ## clippy -D warnings + cargo fmt --check + swiftlint
+	cargo clippy --workspace --all-targets -- -D warnings
+	cargo fmt --all --check
+	cd app && $(SWIFTLINT_ENV) swiftlint lint --strict
 
 fixtures: ## Fetch .xrk samples + regenerate libxrk golden JSON oracle
 	bash scripts/fetch_fixtures.sh
 
-test:    ## Run Rust + Swift test suites (wired in 0.6)
-	@echo "test: placeholder — wired in issue 0.6"
+xcframework: ## Build the universal RaceStudioFFI.xcframework + Swift bindings
+	bash scripts/build_xcframework.sh
 
-coverage: ## Enforce the Rust + Swift line-coverage gate (≥95% on the logic core)
-	bash scripts/coverage.sh
+ci: lint coverage e2e ## The exact sequence CI runs (lint -> coverage -> e2e)
 
-e2e:     ## Run end-to-end checks (wired in 0.6)
-	@echo "e2e: placeholder — wired in issue 0.6"
-
-lint:    ## clippy + rustfmt + swiftlint (wired in 0.6)
-	@echo "lint: placeholder — wired in issue 0.6"
-
-ci:      ## Aggregate gate run in CI (wired in 0.6)
-	@echo "ci: placeholder — wired in issue 0.6"
+clean: ## Remove build artifacts
+	rm -rf target app/.build app/RaceStudioFFI.xcframework dist .cache
