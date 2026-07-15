@@ -21,14 +21,22 @@ test_fetch_fixtures_is_idempotent() {
   # Given the samples already present, When fetch runs, Then every file reports
   # "cached" and nothing is downloaded (idempotent, cached).
   mkdir -p "$FIX"
-  local f
+  local f seeded=()
   for f in aim_official_test.xrk fuji_0033.xrk fuji_0033_reference.csv; do
-    [ -s "$FIX/$f" ] || printf 'seed\n' > "$FIX/$f"
+    if [ ! -s "$FIX/$f" ]; then
+      printf 'seed\n' > "$FIX/$f"
+      seeded+=("$FIX/$f")
+    fi
   done
 
   local out rc
   out="$(bash "$FETCH" --no-goldens 2>&1)"
   rc=$?
+
+  # Remove any placeholders we created. Leaving a fake ~5-byte .xrk behind would
+  # make a later "cached" fetch skip the real download and break the decode
+  # oracle tests (which would open the placeholder and hit BadMagic).
+  [ "${#seeded[@]}" -gt 0 ] && rm -f "${seeded[@]}"
 
   if [ "$rc" -eq 0 ] \
     && grep -qE '^  cached  aim_official_test\.xrk$' <<<"$out" \

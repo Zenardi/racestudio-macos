@@ -61,6 +61,12 @@ jobs:
       - name: Security scan (Trivy)
         run: make security
 
+      # Fetch the git-ignored .xrk samples so the decode oracle tests run against
+      # real data (they skip gracefully when absent). Goldens stay committed, so
+      # --no-goldens keeps this fast and libxrk-free.
+      - name: Fetch .xrk fixtures
+        run: bash scripts/fetch_fixtures.sh --no-goldens
+
       - name: make ci
         run: make ci
         env:

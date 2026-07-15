@@ -1,0 +1,14 @@
+{
+  "channel_count": 38,
+  "datetime_utc": 1762271407,
+  "driver": "CMD",
+  "file": "fuji_0033.xrk",
+  "has_gps": true,
+  "lap_marker_count": 13,
+  "log_date": "11/04/2025",
+  "log_time": "15:50:07",
+  "series": "Fuji Practice",
+  "session": "Generic testing",
+  "track": "Fuji GP Sh",
+  "vehicle": "SFJ"
+}

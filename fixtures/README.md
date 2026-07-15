@@ -15,6 +15,7 @@ fixtures/
     <name>.channels.json       # channel inventory + per-channel summary stats
     <name>.gps.json            # GPS latitude/longitude/altitude summary
     <name>.laps.json           # lap beacons (num / start / end / duration)
+    <name>.metadata.json       # container header metadata + structural counts (1.2)
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are

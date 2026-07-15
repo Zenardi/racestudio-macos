@@ -77,6 +77,25 @@ pub struct ChannelSummary {
     pub last: Option<f64>,
 }
 
+/// `<name>.metadata.json` — container header metadata + structural counts
+/// (issue 1.2). Metadata strings come from libxrk's `log.metadata`; the counts
+/// come from a byte-level walk of the message framing.
+#[derive(Debug, Deserialize)]
+pub struct MetadataGolden {
+    pub file: String,
+    pub driver: String,
+    pub vehicle: String,
+    pub track: String,
+    pub session: String,
+    pub series: String,
+    pub log_date: String,
+    pub log_time: String,
+    pub datetime_utc: i64,
+    pub channel_count: usize,
+    pub has_gps: bool,
+    pub lap_marker_count: usize,
+}
+
 /// `<name>.laps.json` — lap beacons.
 #[derive(Debug, Deserialize)]
 pub struct LapsGolden {

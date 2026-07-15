@@ -1,23 +1,19 @@
 //! Clean-room decoder for AiM RaceStudio telemetry (`.xrk`) files.
 //!
-//! Milestone M0 (issue 0.1) ships only a compiling stub; the real decode
-//! surface — validated against XRKConverter's `libxrk` output as the golden
-//! oracle — arrives in milestone M1.
+//! Decoding is validated against XRKConverter's `libxrk` output as the golden
+//! oracle (see the decode-strategy ADR, `docs/adr/0002-xrk-decode-strategy.md`).
+//! Milestone M1 builds it up in layers: the container + header metadata (1.2,
+//! this module's [`open_container`]), then channels (1.3), GPS (1.4), laps (1.5).
+//!
+//! ```no_run
+//! let container = racestudio_decode::open_container("session.xrk")?;
+//! let meta = container.metadata();
+//! println!("{} at {} ({} ch)", meta.driver, meta.track, container.channel_count());
+//! # Ok::<(), racestudio_decode::DecodeError>(())
+//! ```
 
-/// Compiling stub proving the crate builds, links, and is testable.
-///
-/// Returns an inert sentinel (`0`). The real decode API arrives in M1.
-#[must_use]
-pub fn placeholder() -> u32 {
-    0
-}
+pub mod container;
+pub mod error;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_decode_crate_placeholder() {
-        assert_eq!(placeholder(), 0);
-    }
-}
+pub use container::{open_container, Container, Metadata};
+pub use error::DecodeError;
