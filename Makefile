@@ -1,8 +1,7 @@
 # RaceStudio-macOS — developer task runner.
 #
-# Issue 0.1 ships only the skeleton: these are placeholder targets that are
-# fleshed out in later M0 issues (0.2 Rust gate, 0.3 Swift gate, 0.6 DoD wiring).
-# They intentionally do nothing yet beyond announcing themselves.
+# `coverage` is wired (Rust gate 0.2 + Swift gate 0.3). The remaining targets
+# are placeholders fleshed out in issue 0.6 (DoD wiring).
 
 .PHONY: setup test coverage e2e lint ci
 
@@ -12,7 +11,7 @@ setup:   ## Install toolchains & dev dependencies (wired in 0.6)
 test:    ## Run Rust + Swift test suites (wired in 0.6)
 	@echo "test: placeholder — wired in issue 0.6"
 
-coverage: ## Enforce the Rust line-coverage gate (Swift half lands in 0.3)
+coverage: ## Enforce the Rust + Swift line-coverage gate (≥95% on the logic core)
 	bash scripts/coverage.sh
 
 e2e:     ## Run end-to-end checks (wired in 0.6)

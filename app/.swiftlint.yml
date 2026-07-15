@@ -1,9 +1,13 @@
 # SwiftLint configuration for the RaceStudio SwiftUI app.
-# The full lint gate is wired into CI in issue 0.6; this keeps the scaffold clean.
+# Enforced by the Swift coverage gate (scripts/coverage.sh --swift-lint) and CI.
 
 included:
   - Sources
   - Tests
+
+excluded:
+  - .build
+  - Generated
 
 opt_in_rules:
   - empty_count
