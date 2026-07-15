@@ -5,9 +5,10 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 
 > **Status:** milestone **M0 — Foundations, Tooling & TDD Harness**.
 > Done so far: the scaffold (0.1), the Rust + Swift **coverage gates** (0.2, 0.3),
-> and the **UniFFI xcframework pipeline** (0.4) — a Rust→Swift boundary that
-> round-trips `coreVersion()`. Green, warning-free, ≥95% line coverage on the
-> logic core, enforced in CI. No decode or analysis logic ships yet.
+> the **UniFFI xcframework pipeline** (0.4), and the **golden-fixtures harness**
+> (0.5) — libxrk-derived oracle JSON + Rust/Swift loaders for decode tests.
+> Green, warning-free, ≥95% line coverage on the logic core, enforced in CI. No
+> decode or analysis logic ships yet.
 
 ## Architecture
 
@@ -61,18 +62,23 @@ app/
   Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
   RaceStudioFFI.xcframework/   # built artifact (git-ignored, ~34 MB)
+fixtures/                      # decode goldens (0.5): golden/*.json committed,
+                               #   .xrk/.csv samples git-ignored (make fixtures)
 scripts/
   coverage.sh                  # Rust + Swift quality + coverage gate
   swift_test.sh                # `swift test` wrapper (CLT framework paths)
   build_xcframework.sh         # universal xcframework + Swift bindings
+  fetch_fixtures.sh            # fetch .xrk samples + regenerate goldens
+  gen_goldens.py               # libxrk -> deterministic golden JSON
 tests/
   gate_test.sh                 # Rust gate self-tests
   swift_gate_test.sh           # Swift gate self-tests
   ffi_test.sh                  # FFI pipeline tests
+  fixtures_test.sh             # fetch-fixtures self-tests
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
 docs/adr/                      # architecture decision records
-Makefile                       # `make coverage`, `make xcframework`
+Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
 ```
 
 ## Development
@@ -91,6 +97,9 @@ cargo fmt --check                # format gate
 
 # Rust→Swift FFI boundary
 make xcframework                 # build RaceStudioFFI.xcframework + Swift bindings
+
+# Decode test fixtures (libxrk golden oracle — see fixtures/README.md)
+make fixtures                    # fetch .xrk samples + regenerate golden JSON
 
 # Swift app
 cd app

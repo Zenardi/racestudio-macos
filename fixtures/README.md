@@ -1,0 +1,45 @@
+# Test fixtures
+
+Golden data for decode tests (issue 0.5). Decode correctness in M1+ is defined
+against **libxrk** — XRKConverter's pure-Python `.xrk` parser, used here as the
+decode **oracle**.
+
+## Layout
+
+```
+fixtures/
+  aim_official_test.xrk        # sample .xrk (git-ignored — fetched locally)
+  fuji_0033.xrk                # sample .xrk (git-ignored)
+  fuji_0033_reference.csv      # RaceStudio reference CSV (git-ignored)
+  golden/                      # committed, deterministic oracle JSON
+    <name>.channels.json       # channel inventory + per-channel summary stats
+    <name>.gps.json            # GPS latitude/longitude/altitude summary
+    <name>.laps.json           # lap beacons (num / start / end / duration)
+```
+
+- **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are
+  git-ignored. Fetch them with `make fixtures` (or `bash scripts/fetch_fixtures.sh`),
+  which downloads them from the libxrk repo (idempotent + cached).
+- **`golden/*.json`** are small, sorted, and deterministic, so they are
+  **committed**. They are regenerated from the `.xrk` files by
+  `scripts/gen_goldens.py` (run via `make fixtures`).
+
+## Loading fixtures in tests
+
+- **Rust:** `support::fixtures::fixture_path(name)` and
+  `support::fixtures::load_golden::<T>(name, aspect)`
+  (`core/racestudio-decode/tests/support/fixtures.rs`).
+- **Swift:** `FixtureLoader.url(for:)` and `FixtureLoader.golden(_:aspect:)`
+  (`app/Tests/RaceStudioCoreTests/Support/FixtureLoader.swift`).
+
+Both resolve this directory relative to the repo root and fail with a clear,
+actionable error when a fixture is missing.
+
+## Regenerating goldens
+
+```sh
+make fixtures     # fetch .xrk samples + regenerate golden/*.json via libxrk
+```
+
+Goldens are byte-identical across runs on the same input; review any diff as a
+decode-behaviour change.
