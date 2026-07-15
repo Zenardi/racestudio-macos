@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "core/racestudio-decode",
+    "core/racestudio-analysis",
+    "core/racestudio-ffi",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Eduardo Zenardi <du.zenardi@gmail.com>"]
+repository = "https://github.com/Zenardi/racestudio-macos"
+rust-version = "1.77"

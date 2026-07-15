@@ -1,0 +1,17 @@
+# SwiftLint configuration for the RaceStudio SwiftUI app.
+# The full lint gate is wired into CI in issue 0.6; this keeps the scaffold clean.
+
+included:
+  - Sources
+  - Tests
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+
+line_length:
+  warning: 120
+  error: 200
+
+identifier_name:
+  min_length: 1 # allow short SwiftUI/local identifiers

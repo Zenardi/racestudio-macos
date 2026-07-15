@@ -1,0 +1,18 @@
+# Rust build output
+/target/
+core/**/target/
+
+# Swift Package Manager build output
+app/.build/
+app/Generated/
+
+# Caches & build artifacts
+.cache*
+dist/
+
+# Coverage output
+*.profraw
+*.profdata
+
+# macOS
+.DS_Store
