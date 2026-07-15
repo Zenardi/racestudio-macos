@@ -14,7 +14,7 @@ jobs:
   # A green `make ci` locally predicts a green pipeline: CI runs the exact same
   # sequence (lint -> coverage -> e2e), preceded by the tooling self-tests.
   ci:
-    name: make ci (lint · coverage · e2e)
+    name: make ci (lint, coverage, e2e)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +49,7 @@ jobs:
           bash tests/ffi_test.sh
           bash tests/fixtures_test.sh
           bash tests/make_test.sh
+          bash tests/branch_protection_test.sh
 
       - name: make ci
         run: make ci

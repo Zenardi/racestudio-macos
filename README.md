@@ -165,6 +165,11 @@ single source of truth that [the PR template](.github/PULL_REQUEST_TEMPLATE.md)
 embeds and every issue pastes. New issues use
 [`.github/ISSUE_TEMPLATE/feature.md`](.github/ISSUE_TEMPLATE/feature.md).
 
+`main` is protected: changes land via PR, and the `make ci (lint, coverage, e2e)`
+check plus 1 review are required before merge (linear history, no direct pushes).
+The exact, reproducible configuration is in
+[`docs/BRANCH_PROTECTION.md`](docs/BRANCH_PROTECTION.md).
+
 ## License
 
 [MIT](LICENSE) © 2026 Eduardo Zenardi
