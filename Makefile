@@ -12,8 +12,8 @@ setup:   ## Install toolchains & dev dependencies (wired in 0.6)
 test:    ## Run Rust + Swift test suites (wired in 0.6)
 	@echo "test: placeholder — wired in issue 0.6"
 
-coverage: ## Enforce the 95% line-coverage gate (wired in 0.2/0.3)
-	@echo "coverage: placeholder — wired in issues 0.2 and 0.3"
+coverage: ## Enforce the Rust line-coverage gate (Swift half lands in 0.3)
+	bash scripts/coverage.sh
 
 e2e:     ## Run end-to-end checks (wired in 0.6)
 	@echo "e2e: placeholder — wired in issue 0.6"

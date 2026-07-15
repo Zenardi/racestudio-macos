@@ -1,0 +1,5 @@
+# Clippy config shared by local runs and the CI gate (issue 0.2).
+# Placed at the workspace root so `cargo clippy`, run from the repo root,
+# discovers it (clippy searches the working directory and its parents).
+# Pin the MSRV so lint behaviour matches the workspace's rust-version.
+msrv = "1.77.0"
