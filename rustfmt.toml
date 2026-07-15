@@ -1,0 +1,8 @@
+# Formatting config shared by local `cargo fmt` and the CI gate (issue 0.2).
+# Placed at the workspace root (the repo root holds the workspace Cargo.toml)
+# so rustfmt discovers it from every crate under core/. Kept to stable,
+# default-compatible options so `cargo fmt --check` is deterministic across
+# developer machines and the macos-15 runner.
+edition = "2021"
+max_width = 100
+newline_style = "Unix"
