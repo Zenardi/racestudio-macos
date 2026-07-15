@@ -20,6 +20,11 @@ holds a **≥95% line-coverage floor on the logic core** (the Rust crates and th
 Swift `RaceStudioCore` target), enforced by an automatic gate. Run the whole bar
 locally with `make ci` (the exact sequence CI runs).
 
+The "CI green … branch-protection checks satisfied" item below is enforced on
+`main` per [`docs/BRANCH_PROTECTION.md`](BRANCH_PROTECTION.md): the
+`make ci (lint, coverage, e2e)` check is a required status check, with 1 review,
+stale-approval dismissal, and linear history.
+
 ## Checklist
 
 - [ ] Red→Green→Refactor followed; tests written before implementation
