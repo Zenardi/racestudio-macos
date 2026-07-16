@@ -20,7 +20,12 @@ import Combine
     private final class FakeSessionLoader: SessionLoading, @unchecked Sendable {
         var result: Result<Session, Error>
         init(_ result: Result<Session, Error>) { self.result = result }
-        func load(_ url: URL) async throws -> Session { try result.get() }
+        func load(
+            _ url: URL,
+            onProgress: @escaping @MainActor (DecodeProgress) -> Void
+        ) async throws -> Session {
+            try result.get()
+        }
     }
 
     private struct LoaderError: Error {}
@@ -47,7 +52,10 @@ import Combine
         await store.load(url: anyURL)
         subscription.cancel()
 
-        #expect(observed == [.idle, .loading, .loaded(SessionViewModel(session: session))])
+        #expect(observed.first == .idle)
+        #expect(observed.last == .loaded(SessionViewModel(session: session)))
+        let sawLoading = observed.contains { if case .loading = $0 { return true } else { return false } }
+        #expect(sawLoading)
     }
 
     @MainActor @Test func test_loaded_channel_count_matches_golden() async throws {
@@ -86,8 +94,8 @@ import Combine
         await store.load(url: anyURL)
         subscription.cancel()
 
-        // Two transitions from idle: idle→loading, loading→loaded.
-        #expect(changeCount == 2)
+        // idle → loading(0) → loading(1.0, complete) → loaded.
+        #expect(changeCount == 3)
     }
 
     // MARK: - Failure path
@@ -97,7 +105,11 @@ import Combine
 
         await store.load(url: anyURL)
 
-        #expect(store.state == .failed(.decodeFailed))
+        guard case let .failed(error) = store.state else {
+            Issue.record("expected .failed, got \(store.state)")
+            return
+        }
+        #expect(!error.message.isEmpty)
     }
 
     @MainActor @Test func test_failure_does_not_populate_view_model() async {
@@ -119,7 +131,10 @@ import Combine
         loader.result = .failure(LoaderError())
         await store.load(url: anyURL)
 
-        #expect(store.state == .failed(.decodeFailed))
+        guard case .failed = store.state else {
+            Issue.record("expected .failed, got \(store.state)")
+            return
+        }
         #expect(store.viewModel == nil)
     }
 }

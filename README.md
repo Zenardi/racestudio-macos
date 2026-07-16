@@ -58,7 +58,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > panel, a channel list (name/unit/`"100 Hz"` rate), and a lap list
 > (`m:ss.mmm` times, best-lap marker) — all formatting, em-dash fallbacks, and
 > best-lap detection are pure/tested in Core, so the SwiftUI views are trivial
-> bindings. Next: analysis (M3).
+> bindings. Closing M2, async decode (2.5) threads a clamped/monotonic
+> `DecodeProgress` through the `.loading` state, maps every `DecodeError` to a
+> user-facing `ImportError` (title/message/recovery), and supports **cancellation**
+> (a new load cancels the prior) — so opening a large `.xrk` shows a progress bar,
+> recovers from a bad file with a clear alert, and can be cancelled. **M2 is
+> complete.** Next: analysis (M3).
 
 ## Architecture
 
@@ -107,7 +112,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   (security-scoped bookmarks behind injectable `BookmarkStoring`/`KeyValueStoring`).
   2.4 adds `SessionSummaryViewModel` + `LapTimeFormatter`/`ChannelFormatting` —
   pure presentation logic (rate/date/lap-time strings, em-dash fallbacks, best-lap
-  detection) the summary views bind to.
+  detection) the summary views bind to. 2.5 adds `DecodeProgress` (clamped/monotonic
+  progress), `ImportError(decodeError:)` (total `DecodeError` → title/message/recovery
+  mapping), and `SessionStore` progress threading + `cancel()`.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens

@@ -1,12 +1,19 @@
 import Foundation
 
-/// Strategy for decoding a ``Session`` from a file URL (issue 2.2).
+/// Strategy for decoding a ``Session`` from a file URL, reporting progress
+/// (issues 2.2 + 2.5).
 ///
-/// Injected into ``SessionStore`` so tests substitute a golden-backed fake and
-/// never invoke the real Rust decode; production is `FFISessionLoader`.
+/// Injected into ``SessionStore`` so tests substitute a scripted fake and never
+/// invoke the real Rust decode; production is `FFISessionLoader`. `onProgress` is
+/// main-actor-isolated and awaited in order, so the store observes progress
+/// deterministically.
 public protocol SessionLoading: Sendable {
-    /// Decode the session at `url`, throwing on any decode/IO failure.
-    func load(_ url: URL) async throws -> Session
+    /// Decode the session at `url`, reporting decode progress, throwing a
+    /// ``DecodeError`` (or other error) on failure.
+    func load(
+        _ url: URL,
+        onProgress: @escaping @MainActor (DecodeProgress) -> Void
+    ) async throws -> Session
 }
 
 #if canImport(RaceStudioFFIBindings)
@@ -14,7 +21,7 @@ import RaceStudioFFIBindings
 
 /// Production loader: decodes through the Rust core via the 1.7 UniFFI bindings
 /// in `app/Generated`, mapping the opaque `SessionHandle` into Core's own
-/// ``Session`` value type.
+/// ``Session`` value type and translating `FfiDecodeError` into ``DecodeError``.
 ///
 /// Available when the `RaceStudioFFI.xcframework` has been built
 /// (`scripts/build_xcframework.sh`); a fresh checkout without it builds without
@@ -23,10 +30,22 @@ public struct FFISessionLoader: SessionLoading {
 
     public init() {}
 
-    public func load(_ url: URL) async throws -> Session {
-        let handle = try openSession(path: url.path)
-        return FFISessionLoader.makeSession(
+    public func load(
+        _ url: URL,
+        onProgress: @escaping @MainActor (DecodeProgress) -> Void
+    ) async throws -> Session {
+        await onProgress(DecodeProgress(fraction: 0, phase: .reading))
+        let handle: SessionHandle
+        do {
+            handle = try openSession(path: url.path)
+        } catch let error as FfiDecodeError {
+            throw DecodeError(error)
+        }
+        await onProgress(DecodeProgress(fraction: 0.5, phase: .decoding))
+        let session = FFISessionLoader.makeSession(
             metadata: handle.metadata(), channels: handle.channels(), laps: handle.laps())
+        await onProgress(DecodeProgress(fraction: 1, phase: .complete))
+        return session
     }
 
     /// Pure map from the FFI handle's readouts into Core's ``Session``. Split out
@@ -50,6 +69,24 @@ public struct FFISessionLoader: SessionLoading {
                 Lap(index: $0.index, startTimeS: $0.startTimeS,
                     durationS: $0.durationS, endTimeS: $0.endTimeS)
             })
+    }
+}
+
+extension DecodeError {
+    /// Translate the FFI's `FfiDecodeError` into Core's ``DecodeError``.
+    init(_ ffi: FfiDecodeError) {
+        switch ffi {
+        case let .Io(message): self = .io(message: message)
+        case .BadMagic: self = .badMagic
+        case .TruncatedHeader: self = .truncatedHeader
+        case .TruncatedChannel: self = .truncatedChannel
+        case .BadSampleCount: self = .badSampleCount
+        case .TruncatedGps: self = .truncatedGps
+        case .TruncatedLaps: self = .truncatedLaps
+        case let .ChannelOutOfRange(index, channelCount):
+            self = .channelOutOfRange(index: index, channelCount: channelCount)
+        case let .Other(message): self = .other(message: message)
+        }
     }
 }
 

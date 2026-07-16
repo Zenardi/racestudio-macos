@@ -61,8 +61,21 @@ import RaceStudioFFIBindings
 
     @Test func test_load_throws_on_unreadable_path() async {
         await #expect(throws: (any Error).self) {
-            _ = try await FFISessionLoader().load(URL(fileURLWithPath: "/nonexistent/none.xrk"))
+            _ = try await FFISessionLoader().load(URL(fileURLWithPath: "/nonexistent/none.xrk")) { _ in }
         }
+    }
+
+    @Test func test_ffi_decode_errors_translate_to_core_decode_error() {
+        #expect(DecodeError(FfiDecodeError.Io(message: "disk")) == .io(message: "disk"))
+        #expect(DecodeError(FfiDecodeError.BadMagic) == .badMagic)
+        #expect(DecodeError(FfiDecodeError.TruncatedHeader) == .truncatedHeader)
+        #expect(DecodeError(FfiDecodeError.TruncatedChannel) == .truncatedChannel)
+        #expect(DecodeError(FfiDecodeError.BadSampleCount) == .badSampleCount)
+        #expect(DecodeError(FfiDecodeError.TruncatedGps) == .truncatedGps)
+        #expect(DecodeError(FfiDecodeError.TruncatedLaps) == .truncatedLaps)
+        #expect(DecodeError(FfiDecodeError.ChannelOutOfRange(index: 3, channelCount: 2))
+            == .channelOutOfRange(index: 3, channelCount: 2))
+        #expect(DecodeError(FfiDecodeError.Other(message: "y")) == .other(message: "y"))
     }
 
     // MARK: - Golden validation (skips when the sample is absent)
@@ -70,7 +83,7 @@ import RaceStudioFFIBindings
     @Test func test_ffi_loader_decodes_real_xrk_matching_golden() async throws {
         guard let url = fixtureURLOrSkip() else { return }
 
-        let session = try await FFISessionLoader().load(url)
+        let session = try await FFISessionLoader().load(url) { _ in }
 
         #expect(session.channels.count == (try GoldenSession.channelCount(Self.fixtureName)))
         #expect(session.laps.count == (try GoldenSession.lapCount(Self.fixtureName)))
