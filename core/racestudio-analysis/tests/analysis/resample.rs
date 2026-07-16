@@ -3,9 +3,9 @@
 //! - **Formula / behaviour** (`test_uniform_*`, `test_endpoints_preserved`,
 //!   gap and non-monotonic policies): the acceptance contract on hand-built
 //!   series.
-//! - **Property** (`prop_*`, via `proptest`): output monotonicity for arbitrary
-//!   sorted input, and idempotence when resampling an already-uniform series —
-//!   the large input space the issue calls for.
+//! - **Property** (`prop_*`): output monotonicity for arbitrary sorted input,
+//!   and idempotence when resampling an already-uniform series — swept
+//!   deterministically over the large input space the issue calls for.
 //! - **Golden** (`test_matches_libxrk_resample_golden`): cross-check one channel
 //!   against libxrk's `resample_to_timecodes` over the real fixture. The `.xrk`
 //!   is git-ignored (fetched by `make fixtures`); the test skips when absent.
@@ -13,7 +13,6 @@
 use std::path::PathBuf;
 
 use crate::support::fixtures::{fixture_path, load_golden, ResampleGolden};
-use proptest::prelude::*;
 use racestudio_analysis::{
     resample_uniform, resample_uniform_max_gap, to_distance_grid, AnalysisError,
 };
@@ -98,45 +97,69 @@ fn test_resample_invalid_hz_is_empty() {
 // Property tests
 // --------------------------------------------------------------------------- //
 
-proptest! {
-    #[test]
-    fn prop_resample_monotonic_for_any_sorted_input(
-        steps in prop::collection::vec((1u32..100, -1000.0f64..1000.0), 1..15),
-        hz in 0.005f64..1.0,
-    ) {
-        // Build a strictly-time-sorted series from positive deltas.
+/// A tiny deterministic LCG so the sweeps cover a wide, reproducible input space
+/// without pulling in a randomness/property-testing dependency.
+fn lcg(state: &mut u64) -> u64 {
+    *state = state
+        .wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(1_442_695_040_888_963_407);
+    *state >> 16
+}
+
+#[test]
+fn prop_resample_monotonic_for_any_sorted_input() {
+    // For any strictly-time-sorted input and any positive rate, the output time
+    // axis is strictly increasing. Swept over 400 generated series and rates.
+    let mut state = 0x1234_5678_u64;
+    for _ in 0..400 {
+        let len = 1 + (lcg(&mut state) % 14) as usize;
         let mut t = 0.0f64;
-        let series: Vec<(f64, f64)> = steps
-            .iter()
-            .map(|&(d, v)| { t += f64::from(d); (t, v) })
+        let series: Vec<(f64, f64)> = (0..len)
+            .map(|_| {
+                t += 1.0 + (lcg(&mut state) % 100) as f64; // strictly increasing time
+                let value = (lcg(&mut state) % 4000) as f64 / 2.0 - 1000.0; // -1000..1000
+                (t, value)
+            })
             .collect();
+        let hz = 0.005 + (lcg(&mut state) % 995) as f64 / 1000.0; // 0.005..~1.0
 
         let out = resample_uniform(&series, hz);
 
-        prop_assert!(
+        assert!(
             out.windows(2).all(|w| w[1].0 > w[0].0),
-            "output time axis must be strictly increasing"
+            "output time axis must be strictly increasing (len {len}, hz {hz})"
         );
     }
+}
 
-    #[test]
-    fn prop_idempotent_on_uniform_input(
-        t0 in -100.0f64..100.0,
-        n in 2usize..25,
-        step in 0.25f64..10.0,
-        values in prop::collection::vec(-100.0f64..100.0, 25),
-    ) {
-        let hz = 1.0 / step;
-        let series: Vec<(f64, f64)> = (0..n)
-            .map(|i| (t0 + i as f64 * step, values[i]))
-            .collect();
+#[test]
+fn prop_idempotent_on_uniform_input() {
+    // Resampling an already-uniform series at its own rate reproduces it (length,
+    // times, and values) — swept across origins, lengths, and steps.
+    let mut state = 0x0BAD_F00D_u64;
+    for &t0 in &[-100.0, -12.5, 0.0, 1.0, 37.25, 99.0] {
+        for n in 2..=24usize {
+            for &step in &[0.25, 0.5, 1.0, 2.0, 3.75, 10.0] {
+                let hz = 1.0 / step;
+                let series: Vec<(f64, f64)> = (0..n)
+                    .map(|i| {
+                        let value = (lcg(&mut state) % 20_000) as f64 / 100.0 - 100.0; // -100..100
+                        (t0 + i as f64 * step, value)
+                    })
+                    .collect();
 
-        let out = resample_uniform(&series, hz);
+                let out = resample_uniform(&series, hz);
 
-        prop_assert_eq!(out.len(), n, "length unchanged");
-        for (input, output) in series.iter().zip(&out) {
-            prop_assert!((input.0 - output.0).abs() < 1e-6, "time preserved");
-            prop_assert!((input.1 - output.1).abs() < 1e-6, "value preserved");
+                assert_eq!(
+                    out.len(),
+                    n,
+                    "length unchanged (t0 {t0}, n {n}, step {step})"
+                );
+                for (input, output) in series.iter().zip(&out) {
+                    assert!((input.0 - output.0).abs() < 1e-6, "time preserved");
+                    assert!((input.1 - output.1).abs() < 1e-6, "value preserved");
+                }
+            }
         }
     }
 }
