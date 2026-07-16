@@ -61,12 +61,18 @@ jobs:
       - name: Security scan (Trivy)
         run: make security
 
-      # Fetch the git-ignored .xrk samples so the decode oracle tests run against
-      # real data (they skip gracefully when absent). Goldens stay committed, so
-      # --no-goldens keeps this fast and libxrk-free.
+      # Fetch the git-ignored .xrk samples so the decode oracle tests and the
+      # corpus conformance harness run against real data (they skip gracefully
+      # when absent). Goldens stay committed, so --no-goldens keeps this fast and
+      # libxrk-free.
       - name: Fetch .xrk fixtures
         run: bash scripts/fetch_fixtures.sh --no-goldens
 
+      # `make ci` runs lint -> coverage -> e2e. The e2e phase (scripts/e2e.sh)
+      # runs the corpus golden conformance harness (issue 1.8): it decodes every
+      # fixtures/*.xrk with decode_session and asserts channels/gps/laps/metadata
+      # match fixtures/golden/*.json within docs/DECODE_TOLERANCES.md, exiting
+      # non-zero on any mismatch — the milestone's corpus-wide regression gate.
       - name: make ci
         run: make ci
         env:
