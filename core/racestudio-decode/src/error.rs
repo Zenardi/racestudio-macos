@@ -33,6 +33,8 @@ pub enum DecodeError {
     /// The GPS message stream is truncated: its bytes are not a whole number of
     /// 56-byte NAV-SOL records.
     TruncatedGps,
+    /// A LAP marker message is too short to contain the lap-timing fields.
+    TruncatedLaps,
 }
 
 impl fmt::Display for DecodeError {
@@ -59,6 +61,12 @@ impl fmt::Display for DecodeError {
                     "truncated GPS data: not a whole number of 56-byte records"
                 )
             }
+            DecodeError::TruncatedLaps => {
+                write!(
+                    f,
+                    "truncated lap marker: too short for the lap-timing fields"
+                )
+            }
         }
     }
 }
@@ -72,7 +80,8 @@ impl std::error::Error for DecodeError {
             | DecodeError::TruncatedChannel
             | DecodeError::BadSampleCount
             | DecodeError::UnknownUnit
-            | DecodeError::TruncatedGps => None,
+            | DecodeError::TruncatedGps
+            | DecodeError::TruncatedLaps => None,
         }
     }
 }
@@ -101,6 +110,7 @@ mod tests {
             DecodeError::BadSampleCount,
             DecodeError::UnknownUnit,
             DecodeError::TruncatedGps,
+            DecodeError::TruncatedLaps,
         ] {
             assert!(!err.to_string().is_empty());
             assert!(err.source().is_none());
@@ -112,5 +122,6 @@ mod tests {
         assert!(DecodeError::BadSampleCount.to_string().contains("count"));
         assert!(DecodeError::UnknownUnit.to_string().contains("unit"));
         assert!(DecodeError::TruncatedGps.to_string().contains("GPS"));
+        assert!(DecodeError::TruncatedLaps.to_string().contains("lap"));
     }
 }

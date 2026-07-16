@@ -1,83 +1,84 @@
 {
+  "best_lap_index": 12,
   "file": "fuji_0033.xrk",
   "lap_count": 13,
   "laps": [
     {
       "duration_ms": 193611,
       "end_ms": 193611,
-      "num": 0,
+      "index": 0,
       "start_ms": 0
     },
     {
       "duration_ms": 127350,
       "end_ms": 320961,
-      "num": 1,
+      "index": 1,
       "start_ms": 193611
     },
     {
       "duration_ms": 129206,
       "end_ms": 450167,
-      "num": 2,
+      "index": 2,
       "start_ms": 320961
     },
     {
       "duration_ms": 119270,
       "end_ms": 569437,
-      "num": 3,
+      "index": 3,
       "start_ms": 450167
     },
     {
       "duration_ms": 118690,
       "end_ms": 688127,
-      "num": 4,
+      "index": 4,
       "start_ms": 569437
     },
     {
       "duration_ms": 131176,
       "end_ms": 819303,
-      "num": 5,
+      "index": 5,
       "start_ms": 688127
     },
     {
       "duration_ms": 128349,
       "end_ms": 947652,
-      "num": 6,
+      "index": 6,
       "start_ms": 819303
     },
     {
       "duration_ms": 131778,
       "end_ms": 1079430,
-      "num": 7,
+      "index": 7,
       "start_ms": 947652
     },
     {
       "duration_ms": 123153,
       "end_ms": 1202583,
-      "num": 8,
+      "index": 8,
       "start_ms": 1079430
     },
     {
       "duration_ms": 119801,
       "end_ms": 1322384,
-      "num": 9,
+      "index": 9,
       "start_ms": 1202583
     },
     {
       "duration_ms": 122877,
       "end_ms": 1445261,
-      "num": 10,
+      "index": 10,
       "start_ms": 1322384
     },
     {
       "duration_ms": 133267,
       "end_ms": 1578528,
-      "num": 11,
+      "index": 11,
       "start_ms": 1445261
     },
     {
       "duration_ms": 118430,
       "end_ms": 1696958,
-      "num": 12,
+      "index": 12,
       "start_ms": 1578528
     }
   ]

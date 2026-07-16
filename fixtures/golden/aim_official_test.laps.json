@@ -1,72 +1,73 @@
 {
+  "best_lap_index": 8,
   "file": "aim_official_test.xrk",
   "lap_count": 11,
   "laps": [
     {
-      "duration_ms": 63133,
-      "end_ms": 86967,
-      "num": 0,
-      "start_ms": 23834
+      "duration_ms": 82248,
+      "end_ms": 82248,
+      "index": 0,
+      "start_ms": 0
     },
     {
-      "duration_ms": 53070,
-      "end_ms": 140037,
-      "num": 1,
-      "start_ms": 86967
+      "duration_ms": 53058,
+      "end_ms": 135306,
+      "index": 1,
+      "start_ms": 82248
     },
     {
-      "duration_ms": 52207,
-      "end_ms": 192244,
-      "num": 2,
-      "start_ms": 140037
+      "duration_ms": 52217,
+      "end_ms": 187523,
+      "index": 2,
+      "start_ms": 135306
     },
     {
-      "duration_ms": 50968,
-      "end_ms": 243212,
-      "num": 3,
-      "start_ms": 192244
+      "duration_ms": 50973,
+      "end_ms": 238496,
+      "index": 3,
+      "start_ms": 187523
     },
     {
-      "duration_ms": 49828,
-      "end_ms": 293040,
-      "num": 4,
-      "start_ms": 243212
+      "duration_ms": 49802,
+      "end_ms": 288298,
+      "index": 4,
+      "start_ms": 238496
     },
     {
-      "duration_ms": 50695,
-      "end_ms": 343735,
-      "num": 5,
-      "start_ms": 293040
+      "duration_ms": 50742,
+      "end_ms": 339040,
+      "index": 5,
+      "start_ms": 288298
     },
     {
-      "duration_ms": 49878,
-      "end_ms": 393613,
-      "num": 6,
-      "start_ms": 343735
+      "duration_ms": 49866,
+      "end_ms": 388906,
+      "index": 6,
+      "start_ms": 339040
     },
     {
-      "duration_ms": 50633,
-      "end_ms": 444246,
-      "num": 7,
-      "start_ms": 393613
+      "duration_ms": 50618,
+      "end_ms": 439524,
+      "index": 7,
+      "start_ms": 388906
     },
     {
-      "duration_ms": 49779,
-      "end_ms": 494025,
-      "num": 8,
-      "start_ms": 444246
+      "duration_ms": 49765,
+      "end_ms": 489289,
+      "index": 8,
+      "start_ms": 439524
     },
     {
-      "duration_ms": 50328,
-      "end_ms": 544353,
-      "num": 9,
-      "start_ms": 494025
+      "duration_ms": 50316,
+      "end_ms": 539605,
+      "index": 9,
+      "start_ms": 489289
     },
     {
-      "duration_ms": 58598,
-      "end_ms": 602951,
-      "num": 10,
-      "start_ms": 544353
+      "duration_ms": 58817,
+      "end_ms": 598422,
+      "index": 10,
+      "start_ms": 539605
     }
   ]
 }
