@@ -112,32 +112,69 @@ def _channels_golden(log, data, fname):
     return {"file": fname, "channel_count": len(channels), "channels": channels}
 
 
-def _gps_stat(log, name):
+# GPS channel oracle (issue 1.4). libxrk synthesizes GPS channels from the
+# 56-byte NAV-SOL messages: nine come straight from the record (Raw), three are
+# differentiated/derived (Computed). Order is fixed and deterministic. Lat/lon
+# keep 8 decimals so the 1e-8 acceptance can be checked; the rest use their
+# display precision (which also matches libxrk's float32 storage exactly).
+_GPS_RAW = (
+    "GPS Latitude",
+    "GPS Longitude",
+    "GPS Altitude",
+    "GPS Speed",
+    "GPS_Satellites",
+    "GPS_Fix",
+    "GPS_pDOP",
+    "GPS_Position_Accuracy",
+    "GPS_Velocity_Accuracy",
+)
+_GPS_COMPUTED = ("GPS_InlineAcc", "GPS_LateralAcc", "GPS_Yaw_Rate")
+_GPS_PRECISION = {
+    "GPS Latitude": 8,
+    "GPS Longitude": 8,
+    "GPS Altitude": 6,
+    "GPS Speed": 6,
+}
+
+
+def _gps_channel(log, name, kind):
     table = log.channels.get(name)
     if table is None:
         return None
     values = table.column(name).to_numpy().astype(float)
     if len(values) == 0:
         return None
+    meta = ChannelMetadata.from_channel_table(table)
+    decimals = _GPS_PRECISION.get(name, max(0, int(meta.dec_pts)))
     return {
-        "count": int(len(values)),
-        "first": _round(values[0], 8),
-        "last": _round(values[-1], 8),
-        "min": _round(np.min(values), 8),
-        "max": _round(np.max(values), 8),
+        "name": name,
+        "kind": kind,
+        "unit": meta.units or "",
+        "decimals": decimals,
+        "samples": int(len(values)),
+        "first": _round(values[0], decimals),
+        "last": _round(values[-1], decimals),
+        "min": _round(np.min(values), decimals),
+        "max": _round(np.max(values), decimals),
     }
 
 
 def _gps_golden(log, fname):
-    latitude = _gps_stat(log, "GPS Latitude")
-    longitude = _gps_stat(log, "GPS Longitude")
-    altitude = _gps_stat(log, "GPS Altitude")
+    channels = []
+    for name in _GPS_RAW:
+        ch = _gps_channel(log, name, "Raw")
+        if ch is not None:
+            channels.append(ch)
+    for name in _GPS_COMPUTED:
+        ch = _gps_channel(log, name, "Computed")
+        if ch is not None:
+            channels.append(ch)
+    fix_count = channels[0]["samples"] if channels else 0
     return {
         "file": fname,
-        "has_gps": latitude is not None and longitude is not None,
-        "latitude": latitude,
-        "longitude": longitude,
-        "altitude": altitude,
+        "has_gps": bool(channels),
+        "fix_count": fix_count,
+        "channels": channels,
     }
 
 

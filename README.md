@@ -12,14 +12,17 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > with the **decode-strategy decision**
 > ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
 > validated against the `libxrk` oracle, after a spike rejected wrapping the
-> proprietary-linked `xdrk` crate. Two decoders now ship:
+> proprietary-linked `xdrk` crate. Three decoders now ship:
 > **`open_container`** parses the `.xrk` container header into session
 > **metadata** (driver, vehicle, venue, session date/time) plus the structural
-> counts (channels, GPS presence, lap markers) the later decoders consume; and
+> counts (channels, GPS presence, lap markers) the later decoders consume;
 > **`decode_channels`** turns the container's `CHS` table and `(S`/`(M` sample
 > streams into typed, unit-tagged **channel series** (`name`, `unit`,
-> `sample_rate_hz`, `(timecode, value)` samples), reproducing the libxrk golden
-> to each channel's own precision. GPS (1.4) and lap (1.5) decoding are next.
+> `sample_rate_hz`, `(timecode, value)` samples); and **`decode_gps`** decodes
+> the u-blox **NAV-SOL** stream into `GpsData` — latitude/longitude (ECEF →
+> geodetic, matching the golden to 1e-8), speed (m/s), altitude, accuracy, and
+> satellite count, distinguishing raw from computed GPS channels. All reproduce
+> the libxrk golden to precision. Lap decoding (1.5) is next.
 
 ## Architecture
 
@@ -65,7 +68,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
-  racestudio-decode/           # .xrk decoder — open_container + decode_channels
+  racestudio-decode/           # .xrk decoder — open_container/decode_channels/decode_gps
   racestudio-analysis/         # stub crate + placeholder test
   racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/

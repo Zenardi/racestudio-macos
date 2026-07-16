@@ -1,25 +1,139 @@
 {
-  "altitude": {
-    "count": 4749,
-    "first": 43.06609662,
-    "last": 45.79210192,
-    "max": 51.11884036,
-    "min": 41.76292678
-  },
+  "channels": [
+    {
+      "decimals": 8,
+      "first": 45.0453297,
+      "kind": "Raw",
+      "last": 45.04506647,
+      "max": 45.04685556,
+      "min": 45.04473694,
+      "name": "GPS Latitude",
+      "samples": 4749,
+      "unit": "deg"
+    },
+    {
+      "decimals": 8,
+      "first": 12.14901811,
+      "kind": "Raw",
+      "last": 12.14897173,
+      "max": 12.15195085,
+      "min": 12.14897173,
+      "name": "GPS Longitude",
+      "samples": 4749,
+      "unit": "deg"
+    },
+    {
+      "decimals": 6,
+      "first": 43.066097,
+      "kind": "Raw",
+      "last": 45.792102,
+      "max": 51.11884,
+      "min": 41.762927,
+      "name": "GPS Altitude",
+      "samples": 4749,
+      "unit": "m"
+    },
+    {
+      "decimals": 6,
+      "first": 4.589793,
+      "kind": "Raw",
+      "last": 0.05831,
+      "max": 32.984944,
+      "min": 0.037417,
+      "name": "GPS Speed",
+      "samples": 4749,
+      "unit": "m/s"
+    },
+    {
+      "decimals": 0,
+      "first": 12.0,
+      "kind": "Raw",
+      "last": 16.0,
+      "max": 16.0,
+      "min": 11.0,
+      "name": "GPS_Satellites",
+      "samples": 4749,
+      "unit": ""
+    },
+    {
+      "decimals": 0,
+      "first": 3.0,
+      "kind": "Raw",
+      "last": 3.0,
+      "max": 3.0,
+      "min": 3.0,
+      "name": "GPS_Fix",
+      "samples": 4749,
+      "unit": ""
+    },
+    {
+      "decimals": 2,
+      "first": 1.4,
+      "kind": "Raw",
+      "last": 1.15,
+      "max": 1.99,
+      "min": 1.15,
+      "name": "GPS_pDOP",
+      "samples": 4749,
+      "unit": ""
+    },
+    {
+      "decimals": 2,
+      "first": 33.95,
+      "kind": "Raw",
+      "last": 1.55,
+      "max": 33.95,
+      "min": 1.4,
+      "name": "GPS_Position_Accuracy",
+      "samples": 4749,
+      "unit": "m"
+    },
+    {
+      "decimals": 2,
+      "first": 0.61,
+      "kind": "Raw",
+      "last": 0.14,
+      "max": 0.61,
+      "min": 0.14,
+      "name": "GPS_Velocity_Accuracy",
+      "samples": 4749,
+      "unit": "m/s"
+    },
+    {
+      "decimals": 2,
+      "first": 0.0,
+      "kind": "Computed",
+      "last": -0.04,
+      "max": 1.02,
+      "min": -1.25,
+      "name": "GPS_InlineAcc",
+      "samples": 4749,
+      "unit": "g"
+    },
+    {
+      "decimals": 2,
+      "first": 0.0,
+      "kind": "Computed",
+      "last": -0.14,
+      "max": 3.32,
+      "min": -3.03,
+      "name": "GPS_LateralAcc",
+      "samples": 4749,
+      "unit": "g"
+    },
+    {
+      "decimals": 1,
+      "first": 0.0,
+      "kind": "Computed",
+      "last": -1367.9,
+      "max": 1487.6,
+      "min": -1367.9,
+      "name": "GPS_Yaw_Rate",
+      "samples": 4749,
+      "unit": "deg/s"
+    }
+  ],
   "file": "aim_official_test.xrk",
-  "has_gps": true,
-  "latitude": {
-    "count": 4749,
-    "first": 45.0453297,
-    "last": 45.04506647,
-    "max": 45.04685556,
-    "min": 45.04473694
-  },
-  "longitude": {
-    "count": 4749,
-    "first": 12.14901811,
-    "last": 12.14897173,
-    "max": 12.15195085,
-    "min": 12.14897173
-  }
+  "fix_count": 4749,
+  "has_gps": true
 }
