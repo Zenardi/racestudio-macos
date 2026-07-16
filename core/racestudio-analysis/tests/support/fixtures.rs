@@ -67,3 +67,20 @@ pub struct LapGolden {
     pub end_ms: i64,
     pub duration_ms: i64,
 }
+
+/// `<name>.delta_t.json` — delta-t of a reference lap vs a comparison lap
+/// (issue 3.2), sampled as `(distance, dt_seconds)` at a set of grid distances.
+/// Computed from the fixture decoded by the libxrk-validated decoder (M1).
+#[derive(Debug, Deserialize)]
+pub struct DeltaGolden {
+    pub file: String,
+    pub reference_index: usize,
+    pub comparison_index: usize,
+    pub points: Vec<DeltaPoint>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeltaPoint {
+    pub distance: f64,
+    pub dt: f64,
+}

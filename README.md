@@ -68,6 +68,10 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > sliced to the lap's half-open time window — then derives a trapezoidal distance
 > axis from GPS speed and aligns any two laps in the **time** or **distance**
 > domain for overlay comparison, all validated against the beacon-lap golden.
+> Delta-t (3.2) is the overlay's core metric: `delta_t` returns the cumulative
+> time a comparison lap has gained or lost versus a reference lap as a function
+> of distance (positive ⇒ slower) — zero at the start line, the lap-time
+> difference at the finish, with both laps aligned by track position.
 
 ## Architecture
 
@@ -102,8 +106,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 - **`racestudio-analysis`** — telemetry analysis engine (M3), built on the
   decoded `Session`. Lap segmentation & alignment (3.1) is the first layer:
   `segment_laps` → per-lap `Lap` views, `distance_axis` (trapezoidal integration
-  of GPS speed), and `align_by_time` / `align_by_distance` for two-lap overlay;
-  channels, math, and resampling follow. Panic-free, with a single `AnalysisError`.
+  of GPS speed), and `align_by_time` / `align_by_distance` for two-lap overlay.
+  Delta-t (3.2) adds `delta_t(reference, comparison)` — the time-variance-over-
+  distance metric. Channels, math, and resampling follow. Panic-free, with a
+  single `AnalysisError`.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
@@ -136,7 +142,7 @@ Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
-  racestudio-analysis/         # analysis engine — lap segmentation & alignment (time/distance)
+  racestudio-analysis/         # analysis engine — lap segmentation, alignment, delta-t
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets

@@ -18,11 +18,13 @@
 use racestudio_decode::Session;
 
 use crate::error::AnalysisError;
+use crate::math::{cumulative_trapezoid, interp};
 
 /// The channel integrated to distance for distance-domain work. AiM's GPS-derived
 /// ground speed (m/s); see [`align_by_distance`]. Held constant because the
 /// align API takes only the *value* channel to compare, not the speed source.
-const SPEED_CHANNEL: &str = "GPS Speed";
+/// Shared with delta-t (3.2).
+pub(crate) const SPEED_CHANNEL: &str = "GPS Speed";
 
 /// The domain a pair of laps is aligned on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -212,7 +214,7 @@ pub fn segment_laps(session: &Session) -> Vec<Lap> {
 #[must_use]
 pub fn distance_axis(lap: &Lap, speed_channel: &str) -> Vec<f64> {
     lap.channel(speed_channel)
-        .map(|channel| cumulative_distance(channel.samples()))
+        .map(|channel| cumulative_trapezoid(channel.samples(), true))
         .unwrap_or_default()
 }
 
@@ -311,25 +313,6 @@ fn slice_samples(samples: &[(f64, f64)], start_ms: f64, end_ms: f64) -> Vec<(f64
         .collect()
 }
 
-/// Cumulative trapezoidal integral of a `(timecode_ms, speed)` series, one value
-/// per sample starting at `0`. Each step's area is clamped to `>= 0` so the axis
-/// is a guaranteed-monotonic distance (speed is non-negative; this only guards
-/// against sensor noise).
-fn cumulative_distance(speed: &[(f64, f64)]) -> Vec<f64> {
-    let mut axis = Vec::with_capacity(speed.len());
-    let mut distance = 0.0;
-    let mut previous: Option<(f64, f64)> = None;
-    for &(time_ms, value) in speed {
-        if let Some((prev_time, prev_value)) = previous {
-            let dt_s = (time_ms - prev_time) / 1000.0;
-            distance += (0.5 * (prev_value + value) * dt_s).max(0.0);
-        }
-        axis.push(distance);
-        previous = Some((time_ms, value));
-    }
-    axis
-}
-
 /// A channel's samples split into re-based times (`t - start_ms`) and values.
 fn rebased(samples: &[(f64, f64)], start_ms: f64) -> (Vec<f64>, Vec<f64>) {
     let times = samples.iter().map(|&(t, _)| t - start_ms).collect();
@@ -343,7 +326,7 @@ fn rebased(samples: &[(f64, f64)], start_ms: f64) -> (Vec<f64>, Vec<f64>) {
 fn value_vs_distance(lap: &Lap, channel: &str) -> Result<(Vec<f64>, Vec<f64>), AnalysisError> {
     let speed = require_channel(lap, SPEED_CHANNEL)?;
     let value = require_channel(lap, channel)?;
-    let cumulative = cumulative_distance(speed.samples());
+    let cumulative = cumulative_trapezoid(speed.samples(), true);
     let speed_times: Vec<f64> = speed.samples().iter().map(|&(t, _)| t).collect();
     let distances = value
         .samples()
@@ -362,25 +345,6 @@ fn require_channel<'a>(lap: &'a Lap, name: &str) -> Result<&'a LapChannel, Analy
         })
 }
 
-/// Linear interpolation of `ys` (paired with ascending `xs`) at `x`, clamped to
-/// the endpoints. Empty input yields `0.0`; a single point yields that point.
-fn interp(xs: &[f64], ys: &[f64], x: f64) -> f64 {
-    match (xs.first(), xs.last()) {
-        (None, _) | (_, None) => 0.0,
-        (Some(&first), _) if x <= first => ys.first().copied().unwrap_or(0.0),
-        (_, Some(&last)) if x >= last => ys.last().copied().unwrap_or(0.0),
-        _ => {
-            // `first < x < last`, so a bracketing segment `[lo, hi]` exists with
-            // `xs[lo] < x <= xs[hi]`; the span is therefore strictly positive.
-            let hi = xs.iter().position(|&xi| xi >= x).unwrap_or(xs.len() - 1);
-            let lo = hi.saturating_sub(1);
-            let (x0, x1) = (xs[lo], xs[hi]);
-            let (y0, y1) = (ys[lo], ys[hi]);
-            y0 + (y1 - y0) * (x - x0) / (x1 - x0)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,50 +355,6 @@ mod tests {
         // [10, 30): includes 10 and 20, excludes 30.
         let sliced = slice_samples(&samples, 10.0, 30.0);
         assert_eq!(sliced, vec![(10.0, 2.0), (20.0, 3.0)]);
-    }
-
-    #[test]
-    fn test_cumulative_distance_empty_and_single() {
-        assert!(cumulative_distance(&[]).is_empty());
-        assert_eq!(cumulative_distance(&[(0.0, 12.0)]), vec![0.0]);
-    }
-
-    #[test]
-    fn test_cumulative_distance_trapezoid() {
-        // Constant 10 m/s over 1 s → 10 m; another 1 s → 20 m.
-        let axis = cumulative_distance(&[(0.0, 10.0), (1000.0, 10.0), (2000.0, 10.0)]);
-        assert_eq!(axis, vec![0.0, 10.0, 20.0]);
-    }
-
-    #[test]
-    fn test_cumulative_distance_clamps_negative_area() {
-        // A spurious negative speed cannot push distance backward.
-        let axis = cumulative_distance(&[(0.0, 0.0), (1000.0, -100.0), (2000.0, 10.0)]);
-        assert!(
-            axis.windows(2).all(|w| w[1] >= w[0]),
-            "still non-decreasing"
-        );
-    }
-
-    #[test]
-    fn test_interp_empty_is_zero() {
-        assert_eq!(interp(&[], &[], 5.0), 0.0);
-    }
-
-    #[test]
-    fn test_interp_single_point() {
-        assert_eq!(interp(&[3.0], &[42.0], 0.0), 42.0);
-        assert_eq!(interp(&[3.0], &[42.0], 9.0), 42.0);
-    }
-
-    #[test]
-    fn test_interp_clamps_and_lerps() {
-        let xs = [0.0, 10.0, 20.0];
-        let ys = [0.0, 100.0, 200.0];
-        assert_eq!(interp(&xs, &ys, -5.0), 0.0, "clamped below");
-        assert_eq!(interp(&xs, &ys, 25.0), 200.0, "clamped above");
-        assert_eq!(interp(&xs, &ys, 5.0), 50.0, "midpoint of first segment");
-        assert_eq!(interp(&xs, &ys, 15.0), 150.0, "midpoint of second segment");
     }
 
     #[test]
