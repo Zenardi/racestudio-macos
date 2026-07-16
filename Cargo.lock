@@ -340,6 +340,11 @@ dependencies = [
 [[package]]
 name = "racestudio-analysis"
 version = "0.1.0"
+dependencies = [
+ "racestudio-decode",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "racestudio-decode"
