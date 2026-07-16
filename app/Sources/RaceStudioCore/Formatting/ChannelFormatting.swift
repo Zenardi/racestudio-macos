@@ -22,7 +22,10 @@ public enum ChannelFormatting {
     /// description is used (always a `.` decimal), so the output is stable.
     public static func rate(hz: Double) -> String {
         guard hz.isFinite, hz > 0 else { return emDash }
-        let value = hz == hz.rounded() ? String(Int(hz)) : "\(hz)"
+        // Only take the whole-number path when `hz` is safely within `Int` range
+        // (well beyond any real sample rate); `Int(hz)` traps on out-of-range
+        // doubles. Larger values fall back to the raw description.
+        let value = (hz == hz.rounded() && hz < 1e15) ? String(Int(hz)) : "\(hz)"
         return "\(value) Hz"
     }
 

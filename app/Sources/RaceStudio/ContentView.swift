@@ -53,11 +53,20 @@ struct ContentView: View {
     private func loadingView(_ progress: DecodeProgress) -> some View {
         VStack(spacing: 12) {
             ProgressView(value: progress.fraction) {
-                Text("Decoding…")
+                Text(label(for: progress.phase))
             }
             .frame(width: 240)
             Button("Cancel") { store.cancel() }
         }
         .padding()
+    }
+
+    private func label(for phase: DecodeProgress.Phase) -> String {
+        switch phase {
+        case .reading: return "Reading…"
+        case .decoding: return "Decoding…"
+        case .finalizing: return "Finalizing…"
+        case .complete: return "Finishing…"
+        }
     }
 }

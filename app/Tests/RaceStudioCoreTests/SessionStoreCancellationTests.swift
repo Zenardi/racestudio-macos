@@ -9,10 +9,11 @@ import Combine
 
     /// A loader that emits scripted progress, optionally suspends until the task
     /// is cancelled, then returns/throws a preset result — no real Rust decode.
-    private final class ScriptedLoader: SessionLoading, @unchecked Sendable {
-        var progresses: [Double]
-        var result: Result<Session, Error>
-        var suspendUntilCancelled: Bool
+    /// Immutable (all `let`), so it is safely `Sendable` across the executor hop.
+    private final class ScriptedLoader: SessionLoading, Sendable {
+        let progresses: [Double]
+        let result: Result<Session, Error>
+        let suspendUntilCancelled: Bool
 
         init(progresses: [Double] = [], result: Result<Session, Error>, suspendUntilCancelled: Bool = false) {
             self.progresses = progresses
@@ -31,12 +32,37 @@ import Combine
         }
     }
 
+    /// A loader that routes by URL — `suspendingURL` suspends until cancelled and
+    /// would return `first`, any other URL returns `second` immediately. Immutable,
+    /// so no mid-flight mutation / data race when a second load supersedes the first.
+    private final class RoutingLoader: SessionLoading, Sendable {
+        let suspendingURL: URL
+        let first: Session
+        let second: Session
+
+        init(suspendingURL: URL, first: Session, second: Session) {
+            self.suspendingURL = suspendingURL
+            self.first = first
+            self.second = second
+        }
+
+        func load(_ url: URL, onProgress: @escaping @MainActor (DecodeProgress) -> Void) async throws -> Session {
+            if url == suspendingURL {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+                return first
+            }
+            return second
+        }
+    }
+
     private func session() throws -> Session { try GoldenSession.load("aim_official_test") }
     private var anyURL: URL { URL(fileURLWithPath: "/tmp/x.xrk") }
 
-    /// Spin until the store reports `.loading` (the scripted loader is suspended).
+    /// Spin (bounded) until the store reports `.loading` — the scripted loader is
+    /// suspended, so this returns almost immediately; the bound prevents a hang if
+    /// a load ever races past `.loading` without being observed.
     @MainActor private func waitUntilLoading(_ store: SessionStore) async {
-        while true {
+        for _ in 0..<100_000 {
             if case .loading = store.state { return }
             await Task.yield()
         }
@@ -77,20 +103,40 @@ import Combine
         #expect(store.viewModel == nil)
     }
 
+    @MainActor @Test func test_cancel_when_not_loading_keeps_loaded_session() async throws {
+        let store = SessionStore(loader: ScriptedLoader(result: .success(try session())))
+        await store.load(url: anyURL)
+        #expect(store.viewModel != nil)
+
+        store.cancel() // nothing in flight → must not discard the loaded session
+
+        guard case .loaded = store.state else {
+            Issue.record("cancel() discarded the loaded session, got \(store.state)")
+            return
+        }
+    }
+
     @MainActor @Test func test_new_load_cancels_previous_load() async throws {
         let first = try session()
-        let second = try session()
-        let loader = ScriptedLoader(result: .success(first), suspendUntilCancelled: true)
-        let store = SessionStore(loader: loader)
-        let firstLoad = Task { await store.load(url: anyURL) }
+        // A distinct session so the final assertion actually distinguishes the
+        // second load's result from the (cancelled) first's.
+        let second = Session(
+            metadata: SessionMetadata(
+                vehicle: "", track: "", driver: "SECOND-LOAD", session: "",
+                series: "", logDate: "", logTime: "", datetimeUtc: 0),
+            channels: [], laps: [])
+        let suspendingURL = anyURL
+        let secondURL = URL(fileURLWithPath: "/tmp/second.xrk")
+        let store = SessionStore(
+            loader: RoutingLoader(suspendingURL: suspendingURL, first: first, second: second))
+        let firstLoad = Task { await store.load(url: suspendingURL) }
         await waitUntilLoading(store)
 
-        // Second load cancels the suspended first and completes.
-        loader.suspendUntilCancelled = false
-        loader.result = .success(second)
-        await store.load(url: URL(fileURLWithPath: "/tmp/second.xrk"))
+        // A second load cancels the suspended first and completes with `second`.
+        await store.load(url: secondURL)
         await firstLoad.value
 
         #expect(store.state == .loaded(SessionViewModel(session: second)))
+        #expect(store.viewModel?.metadata.driver == "SECOND-LOAD")
     }
 }

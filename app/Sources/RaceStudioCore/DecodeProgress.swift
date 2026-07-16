@@ -23,10 +23,12 @@ public struct DecodeProgress: Equatable, Sendable {
         self.phase = phase
     }
 
-    /// Fold in a newer reading: the fraction is clamped to `0...1` and never
-    /// decreases; the phase advances to the update's.
+    /// Fold in a newer reading: a reading that would move the fraction backward
+    /// is ignored entirely (fraction and phase both hold), so neither the bar nor
+    /// the phase label ever regresses.
     public func reduce(_ update: DecodeProgress) -> DecodeProgress {
-        DecodeProgress(fraction: max(fraction, update.fraction), phase: update.phase)
+        guard update.fraction >= fraction else { return self }
+        return update
     }
 
     private static func clamp(_ value: Double) -> Double {

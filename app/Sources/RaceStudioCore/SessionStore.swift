@@ -56,11 +56,16 @@ public final class SessionStore: ObservableObject {
         let task = Task { await self.run(url: url, token: token) }
         self.task = task
         await task.value
+        // Drop the finished task, but only if a newer load/cancel hasn't already
+        // replaced it (whose token would differ).
+        if self.token == token { self.task = nil }
     }
 
     /// Cancel an in-flight load and return to `.idle` without producing a
-    /// `.loaded` or `.failed` result.
+    /// `.loaded` or `.failed` result. A no-op when nothing is loading, so a
+    /// completed `.loaded` session is never discarded.
     public func cancel() {
+        guard task != nil else { return }
         _ = beginNewOperation()
         state = .idle
     }
