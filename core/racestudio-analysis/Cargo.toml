@@ -11,6 +11,8 @@ rust-version.workspace = true
 [dependencies]
 # The analysis engine operates on the decoded, immutable `Session` model (1.6).
 racestudio-decode = { path = "../racestudio-decode" }
+# Mixed-radix FFT for the windowed spectrum (issue 3.7); handles any length.
+rustfft = "6"
 
 [dev-dependencies]
 # Used only by the golden-fixture test harness (issue 0.5); not shipped.
