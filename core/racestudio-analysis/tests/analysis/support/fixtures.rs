@@ -84,3 +84,19 @@ pub struct DeltaPoint {
     pub distance: f64,
     pub dt: f64,
 }
+
+/// `<name>.resample.json` — one interpolated channel resampled onto a uniform
+/// integer-millisecond timebase via libxrk's `resample_to_timecodes` (issue 3.3
+/// linear-interpolation oracle).
+#[derive(Debug, Deserialize)]
+pub struct ResampleGolden {
+    pub file: String,
+    pub channel: Option<String>,
+    pub points: Vec<ResamplePoint>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResamplePoint {
+    pub t: f64,
+    pub v: f64,
+}
