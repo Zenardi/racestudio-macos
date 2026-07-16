@@ -515,10 +515,60 @@ fileprivate struct FfiConverterString: FfiConverter {
 public protocol SessionHandleProtocol : AnyObject {
     
     /**
+     * Summary statistics of `channel` over the timecode `window` (ms, issue 3.4).
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+     * - [`AnalysisError::EmptyRange`] if the window selects no finite samples.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+    func channelStats(channel: String, window: FfiWindow) throws  -> StatsDto
+    
+    /**
      * The channel listing: one [`ChannelInfo`] per channel, metadata only. Use
      * [`Self::samples`] to read a channel's sample window.
      */
     func channels()  -> [ChannelInfo]
+    
+    /**
+     * The delta-t of the `comparison` lap versus the `reference` lap, as
+     * `(distance, dt)` points restricted to the distance `window` (metres,
+     * issue 3.2).
+     *
+     * # Errors
+     * - [`AnalysisError::LapOutOfRange`] if either index is not a valid lap.
+     * - [`AnalysisError::EmptyLap`] / [`AnalysisError::DistanceNotMonotonic`]
+     * from the delta-t computation.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+    func deltaTSeries(reference: UInt32, comparison: UInt32, window: FfiWindow) throws  -> [DeltaPoint]
+    
+    /**
+     * Evaluate the math-channel `expr` over the timecode `window` (ms), one
+     * [`Sample`] per point on the first referenced channel's in-window timebase;
+     * other referenced channels are linearly resampled onto it (issues 3.3/3.5).
+     * A constant expression (no channel references) yields no samples.
+     *
+     * # Errors
+     * - [`AnalysisError::InvalidExpression`] if `expr` fails to parse or evaluate.
+     * - [`AnalysisError::MissingChannel`] if it references an absent channel.
+     * - [`AnalysisError::DistanceNotMonotonic`] if a referenced channel's
+     * timecodes are not monotonic (so it cannot be resampled onto the grid).
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+    func evalMathChannel(expr: String, window: FfiWindow) throws  -> [Sample]
+    
+    /**
+     * The single-sided amplitude spectrum of `channel` over the timecode
+     * `window` (ms): the in-window samples are resampled to a uniform rate
+     * (issue 3.3), then windowed and transformed (issue 3.7).
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+     * - [`AnalysisError::EmptyRange`] if the window holds fewer than two samples.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+    func fftSpectrum(channel: String, windowFn: SpectrumWindow, window: FfiWindow) throws  -> SpectrumDto
     
     /**
      * A summary of the GPS stream, or `None` when the session carries no GPS.
@@ -529,6 +579,15 @@ public protocol SessionHandleProtocol : AnyObject {
      * The lap timing as a listing.
      */
     func laps()  -> [LapInfo]
+    
+    /**
+     * The laps whose time span intersects `window` (seconds) — a windowed view
+     * of the lap listing (issue 3.1).
+     *
+     * # Errors
+     * [`AnalysisError::WindowOutOfBounds`] for a non-finite or inverted window.
+     */
+    func listLaps(window: FfiWindow) throws  -> [LapInfo]
     
     /**
      * The session metadata (driver, vehicle, venue, date/time).
@@ -610,12 +669,92 @@ open class SessionHandle:
 
     
     /**
+     * Summary statistics of `channel` over the timecode `window` (ms, issue 3.4).
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+     * - [`AnalysisError::EmptyRange`] if the window selects no finite samples.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+open func channelStats(channel: String, window: FfiWindow)throws  -> StatsDto {
+    return try  FfiConverterTypeStatsDto.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_channel_stats(self.uniffiClonePointer(),
+        FfiConverterString.lower(channel),
+        FfiConverterTypeFfiWindow.lower(window),$0
+    )
+})
+}
+    
+    /**
      * The channel listing: one [`ChannelInfo`] per channel, metadata only. Use
      * [`Self::samples`] to read a channel's sample window.
      */
 open func channels() -> [ChannelInfo] {
     return try!  FfiConverterSequenceTypeChannelInfo.lift(try! rustCall() {
     uniffi_racestudio_ffi_fn_method_sessionhandle_channels(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * The delta-t of the `comparison` lap versus the `reference` lap, as
+     * `(distance, dt)` points restricted to the distance `window` (metres,
+     * issue 3.2).
+     *
+     * # Errors
+     * - [`AnalysisError::LapOutOfRange`] if either index is not a valid lap.
+     * - [`AnalysisError::EmptyLap`] / [`AnalysisError::DistanceNotMonotonic`]
+     * from the delta-t computation.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+open func deltaTSeries(reference: UInt32, comparison: UInt32, window: FfiWindow)throws  -> [DeltaPoint] {
+    return try  FfiConverterSequenceTypeDeltaPoint.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_delta_t_series(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(reference),
+        FfiConverterUInt32.lower(comparison),
+        FfiConverterTypeFfiWindow.lower(window),$0
+    )
+})
+}
+    
+    /**
+     * Evaluate the math-channel `expr` over the timecode `window` (ms), one
+     * [`Sample`] per point on the first referenced channel's in-window timebase;
+     * other referenced channels are linearly resampled onto it (issues 3.3/3.5).
+     * A constant expression (no channel references) yields no samples.
+     *
+     * # Errors
+     * - [`AnalysisError::InvalidExpression`] if `expr` fails to parse or evaluate.
+     * - [`AnalysisError::MissingChannel`] if it references an absent channel.
+     * - [`AnalysisError::DistanceNotMonotonic`] if a referenced channel's
+     * timecodes are not monotonic (so it cannot be resampled onto the grid).
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+open func evalMathChannel(expr: String, window: FfiWindow)throws  -> [Sample] {
+    return try  FfiConverterSequenceTypeSample.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_eval_math_channel(self.uniffiClonePointer(),
+        FfiConverterString.lower(expr),
+        FfiConverterTypeFfiWindow.lower(window),$0
+    )
+})
+}
+    
+    /**
+     * The single-sided amplitude spectrum of `channel` over the timecode
+     * `window` (ms): the in-window samples are resampled to a uniform rate
+     * (issue 3.3), then windowed and transformed (issue 3.7).
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+     * - [`AnalysisError::EmptyRange`] if the window holds fewer than two samples.
+     * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+     */
+open func fftSpectrum(channel: String, windowFn: SpectrumWindow, window: FfiWindow)throws  -> SpectrumDto {
+    return try  FfiConverterTypeSpectrumDto.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_fft_spectrum(self.uniffiClonePointer(),
+        FfiConverterString.lower(channel),
+        FfiConverterTypeSpectrumWindow.lower(windowFn),
+        FfiConverterTypeFfiWindow.lower(window),$0
     )
 })
 }
@@ -636,6 +775,21 @@ open func gpsSummary() -> GpsSummary? {
 open func laps() -> [LapInfo] {
     return try!  FfiConverterSequenceTypeLapInfo.lift(try! rustCall() {
     uniffi_racestudio_ffi_fn_method_sessionhandle_laps(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * The laps whose time span intersects `window` (seconds) — a windowed view
+     * of the lap listing (issue 3.1).
+     *
+     * # Errors
+     * [`AnalysisError::WindowOutOfBounds`] for a non-finite or inverted window.
+     */
+open func listLaps(window: FfiWindow)throws  -> [LapInfo] {
+    return try  FfiConverterSequenceTypeLapInfo.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_list_laps(self.uniffiClonePointer(),
+        FfiConverterTypeFfiWindow.lower(window),$0
     )
 })
 }
@@ -848,6 +1002,172 @@ public func FfiConverterTypeChannelInfo_lift(_ buf: RustBuffer) throws -> Channe
 #endif
 public func FfiConverterTypeChannelInfo_lower(_ value: ChannelInfo) -> RustBuffer {
     return FfiConverterTypeChannelInfo.lower(value)
+}
+
+
+/**
+ * One point of a delta-t series: cumulative time gained/lost versus a reference
+ * lap, as a function of cumulative distance (issue 3.2).
+ */
+public struct DeltaPoint {
+    /**
+     * Cumulative distance from the lap start (metres).
+     */
+    public var distance: Double
+    /**
+     * Delta-t in seconds (positive ⇒ the comparison lap is slower).
+     */
+    public var dt: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Cumulative distance from the lap start (metres).
+         */distance: Double, 
+        /**
+         * Delta-t in seconds (positive ⇒ the comparison lap is slower).
+         */dt: Double) {
+        self.distance = distance
+        self.dt = dt
+    }
+}
+
+
+
+extension DeltaPoint: Equatable, Hashable {
+    public static func ==(lhs: DeltaPoint, rhs: DeltaPoint) -> Bool {
+        if lhs.distance != rhs.distance {
+            return false
+        }
+        if lhs.dt != rhs.dt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(distance)
+        hasher.combine(dt)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeltaPoint: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeltaPoint {
+        return
+            try DeltaPoint(
+                distance: FfiConverterDouble.read(from: &buf), 
+                dt: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeltaPoint, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.distance, into: &buf)
+        FfiConverterDouble.write(value.dt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeltaPoint_lift(_ buf: RustBuffer) throws -> DeltaPoint {
+    return try FfiConverterTypeDeltaPoint.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeltaPoint_lower(_ value: DeltaPoint) -> RustBuffer {
+    return FfiConverterTypeDeltaPoint.lower(value)
+}
+
+
+/**
+ * A half-open analysis window `[start, end)` on an accessor's natural axis —
+ * seconds for laps, channel timecode (ms) for channel accessors, cumulative
+ * distance (m) for delta-t. Every windowed accessor takes one so the UI can
+ * request just the visible range without marshalling whole channels (3.8).
+ */
+public struct FfiWindow {
+    /**
+     * Inclusive lower bound.
+     */
+    public var start: Double
+    /**
+     * Exclusive (for channel windows) / inclusive (for laps, delta-t) upper bound.
+     */
+    public var end: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Inclusive lower bound.
+         */start: Double, 
+        /**
+         * Exclusive (for channel windows) / inclusive (for laps, delta-t) upper bound.
+         */end: Double) {
+        self.start = start
+        self.end = end
+    }
+}
+
+
+
+extension FfiWindow: Equatable, Hashable {
+    public static func ==(lhs: FfiWindow, rhs: FfiWindow) -> Bool {
+        if lhs.start != rhs.start {
+            return false
+        }
+        if lhs.end != rhs.end {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(start)
+        hasher.combine(end)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiWindow: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiWindow {
+        return
+            try FfiWindow(
+                start: FfiConverterDouble.read(from: &buf), 
+                end: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiWindow, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.start, into: &buf)
+        FfiConverterDouble.write(value.end, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiWindow_lift(_ buf: RustBuffer) throws -> FfiWindow {
+    return try FfiConverterTypeFfiWindow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiWindow_lower(_ value: FfiWindow) -> RustBuffer {
+    return FfiConverterTypeFfiWindow.lower(value)
 }
 
 
@@ -1318,6 +1638,386 @@ public func FfiConverterTypeSessionMetadata_lower(_ value: SessionMetadata) -> R
 
 
 /**
+ * A single-sided amplitude spectrum and its frequency axis (issue 3.7).
+ */
+public struct SpectrumDto {
+    /**
+     * Frequencies (Hz): `k·fs/N` for `k` in `0..=N/2`.
+     */
+    public var freqs: [Double]
+    /**
+     * Single-sided amplitudes, aligned with `freqs`.
+     */
+    public var amps: [Double]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Frequencies (Hz): `k·fs/N` for `k` in `0..=N/2`.
+         */freqs: [Double], 
+        /**
+         * Single-sided amplitudes, aligned with `freqs`.
+         */amps: [Double]) {
+        self.freqs = freqs
+        self.amps = amps
+    }
+}
+
+
+
+extension SpectrumDto: Equatable, Hashable {
+    public static func ==(lhs: SpectrumDto, rhs: SpectrumDto) -> Bool {
+        if lhs.freqs != rhs.freqs {
+            return false
+        }
+        if lhs.amps != rhs.amps {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(freqs)
+        hasher.combine(amps)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSpectrumDto: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpectrumDto {
+        return
+            try SpectrumDto(
+                freqs: FfiConverterSequenceDouble.read(from: &buf), 
+                amps: FfiConverterSequenceDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SpectrumDto, into buf: inout [UInt8]) {
+        FfiConverterSequenceDouble.write(value.freqs, into: &buf)
+        FfiConverterSequenceDouble.write(value.amps, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpectrumDto_lift(_ buf: RustBuffer) throws -> SpectrumDto {
+    return try FfiConverterTypeSpectrumDto.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpectrumDto_lower(_ value: SpectrumDto) -> RustBuffer {
+    return FfiConverterTypeSpectrumDto.lower(value)
+}
+
+
+/**
+ * Summary statistics for a channel window (issue 3.4).
+ */
+public struct StatsDto {
+    /**
+     * Number of finite samples in the window.
+     */
+    public var count: UInt32
+    /**
+     * Minimum sample value.
+     */
+    public var min: Double
+    /**
+     * Maximum sample value.
+     */
+    public var max: Double
+    /**
+     * Arithmetic mean.
+     */
+    public var mean: Double
+    /**
+     * Population standard deviation (÷ n).
+     */
+    public var stdPop: Double
+    /**
+     * Sample standard deviation (÷ n−1; 0 for a single sample).
+     */
+    public var stdSample: Double
+    /**
+     * Root mean square.
+     */
+    public var rms: Double
+    /**
+     * Peak-to-peak range (`max − min`).
+     */
+    public var range: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Number of finite samples in the window.
+         */count: UInt32, 
+        /**
+         * Minimum sample value.
+         */min: Double, 
+        /**
+         * Maximum sample value.
+         */max: Double, 
+        /**
+         * Arithmetic mean.
+         */mean: Double, 
+        /**
+         * Population standard deviation (÷ n).
+         */stdPop: Double, 
+        /**
+         * Sample standard deviation (÷ n−1; 0 for a single sample).
+         */stdSample: Double, 
+        /**
+         * Root mean square.
+         */rms: Double, 
+        /**
+         * Peak-to-peak range (`max − min`).
+         */range: Double) {
+        self.count = count
+        self.min = min
+        self.max = max
+        self.mean = mean
+        self.stdPop = stdPop
+        self.stdSample = stdSample
+        self.rms = rms
+        self.range = range
+    }
+}
+
+
+
+extension StatsDto: Equatable, Hashable {
+    public static func ==(lhs: StatsDto, rhs: StatsDto) -> Bool {
+        if lhs.count != rhs.count {
+            return false
+        }
+        if lhs.min != rhs.min {
+            return false
+        }
+        if lhs.max != rhs.max {
+            return false
+        }
+        if lhs.mean != rhs.mean {
+            return false
+        }
+        if lhs.stdPop != rhs.stdPop {
+            return false
+        }
+        if lhs.stdSample != rhs.stdSample {
+            return false
+        }
+        if lhs.rms != rhs.rms {
+            return false
+        }
+        if lhs.range != rhs.range {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(count)
+        hasher.combine(min)
+        hasher.combine(max)
+        hasher.combine(mean)
+        hasher.combine(stdPop)
+        hasher.combine(stdSample)
+        hasher.combine(rms)
+        hasher.combine(range)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStatsDto: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StatsDto {
+        return
+            try StatsDto(
+                count: FfiConverterUInt32.read(from: &buf), 
+                min: FfiConverterDouble.read(from: &buf), 
+                max: FfiConverterDouble.read(from: &buf), 
+                mean: FfiConverterDouble.read(from: &buf), 
+                stdPop: FfiConverterDouble.read(from: &buf), 
+                stdSample: FfiConverterDouble.read(from: &buf), 
+                rms: FfiConverterDouble.read(from: &buf), 
+                range: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StatsDto, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.count, into: &buf)
+        FfiConverterDouble.write(value.min, into: &buf)
+        FfiConverterDouble.write(value.max, into: &buf)
+        FfiConverterDouble.write(value.mean, into: &buf)
+        FfiConverterDouble.write(value.stdPop, into: &buf)
+        FfiConverterDouble.write(value.stdSample, into: &buf)
+        FfiConverterDouble.write(value.rms, into: &buf)
+        FfiConverterDouble.write(value.range, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStatsDto_lift(_ buf: RustBuffer) throws -> StatsDto {
+    return try FfiConverterTypeStatsDto.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStatsDto_lower(_ value: StatsDto) -> RustBuffer {
+    return FfiConverterTypeStatsDto.lower(value)
+}
+
+
+/**
+ * The analysis failure surface across the FFI boundary — the analysis crate's
+ * [`AnalysisError`](racestudio_analysis::AnalysisError) plus the FFI-specific
+ * invalid-expression, out-of-range-lap, and out-of-bounds-window cases.
+ *
+ * Declared `#[uniffi(flat_error)]`: Swift receives a plain `enum AnalysisError:
+ * Error` with these cases (the human-readable message comes from [`Display`]),
+ * so an invalid expression or an out-of-bounds window is a **thrown** typed
+ * error, never a trap.
+ */
+public enum AnalysisError {
+
+    
+    
+    /**
+     * A named channel is not present in the session.
+     */
+    case MissingChannel(message: String)
+    
+    /**
+     * A lap carries no samples to align (delta-t).
+     */
+    case EmptyLap(message: String)
+    
+    /**
+     * A lap's distance axis is not monotonic, so time cannot be inverted.
+     */
+    case DistanceNotMonotonic(message: String)
+    
+    /**
+     * The window selected no finite samples.
+     */
+    case EmptyRange(message: String)
+    
+    /**
+     * A math-channel expression failed to lex, parse, or evaluate.
+     */
+    case InvalidExpression(message: String)
+    
+    /**
+     * A delta-t lap index is outside `0..lap_count`.
+     */
+    case LapOutOfRange(message: String)
+    
+    /**
+     * The window is non-finite or inverted (`start > end`).
+     */
+    case WindowOutOfBounds(message: String)
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAnalysisError: FfiConverterRustBuffer {
+    typealias SwiftType = AnalysisError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AnalysisError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .MissingChannel(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .EmptyLap(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .DistanceNotMonotonic(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .EmptyRange(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .InvalidExpression(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .LapOutOfRange(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 7: return .WindowOutOfBounds(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AnalysisError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .MissingChannel(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .EmptyLap(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .DistanceNotMonotonic(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .EmptyRange(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .InvalidExpression(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+        case .LapOutOfRange(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
+        case .WindowOutOfBounds(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
+
+        
+        }
+    }
+}
+
+
+extension AnalysisError: Equatable, Hashable {}
+
+extension AnalysisError: Foundation.LocalizedError {
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+}
+
+
+/**
  * The decode failure surface across the FFI boundary, mapped from the decode
  * crate's [`DecodeError`], plus the FFI-specific out-of-range channel index.
  */
@@ -1469,6 +2169,99 @@ extension FfiDecodeError: Foundation.LocalizedError {
     }
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The window function applied before an [`SessionHandle::fft_spectrum`] transform.
+ */
+
+public enum SpectrumWindow {
+    
+    /**
+     * No taper.
+     */
+    case rectangular
+    /**
+     * Hann.
+     */
+    case hann
+    /**
+     * Hamming.
+     */
+    case hamming
+    /**
+     * Blackman.
+     */
+    case blackman
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSpectrumWindow: FfiConverterRustBuffer {
+    typealias SwiftType = SpectrumWindow
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SpectrumWindow {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .rectangular
+        
+        case 2: return .hann
+        
+        case 3: return .hamming
+        
+        case 4: return .blackman
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SpectrumWindow, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .rectangular:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .hann:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .hamming:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .blackman:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpectrumWindow_lift(_ buf: RustBuffer) throws -> SpectrumWindow {
+    return try FfiConverterTypeSpectrumWindow.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSpectrumWindow_lower(_ value: SpectrumWindow) -> RustBuffer {
+    return FfiConverterTypeSpectrumWindow.lower(value)
+}
+
+
+
+extension SpectrumWindow: Equatable, Hashable {}
+
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -1496,6 +2289,31 @@ fileprivate struct FfiConverterOptionTypeGpsSummary: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
+    typealias SwiftType = [Double]
+
+    public static func write(_ value: [Double], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterDouble.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Double] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Double]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterDouble.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeChannelInfo: FfiConverterRustBuffer {
     typealias SwiftType = [ChannelInfo]
 
@@ -1513,6 +2331,31 @@ fileprivate struct FfiConverterSequenceTypeChannelInfo: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeChannelInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDeltaPoint: FfiConverterRustBuffer {
+    typealias SwiftType = [DeltaPoint]
+
+    public static func write(_ value: [DeltaPoint], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeltaPoint.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeltaPoint] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeltaPoint]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeltaPoint.read(from: &buf))
         }
         return seq
     }
@@ -1619,13 +2462,28 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_channel_stats() != 5142) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_channels() != 7489) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_delta_t_series() != 39180) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel() != 22850) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_fft_spectrum() != 16994) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary() != 37226) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_laps() != 1553) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_list_laps() != 54279) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_metadata() != 64487) {

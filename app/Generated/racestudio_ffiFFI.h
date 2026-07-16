@@ -261,9 +261,29 @@ void*_Nonnull uniffi_racestudio_ffi_fn_clone_sessionhandle(void*_Nonnull ptr, Ru
 void uniffi_racestudio_ffi_fn_free_sessionhandle(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNEL_STATS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNEL_STATS
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_channel_stats(void*_Nonnull ptr, RustBuffer channel, RustBuffer window, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNELS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNELS
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_channels(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_DELTA_T_SERIES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_DELTA_T_SERIES
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_delta_t_series(void*_Nonnull ptr, uint32_t reference, uint32_t comparison, RustBuffer window, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_eval_math_channel(void*_Nonnull ptr, RustBuffer expr, RustBuffer window, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_FFT_SPECTRUM
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_FFT_SPECTRUM
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_fft_spectrum(void*_Nonnull ptr, RustBuffer channel, RustBuffer window_fn, RustBuffer window, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_GPS_SUMMARY
@@ -274,6 +294,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_gps_summary(void*_Nonnu
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_laps(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LIST_LAPS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LIST_LAPS
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_list_laps(void*_Nonnull ptr, RustBuffer window, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_METADATA
@@ -589,9 +614,33 @@ uint16_t uniffi_racestudio_ffi_checksum_func_open_session(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNEL_STATS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNEL_STATS
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_channel_stats(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNELS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNELS
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_channels(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DELTA_T_SERIES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DELTA_T_SERIES
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_delta_t_series(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_FFT_SPECTRUM
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_FFT_SPECTRUM
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_fft_spectrum(void
     
 );
 #endif
@@ -604,6 +653,12 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_laps(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LIST_LAPS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LIST_LAPS
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_list_laps(void
     
 );
 #endif

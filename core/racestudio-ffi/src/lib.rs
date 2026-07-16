@@ -9,8 +9,22 @@
 //! across the boundary. Every entry point returns a UniFFI-mapped
 //! [`FfiDecodeError`]; malformed input never panics or traps.
 
-use std::sync::Arc;
+// The FFI boundary faces untrusted input and must never panic/trap (mirrors the
+// decode and analysis crates): forbid unwrap/expect/panic on shipped code; test
+// code is exempt.
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
 
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
+
+use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
+use racestudio_analysis::{
+    delta_t, resample_uniform, segment_laps, spectrum, stats_over_range, to_distance_grid,
+    AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
+};
 use racestudio_decode::{decode_session, DecodeError, Session};
 
 uniffi::setup_scaffolding!();
@@ -100,6 +114,192 @@ pub struct Sample {
     pub value: f64,
 }
 
+/// A half-open analysis window `[start, end)` on an accessor's natural axis —
+/// seconds for laps, channel timecode (ms) for channel accessors, cumulative
+/// distance (m) for delta-t. Every windowed accessor takes one so the UI can
+/// request just the visible range without marshalling whole channels (3.8).
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct FfiWindow {
+    /// Inclusive lower bound.
+    pub start: f64,
+    /// Exclusive (for channel windows) / inclusive (for laps, delta-t) upper bound.
+    pub end: f64,
+}
+
+impl FfiWindow {
+    /// Reject a `NaN` or inverted (`start > end`) window. Infinite bounds are
+    /// allowed and mean "unbounded" — `[-∞, ∞)` is the whole session.
+    fn validate(self) -> Result<(), AnalysisError> {
+        if self.start.is_nan() || self.end.is_nan() || self.start > self.end {
+            return Err(AnalysisError::WindowOutOfBounds {
+                start: self.start,
+                end: self.end,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// One point of a delta-t series: cumulative time gained/lost versus a reference
+/// lap, as a function of cumulative distance (issue 3.2).
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct DeltaPoint {
+    /// Cumulative distance from the lap start (metres).
+    pub distance: f64,
+    /// Delta-t in seconds (positive ⇒ the comparison lap is slower).
+    pub dt: f64,
+}
+
+/// Summary statistics for a channel window (issue 3.4).
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct StatsDto {
+    /// Number of finite samples in the window.
+    pub count: u32,
+    /// Minimum sample value.
+    pub min: f64,
+    /// Maximum sample value.
+    pub max: f64,
+    /// Arithmetic mean.
+    pub mean: f64,
+    /// Population standard deviation (÷ n).
+    pub std_pop: f64,
+    /// Sample standard deviation (÷ n−1; 0 for a single sample).
+    pub std_sample: f64,
+    /// Root mean square.
+    pub rms: f64,
+    /// Peak-to-peak range (`max − min`).
+    pub range: f64,
+}
+
+impl From<Stats> for StatsDto {
+    fn from(s: Stats) -> Self {
+        StatsDto {
+            count: u32::try_from(s.count()).unwrap_or(u32::MAX),
+            min: s.min(),
+            max: s.max(),
+            mean: s.mean(),
+            std_pop: s.std_pop(),
+            std_sample: s.std_sample(),
+            rms: s.rms(),
+            range: s.range(),
+        }
+    }
+}
+
+/// A single-sided amplitude spectrum and its frequency axis (issue 3.7).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SpectrumDto {
+    /// Frequencies (Hz): `k·fs/N` for `k` in `0..=N/2`.
+    pub freqs: Vec<f64>,
+    /// Single-sided amplitudes, aligned with `freqs`.
+    pub amps: Vec<f64>,
+}
+
+/// The window function applied before an [`SessionHandle::fft_spectrum`] transform.
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum SpectrumWindow {
+    /// No taper.
+    Rectangular,
+    /// Hann.
+    Hann,
+    /// Hamming.
+    Hamming,
+    /// Blackman.
+    Blackman,
+}
+
+impl From<SpectrumWindow> for FftWindow {
+    fn from(w: SpectrumWindow) -> Self {
+        match w {
+            SpectrumWindow::Rectangular => FftWindow::Rectangular,
+            SpectrumWindow::Hann => FftWindow::Hann,
+            SpectrumWindow::Hamming => FftWindow::Hamming,
+            SpectrumWindow::Blackman => FftWindow::Blackman,
+        }
+    }
+}
+
+/// The analysis failure surface across the FFI boundary — the analysis crate's
+/// [`AnalysisError`](racestudio_analysis::AnalysisError) plus the FFI-specific
+/// invalid-expression, out-of-range-lap, and out-of-bounds-window cases.
+///
+/// Declared `#[uniffi(flat_error)]`: Swift receives a plain `enum AnalysisError:
+/// Error` with these cases (the human-readable message comes from [`Display`]),
+/// so an invalid expression or an out-of-bounds window is a **thrown** typed
+/// error, never a trap.
+#[derive(Debug, uniffi::Error)]
+#[uniffi(flat_error)]
+pub enum AnalysisError {
+    /// A named channel is not present in the session.
+    MissingChannel {
+        /// The requested channel name.
+        name: String,
+    },
+    /// A lap carries no samples to align (delta-t).
+    EmptyLap,
+    /// A lap's distance axis is not monotonic, so time cannot be inverted.
+    DistanceNotMonotonic,
+    /// The window selected no finite samples.
+    EmptyRange,
+    /// A math-channel expression failed to lex, parse, or evaluate.
+    InvalidExpression {
+        /// The underlying expression error message.
+        message: String,
+    },
+    /// A delta-t lap index is outside `0..lap_count`.
+    LapOutOfRange {
+        /// The requested (invalid) lap index.
+        index: u32,
+        /// The number of laps in the session.
+        count: u32,
+    },
+    /// The window is non-finite or inverted (`start > end`).
+    WindowOutOfBounds {
+        /// The window start.
+        start: f64,
+        /// The window end.
+        end: f64,
+    },
+}
+
+impl std::fmt::Display for AnalysisError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnalysisError::MissingChannel { name } => write!(f, "channel not found: {name}"),
+            AnalysisError::EmptyLap => write!(f, "lap has no samples to align"),
+            AnalysisError::DistanceNotMonotonic => {
+                write!(f, "a channel axis (distance or timecode) is not monotonic")
+            }
+            AnalysisError::EmptyRange => write!(f, "window selected no finite samples"),
+            AnalysisError::InvalidExpression { message } => {
+                write!(f, "invalid math-channel expression: {message}")
+            }
+            AnalysisError::LapOutOfRange { index, count } => {
+                write!(
+                    f,
+                    "lap index {index} out of range (session has {count} laps)"
+                )
+            }
+            AnalysisError::WindowOutOfBounds { start, end } => {
+                write!(f, "window out of bounds: [{start}, {end})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for AnalysisError {}
+
+impl From<CoreAnalysisError> for AnalysisError {
+    fn from(err: CoreAnalysisError) -> Self {
+        match err {
+            CoreAnalysisError::MissingChannel { name } => AnalysisError::MissingChannel { name },
+            CoreAnalysisError::EmptyLap => AnalysisError::EmptyLap,
+            CoreAnalysisError::DistanceNotMonotonic => AnalysisError::DistanceNotMonotonic,
+            CoreAnalysisError::EmptyRange => AnalysisError::EmptyRange,
+        }
+    }
+}
+
 /// The decode failure surface across the FFI boundary, mapped from the decode
 /// crate's [`DecodeError`], plus the FFI-specific out-of-range channel index.
 #[derive(Debug, uniffi::Error)]
@@ -187,6 +387,18 @@ impl From<DecodeError> for FfiDecodeError {
 #[derive(Debug, uniffi::Object)]
 pub struct SessionHandle {
     session: Session,
+    /// Lazily-computed per-lap segmentation (3.1), shared by the lap-based
+    /// accessors so an interactive caller does not re-slice the whole session on
+    /// every windowed call.
+    segmented_laps: OnceLock<Vec<Lap>>,
+}
+
+impl SessionHandle {
+    /// The per-lap segmentation, computed once and cached.
+    fn segmented(&self) -> &[Lap] {
+        self.segmented_laps
+            .get_or_init(|| segment_laps(&self.session))
+    }
 }
 
 #[uniffi::export]
@@ -287,6 +499,220 @@ impl SessionHandle {
             .map(|&(timecode, value)| Sample { timecode, value })
             .collect())
     }
+
+    /// The laps whose time span intersects `window` (seconds) — a windowed view
+    /// of the lap listing (issue 3.1).
+    ///
+    /// # Errors
+    /// [`AnalysisError::WindowOutOfBounds`] for a non-finite or inverted window.
+    pub fn list_laps(&self, window: FfiWindow) -> Result<Vec<LapInfo>, AnalysisError> {
+        window.validate()?;
+        Ok(self
+            .session
+            .laps()
+            .laps()
+            .iter()
+            .filter(|l| l.end_time_s() >= window.start && l.start_time_s() <= window.end)
+            .map(|l| LapInfo {
+                index: l.index(),
+                start_time_s: l.start_time_s(),
+                duration_s: l.duration_s(),
+                end_time_s: l.end_time_s(),
+            })
+            .collect())
+    }
+
+    /// The delta-t of the `comparison` lap versus the `reference` lap, as
+    /// `(distance, dt)` points restricted to the distance `window` (metres,
+    /// issue 3.2).
+    ///
+    /// # Errors
+    /// - [`AnalysisError::LapOutOfRange`] if either index is not a valid lap.
+    /// - [`AnalysisError::EmptyLap`] / [`AnalysisError::DistanceNotMonotonic`]
+    ///   from the delta-t computation.
+    /// - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+    pub fn delta_t_series(
+        &self,
+        reference: u32,
+        comparison: u32,
+        window: FfiWindow,
+    ) -> Result<Vec<DeltaPoint>, AnalysisError> {
+        window.validate()?;
+        let laps = self.segmented();
+        let count = u32::try_from(laps.len()).unwrap_or(u32::MAX);
+        let lap = |index: u32| {
+            laps.get(index as usize)
+                .ok_or(AnalysisError::LapOutOfRange { index, count })
+        };
+        let series = delta_t(lap(reference)?, lap(comparison)?)?;
+        Ok(series
+            .into_iter()
+            .filter(|&(distance, _)| distance >= window.start && distance <= window.end)
+            .map(|(distance, dt)| DeltaPoint { distance, dt })
+            .collect())
+    }
+
+    /// Summary statistics of `channel` over the timecode `window` (ms, issue 3.4).
+    ///
+    /// # Errors
+    /// - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+    /// - [`AnalysisError::EmptyRange`] if the window selects no finite samples.
+    /// - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+    pub fn channel_stats(
+        &self,
+        channel: String,
+        window: FfiWindow,
+    ) -> Result<StatsDto, AnalysisError> {
+        window.validate()?;
+        let samples = channel_samples(&self.session, &channel)
+            .ok_or(AnalysisError::MissingChannel { name: channel })?;
+        Ok(stats_over_range(samples, window.start, window.end)?.into())
+    }
+
+    /// Evaluate the math-channel `expr` over the timecode `window` (ms), one
+    /// [`Sample`] per point on the first referenced channel's in-window timebase;
+    /// other referenced channels are linearly resampled onto it (issues 3.3/3.5).
+    /// A constant expression (no channel references) yields no samples.
+    ///
+    /// # Errors
+    /// - [`AnalysisError::InvalidExpression`] if `expr` fails to parse or evaluate.
+    /// - [`AnalysisError::MissingChannel`] if it references an absent channel.
+    /// - [`AnalysisError::DistanceNotMonotonic`] if a referenced channel's
+    ///   timecodes are not monotonic (so it cannot be resampled onto the grid).
+    /// - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+    pub fn eval_math_channel(
+        &self,
+        expr: String,
+        window: FfiWindow,
+    ) -> Result<Vec<Sample>, AnalysisError> {
+        window.validate()?;
+        let ast = parse_str(&expr).map_err(|e| AnalysisError::InvalidExpression {
+            message: e.to_string(),
+        })?;
+        let references = channels_referenced(&ast);
+        if references.is_empty() {
+            return Ok(Vec::new()); // constant expression: no timebase.
+        }
+        // Resolve every referenced channel up front (fail fast on a missing one).
+        let mut resolved: Vec<&[(f64, f64)]> = Vec::with_capacity(references.len());
+        for name in &references {
+            resolved.push(
+                channel_samples(&self.session, name)
+                    .ok_or_else(|| AnalysisError::MissingChannel { name: name.clone() })?,
+            );
+        }
+
+        // Anchor the shared timebase on the referenced channel with the most
+        // in-window samples — the highest resolution, and independent of the
+        // operand order (so `a*b` and `b*a` agree).
+        let in_window = |s: &[(f64, f64)]| {
+            s.iter()
+                .filter(|&&(t, _)| t >= window.start && t < window.end)
+                .count()
+        };
+        let anchor = (0..resolved.len())
+            .max_by_key(|&i| in_window(resolved[i]))
+            .unwrap_or(0);
+        let grid: Vec<f64> = resolved[anchor]
+            .iter()
+            .map(|&(t, _)| t)
+            .filter(|&t| t >= window.start && t < window.end)
+            .collect();
+        if grid.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // The anchor's in-window values already sit on the grid; the others are
+        // linearly resampled onto it (issue 3.3).
+        let mut resolver: HashMap<String, Vec<f64>> = HashMap::new();
+        for (i, (name, series)) in references.iter().zip(&resolved).enumerate() {
+            let values = if i == anchor {
+                series
+                    .iter()
+                    .filter(|&&(t, _)| t >= window.start && t < window.end)
+                    .map(|&(_, v)| v)
+                    .collect()
+            } else {
+                let times: Vec<f64> = series.iter().map(|&(t, _)| t).collect();
+                to_distance_grid(series, &times, &grid)?
+            };
+            resolver.insert(name.clone(), values);
+        }
+
+        let values =
+            eval_series(&ast, &resolver).map_err(|e| AnalysisError::InvalidExpression {
+                message: e.to_string(),
+            })?;
+        Ok(grid
+            .into_iter()
+            .zip(values)
+            .map(|(timecode, value)| Sample { timecode, value })
+            .collect())
+    }
+
+    /// The single-sided amplitude spectrum of `channel` over the timecode
+    /// `window` (ms): the in-window samples are resampled to a uniform rate
+    /// (issue 3.3), then windowed and transformed (issue 3.7).
+    ///
+    /// # Errors
+    /// - [`AnalysisError::MissingChannel`] if `channel` is not in the session.
+    /// - [`AnalysisError::EmptyRange`] if the window holds fewer than two samples.
+    /// - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
+    pub fn fft_spectrum(
+        &self,
+        channel: String,
+        window_fn: SpectrumWindow,
+        window: FfiWindow,
+    ) -> Result<SpectrumDto, AnalysisError> {
+        window.validate()?;
+        let samples = channel_samples(&self.session, &channel)
+            .ok_or(AnalysisError::MissingChannel { name: channel })?;
+        let windowed: Vec<(f64, f64)> = samples
+            .iter()
+            .copied()
+            .filter(|&(t, _)| t >= window.start && t < window.end)
+            .collect();
+        let fs = average_rate_hz(&windowed);
+        if fs <= 0.0 {
+            return Err(AnalysisError::EmptyRange);
+        }
+        // `resample_uniform`'s rate is in samples per unit of the series' own time
+        // axis. The timecodes are milliseconds, so resample at `fs/1000` (samples
+        // per ms) to place the grid at the physical `fs` Hz; `spectrum` is then
+        // given `fs` so the `k·fs/N` axis comes out in Hz.
+        let uniform = resample_uniform(&windowed, fs / 1000.0);
+        let values: Vec<f64> = uniform.iter().map(|&(_, v)| v).collect();
+        let spec = spectrum(&values, fs, window_fn.into())?;
+        Ok(SpectrumDto {
+            freqs: spec.freqs().to_vec(),
+            amps: spec.amps().to_vec(),
+        })
+    }
+}
+
+/// A channel's `(timecode, value)` samples by name, across CHS-backed and GPS
+/// channels (`None` when the name is not present).
+fn channel_samples<'a>(session: &'a Session, name: &str) -> Option<&'a [(f64, f64)]> {
+    if let Some(channel) = session.channels().iter().find(|c| c.name() == name) {
+        return Some(channel.samples());
+    }
+    session
+        .gps()
+        .and_then(|gps| gps.channel(name))
+        .map(|channel| channel.samples())
+}
+
+/// The average sample rate (Hz) of a millisecond-timecoded series, or `0` when
+/// it has fewer than two samples or a non-positive span.
+fn average_rate_hz(samples: &[(f64, f64)]) -> f64 {
+    let (Some(&(first, _)), Some(&(last, _))) = (samples.first(), samples.last()) else {
+        return 0.0;
+    };
+    let span_ms = last - first;
+    if span_ms <= 0.0 {
+        return 0.0;
+    }
+    1000.0 * (samples.len() as f64 - 1.0) / span_ms
 }
 
 /// Open and decode the `.xrk` file at `path` into an opaque [`SessionHandle`].
@@ -300,7 +726,10 @@ impl SessionHandle {
 #[uniffi::export]
 pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> {
     let session = decode_session(path)?;
-    Ok(Arc::new(SessionHandle { session }))
+    Ok(Arc::new(SessionHandle {
+        session,
+        segmented_laps: OnceLock::new(),
+    }))
 }
 
 #[cfg(test)]

@@ -165,6 +165,24 @@ fn apply(func: Func, values: &[f64]) -> f64 {
     }
 }
 
+/// The distinct channel names `ast` references, in first-appearance order.
+///
+/// Useful for callers that must marshal or resample only the channels an
+/// expression actually uses (e.g. building a common timebase before
+/// [`eval_series`]). A constant expression returns an empty list.
+#[must_use]
+pub fn channels_referenced(ast: &Ast) -> Vec<String> {
+    let mut refs = Vec::new();
+    collect_channels(ast, &mut refs);
+    let mut seen = Vec::new();
+    for (name, _, _) in refs {
+        if !seen.contains(&name) {
+            seen.push(name);
+        }
+    }
+    seen
+}
+
 /// Collect every channel reference (name + position) in evaluation order.
 fn collect_channels(ast: &Ast, out: &mut Vec<(String, usize, usize)>) {
     match ast {

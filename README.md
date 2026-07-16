@@ -150,6 +150,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
   `SessionHandle` (metadata / channel listing / lap + GPS summaries), and a
   windowed `samples(channel, start, count)` accessor — plus `core_version()`.
+  3.8 adds the **analysis** interface, all **windowed** so the UI requests only
+  the visible range: `list_laps`, `delta_t_series`, `channel_stats`,
+  `eval_math_channel`, and `fft_spectrum` (each taking an `FfiWindow`), returning
+  DTOs (`LapInfo` / `DeltaPoint` / `StatsDto` / `SpectrumDto`) and throwing a
+  typed `AnalysisError` — never a trap.
   See [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target. As of 2.2 it owns the load

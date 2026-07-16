@@ -23,6 +23,6 @@ mod lexer;
 mod parser;
 
 pub use error::ExprError;
-pub use eval::{eval_scalar, eval_series, ChannelResolver, Env};
+pub use eval::{channels_referenced, eval_scalar, eval_series, ChannelResolver, Env};
 pub use lexer::{tokenize, Token, TokenKind};
 pub use parser::{parse, parse_str, Ast, BinOp, Func};
