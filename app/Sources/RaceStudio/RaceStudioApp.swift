@@ -22,6 +22,7 @@ struct RaceStudioApp: App {
         DocumentGroup(viewing: XRKDocument.self) { _ in
             ContentView()
                 .environmentObject(model)
+                .environmentObject(model.store)
         }
         .commands {
             CommandGroup(after: .newItem) {
