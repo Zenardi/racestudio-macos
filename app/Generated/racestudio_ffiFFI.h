@@ -251,10 +251,50 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureStr
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_CLONE_SESSIONHANDLE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_CLONE_SESSIONHANDLE
+void*_Nonnull uniffi_racestudio_ffi_fn_clone_sessionhandle(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FREE_SESSIONHANDLE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FREE_SESSIONHANDLE
+void uniffi_racestudio_ffi_fn_free_sessionhandle(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNELS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_CHANNELS
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_channels(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_GPS_SUMMARY
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_GPS_SUMMARY
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_gps_summary(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_laps(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_METADATA
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_METADATA
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_metadata(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples(void*_Nonnull ptr, uint32_t channel_index, uint32_t start, uint32_t count, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_OPEN_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_OPEN_SESSION
+void*_Nonnull uniffi_racestudio_ffi_fn_func_open_session(RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_RACESTUDIO_FFI_RUSTBUFFER_ALLOC
@@ -540,6 +580,42 @@ void ffi_racestudio_ffi_rust_future_complete_void(uint64_t handle, RustCallStatu
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_CORE_VERSION
 uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
+uint16_t uniffi_racestudio_ffi_checksum_func_open_session(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNELS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_CHANNELS
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_channels(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_GPS_SUMMARY
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_GPS_SUMMARY
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_laps(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_METADATA
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_METADATA
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_metadata(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples(void
     
 );
 #endif

@@ -399,6 +399,70 @@ fileprivate class UniffiHandleMap<T> {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
+    typealias FfiType = UInt32
+    typealias SwiftType = UInt32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    public static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -436,6 +500,1073 @@ fileprivate struct FfiConverterString: FfiConverter {
         writeBytes(&buf, value.utf8)
     }
 }
+
+
+
+
+/**
+ * An opened decode session, exposed to Swift as an opaque, `Arc`-backed handle.
+ *
+ * The whole [`Session`](racestudio_decode::Session) is decoded once when the
+ * handle is created ([`open_session`]); the accessors then read from it in
+ * place. Channel samples are read in bounded windows via [`Self::samples`], so
+ * Swift never has to copy an entire channel to display part of it.
+ */
+public protocol SessionHandleProtocol : AnyObject {
+    
+    /**
+     * The channel listing: one [`ChannelInfo`] per channel, metadata only. Use
+     * [`Self::samples`] to read a channel's sample window.
+     */
+    func channels()  -> [ChannelInfo]
+    
+    /**
+     * A summary of the GPS stream, or `None` when the session carries no GPS.
+     */
+    func gpsSummary()  -> GpsSummary?
+    
+    /**
+     * The lap timing as a listing.
+     */
+    func laps()  -> [LapInfo]
+    
+    /**
+     * The session metadata (driver, vehicle, venue, date/time).
+     */
+    func metadata()  -> SessionMetadata
+    
+    /**
+     * Read at most `count` samples of channel `channel_index`, starting at
+     * sample `start`.
+     *
+     * The window is **clamped** to the channel: a `start` at or past the end
+     * yields an empty vec, and a `count` that overruns the end returns only the
+     * samples that remain — never an over-read.
+     *
+     * # Errors
+     * [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+     * channel. Never panics.
+     */
+    func samples(channelIndex: UInt32, start: UInt32, count: UInt32) throws  -> [Sample]
+    
+}
+
+/**
+ * An opened decode session, exposed to Swift as an opaque, `Arc`-backed handle.
+ *
+ * The whole [`Session`](racestudio_decode::Session) is decoded once when the
+ * handle is created ([`open_session`]); the accessors then read from it in
+ * place. Channel samples are read in bounded windows via [`Self::samples`], so
+ * Swift never has to copy an entire channel to display part of it.
+ */
+open class SessionHandle:
+    SessionHandleProtocol {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_racestudio_ffi_fn_clone_sessionhandle(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_racestudio_ffi_fn_free_sessionhandle(pointer, $0) }
+    }
+
+    
+
+    
+    /**
+     * The channel listing: one [`ChannelInfo`] per channel, metadata only. Use
+     * [`Self::samples`] to read a channel's sample window.
+     */
+open func channels() -> [ChannelInfo] {
+    return try!  FfiConverterSequenceTypeChannelInfo.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_channels(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * A summary of the GPS stream, or `None` when the session carries no GPS.
+     */
+open func gpsSummary() -> GpsSummary? {
+    return try!  FfiConverterOptionTypeGpsSummary.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_gps_summary(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * The lap timing as a listing.
+     */
+open func laps() -> [LapInfo] {
+    return try!  FfiConverterSequenceTypeLapInfo.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_laps(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * The session metadata (driver, vehicle, venue, date/time).
+     */
+open func metadata() -> SessionMetadata {
+    return try!  FfiConverterTypeSessionMetadata.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_metadata(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+    /**
+     * Read at most `count` samples of channel `channel_index`, starting at
+     * sample `start`.
+     *
+     * The window is **clamped** to the channel: a `start` at or past the end
+     * yields an empty vec, and a `count` that overruns the end returns only the
+     * samples that remain — never an over-read.
+     *
+     * # Errors
+     * [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+     * channel. Never panics.
+     */
+open func samples(channelIndex: UInt32, start: UInt32, count: UInt32)throws  -> [Sample] {
+    return try  FfiConverterSequenceTypeSample.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_samples(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(channelIndex),
+        FfiConverterUInt32.lower(start),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
+}
+    
+
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionHandle: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = SessionHandle
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> SessionHandle {
+        return SessionHandle(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: SessionHandle) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionHandle {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: SessionHandle, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionHandle_lift(_ pointer: UnsafeMutableRawPointer) throws -> SessionHandle {
+    return try FfiConverterTypeSessionHandle.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionHandle_lower(_ value: SessionHandle) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeSessionHandle.lower(value)
+}
+
+
+/**
+ * A channel's listing entry: metadata only — **no** bulk samples. Sample data
+ * is fetched separately and in windows via [`SessionHandle::samples`].
+ */
+public struct ChannelInfo {
+    /**
+     * Channel name (e.g. `RPM`, `AccelerometerX`).
+     */
+    public var name: String
+    /**
+     * Physical unit (e.g. `g`, `V`); empty when dimensionless.
+     */
+    public var unit: String
+    /**
+     * Native sample rate in hertz (0 when unknown).
+     */
+    public var sampleRateHz: Double
+    /**
+     * Display precision (decimal places) hint.
+     */
+    public var decimals: UInt8
+    /**
+     * Number of samples in the channel (reported without copying them).
+     */
+    public var sampleCount: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Channel name (e.g. `RPM`, `AccelerometerX`).
+         */name: String, 
+        /**
+         * Physical unit (e.g. `g`, `V`); empty when dimensionless.
+         */unit: String, 
+        /**
+         * Native sample rate in hertz (0 when unknown).
+         */sampleRateHz: Double, 
+        /**
+         * Display precision (decimal places) hint.
+         */decimals: UInt8, 
+        /**
+         * Number of samples in the channel (reported without copying them).
+         */sampleCount: UInt32) {
+        self.name = name
+        self.unit = unit
+        self.sampleRateHz = sampleRateHz
+        self.decimals = decimals
+        self.sampleCount = sampleCount
+    }
+}
+
+
+
+extension ChannelInfo: Equatable, Hashable {
+    public static func ==(lhs: ChannelInfo, rhs: ChannelInfo) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.unit != rhs.unit {
+            return false
+        }
+        if lhs.sampleRateHz != rhs.sampleRateHz {
+            return false
+        }
+        if lhs.decimals != rhs.decimals {
+            return false
+        }
+        if lhs.sampleCount != rhs.sampleCount {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(unit)
+        hasher.combine(sampleRateHz)
+        hasher.combine(decimals)
+        hasher.combine(sampleCount)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChannelInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChannelInfo {
+        return
+            try ChannelInfo(
+                name: FfiConverterString.read(from: &buf), 
+                unit: FfiConverterString.read(from: &buf), 
+                sampleRateHz: FfiConverterDouble.read(from: &buf), 
+                decimals: FfiConverterUInt8.read(from: &buf), 
+                sampleCount: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChannelInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.unit, into: &buf)
+        FfiConverterDouble.write(value.sampleRateHz, into: &buf)
+        FfiConverterUInt8.write(value.decimals, into: &buf)
+        FfiConverterUInt32.write(value.sampleCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChannelInfo_lift(_ buf: RustBuffer) throws -> ChannelInfo {
+    return try FfiConverterTypeChannelInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChannelInfo_lower(_ value: ChannelInfo) -> RustBuffer {
+    return FfiConverterTypeChannelInfo.lower(value)
+}
+
+
+/**
+ * A summary of the session's GPS stream — counts and time span, without the
+ * per-fix bulk data.
+ */
+public struct GpsSummary {
+    /**
+     * Number of GPS fixes.
+     */
+    public var fixCount: UInt32
+    /**
+     * Number of GPS channels (raw + computed).
+     */
+    public var channelCount: UInt32
+    /**
+     * Timecode (ms) of the first fix (0 when there are none).
+     */
+    public var firstTimecodeMs: Double
+    /**
+     * Timecode (ms) of the last fix (0 when there are none).
+     */
+    public var lastTimecodeMs: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Number of GPS fixes.
+         */fixCount: UInt32, 
+        /**
+         * Number of GPS channels (raw + computed).
+         */channelCount: UInt32, 
+        /**
+         * Timecode (ms) of the first fix (0 when there are none).
+         */firstTimecodeMs: Double, 
+        /**
+         * Timecode (ms) of the last fix (0 when there are none).
+         */lastTimecodeMs: Double) {
+        self.fixCount = fixCount
+        self.channelCount = channelCount
+        self.firstTimecodeMs = firstTimecodeMs
+        self.lastTimecodeMs = lastTimecodeMs
+    }
+}
+
+
+
+extension GpsSummary: Equatable, Hashable {
+    public static func ==(lhs: GpsSummary, rhs: GpsSummary) -> Bool {
+        if lhs.fixCount != rhs.fixCount {
+            return false
+        }
+        if lhs.channelCount != rhs.channelCount {
+            return false
+        }
+        if lhs.firstTimecodeMs != rhs.firstTimecodeMs {
+            return false
+        }
+        if lhs.lastTimecodeMs != rhs.lastTimecodeMs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(fixCount)
+        hasher.combine(channelCount)
+        hasher.combine(firstTimecodeMs)
+        hasher.combine(lastTimecodeMs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGpsSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GpsSummary {
+        return
+            try GpsSummary(
+                fixCount: FfiConverterUInt32.read(from: &buf), 
+                channelCount: FfiConverterUInt32.read(from: &buf), 
+                firstTimecodeMs: FfiConverterDouble.read(from: &buf), 
+                lastTimecodeMs: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GpsSummary, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.fixCount, into: &buf)
+        FfiConverterUInt32.write(value.channelCount, into: &buf)
+        FfiConverterDouble.write(value.firstTimecodeMs, into: &buf)
+        FfiConverterDouble.write(value.lastTimecodeMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGpsSummary_lift(_ buf: RustBuffer) throws -> GpsSummary {
+    return try FfiConverterTypeGpsSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGpsSummary_lower(_ value: GpsSummary) -> RustBuffer {
+    return FfiConverterTypeGpsSummary.lower(value)
+}
+
+
+/**
+ * One decoded lap's timing.
+ */
+public struct LapInfo {
+    /**
+     * Zero-based lap index within the session.
+     */
+    public var index: UInt32
+    /**
+     * Session-relative start time in seconds (cumulative).
+     */
+    public var startTimeS: Double
+    /**
+     * Lap duration in seconds.
+     */
+    public var durationS: Double
+    /**
+     * Session-relative end time in seconds (`start + duration`).
+     */
+    public var endTimeS: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Zero-based lap index within the session.
+         */index: UInt32, 
+        /**
+         * Session-relative start time in seconds (cumulative).
+         */startTimeS: Double, 
+        /**
+         * Lap duration in seconds.
+         */durationS: Double, 
+        /**
+         * Session-relative end time in seconds (`start + duration`).
+         */endTimeS: Double) {
+        self.index = index
+        self.startTimeS = startTimeS
+        self.durationS = durationS
+        self.endTimeS = endTimeS
+    }
+}
+
+
+
+extension LapInfo: Equatable, Hashable {
+    public static func ==(lhs: LapInfo, rhs: LapInfo) -> Bool {
+        if lhs.index != rhs.index {
+            return false
+        }
+        if lhs.startTimeS != rhs.startTimeS {
+            return false
+        }
+        if lhs.durationS != rhs.durationS {
+            return false
+        }
+        if lhs.endTimeS != rhs.endTimeS {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(index)
+        hasher.combine(startTimeS)
+        hasher.combine(durationS)
+        hasher.combine(endTimeS)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLapInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LapInfo {
+        return
+            try LapInfo(
+                index: FfiConverterUInt32.read(from: &buf), 
+                startTimeS: FfiConverterDouble.read(from: &buf), 
+                durationS: FfiConverterDouble.read(from: &buf), 
+                endTimeS: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LapInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.index, into: &buf)
+        FfiConverterDouble.write(value.startTimeS, into: &buf)
+        FfiConverterDouble.write(value.durationS, into: &buf)
+        FfiConverterDouble.write(value.endTimeS, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLapInfo_lift(_ buf: RustBuffer) throws -> LapInfo {
+    return try FfiConverterTypeLapInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLapInfo_lower(_ value: LapInfo) -> RustBuffer {
+    return FfiConverterTypeLapInfo.lower(value)
+}
+
+
+/**
+ * One channel sample: a `(timecode, value)` pair.
+ */
+public struct Sample {
+    /**
+     * Logger timecode (milliseconds for most channels).
+     */
+    public var timecode: Double
+    /**
+     * The sample's physical value.
+     */
+    public var value: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Logger timecode (milliseconds for most channels).
+         */timecode: Double, 
+        /**
+         * The sample's physical value.
+         */value: Double) {
+        self.timecode = timecode
+        self.value = value
+    }
+}
+
+
+
+extension Sample: Equatable, Hashable {
+    public static func ==(lhs: Sample, rhs: Sample) -> Bool {
+        if lhs.timecode != rhs.timecode {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(timecode)
+        hasher.combine(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSample: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Sample {
+        return
+            try Sample(
+                timecode: FfiConverterDouble.read(from: &buf), 
+                value: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Sample, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.timecode, into: &buf)
+        FfiConverterDouble.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSample_lift(_ buf: RustBuffer) throws -> Sample {
+    return try FfiConverterTypeSample.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSample_lower(_ value: Sample) -> RustBuffer {
+    return FfiConverterTypeSample.lower(value)
+}
+
+
+/**
+ * Session metadata carried across the boundary (mirrors the decode
+ * [`Metadata`](racestudio_decode::Metadata)).
+ */
+public struct SessionMetadata {
+    /**
+     * Vehicle name.
+     */
+    public var vehicle: String
+    /**
+     * Track / venue name.
+     */
+    public var track: String
+    /**
+     * Driver / racer name.
+     */
+    public var driver: String
+    /**
+     * Session name.
+     */
+    public var session: String
+    /**
+     * Championship / series name.
+     */
+    public var series: String
+    /**
+     * Raw log date as stored (`MM/DD/YYYY`).
+     */
+    public var logDate: String
+    /**
+     * Raw log time as stored (`HH:MM:SS`).
+     */
+    public var logTime: String
+    /**
+     * Session start as epoch seconds (UTC; 0 when absent/unparseable).
+     */
+    public var datetimeUtc: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Vehicle name.
+         */vehicle: String, 
+        /**
+         * Track / venue name.
+         */track: String, 
+        /**
+         * Driver / racer name.
+         */driver: String, 
+        /**
+         * Session name.
+         */session: String, 
+        /**
+         * Championship / series name.
+         */series: String, 
+        /**
+         * Raw log date as stored (`MM/DD/YYYY`).
+         */logDate: String, 
+        /**
+         * Raw log time as stored (`HH:MM:SS`).
+         */logTime: String, 
+        /**
+         * Session start as epoch seconds (UTC; 0 when absent/unparseable).
+         */datetimeUtc: Int64) {
+        self.vehicle = vehicle
+        self.track = track
+        self.driver = driver
+        self.session = session
+        self.series = series
+        self.logDate = logDate
+        self.logTime = logTime
+        self.datetimeUtc = datetimeUtc
+    }
+}
+
+
+
+extension SessionMetadata: Equatable, Hashable {
+    public static func ==(lhs: SessionMetadata, rhs: SessionMetadata) -> Bool {
+        if lhs.vehicle != rhs.vehicle {
+            return false
+        }
+        if lhs.track != rhs.track {
+            return false
+        }
+        if lhs.driver != rhs.driver {
+            return false
+        }
+        if lhs.session != rhs.session {
+            return false
+        }
+        if lhs.series != rhs.series {
+            return false
+        }
+        if lhs.logDate != rhs.logDate {
+            return false
+        }
+        if lhs.logTime != rhs.logTime {
+            return false
+        }
+        if lhs.datetimeUtc != rhs.datetimeUtc {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(vehicle)
+        hasher.combine(track)
+        hasher.combine(driver)
+        hasher.combine(session)
+        hasher.combine(series)
+        hasher.combine(logDate)
+        hasher.combine(logTime)
+        hasher.combine(datetimeUtc)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionMetadata: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionMetadata {
+        return
+            try SessionMetadata(
+                vehicle: FfiConverterString.read(from: &buf), 
+                track: FfiConverterString.read(from: &buf), 
+                driver: FfiConverterString.read(from: &buf), 
+                session: FfiConverterString.read(from: &buf), 
+                series: FfiConverterString.read(from: &buf), 
+                logDate: FfiConverterString.read(from: &buf), 
+                logTime: FfiConverterString.read(from: &buf), 
+                datetimeUtc: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SessionMetadata, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.vehicle, into: &buf)
+        FfiConverterString.write(value.track, into: &buf)
+        FfiConverterString.write(value.driver, into: &buf)
+        FfiConverterString.write(value.session, into: &buf)
+        FfiConverterString.write(value.series, into: &buf)
+        FfiConverterString.write(value.logDate, into: &buf)
+        FfiConverterString.write(value.logTime, into: &buf)
+        FfiConverterInt64.write(value.datetimeUtc, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionMetadata_lift(_ buf: RustBuffer) throws -> SessionMetadata {
+    return try FfiConverterTypeSessionMetadata.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionMetadata_lower(_ value: SessionMetadata) -> RustBuffer {
+    return FfiConverterTypeSessionMetadata.lower(value)
+}
+
+
+/**
+ * The decode failure surface across the FFI boundary, mapped from the decode
+ * crate's [`DecodeError`], plus the FFI-specific out-of-range channel index.
+ */
+public enum FfiDecodeError {
+
+    
+    
+    /**
+     * The file could not be read from disk.
+     */
+    case Io(message: String
+    )
+    /**
+     * The file does not begin with the `.xrk` header magic.
+     */
+    case BadMagic
+    /**
+     * The first header message is cut short.
+     */
+    case TruncatedHeader
+    /**
+     * A channel data message's samples run past end-of-file.
+     */
+    case TruncatedChannel
+    /**
+     * A multi-sample burst declared an invalid sample count.
+     */
+    case BadSampleCount
+    /**
+     * The GPS stream is not a whole number of records.
+     */
+    case TruncatedGps
+    /**
+     * A lap marker is too short for its timing fields.
+     */
+    case TruncatedLaps
+    /**
+     * A `samples(...)` call named a channel index outside `0..channel_count`.
+     */
+    case ChannelOutOfRange(
+        /**
+         * The requested (invalid) index.
+         */index: UInt32, 
+        /**
+         * The number of channels in the session.
+         */channelCount: UInt32
+    )
+    /**
+     * Any decode error the FFI layer does not distinguish — the reserved
+     * `UnknownUnit` (which the tolerant decoder never emits) and any variant
+     * added to the `#[non_exhaustive]` `DecodeError` after this mapping. Carries
+     * the underlying human-readable message so the boundary stays total.
+     */
+    case Other(message: String
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiDecodeError: FfiConverterRustBuffer {
+    typealias SwiftType = FfiDecodeError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiDecodeError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Io(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 2: return .BadMagic
+        case 3: return .TruncatedHeader
+        case 4: return .TruncatedChannel
+        case 5: return .BadSampleCount
+        case 6: return .TruncatedGps
+        case 7: return .TruncatedLaps
+        case 8: return .ChannelOutOfRange(
+            index: try FfiConverterUInt32.read(from: &buf), 
+            channelCount: try FfiConverterUInt32.read(from: &buf)
+            )
+        case 9: return .Other(
+            message: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FfiDecodeError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case let .Io(message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case .BadMagic:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .TruncatedHeader:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .TruncatedChannel:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .BadSampleCount:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .TruncatedGps:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .TruncatedLaps:
+            writeInt(&buf, Int32(7))
+        
+        
+        case let .ChannelOutOfRange(index,channelCount):
+            writeInt(&buf, Int32(8))
+            FfiConverterUInt32.write(index, into: &buf)
+            FfiConverterUInt32.write(channelCount, into: &buf)
+            
+        
+        case let .Other(message):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(message, into: &buf)
+            
+        }
+    }
+}
+
+
+extension FfiDecodeError: Equatable, Hashable {}
+
+extension FfiDecodeError: Foundation.LocalizedError {
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeGpsSummary: FfiConverterRustBuffer {
+    typealias SwiftType = GpsSummary?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeGpsSummary.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeGpsSummary.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeChannelInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [ChannelInfo]
+
+    public static func write(_ value: [ChannelInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChannelInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ChannelInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ChannelInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChannelInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLapInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [LapInfo]
+
+    public static func write(_ value: [LapInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLapInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LapInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LapInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLapInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSample: FfiConverterRustBuffer {
+    typealias SwiftType = [Sample]
+
+    public static func write(_ value: [Sample], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSample.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Sample] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Sample]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSample.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * The RaceStudio Rust core version, exported across the UniFFI boundary.
  *
@@ -446,6 +1577,23 @@ fileprivate struct FfiConverterString: FfiConverter {
 public func coreVersion() -> String {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_racestudio_ffi_fn_func_core_version($0
+    )
+})
+}
+/**
+ * Open and decode the `.xrk` file at `path` into an opaque [`SessionHandle`].
+ *
+ * The whole session (metadata + channels + GPS + laps) is decoded up front via
+ * [`decode_session`]; the returned handle is `Arc`-backed and immutable.
+ *
+ * # Errors
+ * An [`FfiDecodeError`] mapped from the decode failure — I/O, bad magic, or a
+ * truncated/malformed stream. Never panics or traps.
+ */
+public func openSession(path: String)throws  -> SessionHandle {
+    return try  FfiConverterTypeSessionHandle.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
+    uniffi_racestudio_ffi_fn_func_open_session(
+        FfiConverterString.lower(path),$0
     )
 })
 }
@@ -466,6 +1614,24 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_core_version() != 5309) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_channels() != 7489) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary() != 37226) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_laps() != 1553) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_metadata() != 64487) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_samples() != 44387) {
         return InitializationResult.apiChecksumMismatch
     }
 
