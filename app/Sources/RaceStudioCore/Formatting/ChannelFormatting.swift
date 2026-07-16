@@ -22,10 +22,11 @@ public enum ChannelFormatting {
     /// description is used (always a `.` decimal), so the output is stable.
     public static func rate(hz: Double) -> String {
         guard hz.isFinite, hz > 0 else { return emDash }
-        if hz == hz.rounded() {
-            return "\(Int(hz)) Hz"
-        }
-        return "\(hz) Hz"
+        // Only take the whole-number path when `hz` is safely within `Int` range
+        // (well beyond any real sample rate); `Int(hz)` traps on out-of-range
+        // doubles. Larger values fall back to the raw description.
+        let value = (hz == hz.rounded() && hz < 1e15) ? String(Int(hz)) : "\(hz)"
+        return "\(value) Hz"
     }
 
     /// Format a UTC epoch-seconds timestamp with the fixed metadata formatter.

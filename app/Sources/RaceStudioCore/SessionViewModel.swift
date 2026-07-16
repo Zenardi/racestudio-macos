@@ -24,12 +24,3 @@ public struct SessionViewModel: Equatable, Sendable {
     /// The decoded laps.
     public var laps: [Lap] { session.laps }
 }
-
-/// A typed failure importing a session.
-///
-/// Minimal placeholder for 2.2 — mapping decode/IO errors to user-facing
-/// messages is issue 2.5.
-public enum ImportError: Error, Equatable, Sendable {
-    /// Decoding the file failed.
-    case decodeFailed
-}

@@ -42,7 +42,10 @@ final class CountingSessionLoader: SessionLoading, @unchecked Sendable {
     private(set) var callCount = 0
     private(set) var loadedURLs: [URL] = []
 
-    func load(_ url: URL) async throws -> Session {
+    func load(
+        _ url: URL,
+        onProgress: @escaping @MainActor (DecodeProgress) -> Void
+    ) async throws -> Session {
         callCount += 1
         loadedURLs.append(url)
         return Session(
