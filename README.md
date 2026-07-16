@@ -52,8 +52,13 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > panel, drag-and-drop, and a **Recent Files** list that survives relaunch via
 > **security-scoped bookmarks**: `ImportCoordinator` validates/dedupes incoming
 > URLs and drives the store, while `RecentFilesStore` persists a most-recent-first,
-> path-deduped, max-10 list behind injectable bookmark/key-value protocols. Next:
-> summary screen (2.4), then analysis (M3).
+> path-deduped, max-10 list behind injectable bookmark/key-value protocols. The
+> summary screen (2.4) is the milestone's payoff — open a real `.xrk` and see its
+> contents: `SessionSummaryViewModel` turns a decoded `Session` into a metadata
+> panel, a channel list (name/unit/`"100 Hz"` rate), and a lap list
+> (`m:ss.mmm` times, best-lap marker) — all formatting, em-dash fallbacks, and
+> best-lap detection are pure/tested in Core, so the SwiftUI views are trivial
+> bindings. Next: analysis (M3).
 
 ## Architecture
 
@@ -100,6 +105,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `SessionLoading` (`FFISessionLoader` for production). 2.3 adds
   `ImportCoordinator` (drop/panel validation → store) and `RecentFilesStore`
   (security-scoped bookmarks behind injectable `BookmarkStoring`/`KeyValueStoring`).
+  2.4 adds `SessionSummaryViewModel` + `LapTimeFormatter`/`ChannelFormatting` —
+  pure presentation logic (rate/date/lap-time strings, em-dash fallbacks, best-lap
+  detection) the summary views bind to.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -119,7 +127,7 @@ core/
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
   Sources/RaceStudioCore/      # logic library — session store, file types, doc bytes, FFI bindings
-  Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup + open panel/drop/recent menu
+  Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup, open/drop/recents, summary views
   Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
