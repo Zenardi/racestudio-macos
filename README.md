@@ -44,8 +44,11 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > `.xrk`/`.xrz` files — declaring the imported AiM UTIs, running under the
 > **App Sandbox** with user-selected read-only access, and loading a picked
 > file's bytes into memory (`XRKDocument`) with a typed error on empty/unreadable
-> input, all **without decoding** yet. Next: file import & summary (M2), then
-> analysis (M3).
+> input, all **without decoding** yet. `SessionStore` (2.2) then drives the load
+> lifecycle: a `@MainActor ObservableObject` that decodes a URL through an
+> injected `SessionLoading` (production `FFISessionLoader` → Rust core) and
+> publishes an `idle → loading → loaded / failed` state machine, so views render
+> purely from state. Next: file import & summary (M2), then analysis (M3).
 
 ## Architecture
 
@@ -86,7 +89,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   windowed `samples(channel, start, count)` accessor — plus `core_version()`.
   See [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
-  here. It is the 95% Swift coverage target.
+  here. It is the 95% Swift coverage target. As of 2.2 it owns the load
+  lifecycle: `SessionStore` (`@MainActor ObservableObject`, `LoadState` machine)
+  loading a Core-owned `Session`/`SessionViewModel` through an injected
+  `SessionLoading` (`FFISessionLoader` for production).
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -105,7 +111,7 @@ core/
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
-  Sources/RaceStudioCore/      # logic library — FFI bindings, file types, doc bytes
+  Sources/RaceStudioCore/      # logic library — session store, file types, doc bytes, FFI bindings
   Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup + Info.plist/entitlements
   Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
