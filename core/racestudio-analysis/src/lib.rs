@@ -29,6 +29,10 @@
 //! [`gear_estimate`]): GPS bearing, yaw rate, acceleration in g, and a gear
 //! estimate, matching XRKConverter/libxrk's computed channels.
 //!
+//! The seventh layer (issue 3.7) is the **windowed FFT** ([`spectrum`],
+//! [`apply_window`], [`Window`]): a `rustfft`-backed single-sided amplitude
+//! [`Spectrum`] with per-window coherent-gain correction and `k·fs/N` scaling.
+//!
 //! Every fallible entry point returns [`Result`] and never panics on caller
 //! input — the [`AnalysisError`] enum for the numeric layers, and the dedicated
 //! [`ExprError`](expr::ExprError) for the expression engine.
@@ -44,6 +48,7 @@ pub mod delta;
 pub mod derived;
 pub mod error;
 pub mod expr;
+pub mod fft;
 pub mod laps;
 mod math;
 pub mod resample;
@@ -54,6 +59,7 @@ pub use derived::{
     gear_estimate, heading, lateral_accel_g, longitudinal_accel_g, yaw_rate, GearRatios,
 };
 pub use error::AnalysisError;
+pub use fft::{apply_window, spectrum, Spectrum, Window};
 pub use laps::{
     align_by_distance, align_by_time, distance_axis, segment_laps, Alignment, Lap, LapAxis,
     LapChannel,

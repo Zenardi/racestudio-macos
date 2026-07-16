@@ -90,7 +90,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > GPS `heading` (ENU bearing, `atan2(V_east, V_north)`), `yaw_rate` (with ±180°
 > wrap), longitudinal and lateral acceleration in g, and a nearest-centroid
 > `gear_estimate` — matching XRKConverter/libxrk's computed channels on the
-> golden so overlays agree with the reference tool.
+> golden so overlays agree with the reference tool. Finally the windowed FFT
+> (3.7) gives a channel's frequency spectrum: `spectrum` applies a window
+> (rectangular / Hann / Hamming / Blackman), transforms with a mixed-radix FFT,
+> and returns a coherent-gain-corrected single-sided amplitude spectrum on a
+> `k·fs/N` axis — peak amplitudes physical to ~1%, Parseval-conserving. **M3 is
+> complete.**
 
 ## Architecture
 
@@ -137,7 +142,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `ExprError` carrying `(line, col)` on any malformed input. Derived channels
   (3.6, module `derived`) add `heading` / `yaw_rate` / `longitudinal_accel_g` /
   `lateral_accel_g` / `gear_estimate`, matching libxrk's computed GPS channels.
-  FFT follows. Panic-free, with typed errors throughout.
+  The windowed FFT (3.7, module `fft`) adds `spectrum` / `apply_window` / `Window`
+  — a `rustfft`-backed single-sided amplitude spectrum with per-window coherent-
+  gain correction. Panic-free, with typed errors throughout.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
