@@ -63,7 +63,11 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > user-facing `ImportError` (title/message/recovery), and supports **cancellation**
 > (a new load cancels the prior) — so opening a large `.xrk` shows a progress bar,
 > recovers from a bad file with a clear alert, and can be cancelled. **M2 is
-> complete.** Next: analysis (M3).
+> complete.** **M3** opens the **analysis engine**: lap segmentation & alignment
+> (3.1) splits a decoded `Session` into per-lap views — each channel (CHS + GPS)
+> sliced to the lap's half-open time window — then derives a trapezoidal distance
+> axis from GPS speed and aligns any two laps in the **time** or **distance**
+> domain for overlay comparison, all validated against the beacon-lap golden.
 
 ## Architecture
 
@@ -95,8 +99,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   strategy — a clean-room port over wrapping the proprietary-linked `xdrk`
   crate — is recorded in
   [`docs/adr/0002-xrk-decode-strategy.md`](docs/adr/0002-xrk-decode-strategy.md).
-- **`racestudio-analysis`** — telemetry analysis engine: channels, math,
-  resampling (M3).
+- **`racestudio-analysis`** — telemetry analysis engine (M3), built on the
+  decoded `Session`. Lap segmentation & alignment (3.1) is the first layer:
+  `segment_laps` → per-lap `Lap` views, `distance_axis` (trapezoidal integration
+  of GPS speed), and `align_by_time` / `align_by_distance` for two-lap overlay;
+  channels, math, and resampling follow. Panic-free, with a single `AnalysisError`.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
@@ -129,7 +136,7 @@ Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
-  racestudio-analysis/         # stub crate + placeholder test
+  racestudio-analysis/         # analysis engine — lap segmentation & alignment (time/distance)
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
