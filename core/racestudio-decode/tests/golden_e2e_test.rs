@@ -9,9 +9,10 @@
 //! aspect, location, expected vs actual, delta) so a failure is diagnosable.
 //!
 //! The `.xrk` samples are git-ignored (fetched by `make fixtures`); when the
-//! corpus is empty the corpus tests skip with a clear note rather than fail. The
-//! per-decoder logic is covered by the 1.2–1.5 unit/integration tests; this
-//! harness is pure conformance and adds no decode logic.
+//! corpus is empty the corpus tests skip with a clear note — except under the
+//! e2e gate (`RS_REQUIRE_CORPUS`, set by `scripts/e2e.sh`), where an empty corpus
+//! is a hard failure so the gate never passes vacuously. The per-decoder logic
+//! is covered by the 1.2–1.5 tests; this harness is pure conformance.
 //!
 //! `scripts/e2e.sh` runs this harness corpus-wide (exiting non-zero on any
 //! mismatch); `test_e2e_script_exits_nonzero_on_mismatch` proves that contract
@@ -22,7 +23,9 @@ mod support;
 
 use std::collections::HashSet;
 use std::fmt;
-use std::path::PathBuf;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::de::DeserializeOwned;
 
@@ -30,9 +33,12 @@ use racestudio_decode::{decode_session, open_container, Channel, GpsData, LapDat
 use support::fixtures::{ChannelsGolden, GpsGolden, LapsGolden, MetadataGolden};
 
 // Tolerances — the single source of truth is docs/DECODE_TOLERANCES.md.
-const VALUE_TOL: f64 = 1e-6; // channel/GPS sample values, after rounding to `decimals`
 const RATE_TOL_HZ: f64 = 1e-3; // channel native sample rate
 const LAP_TIME_TOL_S: f64 = 1e-3; // lap durations / start times (ms-precise beacon markers)
+                                  // Floating-point slack below any realistic display quantum, so the exact
+                                  // display-precision comparison ignores representation noise but not a one-unit
+                                  // difference in the last decimal (e.g. it stays well under 1e-8 for 8-dp lat/lon).
+const FP_NOISE: f64 = 1e-9;
 
 /// The fixtures directory, honouring `RS_FIXTURES_DIR` (used by the e2e script's
 /// poisoned-corpus self-test) and defaulting to the repo `fixtures/`.
@@ -53,8 +59,18 @@ fn load_golden<T: DeserializeOwned>(name: &str, aspect: &str) -> Result<T, Strin
         .map_err(|err| format!("golden {} is not valid JSON: {err}", path.display()))
 }
 
-/// The corpus: sorted stems of every genuine `<name>.xrk` in the fixtures dir
-/// (a real header, not a placeholder / LFS pointer / partial download).
+/// Whether `path` begins with the `.xrk` header magic (`<h`) — a genuine sample,
+/// not a placeholder / LFS pointer / partial download. Reads only the two magic
+/// bytes rather than the whole (potentially multi-MB) file.
+fn is_genuine_xrk(path: &Path) -> bool {
+    let mut magic = [0u8; 2];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut magic))
+        .is_ok()
+        && &magic == b"<h"
+}
+
+/// The corpus: sorted stems of every genuine `<name>.xrk` in the fixtures dir.
 fn corpus() -> Vec<String> {
     let mut names = Vec::new();
     let Ok(entries) = std::fs::read_dir(fixtures_dir()) else {
@@ -65,23 +81,32 @@ fn corpus() -> Vec<String> {
         if path.extension().and_then(|e| e.to_str()) != Some("xrk") {
             continue;
         }
-        match std::fs::read(&path) {
-            Ok(bytes) if bytes.starts_with(b"<h") => {
-                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    names.push(stem.to_string());
-                }
+        if is_genuine_xrk(&path) {
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                names.push(stem.to_string());
             }
-            _ => {}
         }
     }
     names.sort();
     names
 }
 
-/// Skip a corpus test (with a note) when no genuine `.xrk` samples are present.
+/// The corpus for a test, or `None` (skip) when no genuine `.xrk` samples exist.
+///
+/// A developer running `cargo test` without fetched samples skips gracefully. But
+/// the e2e gate must never pass vacuously: when `RS_REQUIRE_CORPUS` is set (as
+/// `scripts/e2e.sh` does), an empty corpus is a hard failure rather than a skip —
+/// otherwise placeholder/absent samples would make the conformance gate green
+/// having validated nothing (the pre-1.8 script hard-failed on a missing oracle).
 fn corpus_or_skip() -> Option<Vec<String>> {
     let names = corpus();
     if names.is_empty() {
+        assert!(
+            std::env::var_os("RS_REQUIRE_CORPUS").is_none(),
+            "no genuine .xrk samples in {} but RS_REQUIRE_CORPUS is set — the e2e \
+             conformance gate must not pass vacuously; run `make fixtures`",
+            fixtures_dir().display()
+        );
         eprintln!(
             "skipping: no real .xrk samples in {} — run `make fixtures`",
             fixtures_dir().display()
@@ -128,15 +153,16 @@ fn render(mismatches: &[Mismatch]) -> String {
     out
 }
 
-/// Whether `actual`, rounded to the golden's `decimals`, is within `tol` of the
-/// golden value. `None`/non-finite compare equal (the golden stores `null` for a
-/// non-finite summary). This is the leaf tolerance check for every value field.
-fn assert_within_tolerance(
-    actual: Option<f64>,
-    expected: Option<f64>,
-    decimals: i64,
-    tol: f64,
-) -> bool {
+/// Whether `actual` matches the golden value to the golden's own display
+/// precision — i.e. `actual`, rounded to `decimals`, equals the stored value.
+///
+/// The golden stores `round(raw, decimals)`, so the tolerance is **half a
+/// display quantum** (`0.5 * 10^-decimals`) plus a little FP slack, uniformly for
+/// every channel: exact-to-the-last-decimal for low-precision channels AND for
+/// 8-dp lat/lon (≈1e-8), rather than a flat 1e-6 that left 8-dp channels ~100×
+/// looser than documented. `None`/non-finite compare equal (the golden stores
+/// `null` for a non-finite summary).
+fn assert_within_tolerance(actual: Option<f64>, expected: Option<f64>, decimals: i64) -> bool {
     match (actual, expected) {
         (Some(a), Some(e)) if a.is_finite() => {
             // Round with the SAME mode the golden generator uses — Python's
@@ -144,7 +170,8 @@ fn assert_within_tolerance(
             // rather than `f64::round` (half-away-from-zero), which would diverge
             // at exact `.5` boundaries (e.g. fuji YawRate min = -70.25 → -70.2).
             let scale = 10f64.powi(decimals as i32);
-            ((a * scale).round_ties_even() / scale - e).abs() < tol
+            let half_quantum = 0.5 / scale;
+            ((a * scale).round_ties_even() / scale - e).abs() < half_quantum + FP_NOISE
         }
         (None, None) => true,
         (Some(a), None) => !a.is_finite(),
@@ -152,23 +179,29 @@ fn assert_within_tolerance(
     }
 }
 
-/// First/last/min/max of a channel's finite sample values.
+/// First/last/min/max of a channel's samples.
+///
+/// `min`/`max` match how the golden is generated (`np.min`/`np.max` in
+/// `gen_goldens.py`): NumPy **propagates** a non-finite sample, so any NaN/±Inf
+/// in the channel collapses the golden min/max to `null`. This mirrors that —
+/// `None` when any sample is non-finite — rather than silently skipping the
+/// non-finite values (which would spuriously mismatch a null golden).
 fn stats(samples: &[(f64, f64)]) -> (Option<f64>, Option<f64>, Option<f64>, Option<f64>) {
-    let finite: Vec<f64> = samples
-        .iter()
-        .map(|&(_, v)| v)
-        .filter(|v| v.is_finite())
-        .collect();
     let first = samples.first().map(|&(_, v)| v);
     let last = samples.last().map(|&(_, v)| v);
-    let min = finite
-        .iter()
-        .copied()
-        .fold(None, |m, v| Some(m.map_or(v, |m: f64| m.min(v))));
-    let max = finite
-        .iter()
-        .copied()
-        .fold(None, |m, v| Some(m.map_or(v, |m: f64| m.max(v))));
+    let (min, max) = if samples.is_empty() || samples.iter().any(|&(_, v)| !v.is_finite()) {
+        (None, None)
+    } else {
+        let min = samples
+            .iter()
+            .map(|&(_, v)| v)
+            .fold(f64::INFINITY, f64::min);
+        let max = samples
+            .iter()
+            .map(|&(_, v)| v)
+            .fold(f64::NEG_INFINITY, f64::max);
+        (Some(min), Some(max))
+    };
     (first, last, min, max)
 }
 
@@ -375,7 +408,7 @@ fn compare_channels(
             ("min", min, gc.min),
             ("max", max, gc.max),
         ] {
-            if !assert_within_tolerance(a, e, gc.decimals, VALUE_TOL) {
+            if !assert_within_tolerance(a, e, gc.decimals) {
                 out.push(value_mismatch(fixture, "channels", loc, field, a, e));
             }
         }
@@ -408,6 +441,19 @@ fn compare_gps(fixture: &str, gps: Option<&GpsData>, g: &GpsGolden) -> Vec<Misma
             "fix_count",
             data.len(),
             g.fix_count,
+        ));
+    }
+    // Assert the channel inventory matches in both directions: the per-channel
+    // loop below only checks golden channels are present, so a count check is
+    // what catches a spurious/duplicate decoded channel absent from the golden.
+    if data.channels().len() != g.channels.len() {
+        out.push(eq_mismatch(
+            fixture,
+            "gps",
+            "corpus",
+            "channel_count",
+            data.channels().len(),
+            g.channels.len(),
         ));
     }
     for gc in &g.channels {
@@ -454,7 +500,7 @@ fn compare_gps(fixture: &str, gps: Option<&GpsData>, g: &GpsGolden) -> Vec<Misma
             ("min", min, gc.min),
             ("max", max, gc.max),
         ] {
-            if !assert_within_tolerance(a, e, gc.decimals, VALUE_TOL) {
+            if !assert_within_tolerance(a, e, gc.decimals) {
                 out.push(value_mismatch(fixture, "gps", loc, field, a, e));
             }
         }
@@ -610,15 +656,27 @@ fn conformance(fixture: &str) -> Vec<Mismatch> {
     out
 }
 
-/// Gather one aspect's mismatches across the whole corpus.
-fn corpus_mismatches(corpus: &[String], aspect: &str) -> Vec<Mismatch> {
-    corpus
+/// Every mismatch across the whole corpus, computed **once** — each fixture is
+/// decoded a single time, and the four per-aspect tests share this result
+/// instead of re-decoding the corpus once per aspect.
+fn all_mismatches() -> &'static [Mismatch] {
+    static CACHE: OnceLock<Vec<Mismatch>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        corpus()
+            .iter()
+            .flat_map(|fixture| conformance(fixture))
+            .collect()
+    })
+}
+
+/// One aspect's mismatches — plus any top-level `decode` failures, which belong
+/// to no single aspect but must fail every aspect gate (otherwise a fixture that
+/// fails to decode at all would be silently dropped by the aspect filter).
+fn corpus_mismatches(aspect: &str) -> Vec<Mismatch> {
+    all_mismatches()
         .iter()
-        .flat_map(|fixture| {
-            conformance(fixture)
-                .into_iter()
-                .filter(|m| m.aspect == aspect)
-        })
+        .filter(|m| m.aspect == aspect || m.aspect == "decode")
+        .cloned()
         .collect()
 }
 
@@ -653,37 +711,37 @@ fn test_every_fixture_has_a_golden() {
 
 #[test]
 fn test_metadata_matches_golden_corpus_wide() {
-    let Some(corpus) = corpus_or_skip() else {
+    if corpus_or_skip().is_none() {
         return;
-    };
-    let mismatches = corpus_mismatches(&corpus, "metadata");
+    }
+    let mismatches = corpus_mismatches("metadata");
     assert!(mismatches.is_empty(), "{}", render(&mismatches));
 }
 
 #[test]
 fn test_all_channels_match_golden_within_tolerance() {
-    let Some(corpus) = corpus_or_skip() else {
+    if corpus_or_skip().is_none() {
         return;
-    };
-    let mismatches = corpus_mismatches(&corpus, "channels");
+    }
+    let mismatches = corpus_mismatches("channels");
     assert!(mismatches.is_empty(), "{}", render(&mismatches));
 }
 
 #[test]
 fn test_all_gps_match_golden_within_tolerance() {
-    let Some(corpus) = corpus_or_skip() else {
+    if corpus_or_skip().is_none() {
         return;
-    };
-    let mismatches = corpus_mismatches(&corpus, "gps");
+    }
+    let mismatches = corpus_mismatches("gps");
     assert!(mismatches.is_empty(), "{}", render(&mismatches));
 }
 
 #[test]
 fn test_all_laps_match_golden() {
-    let Some(corpus) = corpus_or_skip() else {
+    if corpus_or_skip().is_none() {
         return;
-    };
-    let mismatches = corpus_mismatches(&corpus, "laps");
+    }
+    let mismatches = corpus_mismatches("laps");
     assert!(mismatches.is_empty(), "{}", render(&mismatches));
 }
 
@@ -761,8 +819,11 @@ fn test_e2e_script_exits_nonzero_on_mismatch() {
         .parent()
         .expect("repo root")
         .to_path_buf();
-    let poisoned = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("poisoned_corpus");
+    let poisoned = Path::new(env!("CARGO_TARGET_TMPDIR")).join("poisoned_corpus");
     let golden_dir = poisoned.join("golden");
+    // Start from a clean dir so a stale sample from a prior run (if the
+    // first-sorted fixture ever changes) cannot linger and be decoded here.
+    let _ = std::fs::remove_dir_all(&poisoned);
     std::fs::create_dir_all(&golden_dir).expect("mk poisoned corpus");
 
     // Copy the real .xrk so decode succeeds…
@@ -772,13 +833,17 @@ fn test_e2e_script_exits_nonzero_on_mismatch() {
     )
     .expect("copy sample");
     // …and copy every golden, corrupting the metadata driver to force a mismatch.
+    // Mutate the parsed JSON value (not a string replace) so it is robust to an
+    // empty or key-colliding driver string.
     for aspect in ["metadata", "channels", "gps", "laps"] {
         let name = format!("{fixture}.{aspect}.json");
         let text = std::fs::read_to_string(fixtures_dir().join("golden").join(&name))
             .expect("read golden");
         let text = if aspect == "metadata" {
-            let g: MetadataGolden = serde_json::from_str(&text).expect("parse metadata golden");
-            text.replace(&format!("\"{}\"", g.driver), "\"__POISONED_DRIVER__\"")
+            let mut value: serde_json::Value =
+                serde_json::from_str(&text).expect("parse metadata golden");
+            value["driver"] = serde_json::Value::String("__POISONED_DRIVER__".to_string());
+            serde_json::to_string_pretty(&value).expect("serialize poisoned golden")
         } else {
             text
         };
@@ -788,6 +853,10 @@ fn test_e2e_script_exits_nonzero_on_mismatch() {
     let output = std::process::Command::new("bash")
         .arg(root.join("scripts/e2e.sh"))
         .arg("--goldens-only")
+        // Drop the guard var so the nested harness's own script self-test skips
+        // via the env guard, not only via e2e.sh's `--skip` (defence in depth
+        // against unbounded recursion).
+        .env_remove("RS_RUN_E2E_SCRIPT_TEST")
         .env("RS_FIXTURES_DIR", &poisoned)
         .current_dir(&root)
         .output()
@@ -803,8 +872,10 @@ fn test_e2e_script_exits_nonzero_on_mismatch() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    // Require the specific poisoned-driver diff (not just "FAILED", which cargo
+    // prints on any failure) so the test proves the poison drove the exit.
     assert!(
-        combined.contains("mismatch") || combined.contains("driver") || combined.contains("FAILED"),
-        "e2e.sh output should name the mismatch:\n{combined}"
+        combined.contains("driver") && combined.contains("__POISONED_DRIVER__"),
+        "e2e.sh output should name the poisoned driver mismatch:\n{combined}"
     );
 }

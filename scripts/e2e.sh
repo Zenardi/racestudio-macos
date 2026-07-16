@@ -54,14 +54,18 @@ fi
 
 STEP=$([ "$GOLDENS_ONLY" -eq 1 ] && echo "1/1" || echo "4/4")
 echo "==> [e2e $STEP] corpus golden conformance (decode_session vs libxrk oracle)"
+# RS_REQUIRE_CORPUS makes the harness FAIL (not skip) on an empty corpus, so this
+# gate can never pass vacuously when the samples are absent or non-genuine.
 if [ "$GOLDENS_ONLY" -eq 1 ]; then
   # Poisoned-corpus self-test context: run the harness against RS_FIXTURES_DIR,
   # skipping the script self-test itself so it cannot recurse.
-  RS_FIXTURES_DIR="$FIXTURES_DIR" cargo test -p racestudio-decode --test golden_e2e_test -- \
+  RS_REQUIRE_CORPUS=1 RS_FIXTURES_DIR="$FIXTURES_DIR" \
+    cargo test -p racestudio-decode --test golden_e2e_test -- \
     --skip test_e2e_script_exits_nonzero_on_mismatch
 else
   # Full gate: run the whole harness, enabling the script self-test.
-  RS_RUN_E2E_SCRIPT_TEST=1 cargo test -p racestudio-decode --test golden_e2e_test
+  RS_REQUIRE_CORPUS=1 RS_RUN_E2E_SCRIPT_TEST=1 \
+    cargo test -p racestudio-decode --test golden_e2e_test
 fi
 
 if [ "$GOLDENS_ONLY" -eq 1 ]; then
