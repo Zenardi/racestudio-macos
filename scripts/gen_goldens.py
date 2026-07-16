@@ -8,7 +8,7 @@ diffed:
 
     fixtures/golden/<name>.channels.json   channel inventory + per-channel stats
     fixtures/golden/<name>.gps.json        GPS lat/long/altitude summary
-    fixtures/golden/<name>.laps.json       lap beacons (num / start / end)
+    fixtures/golden/<name>.laps.json       beacon lap table (index / start / end / duration)
 
 Output is sorted and rounded to each channel's own decimal precision, so
 re-running on the same input is byte-identical.
@@ -178,16 +178,112 @@ def _gps_golden(log, fname):
     }
 
 
-def _laps_golden(log, fname):
-    lap_dict = log.laps.to_pydict()
+# --------------------------------------------------------------------------- #
+# Lap-marker golden (issue 1.5).
+#
+# The lap table is decoded from the container's LAP *marker* messages (the AiM
+# logger's own recorded lap times), NOT libxrk's `log.laps` — which for these
+# files is GPS-plane-crossing-refined and so differs from the beacon markers by
+# tens of ms. The marker-table decode is what issue 1.5 specifies ("decodes the
+# lap-marker table"); its lap COUNT is cross-validated against libxrk. Both this
+# generator and the Rust `decode_laps` implement the same documented algorithm:
+# keep whole-lap (segment 0) markers, drop duplicates, infer a single missed
+# lap, and accumulate each marker's `duration` field into cumulative lap times.
+# --------------------------------------------------------------------------- #
+
+
+def _lap_markers(data):
+    """Collect raw LAP markers `(segment, lap, duration_ms)` in file order,
+    walking the framing and size-skipping data messages."""
+    channel_sizes = {}
+    group_sizes = {}
+    markers = []
+
+    def register(buf, top):
+        off, n = 0, len(buf)
+        while off + 2 <= n:
+            if buf[off : off + 2] == b"\x3c\x68":
+                if off + 12 > n:
+                    break
+                token = struct.unpack_from("<I", buf, off + 2)[0]
+                plen = struct.unpack_from("<i", buf, off + 6)[0]
+                start, end = off + 12, off + 12 + plen
+                if plen < 0 or end + 8 > n:
+                    break
+                payload = buf[start:end]
+                tok = _tokstr(token)
+                if tok in ("CNF", "ENF"):
+                    register(payload, top=False)
+                elif tok == "CHS" and len(payload) >= 73:
+                    channel_sizes[struct.unpack_from("<H", payload, 0)[0]] = payload[72]
+                elif tok == "GRP" and len(payload) >= 4:
+                    gidx = struct.unpack_from("<H", payload, 0)[0]
+                    cnt = struct.unpack_from("<H", payload, 2)[0]
+                    group_sizes[gidx] = sum(
+                        channel_sizes.get(struct.unpack_from("<H", payload, 4 + 2 * i)[0], 0)
+                        for i in range(cnt)
+                        if 4 + 2 * i + 2 <= len(payload)
+                    )
+                elif tok == "LAP" and len(payload) >= 20:
+                    segment = payload[1]
+                    lap = struct.unpack_from("<H", payload, 2)[0]
+                    duration = struct.unpack_from("<I", payload, 4)[0]
+                    markers.append((segment, lap, duration))
+                off = end + 8
+            elif top and buf[off] == 0x28:
+                nxt = _skip_data(buf, off, channel_sizes, group_sizes)
+                if nxt is None or nxt <= off:
+                    break
+                off = nxt
+            else:
+                break
+
+    register(data, top=True)
+    return markers
+
+
+def _lap_table(markers):
+    """Apply libxrk's LAP dedup (segment-0 only, skip duplicate lap numbers,
+    infer a single missed lap) and accumulate each accepted marker's `duration`
+    into cumulative lap times. Returns `(laps, best_index)`."""
+    kept = []  # (lap_number, duration_ms)
+    for segment, lap, duration in markers:
+        if segment:
+            continue
+        if not kept:
+            pass
+        elif kept[-1][0] == lap:
+            continue
+        elif kept[-1][0] + 1 == lap:
+            pass
+        elif kept[-1][0] + 2 == lap:
+            kept.append((lap - 1, duration))  # inferred missed lap
+        else:
+            raise ValueError(f"lap gap {kept[-1][0]} -> {lap}")
+        kept.append((lap, duration))
+    if not kept:
+        return [], None
+    base = min(n for n, _ in kept)
     laps = []
-    numbers = lap_dict.get("num", [])
-    for i, number in enumerate(numbers):
-        start = int(lap_dict["start_time"][i])
-        end = int(lap_dict["end_time"][i])
-        laps.append({"num": int(number), "start_ms": start, "end_ms": end,
-                     "duration_ms": end - start})
-    return {"file": fname, "lap_count": len(laps), "laps": laps}
+    cum = 0
+    for num, duration in kept:
+        start = cum
+        cum += duration
+        laps.append(
+            {"index": num - base, "start_ms": start, "end_ms": cum, "duration_ms": duration}
+        )
+    best = min(range(len(laps)), key=lambda i: laps[i]["duration_ms"])
+    return laps, laps[best]["index"]
+
+
+def _laps_golden(data, fname):
+    laps, best = _lap_table(_lap_markers(data))
+    return {
+        "file": fname,
+        "lap_count": len(laps),
+        "best_lap_index": best,
+        "laps": laps,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -359,7 +455,7 @@ def main(argv):
             raw = handle.read()
         _write_json(os.path.join(out_dir, f"{stem}.channels.json"), _channels_golden(log, raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.gps.json"), _gps_golden(log, fname))
-        _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(log, fname))
+        _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))
         print(f"  golden  {stem}.{{channels,gps,laps,metadata}}.json")
     return 0

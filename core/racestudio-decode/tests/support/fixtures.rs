@@ -126,17 +126,19 @@ pub struct MetadataGolden {
     pub lap_marker_count: usize,
 }
 
-/// `<name>.laps.json` — lap beacons.
+/// `<name>.laps.json` — beacon lap table (issue 1.5): per-lap cumulative times
+/// decoded from the container's LAP markers, plus the best (fastest) lap index.
 #[derive(Debug, Deserialize)]
 pub struct LapsGolden {
     pub file: String,
     pub lap_count: usize,
-    pub laps: Vec<Lap>,
+    pub best_lap_index: Option<u32>,
+    pub laps: Vec<LapGolden>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Lap {
-    pub num: i64,
+pub struct LapGolden {
+    pub index: u32,
     pub start_ms: i64,
     pub end_ms: i64,
     pub duration_ms: i64,

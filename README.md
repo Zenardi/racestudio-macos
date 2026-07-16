@@ -12,17 +12,19 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > with the **decode-strategy decision**
 > ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
 > validated against the `libxrk` oracle, after a spike rejected wrapping the
-> proprietary-linked `xdrk` crate. Three decoders now ship:
+> proprietary-linked `xdrk` crate. The full M1 decode layer now ships:
 > **`open_container`** parses the `.xrk` container header into session
 > **metadata** (driver, vehicle, venue, session date/time) plus the structural
 > counts (channels, GPS presence, lap markers) the later decoders consume;
 > **`decode_channels`** turns the container's `CHS` table and `(S`/`(M` sample
 > streams into typed, unit-tagged **channel series** (`name`, `unit`,
-> `sample_rate_hz`, `(timecode, value)` samples); and **`decode_gps`** decodes
+> `sample_rate_hz`, `(timecode, value)` samples); **`decode_gps`** decodes
 > the u-blox **NAV-SOL** stream into `GpsData` — latitude/longitude (ECEF →
 > geodetic, matching the golden to 1e-8), speed (m/s), altitude, accuracy, and
-> satellite count, distinguishing raw from computed GPS channels. All reproduce
-> the libxrk golden to precision. Lap decoding (1.5) is next.
+> satellite count, distinguishing raw from computed GPS channels; and
+> **`decode_laps`** decodes the **LAP marker** table into `LapData` — per-lap
+> cumulative times and the best (fastest) lap. All reproduce the libxrk golden
+> to precision. Next: the unified `Session` model (M1.6) and analysis (M3).
 
 ## Architecture
 
@@ -68,7 +70,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
-  racestudio-decode/           # .xrk decoder — open_container/decode_channels/decode_gps
+  racestudio-decode/           # .xrk decoder — container/channels/gps/laps
   racestudio-analysis/         # stub crate + placeholder test
   racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/
