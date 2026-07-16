@@ -100,3 +100,34 @@ pub struct ResamplePoint {
     pub t: f64,
     pub v: f64,
 }
+
+/// `<name>.stats.json` — per-channel whole-session summary statistics (issue
+/// 3.4) computed independently with numpy over the libxrk-decoded fixture. The
+/// oracle for [`channel_stats`](racestudio_analysis::channel_stats): statistics
+/// depend only on the value array, so they are free of the timecode-origin
+/// offset between decoders and match to full precision.
+#[derive(Debug, Deserialize)]
+pub struct StatsGolden {
+    pub file: String,
+    pub channel_count: usize,
+    pub channels: Vec<StatsChannel>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StatsChannel {
+    pub name: String,
+    /// libxrk's storage type (`double`, `float`, `int16`, `uint16`, …). Drives
+    /// the cross-check tolerance: `float` (float32) channels differ from the Rust
+    /// float64 decode by up to float32 epsilon.
+    pub dtype: String,
+    pub count: usize,
+    pub min: f64,
+    pub max: f64,
+    pub mean: f64,
+    /// Population standard deviation (divides by `n`).
+    pub std_pop: f64,
+    /// Sample standard deviation (divides by `n - 1`; `0.0` for a single sample).
+    pub std_sample: f64,
+    pub rms: f64,
+    pub range: f64,
+}

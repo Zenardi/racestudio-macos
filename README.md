@@ -75,7 +75,11 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > (3.3) puts heterogeneously-sampled channels on a common grid: `resample_uniform`
 > (fixed-rate, endpoint-preserving, holes across gaps wider than `max_gap`) and
 > `to_distance_grid` (onto a supplied distance axis), linearly interpolated and
-> cross-checked against libxrk's `resample_to_timecodes`.
+> cross-checked against libxrk's `resample_to_timecodes`. Statistics (3.4) reduce
+> any channel — whole-session, per-lap, or over a half-open `[t0, t1)` window — to
+> `channel_stats` (min / max / mean / population & sample std / RMS / count /
+> range) using Welford's numerically stable one-pass moments, ignoring `NaN`
+> holes and cross-checked per channel against a numpy oracle.
 
 ## Architecture
 
@@ -114,8 +118,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   Delta-t (3.2) adds `delta_t(reference, comparison)` — the time-variance-over-
   distance metric. Resampling (3.3) adds `resample_uniform` /
   `to_distance_grid` (linear interpolation onto a uniform-rate or distance grid,
-  with a `max_gap` hole policy). FFT and expressions follow. Panic-free, with a
-  single `AnalysisError`.
+  with a `max_gap` hole policy). Statistics (3.4) add `channel_stats` /
+  `stats_over_range` / `stats_per_lap` — Welford-based min/max/mean/std/RMS/range
+  over the whole channel, a `[t0, t1)` window, or each lap, ignoring `NaN` holes.
+  FFT and expressions follow. Panic-free, with a single `AnalysisError`.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
@@ -148,7 +154,7 @@ Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
-  racestudio-analysis/         # analysis engine — lap segmentation, alignment, delta-t
+  racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets

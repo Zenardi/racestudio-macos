@@ -19,6 +19,10 @@ fixtures/
     <name>.laps.json           # beacon lap table: per-lap cumulative times +
                                #   best-lap index, decoded from LAP markers (1.5)
     <name>.metadata.json       # container header metadata + structural counts (1.2)
+    <name>.resample.json       # one channel linearly resampled onto a uniform
+                               #   timebase via resample_to_timecodes (3.3)
+    <name>.stats.json          # per-channel whole-session statistics with the
+                               #   libxrk storage dtype per channel (3.4)
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are

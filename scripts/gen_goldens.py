@@ -9,6 +9,7 @@ diffed:
     fixtures/golden/<name>.channels.json   channel inventory + per-channel stats
     fixtures/golden/<name>.gps.json        GPS lat/long/altitude summary
     fixtures/golden/<name>.laps.json       beacon lap table (index / start / end / duration)
+    fixtures/golden/<name>.stats.json      per-channel whole-session statistics (3.4)
 
 Output is sorted and rounded to each channel's own decimal precision, so
 re-running on the same input is byte-identical.
@@ -324,6 +325,65 @@ def _resample_golden(log, fname):
 
 
 # --------------------------------------------------------------------------- #
+# Channel-statistics golden (issue 3.4).
+#
+# The oracle for `channel_stats`: per-channel summary statistics over the WHOLE
+# session, computed independently with numpy so the Rust Welford implementation
+# is cross-checked against a naive two-pass reference. Statistics are a function
+# of the value array alone, so — unlike a per-lap or resampling golden — they are
+# free of the constant timecode-origin offset between the two decoders; the Rust
+# and libxrk value arrays are identical, so these match to full precision.
+#
+# Non-finite samples are dropped first, mirroring the Rust NaN-hole policy; a
+# channel with no finite samples is skipped. `std_pop` divides by n (population),
+# `std_sample` by n-1 (sample; 0.0 for a single sample, never NaN). `rms` is the
+# quadratic mean. Values are stored at full float precision (deterministic
+# shortest-repr) so the acceptance tolerance can be tight.
+# --------------------------------------------------------------------------- #
+
+
+def _channel_stats(name, table):
+    column = table.column(name)
+    values = column.to_numpy().astype(float)
+    values = values[np.isfinite(values)]
+    n = int(len(values))
+    if n == 0:
+        return None
+    minimum = float(np.min(values))
+    maximum = float(np.max(values))
+    return {
+        "name": name,
+        # libxrk's storage type for this channel. `double` and the integer types
+        # are lossless relative to the Rust float64 decode (match to ~1e-12);
+        # `float` (float32) channels differ by up to float32 epsilon (~1e-7), so
+        # the Rust test loosens the tolerance for them. See _stats_golden.
+        "dtype": str(column.type),
+        "count": n,
+        "min": minimum,
+        "max": maximum,
+        "mean": float(np.mean(values)),
+        "std_pop": float(np.std(values, ddof=0)),
+        "std_sample": float(np.std(values, ddof=1)) if n > 1 else 0.0,
+        "rms": float(np.sqrt(np.mean(np.square(values)))),
+        "range": maximum - minimum,
+    }
+
+
+def _stats_golden(log, fname):
+    # Every channel with at least one finite sample is included; each carries its
+    # libxrk storage `dtype` so the Rust cross-check can pick a tolerance that
+    # matches the reference's precision (1e-9 for float64/integer channels,
+    # float32-epsilon for `float` channels). Statistics depend only on the value
+    # array, so they are free of the timecode-origin offset between decoders.
+    channels = [
+        stats
+        for name in sorted(log.channels)
+        if (stats := _channel_stats(name, log.channels[name])) is not None
+    ]
+    return {"file": fname, "channel_count": len(channels), "channels": channels}
+
+
+# --------------------------------------------------------------------------- #
 # Container metadata golden (issue 1.2).
 #
 # Metadata *strings* come from libxrk's public `log.metadata` (the authoritative
@@ -495,7 +555,8 @@ def main(argv):
         _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.resample.json"), _resample_golden(log, fname))
-        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample}}.json")
+        _write_json(os.path.join(out_dir, f"{stem}.stats.json"), _stats_golden(log, fname))
+        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample,stats}}.json")
     return 0
 
 

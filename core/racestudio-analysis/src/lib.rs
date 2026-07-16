@@ -31,6 +31,7 @@ pub mod error;
 pub mod laps;
 mod math;
 pub mod resample;
+pub mod stats;
 
 pub use delta::delta_t;
 pub use error::AnalysisError;
@@ -39,3 +40,4 @@ pub use laps::{
     LapChannel,
 };
 pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid};
+pub use stats::{channel_stats, stats_over_range, stats_per_lap, Stats};
