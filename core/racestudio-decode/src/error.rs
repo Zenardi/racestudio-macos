@@ -17,6 +17,19 @@ pub enum DecodeError {
     /// The file begins with valid magic but its first header message is cut
     /// short (payload/footer runs past end-of-file).
     TruncatedHeader,
+    /// A channel data message's sample bytes run past the end of the stream.
+    TruncatedChannel,
+    /// A multi-sample (`(M`) burst declares a sample count that is zero or
+    /// whose bytes overrun the message framing.
+    BadSampleCount,
+    /// A channel definition carries a unit type the decoder does not recognise.
+    ///
+    /// Reserved for strict unit validation. The default [`decode_channels`] is
+    /// tolerant — as libxrk is — and maps an unrecognised unit type to an empty
+    /// unit string rather than returning this error.
+    ///
+    /// [`decode_channels`]: crate::decode_channels
+    UnknownUnit,
 }
 
 impl fmt::Display for DecodeError {
@@ -27,6 +40,16 @@ impl fmt::Display for DecodeError {
                 write!(f, "not an .xrk file: missing '<h' header magic")
             }
             DecodeError::TruncatedHeader => write!(f, "truncated .xrk header"),
+            DecodeError::TruncatedChannel => {
+                write!(
+                    f,
+                    "truncated channel data: sample bytes run past end-of-file"
+                )
+            }
+            DecodeError::BadSampleCount => {
+                write!(f, "invalid channel sample count in a multi-sample burst")
+            }
+            DecodeError::UnknownUnit => write!(f, "unrecognised channel unit type"),
         }
     }
 }
@@ -35,7 +58,11 @@ impl std::error::Error for DecodeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             DecodeError::Io(err) => Some(err),
-            DecodeError::BadMagic | DecodeError::TruncatedHeader => None,
+            DecodeError::BadMagic
+            | DecodeError::TruncatedHeader
+            | DecodeError::TruncatedChannel
+            | DecodeError::BadSampleCount
+            | DecodeError::UnknownUnit => None,
         }
     }
 }
@@ -57,10 +84,21 @@ mod tests {
         assert!(io.to_string().contains("gone"));
         assert!(io.source().is_some(), "Io wraps a source error");
 
-        for err in [DecodeError::BadMagic, DecodeError::TruncatedHeader] {
+        for err in [
+            DecodeError::BadMagic,
+            DecodeError::TruncatedHeader,
+            DecodeError::TruncatedChannel,
+            DecodeError::BadSampleCount,
+            DecodeError::UnknownUnit,
+        ] {
             assert!(!err.to_string().is_empty());
             assert!(err.source().is_none());
         }
         assert!(DecodeError::BadMagic.to_string().contains("magic"));
+        assert!(DecodeError::TruncatedChannel
+            .to_string()
+            .contains("channel"));
+        assert!(DecodeError::BadSampleCount.to_string().contains("count"));
+        assert!(DecodeError::UnknownUnit.to_string().contains("unit"));
     }
 }

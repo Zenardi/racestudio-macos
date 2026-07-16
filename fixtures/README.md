@@ -12,7 +12,8 @@ fixtures/
   fuji_0033.xrk                # sample .xrk (git-ignored)
   fuji_0033_reference.csv      # RaceStudio reference CSV (git-ignored)
   golden/                      # committed, deterministic oracle JSON
-    <name>.channels.json       # channel inventory + per-channel summary stats
+    <name>.channels.json       # channel inventory + per-channel summary stats,
+                               #   incl. sample_rate_hz for CHS-backed channels (1.3)
     <name>.gps.json            # GPS latitude/longitude/altitude summary
     <name>.laps.json           # lap beacons (num / start / end / duration)
     <name>.metadata.json       # container header metadata + structural counts (1.2)

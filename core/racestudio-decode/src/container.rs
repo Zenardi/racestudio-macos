@@ -18,11 +18,12 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::error::DecodeError;
 
 /// Header-message magic: ASCII `'<h'`.
-const MAGIC: [u8; 2] = [0x3C, 0x68];
+pub(crate) const MAGIC: [u8; 2] = [0x3C, 0x68];
 
 /// Session metadata parsed from the `.xrk` container header.
 ///
@@ -58,6 +59,10 @@ pub struct Container {
     channel_count: usize,
     has_gps: bool,
     lap_marker_count: usize,
+    /// The full file bytes, retained so the channel/GPS/lap decoders can walk
+    /// the message stream without re-reading from disk. Shared (`Arc`) so
+    /// cloning a `Container` stays cheap.
+    bytes: Arc<[u8]>,
 }
 
 impl Container {
@@ -65,6 +70,12 @@ impl Container {
     #[must_use]
     pub fn metadata(&self) -> &Metadata {
         &self.metadata
+    }
+
+    /// The raw file bytes backing this container, for the layered decoders
+    /// (channels 1.3, GPS 1.4, laps 1.5).
+    pub(crate) fn raw(&self) -> &[u8] {
+        &self.bytes
     }
 
     /// Number of distinct channel definitions (`CHS`) in the container. The
@@ -109,22 +120,22 @@ fn parse_container(bytes: &[u8]) -> Result<Container, DecodeError> {
     }
     let mut walker = Walker::default();
     walker.walk(bytes, true);
-    Ok(walker.into_container())
+    Ok(walker.into_container(Arc::from(bytes)))
 }
 
 /// A framed header message borrowed from the file bytes.
-struct Header<'a> {
-    token: u32,
-    payload: &'a [u8],
+pub(crate) struct Header<'a> {
+    pub(crate) token: u32,
+    pub(crate) payload: &'a [u8],
     /// Offset just past this message's footer.
-    next: usize,
+    pub(crate) next: usize,
 }
 
 /// Read the header message at `off`, or `None` if it is not a fully-framed
 /// header (out of bounds, negative length, or payload/footer past EOF).
 ///
 /// Callers guarantee `bytes[off..off + 2] == MAGIC` before calling.
-fn read_header(bytes: &[u8], off: usize) -> Option<Header<'_>> {
+pub(crate) fn read_header(bytes: &[u8], off: usize) -> Option<Header<'_>> {
     let plen = le_i32(bytes, off + 6)?;
     if plen < 0 {
         return None;
@@ -274,12 +285,13 @@ impl Walker {
         self.channel_sizes.get(&index).copied()
     }
 
-    fn into_container(self) -> Container {
+    fn into_container(self, bytes: Arc<[u8]>) -> Container {
         let datetime_utc = parse_datetime_utc(&self.log_date, &self.log_time);
         Container {
             channel_count: self.chs_indices.len(),
             has_gps: self.gps > 0,
             lap_marker_count: self.lap,
+            bytes,
             metadata: Metadata {
                 vehicle: self.vehicle,
                 track: self.track,
@@ -296,7 +308,7 @@ impl Walker {
 
 /// Decode a token integer into its ASCII string, dropping the trailing space
 /// AiM uses to pad 3-character tokens to 4 bytes.
-fn tokstr(token: u32) -> String {
+pub(crate) fn tokstr(token: u32) -> String {
     let mut out = String::new();
     let mut value = token;
     while value != 0 {
@@ -307,7 +319,7 @@ fn tokstr(token: u32) -> String {
 }
 
 /// Decode a null-terminated ASCII string from a payload slice.
-fn nullterm(bytes: &[u8]) -> String {
+pub(crate) fn nullterm(bytes: &[u8]) -> String {
     let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
     String::from_utf8_lossy(&bytes[..end]).into_owned()
 }
@@ -348,19 +360,19 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
-fn le_u16(bytes: &[u8], off: usize) -> Option<u16> {
+pub(crate) fn le_u16(bytes: &[u8], off: usize) -> Option<u16> {
     Some(u16::from_le_bytes(
         bytes.get(off..off + 2)?.try_into().ok()?,
     ))
 }
 
-fn le_u32(bytes: &[u8], off: usize) -> Option<u32> {
+pub(crate) fn le_u32(bytes: &[u8], off: usize) -> Option<u32> {
     Some(u32::from_le_bytes(
         bytes.get(off..off + 4)?.try_into().ok()?,
     ))
 }
 
-fn le_i32(bytes: &[u8], off: usize) -> Option<i32> {
+pub(crate) fn le_i32(bytes: &[u8], off: usize) -> Option<i32> {
     Some(i32::from_le_bytes(
         bytes.get(off..off + 4)?.try_into().ok()?,
     ))
