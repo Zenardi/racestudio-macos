@@ -39,7 +39,13 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > `decode_session` and asserts metadata/channels/GPS/laps match the committed
 > libxrk goldens within [documented tolerances](docs/DECODE_TOLERANCES.md),
 > emitting a precise diff on any mismatch and gating CI via `scripts/e2e.sh` —
-> the milestone's regression net. Next: analysis (M3).
+> the milestone's regression net. **M2** now stands up the app itself:
+> RaceStudio is a **document-based SwiftUI shell** (2.1) that opens
+> `.xrk`/`.xrz` files — declaring the imported AiM UTIs, running under the
+> **App Sandbox** with user-selected read-only access, and loading a picked
+> file's bytes into memory (`XRKDocument`) with a typed error on empty/unreadable
+> input, all **without decoding** yet. Next: file import & summary (M2), then
+> analysis (M3).
 
 ## Architecture
 
@@ -82,7 +88,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
-  excluded from the coverage metric by target.
+  excluded from the coverage metric by target. As of 2.1 it is a
+  **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
+  `.xrk`/`.xrz` files under the App Sandbox; its file-type logic
+  (`SupportedFileType`, `UTType.xrk`/`.xrz`) and byte-loading (`DocumentContents`)
+  live in `RaceStudioCore`.
 
 ## Layout
 
@@ -95,9 +105,9 @@ core/
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
-  Sources/RaceStudioCore/      # logic library (wraps the FFI bindings)
-  Sources/RaceStudio/          # @main SwiftUI shell
-  Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip tests
+  Sources/RaceStudioCore/      # logic library — FFI bindings, file types, doc bytes
+  Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup + Info.plist/entitlements
+  Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
   RaceStudioFFI.xcframework/   # built artifact (git-ignored, ~34 MB)

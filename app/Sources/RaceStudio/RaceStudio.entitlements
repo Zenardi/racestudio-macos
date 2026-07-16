@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Run in the App Sandbox. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- Read access to files the user explicitly picks (open panel, drag/drop).
+	     Read-only: RaceStudio never rewrites a telemetry file. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+
+	<!-- App-scoped security-scoped bookmarks, so a user-picked file can be
+	     re-opened from Recents across launches (consumed by issue 2.3). -->
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+</dict>
+</plist>
