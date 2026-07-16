@@ -9,23 +9,34 @@ import RaceStudioCore
 /// `RaceStudioCore`.
 ///
 /// The scene is a `DocumentGroup` over `XRKDocument`, making RaceStudio a
-/// document-based app that opens `.xrk`/`.xrz` telemetry files (issue 2.1). The
-/// actual file-loading UI, drag/drop, recents, and summary screen arrive in
-/// issues 2.2–2.4; here the viewer is a placeholder.
+/// document-based app that opens `.xrk`/`.xrz` telemetry files (issue 2.1). As of
+/// 2.3 it also wires an Open panel, drag-and-drop, and an "Open Recent" menu
+/// (backed by security-scoped bookmarks) through the shared `AppModel` →
+/// `ImportCoordinator`. The summary screen (2.4) and error surfacing (2.5) build
+/// on the resulting `SessionStore` state.
 @main
 struct RaceStudioApp: App {
+    @StateObject private var model = AppModel()
+
     var body: some Scene {
         DocumentGroup(viewing: XRKDocument.self) { _ in
             ContentView()
+                .environmentObject(model)
         }
-    }
-}
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Open…") { model.presentOpenPanel() }
+                    .keyboardShortcut("o", modifiers: .command)
 
-/// Placeholder root view. Displays a Core-owned value so the shell carries no
-/// logic of its own.
-struct ContentView: View {
-    var body: some View {
-        Text(RaceStudioCore.appName)
-            .padding()
+                Menu("Open Recent") {
+                    ForEach(model.recents.entries, id: \.self) { url in
+                        Button(url.lastPathComponent) { model.openRecent(url) }
+                    }
+                    if model.recents.entries.isEmpty {
+                        Text("No Recent Files")
+                    }
+                }
+            }
+        }
     }
 }

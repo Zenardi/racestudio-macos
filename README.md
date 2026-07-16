@@ -48,7 +48,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > lifecycle: a `@MainActor ObservableObject` that decodes a URL through an
 > injected `SessionLoading` (production `FFISessionLoader` → Rust core) and
 > publishes an `idle → loading → loaded / failed` state machine, so views render
-> purely from state. Next: file import & summary (M2), then analysis (M3).
+> purely from state. File import (2.3) then brings files in three ways — Open
+> panel, drag-and-drop, and a **Recent Files** list that survives relaunch via
+> **security-scoped bookmarks**: `ImportCoordinator` validates/dedupes incoming
+> URLs and drives the store, while `RecentFilesStore` persists a most-recent-first,
+> path-deduped, max-10 list behind injectable bookmark/key-value protocols. Next:
+> summary screen (2.4), then analysis (M3).
 
 ## Architecture
 
@@ -92,7 +97,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   here. It is the 95% Swift coverage target. As of 2.2 it owns the load
   lifecycle: `SessionStore` (`@MainActor ObservableObject`, `LoadState` machine)
   loading a Core-owned `Session`/`SessionViewModel` through an injected
-  `SessionLoading` (`FFISessionLoader` for production).
+  `SessionLoading` (`FFISessionLoader` for production). 2.3 adds
+  `ImportCoordinator` (drop/panel validation → store) and `RecentFilesStore`
+  (security-scoped bookmarks behind injectable `BookmarkStoring`/`KeyValueStoring`).
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -112,7 +119,7 @@ core/
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
   Sources/RaceStudioCore/      # logic library — session store, file types, doc bytes, FFI bindings
-  Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup + Info.plist/entitlements
+  Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup + open panel/drop/recent menu
   Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
