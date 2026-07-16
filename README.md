@@ -71,7 +71,11 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > Delta-t (3.2) is the overlay's core metric: `delta_t` returns the cumulative
 > time a comparison lap has gained or lost versus a reference lap as a function
 > of distance (positive ⇒ slower) — zero at the start line, the lap-time
-> difference at the finish, with both laps aligned by track position.
+> difference at the finish, with both laps aligned by track position. Resampling
+> (3.3) puts heterogeneously-sampled channels on a common grid: `resample_uniform`
+> (fixed-rate, endpoint-preserving, holes across gaps wider than `max_gap`) and
+> `to_distance_grid` (onto a supplied distance axis), linearly interpolated and
+> cross-checked against libxrk's `resample_to_timecodes`.
 
 ## Architecture
 
@@ -108,7 +112,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `segment_laps` → per-lap `Lap` views, `distance_axis` (trapezoidal integration
   of GPS speed), and `align_by_time` / `align_by_distance` for two-lap overlay.
   Delta-t (3.2) adds `delta_t(reference, comparison)` — the time-variance-over-
-  distance metric. Channels, math, and resampling follow. Panic-free, with a
+  distance metric. Resampling (3.3) adds `resample_uniform` /
+  `to_distance_grid` (linear interpolation onto a uniform-rate or distance grid,
+  with a `max_gap` hole policy). FFT and expressions follow. Panic-free, with a
   single `AnalysisError`.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.

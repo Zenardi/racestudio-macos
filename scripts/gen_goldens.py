@@ -26,6 +26,7 @@ import struct
 import sys
 
 import numpy as np
+import pyarrow as pa
 from libxrk import ChannelMetadata, aim_xrk
 
 
@@ -287,6 +288,42 @@ def _laps_golden(data, fname):
 
 
 # --------------------------------------------------------------------------- #
+# Resampling golden (issue 3.3).
+#
+# libxrk's `resample_to_timecodes` linearly interpolates channels flagged
+# interpolate="True" onto a target timebase — the oracle for the Rust
+# `to_distance_grid`/`resample_uniform` linear interpolation. We resample one
+# such channel (the first present from a small preference list) onto a uniform
+# timebase spanning the channel.
+#
+# Target times `t` are stored **relative to the channel's first sample**: the
+# Rust and libxrk decoders assign the same per-sample values and spacing but a
+# constant absolute-timecode origin offset (a decode detail outside 3.3's
+# scope), so re-basing to the channel start isolates the interpolation itself.
+# --------------------------------------------------------------------------- #
+
+_RESAMPLE_PREF = ("AccelerometerX", "External Voltage", "GPS Speed")
+_RESAMPLE_POINTS = 25
+
+
+def _resample_golden(log, fname):
+    channel = next((c for c in _RESAMPLE_PREF if c in log.channels), None)
+    if channel is None:
+        return {"file": fname, "channel": None, "points": []}
+    timecodes = log.channels[channel].column("timecodes").to_numpy().astype(np.int64)
+    if len(timecodes) < 2:
+        return {"file": fname, "channel": channel, "points": []}
+    origin = int(timecodes[0])
+    targets = np.linspace(origin, int(timecodes[-1]), _RESAMPLE_POINTS).astype(np.int64)
+    # De-duplicate in case the range is tiny (keeps target strictly increasing).
+    targets = np.unique(targets)
+    resampled = log.resample_to_timecodes(pa.array(targets, type=pa.int64()), [channel])
+    values = resampled.channels[channel].column(channel).to_numpy().astype(float)
+    points = [{"t": int(t) - origin, "v": _round(v, 6)} for t, v in zip(targets, values)]
+    return {"file": fname, "channel": channel, "points": points}
+
+
+# --------------------------------------------------------------------------- #
 # Container metadata golden (issue 1.2).
 #
 # Metadata *strings* come from libxrk's public `log.metadata` (the authoritative
@@ -457,7 +494,8 @@ def main(argv):
         _write_json(os.path.join(out_dir, f"{stem}.gps.json"), _gps_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))
-        print(f"  golden  {stem}.{{channels,gps,laps,metadata}}.json")
+        _write_json(os.path.join(out_dir, f"{stem}.resample.json"), _resample_golden(log, fname))
+        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample}}.json")
     return 0
 
 

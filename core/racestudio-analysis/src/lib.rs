@@ -11,6 +11,11 @@
 //! time variance between a reference and a comparison lap as a function of
 //! distance — the core two-lap overlay metric.
 //!
+//! The third layer (issue 3.3) is **resampling** ([`resample_uniform`],
+//! [`to_distance_grid`]): placing an irregular series onto a uniform-rate or a
+//! supplied distance grid with linear interpolation, so overlay, delta-t, and
+//! FFT can share a common axis.
+//!
 //! Every fallible entry point returns [`Result`] with the single
 //! [`AnalysisError`] enum and never panics on caller input.
 
@@ -25,6 +30,7 @@ pub mod delta;
 pub mod error;
 pub mod laps;
 mod math;
+pub mod resample;
 
 pub use delta::delta_t;
 pub use error::AnalysisError;
@@ -32,3 +38,4 @@ pub use laps::{
     align_by_distance, align_by_time, distance_axis, segment_laps, Alignment, Lap, LapAxis,
     LapChannel,
 };
+pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid};

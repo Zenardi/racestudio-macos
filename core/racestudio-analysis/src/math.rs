@@ -1,26 +1,60 @@
 //! Small numeric helpers shared across the analysis engine: linear
-//! interpolation, cumulative trapezoidal integration, and a monotonicity check.
+//! interpolation (with binary-search bracketing), cumulative trapezoidal
+//! integration, and a monotonicity check.
 //!
-//! These are the local primitives lap segmentation (3.1) and delta-t (3.2) build
-//! on until the general resampler (3.3) supersedes them.
+//! These are the local primitives lap segmentation (3.1), delta-t (3.2), and
+//! resampling (3.3) build on.
+
+/// Linear interpolation between two points `(x0, y0)`–`(x1, y1)` evaluated at
+/// `x`. A zero-width span (`x0 == x1`) returns `y0`.
+pub(crate) fn lerp(x0: f64, y0: f64, x1: f64, y1: f64, x: f64) -> f64 {
+    let span = x1 - x0;
+    if span == 0.0 {
+        y0
+    } else {
+        y0 + (y1 - y0) * (x - x0) / span
+    }
+}
+
+/// The indices `(lo, hi)` of the samples in ascending `xs` that bracket `x`, by
+/// binary search: `xs[lo] <= x <= xs[hi]` with `hi = lo` or `hi = lo + 1`. `x`
+/// at or beyond an end clamps to `(0, 0)` / `(last, last)`; empty `xs` yields
+/// `(0, 0)` (callers guard emptiness).
+pub(crate) fn find_bracket(xs: &[f64], x: f64) -> (usize, usize) {
+    let n = xs.len();
+    if n == 0 {
+        return (0, 0);
+    }
+    if x <= xs[0] {
+        return (0, 0);
+    }
+    if x >= xs[n - 1] {
+        return (n - 1, n - 1);
+    }
+    // Invariant: xs[lo] <= x < xs[hi]; narrow until the pair is adjacent.
+    let (mut lo, mut hi) = (0usize, n - 1);
+    while lo + 1 < hi {
+        let mid = lo + (hi - lo) / 2;
+        if xs[mid] <= x {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    (lo, hi)
+}
 
 /// Linear interpolation of `ys` (paired with ascending `xs`) at `x`, clamped to
 /// the endpoints. Empty input yields `0.0`; a single point yields that point.
 pub(crate) fn interp(xs: &[f64], ys: &[f64], x: f64) -> f64 {
-    match (xs.first(), xs.last()) {
-        (None, _) | (_, None) => 0.0,
-        (Some(&first), _) if x <= first => ys.first().copied().unwrap_or(0.0),
-        (_, Some(&last)) if x >= last => ys.last().copied().unwrap_or(0.0),
-        _ => {
-            // `first < x < last`, so a bracketing segment `[lo, hi]` exists with
-            // `xs[lo] < x <= xs[hi]`; the span is therefore strictly positive.
-            let hi = xs.iter().position(|&xi| xi >= x).unwrap_or(xs.len() - 1);
-            let lo = hi.saturating_sub(1);
-            let (x0, x1) = (xs[lo], xs[hi]);
-            let (y0, y1) = (ys[lo], ys[hi]);
-            y0 + (y1 - y0) * (x - x0) / (x1 - x0)
-        }
+    if xs.is_empty() || ys.is_empty() {
+        return 0.0;
     }
+    let (lo, hi) = find_bracket(xs, x);
+    if lo == hi {
+        return ys[lo];
+    }
+    lerp(xs[lo], ys[lo], xs[hi], ys[hi], x)
 }
 
 /// Cumulative trapezoidal integral of a `(timecode_ms, value)` series (time in
@@ -74,6 +108,30 @@ mod tests {
         assert_eq!(interp(&xs, &ys, 25.0), 200.0, "clamped above");
         assert_eq!(interp(&xs, &ys, 5.0), 50.0, "midpoint of first segment");
         assert_eq!(interp(&xs, &ys, 15.0), 150.0, "midpoint of second segment");
+        assert_eq!(interp(&xs, &ys, 10.0), 100.0, "exact interior knot");
+    }
+
+    #[test]
+    fn test_lerp_including_zero_span() {
+        assert_eq!(lerp(0.0, 0.0, 10.0, 100.0, 2.5), 25.0);
+        assert_eq!(lerp(5.0, 42.0, 5.0, 99.0, 5.0), 42.0, "zero span → y0");
+    }
+
+    #[test]
+    fn test_find_bracket() {
+        let xs = [0.0, 10.0, 20.0, 30.0];
+        assert_eq!(find_bracket(&xs, -1.0), (0, 0), "clamp below");
+        assert_eq!(find_bracket(&xs, 0.0), (0, 0), "at first");
+        assert_eq!(find_bracket(&xs, 40.0), (3, 3), "clamp above");
+        assert_eq!(find_bracket(&xs, 30.0), (3, 3), "at last");
+        assert_eq!(find_bracket(&xs, 5.0), (0, 1));
+        assert_eq!(find_bracket(&xs, 25.0), (2, 3));
+        assert_eq!(
+            find_bracket(&xs, 10.0),
+            (1, 2),
+            "interior knot brackets [knot, next]"
+        );
+        assert_eq!(find_bracket(&[], 5.0), (0, 0), "empty");
     }
 
     #[test]
