@@ -441,6 +441,49 @@ fn test_single_sample_lap_no_panic() {
     assert_eq!(by_distance.a(), &[42.0]);
 }
 
+#[test]
+fn test_value_types_clone_eq_debug() {
+    // Exercise the derived Clone / PartialEq / Debug impls on the public value
+    // types (both eq and ne branches), so coverage counts them — these are part
+    // of the public surface a consumer relies on.
+    let channel = LapChannel::new("RPM", vec![(0.0, 1.0), (1.0, 2.0)]);
+    assert_eq!(channel, channel.clone());
+    assert_ne!(channel, LapChannel::new("RPM", vec![(0.0, 9.0)]));
+    assert!(format!("{channel:?}").contains("RPM"));
+
+    let lap = Lap::new(2, 0.0, 10.0, vec![channel.clone()]);
+    assert_eq!(lap, lap.clone());
+    assert_ne!(lap, Lap::new(3, 0.0, 10.0, vec![channel]));
+    assert!(format!("{lap:?}").contains("Lap"));
+
+    let a = lap_with(
+        0,
+        0.0,
+        &[(0.0, 5.0), (100.0, 6.0)],
+        "RPM",
+        &[(0.0, 1.0), (100.0, 2.0)],
+    );
+    let b = lap_with(
+        1,
+        0.0,
+        &[(0.0, 5.0), (100.0, 6.0)],
+        "RPM",
+        &[(0.0, 3.0), (100.0, 4.0)],
+    );
+    let alignment = align_by_time(&a, &b, "RPM").expect("align");
+    assert_eq!(alignment, alignment.clone());
+    assert_ne!(alignment, align_by_time(&a, &a, "RPM").expect("align"));
+    assert!(format!("{alignment:?}").contains("Alignment"));
+
+    // LapAxis: Copy / PartialEq / Eq / Debug.
+    let kind = alignment.axis_kind();
+    let copied = kind;
+    assert_eq!(kind, copied);
+    assert_eq!(kind, LapAxis::Time);
+    assert_ne!(LapAxis::Time, LapAxis::Distance);
+    assert!(format!("{:?}", LapAxis::Distance).contains("Distance"));
+}
+
 /// Minimal `.xrk` framing helper for the synthetic marker-free fixture.
 mod synth {
     const MAGIC: [u8; 2] = [0x3C, 0x68];
