@@ -33,6 +33,16 @@ if needsTestingPaths {
 let ffiXcframework = "RaceStudioFFI.xcframework"
 let ffiEnabled = FileManager.default.fileExists(atPath: ffiXcframework)
 
+// The @main shell ships an Info.plist (imported .xrk/.xrz UTI declarations) and
+// a sandbox entitlements file. SwiftPM forbids a resource literally named
+// Info.plist, so both are excluded from resource processing; the plist is
+// instead embedded into the executable's Mach-O `__TEXT,__info_plist` section so
+// a plain `swift run RaceStudio` still carries its document-type declarations.
+// An absolute path keeps the linker flag correct regardless of the invoking
+// working directory (`#filePath` resolves to this manifest's directory = app/).
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let infoPlistPath = packageDir + "/Sources/RaceStudio/Info.plist"
+
 var coreDependencies: [Target.Dependency] = []
 var ffiTargets: [Target] = []
 var testExcludes: [String] = []
@@ -80,7 +90,19 @@ let package = Package(
         // coverage metric by target (wired in issue 0.3).
         .executableTarget(
             name: "RaceStudio",
-            dependencies: ["RaceStudioCore"]
+            dependencies: ["RaceStudioCore"],
+            exclude: [
+                "Info.plist",
+                "RaceStudio.entitlements"
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", infoPlistPath
+                ])
+            ]
         ),
         .testTarget(
             name: "RaceStudioCoreTests",
