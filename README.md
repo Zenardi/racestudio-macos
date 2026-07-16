@@ -4,7 +4,7 @@ A native macOS re-implementation of AiM **RaceStudio 3** telemetry analysis —
 successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter).
 
 > **Status:** **M0 — Foundations, Tooling & TDD Harness** complete (0.1–0.7);
-> **M1 — Rust Core: XRK Decode** has begun. M0 shipped the scaffold, the Rust +
+> **M1 — Rust Core: XRK Decode** complete (1.2–1.8). M0 shipped the scaffold, the Rust +
 > Swift **coverage gates**, the **UniFFI xcframework pipeline**, the
 > **golden-fixtures harness** (libxrk-derived oracle JSON + Rust/Swift loaders),
 > the shared DoD/CI/Makefile, and enforceable branch protection — green,
@@ -34,7 +34,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > and Swift reads channel data through a **windowed** `samples(channel, start,
 > count)` accessor — a bounded slice per call — so the UI never copies a whole
 > channel across the boundary; a Swift round-trip test opens the real sample,
-> lists channels, and stitches two adjacent windows. Next: analysis (M3).
+> lists channels, and stitches two adjacent windows. Closing M1, a **corpus-wide
+> conformance harness** (1.8) decodes **every** `fixtures/*.xrk` with
+> `decode_session` and asserts metadata/channels/GPS/laps match the committed
+> libxrk goldens within [documented tolerances](docs/DECODE_TOLERANCES.md),
+> emitting a precise diff on any mismatch and gating CI via `scripts/e2e.sh` —
+> the milestone's regression net. Next: analysis (M3).
 
 ## Architecture
 
@@ -104,6 +109,7 @@ scripts/
   build_xcframework.sh         # universal xcframework + Swift bindings
   fetch_fixtures.sh            # fetch .xrk samples + regenerate goldens
   gen_goldens.py               # libxrk -> deterministic golden JSON
+  e2e.sh                       # build pipeline + corpus golden conformance (1.8)
   spike_xdrk_linkage.sh        # reproducible xdrk-crate linkage probe (ADR 0002)
 tests/
   gate_test.sh                 # Rust gate self-tests
@@ -112,6 +118,7 @@ tests/
   fixtures_test.sh             # fetch-fixtures self-tests
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
+docs/DECODE_TOLERANCES.md      # decode conformance tolerance table (1.8)
 docs/adr/                      # architecture decision records (0001 FFI, 0002 decode)
 docs/spike/                    # spike evidence (xdrk linkage finding)
 Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
