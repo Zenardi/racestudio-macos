@@ -40,16 +40,27 @@ def _round(value, decimals):
     return round(value, decimals)
 
 
-def _channel_summary(name, table):
+def _channel_summary(name, table, periods):
     meta = ChannelMetadata.from_channel_table(table)
     decimals = max(0, int(meta.dec_pts))
     values = table.column(name).to_numpy().astype(float)
     timecodes = table.column("timecodes").to_numpy()
     has = len(values) > 0
+    # sample_rate_hz is present only for CHS-backed channels (the ones the 1.3
+    # channel decoder produces); libxrk-synthesized GPS channels have no CHS and
+    # so no native rate -> null, which lets 1.3 filter to its oracle set.
+    period_us = periods.get(name)
+    if period_us is None:
+        sample_rate_hz = None
+    elif period_us <= 0:
+        sample_rate_hz = 0.0
+    else:
+        sample_rate_hz = round(1_000_000 / period_us, 3)
     return {
         "name": name,
         "units": meta.units or "",
         "decimals": decimals,
+        "sample_rate_hz": sample_rate_hz,
         "samples": int(table.num_rows),
         "t_first_ms": int(timecodes[0]) if len(timecodes) else None,
         "t_last_ms": int(timecodes[-1]) if len(timecodes) else None,
@@ -60,8 +71,44 @@ def _channel_summary(name, table):
     }
 
 
-def _channels_golden(log, fname):
-    channels = [_channel_summary(n, log.channels[n]) for n in sorted(log.channels)]
+def _chs_periods(data):
+    """{long_name: sample_period_us} for CHS-backed channels, first-wins.
+
+    Walks the CNF-nested CHS definitions (which all precede the first data
+    message), keeping the first definition per name — mirroring the Rust channel
+    decoder, so its `sample_rate_hz` can be checked against this golden.
+    """
+    periods = {}
+
+    def walk(buf):
+        off, n = 0, len(buf)
+        while off + 2 <= n:
+            if buf[off : off + 2] != b"\x3c\x68":  # stop at the first data message
+                break
+            if off + 12 > n:
+                break
+            token = struct.unpack_from("<I", buf, off + 2)[0]
+            plen = struct.unpack_from("<i", buf, off + 6)[0]
+            start, end = off + 12, off + 12 + plen
+            if plen < 0 or end + 8 > n:
+                break
+            payload = buf[start:end]
+            tok = _tokstr(token)
+            if tok in ("CNF", "ENF"):
+                walk(payload)
+            elif tok == "CHS" and len(payload) >= 73:
+                name = payload[32:56].split(b"\x00")[0].decode("ascii", "replace")
+                if name not in periods:
+                    periods[name] = struct.unpack_from("<I", payload, 64)[0]
+            off = end + 8
+
+    walk(data)
+    return periods
+
+
+def _channels_golden(log, data, fname):
+    periods = _chs_periods(data)
+    channels = [_channel_summary(n, log.channels[n], periods) for n in sorted(log.channels)]
     return {"file": fname, "channel_count": len(channels), "channels": channels}
 
 
@@ -273,7 +320,7 @@ def main(argv):
             log = aim_xrk(xrk)
         with open(xrk, "rb") as handle:
             raw = handle.read()
-        _write_json(os.path.join(out_dir, f"{stem}.channels.json"), _channels_golden(log, fname))
+        _write_json(os.path.join(out_dir, f"{stem}.channels.json"), _channels_golden(log, raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.gps.json"), _gps_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.laps.json"), _laps_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))

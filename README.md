@@ -12,12 +12,14 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > with the **decode-strategy decision**
 > ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
 > validated against the `libxrk` oracle, after a spike rejected wrapping the
-> proprietary-linked `xdrk` crate. The first decoder now ships —
+> proprietary-linked `xdrk` crate. Two decoders now ship:
 > **`open_container`** parses the `.xrk` container header into session
 > **metadata** (driver, vehicle, venue, session date/time) plus the structural
-> counts (channels, GPS presence, lap markers) the later decoders consume,
-> reproducing the libxrk golden byte-for-value. Channel/GPS/lap sample decoding
-> is next.
+> counts (channels, GPS presence, lap markers) the later decoders consume; and
+> **`decode_channels`** turns the container's `CHS` table and `(S`/`(M` sample
+> streams into typed, unit-tagged **channel series** (`name`, `unit`,
+> `sample_rate_hz`, `(timecode, value)` samples), reproducing the libxrk golden
+> to each channel's own precision. GPS (1.4) and lap (1.5) decoding are next.
 
 ## Architecture
 
@@ -63,7 +65,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
-  racestudio-decode/           # .xrk decoder — open_container + header metadata
+  racestudio-decode/           # .xrk decoder — open_container + decode_channels
   racestudio-analysis/         # stub crate + placeholder test
   racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/

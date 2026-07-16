@@ -75,6 +75,12 @@ pub struct ChannelSummary {
     pub max: Option<f64>,
     pub first: Option<f64>,
     pub last: Option<f64>,
+    /// Native sample rate (Hz) from the channel's `CHS` sample period. Present
+    /// only for channels backed by a `CHS` definition — the ones the 1.3 channel
+    /// decoder produces. `None` marks a libxrk-synthesized channel (e.g. GPS,
+    /// milestone 1.4), so tests filter to `Some(_)` for the 1.3 oracle set.
+    #[serde(default)]
+    pub sample_rate_hz: Option<f64>,
 }
 
 /// `<name>.metadata.json` — container header metadata + structural counts
