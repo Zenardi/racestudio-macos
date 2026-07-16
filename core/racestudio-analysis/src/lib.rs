@@ -16,8 +16,17 @@
 //! supplied distance grid with linear interpolation, so overlay, delta-t, and
 //! FFT can share a common axis.
 //!
-//! Every fallible entry point returns [`Result`] with the single
-//! [`AnalysisError`] enum and never panics on caller input.
+//! The fourth layer (issue 3.4) is **channel statistics** ([`channel_stats`],
+//! [`stats_over_range`], [`stats_per_lap`]): Welford-based min / max / mean /
+//! std / RMS / range over a whole channel, a `[t0, t1)` window, or each lap.
+//!
+//! The fifth layer (issue 3.5) is the **math-channel expression engine**
+//! ([`mod@expr`]): a small `tokenize` → `parse` → `eval_scalar` / `eval_series`
+//! pipeline for user-defined channels, with its own typed [`ExprError`](expr::ExprError).
+//!
+//! Every fallible entry point returns [`Result`] and never panics on caller
+//! input — the [`AnalysisError`] enum for the numeric layers, and the dedicated
+//! [`ExprError`](expr::ExprError) for the expression engine.
 
 // Analysis is a pure, panic-free library (mirrors the decode crate, issue 1.6):
 // forbid unwrap/expect/panic on shipped code; test code is exempt.
@@ -28,6 +37,7 @@
 
 pub mod delta;
 pub mod error;
+pub mod expr;
 pub mod laps;
 mod math;
 pub mod resample;

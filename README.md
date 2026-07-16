@@ -79,7 +79,14 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > any channel — whole-session, per-lap, or over a half-open `[t0, t1)` window — to
 > `channel_stats` (min / max / mean / population & sample std / RMS / count /
 > range) using Welford's numerically stable one-pass moments, ignoring `NaN`
-> holes and cross-checked per channel against a numpy oracle.
+> holes and cross-checked per channel against a numpy oracle. Math channels (3.5)
+> add a small expression language — lexer, precedence-climbing parser, and
+> evaluator — for user-defined channels like `sqrt(Ax*Ax + Ay*Ay)`: `+ - * /`
+> with correct precedence, parentheses, unary minus, scientific-notation
+> literals, a built-in function set (`abs min max sqrt sin cos tan log exp pow
+> clamp`), and channel references resolved to a scalar or a per-sample series.
+> Every malformed input returns a typed `ExprError` with a `(line, col)` — never
+> a panic.
 
 ## Architecture
 
@@ -121,7 +128,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   with a `max_gap` hole policy). Statistics (3.4) add `channel_stats` /
   `stats_over_range` / `stats_per_lap` — Welford-based min/max/mean/std/RMS/range
   over the whole channel, a `[t0, t1)` window, or each lap, ignoring `NaN` holes.
-  FFT and expressions follow. Panic-free, with a single `AnalysisError`.
+  The math-channel expression engine (3.5, module `expr`) adds `tokenize` →
+  `parse` → `eval_scalar` / `eval_series` for user-defined channels, with a typed
+  `ExprError` carrying `(line, col)` on any malformed input. FFT and derived
+  channels follow. Panic-free, with typed errors throughout.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
