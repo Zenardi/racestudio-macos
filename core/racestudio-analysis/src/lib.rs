@@ -24,6 +24,11 @@
 //! ([`mod@expr`]): a small `tokenize` → `parse` → `eval_scalar` / `eval_series`
 //! pipeline for user-defined channels, with its own typed [`ExprError`](expr::ExprError).
 //!
+//! The sixth layer (issue 3.6) is **derived channels** ([`heading`],
+//! [`yaw_rate`], [`longitudinal_accel_g`], [`lateral_accel_g`],
+//! [`gear_estimate`]): GPS bearing, yaw rate, acceleration in g, and a gear
+//! estimate, matching XRKConverter/libxrk's computed channels.
+//!
 //! Every fallible entry point returns [`Result`] and never panics on caller
 //! input — the [`AnalysisError`] enum for the numeric layers, and the dedicated
 //! [`ExprError`](expr::ExprError) for the expression engine.
@@ -36,6 +41,7 @@
 )]
 
 pub mod delta;
+pub mod derived;
 pub mod error;
 pub mod expr;
 pub mod laps;
@@ -44,6 +50,9 @@ pub mod resample;
 pub mod stats;
 
 pub use delta::delta_t;
+pub use derived::{
+    gear_estimate, heading, lateral_accel_g, longitudinal_accel_g, yaw_rate, GearRatios,
+};
 pub use error::AnalysisError;
 pub use laps::{
     align_by_distance, align_by_time, distance_axis, segment_laps, Alignment, Lap, LapAxis,

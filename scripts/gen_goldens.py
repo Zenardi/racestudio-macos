@@ -29,6 +29,7 @@ import sys
 import numpy as np
 import pyarrow as pa
 from libxrk import ChannelMetadata, aim_xrk
+from libxrk import gps as libxrk_gps
 
 
 def _round(value, decimals):
@@ -384,6 +385,146 @@ def _stats_golden(log, fname):
 
 
 # --------------------------------------------------------------------------- #
+# Derived-channel golden (issue 3.6).
+#
+# The oracle for `heading` / `yaw_rate` / `longitudinal_accel_g` /
+# `lateral_accel_g`. libxrk computes these from the NAV-SOL ECEF velocity but
+# exposes only the acceleration/yaw channels, not the intermediate heading, so
+# this reconstructs the inputs directly from the .xrk (the same 56-byte records
+# the Rust decoder reads: ECEF velocity at bytes 32/36/40, cm/s) and applies
+# libxrk's OWN `gps.ecef_velocity_to_enu` for heading — matching aim_xrk.pyx:
+#     heading_deg = atan2(V_east, V_north)·180/π
+#     dt_sec      = diff(t)/1000, guarded to +inf when ≤ 0
+#     inline_acc  = [0, diff(speed)/dt] / 9.81
+#     yaw_rate    = [0, wrap±180(diff(heading))/dt]
+#     lateral_acc = speed · yaw_rate · π/180 / 9.81
+#
+# A contiguous window (skipping the session's initial GPS gap) is emitted with
+# both the inputs and the expected outputs, computed window-standalone so the
+# Rust pure functions reproduce it exactly. As a fidelity check the window's
+# diff-based outputs are compared to libxrk's own stored `GPS_*` channels.
+# --------------------------------------------------------------------------- #
+
+_GPS_RECORD_LEN = 56
+_DERIVED_START = 2  # skip the initial GPS gap (fix 0→1 spans several seconds)
+_DERIVED_COUNT = 300
+
+
+def _gather_gps_payloads(data):
+    """Concatenate every GPS/GPS1 message payload, mirroring the Rust decoder's
+    walk (size-skipping data messages so all records are reached)."""
+    channel_sizes, group_sizes = {}, {}
+    out = bytearray()
+
+    def walk(buf, top):
+        off, n = 0, len(buf)
+        while off + 2 <= n:
+            if buf[off : off + 2] == b"\x3c\x68":
+                if off + 12 > n:
+                    break
+                token = struct.unpack_from("<I", buf, off + 2)[0]
+                plen = struct.unpack_from("<i", buf, off + 6)[0]
+                start, end = off + 12, off + 12 + plen
+                if plen < 0 or end + 8 > n:
+                    break
+                payload = buf[start:end]
+                tok = _tokstr(token)
+                if tok in ("CNF", "ENF"):
+                    walk(payload, False)
+                elif tok == "CHS" and len(payload) >= 73:
+                    channel_sizes[struct.unpack_from("<H", payload, 0)[0]] = payload[72]
+                elif tok == "GRP" and len(payload) >= 4:
+                    gidx = struct.unpack_from("<H", payload, 0)[0]
+                    cnt = struct.unpack_from("<H", payload, 2)[0]
+                    group_sizes[gidx] = sum(
+                        channel_sizes.get(struct.unpack_from("<H", payload, 4 + 2 * i)[0], 0)
+                        for i in range(cnt)
+                        if 4 + 2 * i + 2 <= len(payload)
+                    )
+                elif tok in ("GPS", "GPS1"):
+                    out.extend(payload)
+                off = end + 8
+            elif top and buf[off] == 0x28:
+                nxt = _skip_data(buf, off, channel_sizes, group_sizes)
+                if nxt is None or nxt <= off:
+                    break
+                off = nxt
+            else:
+                break
+
+    walk(data, True)
+    return bytes(out)
+
+
+def _derived_golden(log, raw, fname):
+    gps_bytes = _gather_gps_payloads(raw)
+    count = len(gps_bytes) // _GPS_RECORD_LEN
+    if count < _DERIVED_START + _DERIVED_COUNT:
+        return {"file": fname, "start_index": 0, "count": 0, "samples": []}
+    recs = np.frombuffer(gps_bytes[: count * _GPS_RECORD_LEN], dtype=np.uint8).reshape(-1, 56)
+
+    def i32(lo):
+        return recs[:, lo : lo + 4].copy().view(np.int32).ravel().astype(np.float64)
+
+    vx, vy, vz = i32(32), i32(36), i32(40)  # ECEF velocity, cm/s
+
+    lat = log.channels["GPS Latitude"].column("GPS Latitude").to_numpy().astype(float)
+    lon = log.channels["GPS Longitude"].column("GPS Longitude").to_numpy().astype(float)
+    speed = log.channels["GPS Speed"].column("GPS Speed").to_numpy().astype(float)
+    tc = log.channels["GPS Speed"].column("timecodes").to_numpy().astype(np.int64)
+
+    # heading via libxrk's own ENU transform (unit-independent → cm/s is fine).
+    v_east, v_north = libxrk_gps.ecef_velocity_to_enu(
+        vx, vy, vz, lat * (np.pi / 180), lon * (np.pi / 180)
+    )
+    heading = np.arctan2(v_east, v_north) * (180 / np.pi)
+
+    sl = slice(_DERIVED_START, _DERIVED_START + _DERIVED_COUNT)
+    tw, spw, hdw = tc[sl], speed[sl], heading[sl]
+    dt = np.diff(tw) / 1000.0
+    dt = np.where(dt > 0, dt, np.inf)
+    inline = np.concatenate([[0.0], np.diff(spw) / dt]) / 9.81
+    dh = np.diff(hdw)
+    dh = np.where(dh > 180, dh - 360, dh)
+    dh = np.where(dh < -180, dh + 360, dh)
+    yaw = np.concatenate([[0.0], dh / dt])
+    lateral = spw * yaw * (np.pi / 180) / 9.81
+
+    # Fidelity check: the window's diff-based outputs (index ≥ 1) should match
+    # libxrk's own stored GPS_* channels to float32 precision.
+    stored = {
+        "GPS_InlineAcc": inline,
+        "GPS_LateralAcc": lateral,
+        "GPS_Yaw_Rate": yaw,
+    }
+    for name, computed in stored.items():
+        ch = log.channels[name].column(name).to_numpy().astype(float)[sl]
+        drift = float(np.max(np.abs(computed[1:] - ch[1:])))
+        print(f"    derived fidelity {name}: {drift:.2e}", file=sys.stderr)
+
+    samples = [
+        {
+            "t": int(tw[i]),
+            "lat": float(lat[sl][i]),
+            "lon": float(lon[sl][i]),
+            "vel_ecef": [float(vx[sl][i]), float(vy[sl][i]), float(vz[sl][i])],
+            "speed": float(spw[i]),
+            "heading": float(hdw[i]),
+            "inline_acc": float(inline[i]),
+            "yaw_rate": float(yaw[i]),
+            "lateral_acc": float(lateral[i]),
+        }
+        for i in range(_DERIVED_COUNT)
+    ]
+    return {
+        "file": fname,
+        "start_index": _DERIVED_START,
+        "count": _DERIVED_COUNT,
+        "samples": samples,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Container metadata golden (issue 1.2).
 #
 # Metadata *strings* come from libxrk's public `log.metadata` (the authoritative
@@ -556,7 +697,8 @@ def main(argv):
         _write_json(os.path.join(out_dir, f"{stem}.metadata.json"), _metadata_golden(log, raw, fname))
         _write_json(os.path.join(out_dir, f"{stem}.resample.json"), _resample_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.stats.json"), _stats_golden(log, fname))
-        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample,stats}}.json")
+        _write_json(os.path.join(out_dir, f"{stem}.derived.json"), _derived_golden(log, raw, fname))
+        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample,stats,derived}}.json")
     return 0
 
 

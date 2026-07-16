@@ -86,7 +86,11 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > literals, a built-in function set (`abs min max sqrt sin cos tan log exp pow
 > clamp`), and channel references resolved to a scalar or a per-sample series.
 > Every malformed input returns a typed `ExprError` with a `(line, col)` — never
-> a panic.
+> a panic. Derived channels (3.6) compute what the logger doesn't record —
+> GPS `heading` (ENU bearing, `atan2(V_east, V_north)`), `yaw_rate` (with ±180°
+> wrap), longitudinal and lateral acceleration in g, and a nearest-centroid
+> `gear_estimate` — matching XRKConverter/libxrk's computed channels on the
+> golden so overlays agree with the reference tool.
 
 ## Architecture
 
@@ -130,8 +134,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   over the whole channel, a `[t0, t1)` window, or each lap, ignoring `NaN` holes.
   The math-channel expression engine (3.5, module `expr`) adds `tokenize` →
   `parse` → `eval_scalar` / `eval_series` for user-defined channels, with a typed
-  `ExprError` carrying `(line, col)` on any malformed input. FFT and derived
-  channels follow. Panic-free, with typed errors throughout.
+  `ExprError` carrying `(line, col)` on any malformed input. Derived channels
+  (3.6, module `derived`) add `heading` / `yaw_rate` / `longitudinal_accel_g` /
+  `lateral_accel_g` / `gear_estimate`, matching libxrk's computed GPS channels.
+  FFT follows. Panic-free, with typed errors throughout.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
