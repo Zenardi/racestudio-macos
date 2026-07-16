@@ -24,7 +24,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > satellite count, distinguishing raw from computed GPS channels; and
 > **`decode_laps`** decodes the **LAP marker** table into `LapData` — per-lap
 > cumulative times and the best (fastest) lap. All reproduce the libxrk golden
-> to precision. Next: the unified `Session` model (M1.6) and analysis (M3).
+> to precision. These now unify (1.6) behind one call — **`decode_session`** —
+> which opens the container and runs every decoder, returning a complete,
+> immutable **`Session`** (metadata + channels + GPS + laps) through one typed,
+> `#[non_exhaustive]` **`DecodeError`**; the whole decode path is panic-free,
+> enforced by a clippy lint forbidding `unwrap`/`expect`/`panic!` on library
+> code. Next: the UniFFI exposure of `Session` (M1.7) and analysis (M3).
 
 ## Architecture
 
@@ -50,7 +55,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 
 - **`racestudio-decode`** — clean-room Rust decoder for AiM `.xrk` files,
   validated against XRKConverter's `libxrk` output as the golden oracle (M1).
-  The strategy — a clean-room port over wrapping the proprietary-linked `xdrk`
+  `decode_session(path)` is the primary entry point: it bundles the layered
+  decoders (container, channels, GPS, laps) into one immutable `Session`, with a
+  single `#[non_exhaustive] DecodeError` and a panic-free decode path. The
+  strategy — a clean-room port over wrapping the proprietary-linked `xdrk`
   crate — is recorded in
   [`docs/adr/0002-xrk-decode-strategy.md`](docs/adr/0002-xrk-decode-strategy.md).
 - **`racestudio-analysis`** — telemetry analysis engine: channels, math,
@@ -70,7 +78,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 Cargo.toml                     # Rust workspace (resolver "2")
 rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
-  racestudio-decode/           # .xrk decoder — container/channels/gps/laps
+  racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # stub crate + placeholder test
   racestudio-ffi/              # UniFFI boundary — exports core_version()
 app/

@@ -1,7 +1,9 @@
-//! Decode error types for the `.xrk` decoder.
+//! Decode error type for the `.xrk` decoder.
 //!
-//! The variant set is intentionally small in 1.2 (container + header). It grows
-//! as the channel/GPS/lap decoders land (1.3-1.5) and is unified in 1.6.
+//! The variant set grew across the layered decoders (1.2 container/header, 1.3
+//! channels, 1.4 GPS, 1.5 laps) and is now the single, `#[non_exhaustive]`
+//! `DecodeError` every entry point returns (1.6) — the one failure surface for
+//! [`decode_session`](crate::decode_session) and the individual decoders alike.
 
 use std::fmt;
 use std::io;
