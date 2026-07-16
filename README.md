@@ -29,7 +29,12 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 > immutable **`Session`** (metadata + channels + GPS + laps) through one typed,
 > `#[non_exhaustive]` **`DecodeError`**; the whole decode path is panic-free,
 > enforced by a clippy lint forbidding `unwrap`/`expect`/`panic!` on library
-> code. Next: the UniFFI exposure of `Session` (M1.7) and analysis (M3).
+> code. That `Session` is now exposed to Swift over **UniFFI** (1.7):
+> **`open_session(path)`** returns an opaque, `Arc`-backed **`SessionHandle`**,
+> and Swift reads channel data through a **windowed** `samples(channel, start,
+> count)` accessor — a bounded slice per call — so the UI never copies a whole
+> channel across the boundary; a Swift round-trip test opens the real sample,
+> lists channels, and stitches two adjacent windows. Next: analysis (M3).
 
 ## Architecture
 
@@ -65,8 +70,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   resampling (M3).
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
-  As of 0.4 it exports `core_version()`, round-tripped by a Swift test. See
-  [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
+  As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
+  `SessionHandle` (metadata / channel listing / lap + GPS summaries), and a
+  windowed `samples(channel, start, count)` accessor — plus `core_version()`.
+  See [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
@@ -80,7 +87,7 @@ rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # stub crate + placeholder test
-  racestudio-ffi/              # UniFFI boundary — exports core_version()
+  racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
   Sources/RaceStudioCore/      # logic library (wraps the FFI bindings)

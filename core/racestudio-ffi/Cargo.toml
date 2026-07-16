@@ -24,6 +24,7 @@ required-features = ["bindgen"]
 
 [dependencies]
 uniffi = { version = "0.28" }
+racestudio-decode = { path = "../racestudio-decode" }
 
 [lints.clippy]
 all = "warn"
