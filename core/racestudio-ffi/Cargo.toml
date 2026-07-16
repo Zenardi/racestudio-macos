@@ -25,6 +25,8 @@ required-features = ["bindgen"]
 [dependencies]
 uniffi = { version = "0.28" }
 racestudio-decode = { path = "../racestudio-decode" }
+# Analysis engine (M3): laps, delta-t, statistics, math channels, FFT (issue 3.8).
+racestudio-analysis = { path = "../racestudio-analysis" }
 
 [lints.clippy]
 all = "warn"

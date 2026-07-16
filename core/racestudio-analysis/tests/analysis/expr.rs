@@ -18,7 +18,8 @@
 use std::collections::HashMap;
 
 use racestudio_analysis::expr::{
-    eval_scalar, eval_series, parse, parse_str, tokenize, Ast, Env, ExprError, Func,
+    channels_referenced, eval_scalar, eval_series, parse, parse_str, tokenize, Ast, Env, ExprError,
+    Func,
 };
 
 // --------------------------------------------------------------------------- //
@@ -504,6 +505,25 @@ fn test_parser_reports_missing_close_after_group() {
     assert!(
         matches!(err, ExprError::UnexpectedToken { .. }),
         "got {err:?}"
+    );
+}
+
+#[test]
+fn test_channels_referenced_lists_distinct_names_in_order() {
+    let ast = parse_str("sqrt(Ax*Ax + Ay*Ay) + Ax - 2").expect("parse");
+    // Each distinct channel once, in first-appearance order; constants excluded.
+    assert_eq!(
+        channels_referenced(&ast),
+        vec!["Ax".to_string(), "Ay".to_string()]
+    );
+
+    // A constant expression references no channels.
+    assert!(channels_referenced(&parse_str("2 + 3 * 4").expect("parse")).is_empty());
+
+    // A single reference under a function call.
+    assert_eq!(
+        channels_referenced(&parse_str("-GPS_Speed").expect("parse")),
+        vec!["GPS_Speed".to_string()]
     );
 }
 

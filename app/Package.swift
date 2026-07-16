@@ -65,10 +65,11 @@ if ffiEnabled {
         )
     ]
 } else {
-    // Both FFI test files import the generated bindings; exclude them when the
+    // The FFI test files import the generated bindings; exclude them when the
     // xcframework is absent so a fresh checkout still builds.
     testExcludes.append("FFIRoundTripTests.swift")
     testExcludes.append("DecodeFFITests.swift")
+    testExcludes.append("AnalysisFFITests.swift")
 }
 
 let package = Package(
