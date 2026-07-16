@@ -10,16 +10,14 @@
 //!   against libxrk's `resample_to_timecodes` over the real fixture. The `.xrk`
 //!   is git-ignored (fetched by `make fixtures`); the test skips when absent.
 
-mod support;
-
 use std::path::PathBuf;
 
+use crate::support::fixtures::{fixture_path, load_golden, ResampleGolden};
 use proptest::prelude::*;
 use racestudio_analysis::{
     resample_uniform, resample_uniform_max_gap, to_distance_grid, AnalysisError,
 };
 use racestudio_decode::{decode_session, Session};
-use support::fixtures::{fixture_path, load_golden, ResampleGolden};
 
 const SAMPLE: &str = "aim_official_test.xrk";
 

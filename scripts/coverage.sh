@@ -148,8 +148,6 @@ rust_gate() {
     cargo test --workspace
     echo "==> [rust 4/4] cargo llvm-cov --workspace --fail-under-lines ${THRESHOLD}"
     cargo llvm-cov --workspace --no-report
-    echo "==> [diag] show-missing-lines"
-    cargo llvm-cov report --show-missing-lines || true
     cargo llvm-cov report --fail-under-lines "${THRESHOLD}"
     if [[ "${EMIT_LCOV:-0}" == "1" ]]; then
       cargo llvm-cov report --lcov --output-path target/lcov.info

@@ -14,16 +14,14 @@
 //!   samples so the distance/alignment maths is tested in isolation — no `.xrk`,
 //!   deterministic, one reason to fail.
 
-mod support;
-
 use std::path::PathBuf;
 
+use crate::support::fixtures::{fixture_path, load_golden, LapsGolden};
 use racestudio_analysis::{
     align_by_distance, align_by_time, distance_axis, segment_laps, AnalysisError, Lap, LapAxis,
     LapChannel,
 };
 use racestudio_decode::{decode_session, Session};
-use support::fixtures::{fixture_path, load_golden, LapsGolden};
 
 const SAMPLE: &str = "aim_official_test.xrk";
 
