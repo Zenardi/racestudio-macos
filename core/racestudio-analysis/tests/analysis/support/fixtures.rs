@@ -131,3 +131,32 @@ pub struct StatsChannel {
     pub rms: f64,
     pub range: f64,
 }
+
+/// `<name>.derived.json` — a contiguous window of GPS-derived channels (issue
+/// 3.6). Heading is reconstructed via libxrk's own `gps.ecef_velocity_to_enu`;
+/// the acceleration/yaw outputs match libxrk's stored `GPS_*` channels to
+/// float32. Each sample carries both the inputs (`t`, `lat`, `lon`, `vel_ecef`,
+/// `speed`, `heading`) and the expected outputs (`heading`, `inline_acc`,
+/// `yaw_rate`, `lateral_acc`), so the pure functions are validated directly.
+#[derive(Debug, Deserialize)]
+pub struct DerivedGolden {
+    pub file: String,
+    pub start_index: usize,
+    pub count: usize,
+    pub samples: Vec<DerivedSample>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DerivedSample {
+    /// Timecode (milliseconds).
+    pub t: f64,
+    pub lat: f64,
+    pub lon: f64,
+    /// ECEF velocity `(vx, vy, vz)` in cm/s (heading is unit-independent).
+    pub vel_ecef: [f64; 3],
+    pub speed: f64,
+    pub heading: f64,
+    pub inline_acc: f64,
+    pub yaw_rate: f64,
+    pub lateral_acc: f64,
+}

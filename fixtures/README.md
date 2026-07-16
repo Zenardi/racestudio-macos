@@ -23,6 +23,8 @@ fixtures/
                                #   timebase via resample_to_timecodes (3.3)
     <name>.stats.json          # per-channel whole-session statistics with the
                                #   libxrk storage dtype per channel (3.4)
+    <name>.derived.json        # GPS-derived channels window: heading, yaw_rate,
+                               #   inline/lateral accel — inputs + outputs (3.6)
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are
