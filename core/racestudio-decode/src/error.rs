@@ -30,6 +30,9 @@ pub enum DecodeError {
     ///
     /// [`decode_channels`]: crate::decode_channels
     UnknownUnit,
+    /// The GPS message stream is truncated: its bytes are not a whole number of
+    /// 56-byte NAV-SOL records.
+    TruncatedGps,
 }
 
 impl fmt::Display for DecodeError {
@@ -50,6 +53,12 @@ impl fmt::Display for DecodeError {
                 write!(f, "invalid channel sample count in a multi-sample burst")
             }
             DecodeError::UnknownUnit => write!(f, "unrecognised channel unit type"),
+            DecodeError::TruncatedGps => {
+                write!(
+                    f,
+                    "truncated GPS data: not a whole number of 56-byte records"
+                )
+            }
         }
     }
 }
@@ -62,7 +71,8 @@ impl std::error::Error for DecodeError {
             | DecodeError::TruncatedHeader
             | DecodeError::TruncatedChannel
             | DecodeError::BadSampleCount
-            | DecodeError::UnknownUnit => None,
+            | DecodeError::UnknownUnit
+            | DecodeError::TruncatedGps => None,
         }
     }
 }
@@ -90,6 +100,7 @@ mod tests {
             DecodeError::TruncatedChannel,
             DecodeError::BadSampleCount,
             DecodeError::UnknownUnit,
+            DecodeError::TruncatedGps,
         ] {
             assert!(!err.to_string().is_empty());
             assert!(err.source().is_none());
@@ -100,5 +111,6 @@ mod tests {
             .contains("channel"));
         assert!(DecodeError::BadSampleCount.to_string().contains("count"));
         assert!(DecodeError::UnknownUnit.to_string().contains("unit"));
+        assert!(DecodeError::TruncatedGps.to_string().contains("GPS"));
     }
 }

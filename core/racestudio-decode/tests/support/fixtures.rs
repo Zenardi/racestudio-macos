@@ -83,6 +83,30 @@ pub struct ChannelSummary {
     pub sample_rate_hz: Option<f64>,
 }
 
+/// `<name>.gps.json` — GPS channel inventory (issue 1.4). Nine `Raw` channels
+/// come straight from the NAV-SOL record; three `Computed` channels are derived
+/// (inline/lateral acceleration, yaw rate).
+#[derive(Debug, Deserialize)]
+pub struct GpsGolden {
+    pub file: String,
+    pub has_gps: bool,
+    pub fix_count: usize,
+    pub channels: Vec<GpsChannelSummary>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GpsChannelSummary {
+    pub name: String,
+    pub kind: String,
+    pub unit: String,
+    pub decimals: i64,
+    pub samples: usize,
+    pub min: Option<f64>,
+    pub max: Option<f64>,
+    pub first: Option<f64>,
+    pub last: Option<f64>,
+}
+
 /// `<name>.metadata.json` — container header metadata + structural counts
 /// (issue 1.2). Metadata strings come from libxrk's `log.metadata`; the counts
 /// come from a byte-level walk of the message framing.
