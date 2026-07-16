@@ -552,6 +552,8 @@ public protocol SessionHandleProtocol : AnyObject {
      * # Errors
      * - [`AnalysisError::InvalidExpression`] if `expr` fails to parse or evaluate.
      * - [`AnalysisError::MissingChannel`] if it references an absent channel.
+     * - [`AnalysisError::DistanceNotMonotonic`] if a referenced channel's
+     * timecodes are not monotonic (so it cannot be resampled onto the grid).
      * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
      */
     func evalMathChannel(expr: String, window: FfiWindow) throws  -> [Sample]
@@ -724,6 +726,8 @@ open func deltaTSeries(reference: UInt32, comparison: UInt32, window: FfiWindow)
      * # Errors
      * - [`AnalysisError::InvalidExpression`] if `expr` fails to parse or evaluate.
      * - [`AnalysisError::MissingChannel`] if it references an absent channel.
+     * - [`AnalysisError::DistanceNotMonotonic`] if a referenced channel's
+     * timecodes are not monotonic (so it cannot be resampled onto the grid).
      * - [`AnalysisError::WindowOutOfBounds`] for an inverted window.
      */
 open func evalMathChannel(expr: String, window: FfiWindow)throws  -> [Sample] {
@@ -2467,7 +2471,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_delta_t_series() != 39180) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel() != 16156) {
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel() != 22850) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_fft_spectrum() != 16994) {

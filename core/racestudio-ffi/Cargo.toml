@@ -28,5 +28,10 @@ racestudio-decode = { path = "../racestudio-decode" }
 # Analysis engine (M3): laps, delta-t, statistics, math channels, FFT (issue 3.8).
 racestudio-analysis = { path = "../racestudio-analysis" }
 
+# No [dev-dependencies]: the crate has `staticlib`/`cdylib` crate-types, and
+# adding any dev-dep makes cargo-llvm-cov instrument an extra, uncovered copy of
+# the lib (~7% phantom coverage drop) — the same instrumentation interaction that
+# bit issue 3.3. The one JSON golden the tests read is parsed by hand instead.
+
 [lints.clippy]
 all = "warn"

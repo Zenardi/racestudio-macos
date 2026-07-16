@@ -9,13 +9,21 @@
 //! across the boundary. Every entry point returns a UniFFI-mapped
 //! [`FfiDecodeError`]; malformed input never panics or traps.
 
+// The FFI boundary faces untrusted input and must never panic/trap (mirrors the
+// decode and analysis crates): forbid unwrap/expect/panic on shipped code; test
+// code is exempt.
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
+
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
     delta_t, resample_uniform, segment_laps, spectrum, stats_over_range, to_distance_grid,
-    AnalysisError as CoreAnalysisError, Stats, Window as FftWindow,
+    AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 
@@ -259,7 +267,9 @@ impl std::fmt::Display for AnalysisError {
         match self {
             AnalysisError::MissingChannel { name } => write!(f, "channel not found: {name}"),
             AnalysisError::EmptyLap => write!(f, "lap has no samples to align"),
-            AnalysisError::DistanceNotMonotonic => write!(f, "lap distance axis is not monotonic"),
+            AnalysisError::DistanceNotMonotonic => {
+                write!(f, "a channel axis (distance or timecode) is not monotonic")
+            }
             AnalysisError::EmptyRange => write!(f, "window selected no finite samples"),
             AnalysisError::InvalidExpression { message } => {
                 write!(f, "invalid math-channel expression: {message}")
@@ -377,6 +387,18 @@ impl From<DecodeError> for FfiDecodeError {
 #[derive(Debug, uniffi::Object)]
 pub struct SessionHandle {
     session: Session,
+    /// Lazily-computed per-lap segmentation (3.1), shared by the lap-based
+    /// accessors so an interactive caller does not re-slice the whole session on
+    /// every windowed call.
+    segmented_laps: OnceLock<Vec<Lap>>,
+}
+
+impl SessionHandle {
+    /// The per-lap segmentation, computed once and cached.
+    fn segmented(&self) -> &[Lap] {
+        self.segmented_laps
+            .get_or_init(|| segment_laps(&self.session))
+    }
 }
 
 #[uniffi::export]
@@ -516,7 +538,7 @@ impl SessionHandle {
         window: FfiWindow,
     ) -> Result<Vec<DeltaPoint>, AnalysisError> {
         window.validate()?;
-        let laps = segment_laps(&self.session);
+        let laps = self.segmented();
         let count = u32::try_from(laps.len()).unwrap_or(u32::MAX);
         let lap = |index: u32| {
             laps.get(index as usize)
@@ -568,15 +590,30 @@ impl SessionHandle {
             message: e.to_string(),
         })?;
         let references = channels_referenced(&ast);
-        let Some(anchor_name) = references.first() else {
+        if references.is_empty() {
             return Ok(Vec::new()); // constant expression: no timebase.
+        }
+        // Resolve every referenced channel up front (fail fast on a missing one).
+        let mut resolved: Vec<&[(f64, f64)]> = Vec::with_capacity(references.len());
+        for name in &references {
+            resolved.push(
+                channel_samples(&self.session, name)
+                    .ok_or_else(|| AnalysisError::MissingChannel { name: name.clone() })?,
+            );
+        }
+
+        // Anchor the shared timebase on the referenced channel with the most
+        // in-window samples — the highest resolution, and independent of the
+        // operand order (so `a*b` and `b*a` agree).
+        let in_window = |s: &[(f64, f64)]| {
+            s.iter()
+                .filter(|&&(t, _)| t >= window.start && t < window.end)
+                .count()
         };
-        let anchor = channel_samples(&self.session, anchor_name).ok_or_else(|| {
-            AnalysisError::MissingChannel {
-                name: anchor_name.clone(),
-            }
-        })?;
-        let grid: Vec<f64> = anchor
+        let anchor = (0..resolved.len())
+            .max_by_key(|&i| in_window(resolved[i]))
+            .unwrap_or(0);
+        let grid: Vec<f64> = resolved[anchor]
             .iter()
             .map(|&(t, _)| t)
             .filter(|&t| t >= window.start && t < window.end)
@@ -585,13 +622,21 @@ impl SessionHandle {
             return Ok(Vec::new());
         }
 
-        // Resample every referenced channel onto the anchor grid (issue 3.3).
+        // The anchor's in-window values already sit on the grid; the others are
+        // linearly resampled onto it (issue 3.3).
         let mut resolver: HashMap<String, Vec<f64>> = HashMap::new();
-        for name in &references {
-            let series = channel_samples(&self.session, name)
-                .ok_or_else(|| AnalysisError::MissingChannel { name: name.clone() })?;
-            let times: Vec<f64> = series.iter().map(|&(t, _)| t).collect();
-            resolver.insert(name.clone(), to_distance_grid(series, &times, &grid)?);
+        for (i, (name, series)) in references.iter().zip(&resolved).enumerate() {
+            let values = if i == anchor {
+                series
+                    .iter()
+                    .filter(|&&(t, _)| t >= window.start && t < window.end)
+                    .map(|&(_, v)| v)
+                    .collect()
+            } else {
+                let times: Vec<f64> = series.iter().map(|&(t, _)| t).collect();
+                to_distance_grid(series, &times, &grid)?
+            };
+            resolver.insert(name.clone(), values);
         }
 
         let values =
@@ -631,11 +676,11 @@ impl SessionHandle {
         if fs <= 0.0 {
             return Err(AnalysisError::EmptyRange);
         }
-        // Resample on a *seconds* timebase (timecodes are ms) so the rate `fs`
-        // (Hz) and the grid step `1/fs` share units, and the spectrum's `k·fs/N`
-        // axis comes out in Hz.
-        let in_seconds: Vec<(f64, f64)> = windowed.iter().map(|&(t, v)| (t / 1000.0, v)).collect();
-        let uniform = resample_uniform(&in_seconds, fs);
+        // `resample_uniform`'s rate is in samples per unit of the series' own time
+        // axis. The timecodes are milliseconds, so resample at `fs/1000` (samples
+        // per ms) to place the grid at the physical `fs` Hz; `spectrum` is then
+        // given `fs` so the `k·fs/N` axis comes out in Hz.
+        let uniform = resample_uniform(&windowed, fs / 1000.0);
         let values: Vec<f64> = uniform.iter().map(|&(_, v)| v).collect();
         let spec = spectrum(&values, fs, window_fn.into())?;
         Ok(SpectrumDto {
@@ -653,7 +698,7 @@ fn channel_samples<'a>(session: &'a Session, name: &str) -> Option<&'a [(f64, f6
     }
     session
         .gps()
-        .and_then(|gps| gps.channels().iter().find(|c| c.name() == name))
+        .and_then(|gps| gps.channel(name))
         .map(|channel| channel.samples())
 }
 
@@ -681,7 +726,10 @@ fn average_rate_hz(samples: &[(f64, f64)]) -> f64 {
 #[uniffi::export]
 pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> {
     let session = decode_session(path)?;
-    Ok(Arc::new(SessionHandle { session }))
+    Ok(Arc::new(SessionHandle {
+        session,
+        segmented_laps: OnceLock::new(),
+    }))
 }
 
 #[cfg(test)]

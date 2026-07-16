@@ -75,7 +75,9 @@ import RaceStudioFFIBindings
         let golden: LapsGolden = try FixtureLoader.golden("aim_official_test", aspect: "laps")
 
         let laps = try session.listLaps(window: all())
-        #expect(laps.count == golden.laps.count, "same lap count")
+        // `#require` halts the test (throws) so an empty/short result fails
+        // cleanly here instead of trapping on a subscript below.
+        try #require(laps.count == golden.laps.count, "same lap count")
         for (ffi, want) in zip(laps, golden.laps) {
             #expect(ffi.index == UInt32(want.index))
             #expect(abs(ffi.startTimeS - want.startMs / 1000) < 1e-6)
@@ -83,10 +85,10 @@ import RaceStudioFFIBindings
         }
 
         // A window covering only the first lap returns just it.
-        let first = laps[0]
+        let first = try #require(laps.first)
         let windowed = try session.listLaps(
             window: FfiWindow(start: first.startTimeS, end: first.endTimeS - 0.001))
-        #expect(windowed.count == 1)
+        try #require(windowed.count == 1)
         #expect(windowed[0].index == 0)
     }
 
@@ -100,7 +102,9 @@ import RaceStudioFFIBindings
             reference: UInt32(golden.referenceIndex),
             comparison: UInt32(golden.comparisonIndex),
             window: all())
-        #expect(!series.isEmpty)
+        // `#require` halts before the subscripts below, so an empty series is a
+        // clean failure rather than an out-of-bounds trap.
+        try #require(!series.isEmpty)
         #expect(abs(series[0].dt) < 1e-6, "delta-t starts at 0")
         for point in golden.points {
             #expect(abs(dtAt(series, point.distance) - point.dt) < 1e-3,
