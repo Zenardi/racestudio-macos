@@ -2,6 +2,7 @@ import Foundation
 
 /// A view that participates in the linked-cursor workspace (issue 4.7): it is
 /// notified when *another* view moves the shared cursor.
+@MainActor
 public protocol CursorLinked: AnyObject {
     /// Called when another registered view moves the shared cursor.
     func cursorDidMove(to cursor: WorkspaceCursor)
@@ -9,6 +10,7 @@ public protocol CursorLinked: AnyObject {
 
 /// Broadcasts cursor moves to the linked views, skipping the originator so a
 /// move never echoes back into a feedback loop (issue 4.7).
+@MainActor
 public protocol CursorBroadcaster: AnyObject {
     func broadcast(_ cursor: WorkspaceCursor, from origin: CursorLinked)
 }
@@ -18,7 +20,11 @@ public protocol CursorBroadcaster: AnyObject {
 /// Views ``register(_:)`` on appear and ``unregister(_:)`` on disappear. A
 /// ``broadcast(_:from:)`` reaches every *other* registered view exactly once.
 /// Views are held weakly and keyed by identity, so a deallocated view is skipped
-/// and registering the same view twice does not double-deliver.
+/// (and pruned) and registering the same view twice does not double-deliver.
+///
+/// `@MainActor` so the `views` dictionary is never touched concurrently and
+/// cursor moves are delivered on the UI thread.
+@MainActor
 public final class LinkedViewRegistry: CursorBroadcaster {
 
     /// A weak reference so the registry never keeps a view alive.
@@ -43,10 +49,20 @@ public final class LinkedViewRegistry: CursorBroadcaster {
     }
 
     /// Notify every registered view except `origin` that the cursor moved.
+    ///
+    /// Delivery iterates a snapshot of the registrations, so a receiver may
+    /// (un)register during delivery without mutating the collection being walked;
+    /// entries whose view has deallocated are pruned as they are encountered.
     public func broadcast(_ cursor: WorkspaceCursor, from origin: CursorLinked) {
         let originID = ObjectIdentifier(origin)
-        for (id, box) in views where id != originID {
-            box.value?.cursorDidMove(to: cursor)
+        for (id, box) in Array(views) {
+            guard let view = box.value else {
+                views.removeValue(forKey: id) // safe: iterating the snapshot, not `views`
+                continue
+            }
+            if id != originID {
+                view.cursorDidMove(to: cursor)
+            }
         }
     }
 }

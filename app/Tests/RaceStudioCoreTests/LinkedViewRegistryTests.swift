@@ -4,6 +4,7 @@ import Foundation
 
 /// Tests for `LinkedViewRegistry` / `CursorBroadcaster` (issue 4.7) — the
 /// broadcast fan-out that keeps linked views in sync without a feedback loop.
+@MainActor
 @Suite struct LinkedViewRegistryTests {
 
     /// A linked view that counts the broadcasts it receives.
@@ -14,6 +15,15 @@ import Foundation
             notifications += 1
             lastTime = cursor.timePosition
         }
+    }
+
+    /// A counter shared with a view, so a broadcast to it is observable even
+    /// after the view itself has deallocated.
+    private final class Counter { var value = 0 }
+    private final class CountingView: CursorLinked {
+        let counter: Counter
+        init(_ counter: Counter) { self.counter = counter }
+        func cursorDidMove(to cursor: WorkspaceCursor) { counter.value += 1 }
     }
 
     private func cursor() -> WorkspaceCursor {
@@ -68,16 +78,22 @@ import Foundation
 
     @Test func test_deallocated_view_is_skipped() {
         let registry = LinkedViewRegistry()
-        let a = SpyView()
-        registry.register(a)
+        let counter = Counter()
+        let live = SpyView()
+        registry.register(live)
         do {
-            let transient = SpyView()
+            let transient = CountingView(counter)
             registry.register(transient)
         } // `transient` deallocates here; the registry holds it weakly
 
-        // Broadcasting must neither crash nor resurrect the dead view.
-        registry.broadcast(cursor(), from: a)
-        #expect(a.notifications == 0)
+        // Broadcast from a third view so both `live` and the dead `transient`
+        // are non-originators; the dead view must be skipped (not resurrected).
+        let originator = SpyView()
+        registry.register(originator)
+        registry.broadcast(cursor(), from: originator)
+
+        #expect(live.notifications == 1, "the live view is still notified")
+        #expect(counter.value == 0, "the deallocated view is never notified (its counter is untouched)")
     }
 
     @Test func test_broadcast_through_the_broadcaster_protocol() {

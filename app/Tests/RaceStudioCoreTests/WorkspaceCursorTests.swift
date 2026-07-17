@@ -4,6 +4,7 @@ import Foundation
 
 /// Tests for `WorkspaceCursor` (issue 4.7) — the shared cursor and its
 /// time↔distance conversion via the 3.8 mapping.
+@MainActor
 @Suite struct WorkspaceCursorTests {
 
     /// A linear 3.8-style mapping: time 0…10 s ↔ distance 0…1000 m, with a
@@ -30,12 +31,29 @@ import Foundation
 
     @Test func test_cursor_clamped_to_session_bounds() {
         let cursor = cursor()
-        cursor.set(time: 999)
-        cursor.clampToBounds()
+        cursor.set(time: 999) // past the end
         #expect(cursor.timePosition == 10, "clamped to the last time")
-        cursor.set(time: -5)
-        cursor.clampToBounds()
+        #expect(cursor.distancePosition == 1000, "distance stays consistent with the clamped time")
+        cursor.set(time: -5) // before the start
         #expect(cursor.timePosition == 0, "clamped to the first time")
+        // clampToBounds is idempotent on an already-in-bounds position.
+        cursor.set(time: 5)
+        cursor.clampToBounds()
+        #expect(cursor.timePosition == 5)
+    }
+
+    @Test func test_nonfinite_initial_time_falls_back_to_first_sample() {
+        // init assigns timePosition directly, so it must sanitize a non-finite
+        // seed rather than letting a NaN poison the cursor forever.
+        let cursor = WorkspaceCursor(times: [0, 5, 10], distances: [0, 400, 1000], time: .nan)
+        #expect(cursor.timePosition == 0)
+        #expect(cursor.distancePosition == 0)
+    }
+
+    @Test func test_nonfinite_initial_time_with_no_mapping_is_zero() {
+        // No mapping and a non-finite seed → the safest fallback, zero.
+        let cursor = WorkspaceCursor(times: [], distances: [], time: .nan)
+        #expect(cursor.timePosition == 0)
     }
 
     @Test func test_time_and_distance_agree_on_the_same_point() {

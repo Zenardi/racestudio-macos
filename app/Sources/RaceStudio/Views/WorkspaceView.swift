@@ -1,14 +1,17 @@
 import SwiftUI
 import RaceStudioCore
 
-/// The shared linked-view registry, injected through the environment so any
-/// workspace tile / view-model can register to receive cursor moves (issue 4.7).
+/// The shared linked-view registry, injected through the environment so an
+/// imperative workspace consumer (e.g. a view-model or the Metal renderer) can
+/// register to receive cursor moves (issue 4.7). The default is `nil` — absence
+/// is explicit, so tiles never fall back to a shared process-wide instance that
+/// would cross-link separate workspaces.
 private struct LinkedViewRegistryKey: EnvironmentKey {
-    static let defaultValue = LinkedViewRegistry()
+    static let defaultValue: LinkedViewRegistry? = nil
 }
 
 extension EnvironmentValues {
-    var linkedViewRegistry: LinkedViewRegistry {
+    var linkedViewRegistry: LinkedViewRegistry? {
         get { self[LinkedViewRegistryKey.self] }
         set { self[LinkedViewRegistryKey.self] = newValue }
     }
@@ -23,9 +26,13 @@ extension EnvironmentValues {
 /// (`LinkedViewRegistry`) all live in `RaceStudioCore`. This view only lays out
 /// the tiles, forwards the cursor position onto each tile's axis, and injects the
 /// shared cursor + registry via the environment — no sync logic of its own.
+///
+/// SwiftUI tiles link simply by observing the shared cursor; the injected
+/// registry is the explicit-callback path for imperative consumers. Wiring each
+/// tile's hover/drag input into the cursor is app-level integration (out of this
+/// issue's scope, along with tile-layout persistence and drag-to-rearrange).
 public struct WorkspaceView: View {
     @ObservedObject private var cursor: WorkspaceCursor
-    @State private var selection = CursorSelection()
     @State private var registry = LinkedViewRegistry()
 
     private let traces: [ChannelTrace]
@@ -57,15 +64,12 @@ public struct WorkspaceView: View {
         .accessibilityLabel("Analysis workspace")
     }
 
-    /// A compact readout of the shared cursor and current selection.
+    /// A compact readout of the shared cursor's time and distance positions.
     private var cursorReadout: some View {
         HStack(spacing: 16) {
             Text(String(format: "t = %.2f s", cursor.timePosition))
             Text(String(format: "d = %.1f m", cursor.distancePosition))
             Spacer()
-            if let range = selection.range, !selection.isEmpty {
-                Text(String(format: "selection %.1f–%.1f", range.lowerBound, range.upperBound))
-            }
         }
         .font(.caption.monospacedDigit())
         .foregroundColor(.secondary)
