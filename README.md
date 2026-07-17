@@ -169,9 +169,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   progress), `ImportError(decodeError:)` (total `DecodeError` → title/message/recovery
   mapping), and `SessionStore` progress threading + `cancel()`.
   4.1 adds the `Plot/` geometry — `LinearScale` (value↔pixel), `TickGenerator`
-  (nice 1/2/5 ticks), `PlotViewport` (anchor-preserving zoom/pan), and `PlotModel`
-  (`XAxisMode`, `ChannelTrace`, `hitTest`, min/max `envelope` decimation) — all the
-  testable math behind the time/distance line plot.
+  (nice 1/2/5 ticks), `PlotViewport` (anchor-preserving, non-finite-safe zoom/pan),
+  `plotDomain` (finite-only axis range), and `PlotModel` (`XAxisMode`,
+  `ChannelTrace`, `hitTest`, the min/max `envelope` and the visible-window
+  `plotPolyline` both render paths draw) — all the testable math behind the
+  time/distance line plot.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens

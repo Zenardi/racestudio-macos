@@ -80,4 +80,22 @@ import Foundation
         #expect(reset.visible.lowerBound == 0)
         #expect(reset.visible.upperBound == 100)
     }
+
+    @Test func test_zoom_and_pan_ignore_nonfinite_input() {
+        // A NaN/±∞ gesture value must leave the viewport unchanged, never build
+        // an inverted/NaN ClosedRange (which would trap).
+        let viewport = PlotViewport(bounds: 0...100, visible: 25...75)
+        #expect(viewport.zoom(factor: .nan, anchor: 0.5) == viewport)
+        #expect(viewport.zoom(factor: .infinity, anchor: 0.5) == viewport)
+        #expect(viewport.zoom(factor: 0.5, anchor: .nan) == viewport)
+        #expect(viewport.pan(by: .nan) == viewport)
+        #expect(viewport.pan(by: .infinity) == viewport)
+    }
+
+    @Test func test_min_span_is_clamped_to_bounds_span() {
+        // minSpan can never exceed the extent it must fit inside…
+        #expect(PlotViewport(bounds: 0...10, minSpan: 100).minSpan == 10)
+        // …and a degenerate extent yields a zero floor (no positive span fits).
+        #expect(PlotViewport(bounds: 5...5).minSpan == 0)
+    }
 }

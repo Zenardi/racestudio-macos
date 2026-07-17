@@ -5,10 +5,11 @@ import RaceStudioCore
 /// The primary Metal line-strip renderer (issue 4.1, ADR 0003).
 ///
 /// Wraps an `MTKView` that draws one GPU line strip per trace. Vertices come
-/// from ``plotPolyline(trace:mode:columns:)`` (the shared
-/// `RaceStudioCore.envelope` decimation) placed into normalised device
+/// from `RaceStudioCore`'s `plotPolyline(trace:mode:visible:columns:)` (the
+/// visible-window `envelope` decimation) placed into normalised device
 /// coordinates by `RaceStudioCore.LinearScale`. All geometry is computed in the
-/// core; this view only uploads and draws.
+/// core; this view re-decimates the visible window and uploads a line-strip
+/// buffer per frame, then the GPU draws it.
 struct MetalPlotRenderer: NSViewRepresentable {
     let traces: [ChannelTrace]
     let mode: XAxisMode
@@ -78,7 +79,9 @@ struct MetalPlotRenderer: NSViewRepresentable {
             let yScale = LinearScale(domain: valueDomain, range: -1...1)
 
             strips = traces.compactMap { trace in
-                let vertices = plotPolyline(trace: trace, mode: mode, columns: columns).map { point in
+                let polyline = plotPolyline(trace: trace, mode: mode,
+                                            visible: viewport.visible, columns: columns)
+                let vertices = polyline.map { point in
                     SIMD2<Float>(Float(xScale.map(point.x)), Float(yScale.map(point.y)))
                 }
                 guard vertices.count > 1,

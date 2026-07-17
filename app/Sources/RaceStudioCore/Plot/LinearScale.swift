@@ -12,6 +12,7 @@ public struct LinearScale: Equatable, Sendable {
     /// The pixel-space interval the domain maps onto, e.g. `0...640`.
     public let range: ClosedRange<CGFloat>
 
+    /// Creates a scale from a value `domain` to a pixel `range`.
     public init(domain: ClosedRange<Double>, range: ClosedRange<CGFloat>) {
         self.domain = domain
         self.range = range
@@ -39,12 +40,12 @@ public struct LinearScale: Equatable, Sendable {
     /// Like ``map(_:)`` but clamps `value` into the domain first, so
     /// out-of-range inputs pin to the range endpoints.
     public func mapClamped(_ value: Double) -> CGFloat {
-        map(min(max(value, domain.lowerBound), domain.upperBound))
+        map(value.clamped(to: domain))
     }
 
     /// Like ``invert(_:)`` but clamps `pixel` into the range first, so
     /// out-of-range pixels pin to the domain endpoints.
     public func invertClamped(_ pixel: CGFloat) -> Double {
-        invert(min(max(pixel, range.lowerBound), range.upperBound))
+        invert(pixel.clamped(to: range))
     }
 }

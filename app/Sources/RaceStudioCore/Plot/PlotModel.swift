@@ -14,6 +14,7 @@ public struct PlotSample: Equatable, Sendable {
     public let distance: Double
     public let value: Double
 
+    /// Creates a sample tagged with both x-bases and its channel value.
     public init(time: Double, distance: Double, value: Double) {
         self.time = time
         self.distance = distance
@@ -28,6 +29,7 @@ public struct ChannelTrace: Equatable, Sendable, Identifiable {
     public let samples: [PlotSample]
     public var id: String { name }
 
+    /// Creates a trace from a name and its ordered samples.
     public init(name: String, samples: [PlotSample]) {
         self.name = name
         self.samples = samples
@@ -81,6 +83,7 @@ public struct ColumnExtent: Equatable, Sendable {
     public let minIndex: Int
     public let maxIndex: Int
 
+    /// Creates a column extent from its min/max values and their sample indices.
     public init(min: Double, max: Double, minIndex: Int, maxIndex: Int) {
         self.min = min
         self.max = max
@@ -118,6 +121,86 @@ private func nearestSortedIndex(to x: Double, in xs: [Double]) -> Int? {
     let distanceToUpper = xs[upperIndex] - x
     // Ties resolve to the lower index.
     return distanceToLower <= distanceToUpper ? lowerIndex : upperIndex
+}
+
+/// A single point of a plotted polyline, in domain coordinates (issue 4.1).
+public struct PlotPoint: Identifiable, Equatable, Sendable {
+    public let id: Int
+    public let x: Double
+    public let y: Double
+
+    public init(id: Int, x: Double, y: Double) {
+        self.id = id
+        self.x = x
+        self.y = y
+    }
+}
+
+/// Builds the polyline a renderer draws for `trace` on the `mode` x-basis,
+/// restricted to the `visible` x-window and decimated to at most `columns`
+/// min/max pairs (issue 4.1, ADR 0003).
+///
+/// Only the samples inside `visible` are considered (found by binary search, so
+/// zooming in reveals the detail within the window rather than a coarser whole-
+/// trace envelope). When that slice is denser than `columns` it is reduced to
+/// per-column min/max pairs via ``envelope(values:columns:)``, emitted in sample
+/// order so the line stays monotonic in x; otherwise the raw slice is returned.
+/// Both render paths call this, so they draw the identical shape.
+public func plotPolyline(
+    trace: ChannelTrace,
+    mode: XAxisMode,
+    visible: ClosedRange<Double>,
+    columns: Int
+) -> [PlotPoint] {
+    let allX = trace.xValues(mode: mode)
+    guard !allX.isEmpty else { return [] }
+
+    // [start, end) = the samples whose x lies inside `visible` (allX ascending).
+    let start = sortedLowerBound(allX, visible.lowerBound)
+    let end = sortedUpperBound(allX, visible.upperBound)
+    guard start < end else { return [] }
+
+    let xs = Array(allX[start..<end])
+    let values = trace.samples[start..<end].map(\.value)
+
+    guard columns > 0, values.count > columns else {
+        return xs.indices.map { PlotPoint(id: $0, x: xs[$0], y: values[$0]) }
+    }
+
+    var points: [PlotPoint] = []
+    points.reserveCapacity(columns * 2)
+    var id = 0
+    for extent in envelope(values: values, columns: columns) {
+        let lower = min(extent.minIndex, extent.maxIndex)
+        let upper = max(extent.minIndex, extent.maxIndex)
+        points.append(PlotPoint(id: id, x: xs[lower], y: values[lower]))
+        id += 1
+        if upper != lower {
+            points.append(PlotPoint(id: id, x: xs[upper], y: values[upper]))
+            id += 1
+        }
+    }
+    return points
+}
+
+/// First index of ascending `xs` whose value is `>= target` (the count if none).
+private func sortedLowerBound(_ xs: [Double], _ target: Double) -> Int {
+    var low = 0, high = xs.count
+    while low < high {
+        let mid = (low + high) / 2
+        if xs[mid] < target { low = mid + 1 } else { high = mid }
+    }
+    return low
+}
+
+/// First index of ascending `xs` whose value is `> target` (the count if none).
+private func sortedUpperBound(_ xs: [Double], _ target: Double) -> Int {
+    var low = 0, high = xs.count
+    while low < high {
+        let mid = (low + high) / 2
+        if xs[mid] <= target { low = mid + 1 } else { high = mid }
+    }
+    return low
 }
 
 /// Buckets `values` into `columns` evenly-sized index ranges and returns each

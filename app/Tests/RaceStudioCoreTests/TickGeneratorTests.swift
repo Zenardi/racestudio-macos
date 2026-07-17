@@ -5,41 +5,33 @@ import Foundation
 /// Tests for `TickGenerator` (issue 4.1) — the nice-number axis tick algorithm.
 @Suite struct TickGeneratorTests {
 
-    /// The mantissa of a nice step is 1, 2, or 5 (× a power of ten).
-    private func isNiceStep(_ step: Double) -> Bool {
-        let exp = floor(log10(step))
-        let mantissa = (step / pow(10, exp)).rounded()
-        return mantissa == 1 || mantissa == 2 || mantissa == 5
-    }
+    /// Golden tick sets — exact expected output, so the test asserts against
+    /// known-nice values rather than re-deriving the nice-number math.
+    private static let goldens: [(domain: ClosedRange<Double>, expected: [Double])] = [
+        (0...1, [0, 0.2, 0.4, 0.6, 0.8, 1.0]),
+        (0...100, [0, 20, 40, 60, 80, 100]),
+        (3.2...18.7, [5, 10, 15]),
+        (-50...50, [-40, -20, 0, 20, 40]),
+        (0.001...0.009, [0.002, 0.004, 0.006, 0.008])
+    ]
 
     @Test func test_ticks_are_nice_and_within_domain() {
-        let domains: [ClosedRange<Double>] = [
-            0...1, 0...100, 3.2...18.7, -50...50, 0.001...0.009
-        ]
-        for domain in domains {
+        for (domain, expected) in Self.goldens {
             let ticks = TickGenerator.ticks(for: domain, targetCount: 5)
+            #expect(ticks.count == expected.count, "count for \(domain)")
+            for (got, want) in zip(ticks, expected) {
+                #expect(abs(got - want) < 1e-9, "tick \(got) vs \(want) in \(domain)")
+                #expect(got >= domain.lowerBound - 1e-9 && got <= domain.upperBound + 1e-9,
+                        "tick \(got) outside \(domain)")
+            }
+        }
+    }
 
-            // Non-degenerate domains always yield at least one tick.
-            #expect(!ticks.isEmpty, "empty ticks for \(domain)")
-            // Strictly ascending.
+    @Test func test_ticks_are_strictly_ascending() {
+        for (domain, _) in Self.goldens {
+            let ticks = TickGenerator.ticks(for: domain, targetCount: 5)
             for i in 1..<ticks.count {
                 #expect(ticks[i] > ticks[i - 1], "not ascending in \(domain)")
-            }
-            // All inside the domain.
-            for tick in ticks {
-                #expect(tick >= domain.lowerBound - 1e-9 && tick <= domain.upperBound + 1e-9,
-                        "tick \(tick) outside \(domain)")
-            }
-            // Uniform, nice spacing; every tick is an integer multiple of it.
-            if ticks.count >= 2 {
-                let step = ticks[1] - ticks[0]
-                for i in 1..<ticks.count {
-                    #expect(abs((ticks[i] - ticks[i - 1]) - step) < step * 1e-6, "uneven step in \(domain)")
-                }
-                #expect(isNiceStep(step), "step \(step) not nice in \(domain)")
-                for tick in ticks {
-                    #expect(abs((tick / step).rounded() - tick / step) < 1e-6, "tick \(tick) not on grid")
-                }
             }
         }
     }
@@ -58,8 +50,9 @@ import Foundation
         // targetCount 1 gives a raw step == span; the nice-round-up (5) would
         // overflow the domain, so the algorithm rounds the step down to 2.
         let ticks = TickGenerator.ticks(for: 0...3, targetCount: 1)
-        #expect(ticks == [0, 2])
-        #expect(isNiceStep(ticks[1] - ticks[0]))
+        #expect(ticks.count == 2)
+        #expect(abs(ticks[0] - 0) < 1e-9)
+        #expect(abs(ticks[1] - 2) < 1e-9)
     }
 
     @Test func test_degenerate_domain_and_invalid_target_are_empty() {

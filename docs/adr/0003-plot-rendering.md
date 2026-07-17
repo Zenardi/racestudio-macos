@@ -21,9 +21,11 @@ both present in the Command-Line-Tools SDK this project builds against
 - **Swift Charts** — declarative, correct, accessible, trivial to write; but it
   rebuilds its view tree per frame and is not designed for 50k+ `LineMark`s at
   gesture frame rates.
-- **Metal (`MTKView`)** — a GPU line-strip pass that uploads vertices once and
-  redraws in microseconds; more code, but the only option that keeps a dense
-  plot interactive.
+- **Metal (`MTKView`)** — a GPU line-strip pass. Each frame it re-decimates only
+  the **visible** window to at most one min/max pair per pixel column
+  (`plotPolyline`/`envelope`, bounded by the view width, not the sample count),
+  uploads a small vertex buffer, and the GPU draws the strips; more code, but the
+  only option that keeps a dense plot interactive.
 
 ## Decision
 
@@ -32,13 +34,16 @@ line strip per trace) and **Swift Charts as a correctness / low-density
 fallback**. Crucially, **the numeric model is identical for both** and lives in
 `RaceStudioCore`, not in either view:
 
-- `LinearScale` — value↔pixel affine map (both paths place points with it).
-- `TickGenerator` — "nice" 1/2/5 × 10ⁿ axis ticks.
-- `PlotViewport` — zoom/pan window math (anchor-preserving, min-span guarded).
-- `PlotModel` — `XAxisMode`, `ChannelTrace`, `hitTest`, and the **min/max
-  `envelope` decimation** that both renderers consume so a dense channel draws
-  the *same visible min/max envelope* regardless of path (the 4.1 parity
-  requirement).
+- `LinearScale` — value↔pixel affine map (both paths place points with it; the
+  view's tick/gridline overlay uses it too).
+- `TickGenerator` — "nice" 1/2/5 × 10ⁿ axis ticks, drawn as the shared
+  gridline/label overlay above both renderers.
+- `PlotViewport` — zoom/pan window math (anchor-preserving, min-span guarded,
+  non-finite-input safe).
+- `PlotModel` — `XAxisMode`, `ChannelTrace`, `hitTest`, `plotDomain`, and the
+  **min/max `envelope` decimation** behind `plotPolyline`, which both renderers
+  consume over the same visible window so a dense channel draws the *same visible
+  min/max envelope* regardless of path (the 4.1 parity requirement).
 
 The SwiftUI views in the `RaceStudio` shell
 (`TimeDistancePlotView`, `MetalPlotRenderer`, `SwiftChartsPlotFallback`) are
@@ -49,9 +54,11 @@ views are structurally excluded from the coverage metric (per
 
 ## Consequences
 
-- The plot stays interactive on dense laps because the Metal path uploads
-  vertices and redraws on the GPU; the CPU-side per-frame work is the O(width)
-  `envelope` decimation, not O(samples) view diffing.
+- The plot stays interactive on dense laps because the Metal path's per-frame
+  CPU work is the visible-window `envelope` decimation — bounded by the pixel
+  width, so zooming in *reduces* work while *revealing* detail — followed by a
+  GPU line-strip draw, rather than Swift Charts rebuilding an O(samples) view
+  tree every frame.
 - Because both paths share `RaceStudioCore`'s scales and `envelope`, switching
   between them (or using Charts for sparse channels / screenshots / debugging)
   produces the same picture — asserted by `test_dense_envelope_parity_min_max`.
