@@ -191,6 +191,12 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   slope/intercept/R², `nil` for degenerate input), and `ScatterModel` (paired
   channel-vs-channel points with NaN-drop and window restriction) — the math
   behind the distribution and XY-scatter plots.
+  4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
+  last-write-wins live validator publishing an `EditorState` + preview
+  `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →
+  message + character-span mapping), and the `ExpressionEvaluating` seam whose
+  `FFIExpressionEvaluator` runs the 3.5 engine over the session via UniFFI — the
+  logic behind the math-channel editor.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -208,6 +214,8 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   4.5 adds `Views/HistogramView` (bin bars) and `Views/ScatterView` (points +
   fitted trend line), drawing the Core `Stats/` model with the 4.1
   `LinearScale`/`TickGenerator` axes.
+  4.6 adds `Views/MathChannelEditorView` (expression field + inline diagnostic
+  caret + embedded 4.1 preview plot), rendering the Core `MathChannelEditorModel`.
 
 ## Layout
 
