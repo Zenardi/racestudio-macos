@@ -68,4 +68,22 @@ import Foundation
         #expect(model.selected.isEmpty)
         #expect(model.reference == nil)
     }
+
+    @Test func test_init_normalizes_reference_to_uphold_invariant() {
+        // A non-nil reference with an empty selection is normalized to nil…
+        #expect(LapSelectionModel(selected: [], reference: LapID(0)).reference == nil)
+        // …a reference not in the selection promotes to the first selected lap…
+        #expect(LapSelectionModel(selected: [LapID(1), LapID(2)], reference: LapID(9)).reference == LapID(1))
+        // …and a valid reference is kept.
+        #expect(LapSelectionModel(selected: [LapID(1), LapID(2)], reference: LapID(2)).reference == LapID(2))
+    }
+
+    @Test func test_comparison_target_is_first_non_reference_lap() {
+        let model = LapSelectionModel(selected: [LapID(0), LapID(1), LapID(2)], reference: LapID(0))
+        #expect(model.comparisonTarget == LapID(1))
+        // Only the reference selected → no target.
+        #expect(LapSelectionModel(selected: [LapID(0)], reference: LapID(0)).comparisonTarget == nil)
+        // Empty selection → no target.
+        #expect(LapSelectionModel().comparisonTarget == nil)
+    }
 }

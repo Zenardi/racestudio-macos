@@ -92,22 +92,40 @@ public struct LapOverlayViewModel: Sendable {
 
     /// The delta-t strip of `target` versus `reference`: the 3.2 series for the
     /// pair, or all-zeros over the reference's distance basis when they are the
-    /// same lap. Empty when neither is available.
+    /// same lap. Depends only on the passed pair, not on the current selection.
+    ///
+    /// Delta-t is antisymmetric (`dt(A,B) == -dt(B,A)` on a shared distance
+    /// basis), so if only the opposite orientation was supplied — e.g. after the
+    /// user swaps which lap is the reference — the strip is derived by negating
+    /// it rather than vanishing. Empty when nothing is available.
     public func deltaStrip(reference: LapID, target: LapID) -> [DeltaSample] {
-        guard selection.reference != nil else { return [] }
         if reference == target {
             guard let lap = laps[reference] else { return [] }
             return lap.distances.map { DeltaSample(distance: $0, dt: 0) }
         }
-        return deltas[DeltaPair(reference: reference, target: target)] ?? []
+        if let series = deltas[DeltaPair(reference: reference, target: target)] {
+            return series
+        }
+        if let reversed = deltas[DeltaPair(reference: target, target: reference)] {
+            return reversed.map { DeltaSample(distance: $0.distance, dt: -$0.dt) }
+        }
+        return []
     }
 
     /// The interpolated delta-t and leading lap at cursor `distance`, or `nil`
     /// when there is no strip for the pair. Negative `dt` means the target is
     /// ahead (leads); positive means the reference leads; zero is a tie.
     public func deltaAtCursor(reference: LapID, target: LapID, distance: Double) -> DeltaReadout? {
-        let strip = deltaStrip(reference: reference, target: target)
-        guard !strip.isEmpty else { return nil }
+        readout(in: deltaStrip(reference: reference, target: target),
+                at: distance, reference: reference, target: target)
+    }
+
+    /// The cursor readout for an already-computed `strip` — the hot-path variant
+    /// that avoids rebuilding the strip. Returns `nil` for an empty strip or a
+    /// non-finite `distance`.
+    public func readout(in strip: [DeltaSample], at distance: Double,
+                        reference: LapID, target: LapID) -> DeltaReadout? {
+        guard distance.isFinite, !strip.isEmpty else { return nil }
         let dt = interpolatedDelta(strip, at: distance)
         let leader: LapID?
         if dt < 0 {

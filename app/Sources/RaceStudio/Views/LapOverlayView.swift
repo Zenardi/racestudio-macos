@@ -2,11 +2,13 @@ import SwiftUI
 import RaceStudioCore
 
 /// The lap overlay comparison surface (issue 4.2): a lap picker on the left, the
-/// overlaid 4.1 plot for a chosen channel, and the delta-t strip beneath it.
+/// overlaid 4.1 plot for a chosen channel, and the scrubbable delta-t strip
+/// beneath it.
 ///
-/// Thin: it owns the selection state and layout only. Trace building, coloring,
-/// and delta-t all come from `RaceStudioCore.LapOverlayViewModel`, and the plot
-/// itself is the reused ``TimeDistancePlotView`` (no new rendering code).
+/// Thin: it owns the selection/cursor state and layout only. Trace building,
+/// coloring, target selection, and delta-t all come from
+/// `RaceStudioCore.LapOverlayViewModel`/`LapSelectionModel`, and the plot itself
+/// is the reused ``TimeDistancePlotView`` (no new rendering code).
 public struct LapOverlayView: View {
     private let laps: [OverlayLap]
     private let deltas: [DeltaPair: [DeltaSample]]
@@ -23,36 +25,36 @@ public struct LapOverlayView: View {
         _selection = State(initialValue: initialSelection)
     }
 
-    private var overlay: LapOverlayViewModel {
-        LapOverlayViewModel(selection: selection, laps: laps, deltas: deltas)
-    }
-
-    /// The first selected lap that is not the reference — the comparison target
-    /// for the delta strip.
-    private var target: LapID? {
-        selection.selected.first { $0 != selection.reference }
-    }
-
     public var body: some View {
+        // Build the view-model once per render, not once per access.
+        let overlay = LapOverlayViewModel(selection: selection, laps: laps, deltas: deltas)
         HStack(spacing: 0) {
-            lapPicker
+            lapPicker(overlay)
                 .frame(width: 180)
             Divider()
             VStack(spacing: 4) {
                 TimeDistancePlotView(traces: overlay.traces(for: channel),
                                      mode: .distance, renderer: .swiftCharts)
-                if let reference = selection.reference, let target {
-                    DeltaStripView(
-                        strip: overlay.deltaStrip(reference: reference, target: target),
-                        readout: cursorDistance.flatMap {
-                            overlay.deltaAtCursor(reference: reference, target: target, distance: $0)
-                        })
-                }
+                deltaStrip(overlay)
             }
         }
     }
 
-    private var lapPicker: some View {
+    @ViewBuilder
+    private func deltaStrip(_ overlay: LapOverlayViewModel) -> some View {
+        if let reference = selection.reference, let target = selection.comparisonTarget {
+            // Compute the strip once and reuse it for both the render and the readout.
+            let strip = overlay.deltaStrip(reference: reference, target: target)
+            DeltaStripView(
+                strip: strip,
+                readout: cursorDistance.flatMap {
+                    overlay.readout(in: strip, at: $0, reference: reference, target: target)
+                },
+                cursorDistance: $cursorDistance)
+        }
+    }
+
+    private func lapPicker(_ overlay: LapOverlayViewModel) -> some View {
         List(laps, id: \.id) { lap in
             HStack(spacing: 8) {
                 Circle()

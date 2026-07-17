@@ -15,9 +15,23 @@ public struct LapSelectionModel: Equatable, Sendable {
     public private(set) var selected: [LapID]
     public private(set) var reference: LapID?
 
+    /// Builds a selection, normalizing `reference` to uphold the invariant: it is
+    /// kept only if it is one of `selected`, otherwise it promotes to the first
+    /// selected lap (or `nil` when the selection is empty).
     public init(selected: [LapID] = [], reference: LapID? = nil) {
         self.selected = selected
-        self.reference = reference
+        if let reference, selected.contains(reference) {
+            self.reference = reference
+        } else {
+            self.reference = selected.first
+        }
+    }
+
+    /// The first selected lap that is not the ``reference`` — the comparison
+    /// target for the delta strip — or `nil` when only the reference (or
+    /// nothing) is selected.
+    public var comparisonTarget: LapID? {
+        selected.first { $0 != reference }
     }
 
     /// Adds `lap` if absent, removes it if present; then restores the reference

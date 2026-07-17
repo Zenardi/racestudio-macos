@@ -41,8 +41,14 @@ import Foundation
         #expect(traces[0].name == "Lap 1")
         #expect(traces[0].xValues(mode: .distance) == [0, 50, 100])
         #expect(traces[1].xValues(mode: .distance) == [0, 60])
+    }
 
-        // A channel no lap carries yields no traces.
+    @Test func test_traces_skip_a_channel_no_lap_carries() {
+        let a = lap(0, distances: [0, 50], speed: [10, 20])
+        let model = LapOverlayViewModel(
+            selection: LapSelectionModel(selected: [LapID(0)], reference: LapID(0)),
+            laps: [a],
+            deltas: [:])
         #expect(model.traces(for: "Nonexistent").isEmpty)
     }
 
@@ -141,26 +147,49 @@ import Foundation
         #expect(model.deltaAtCursor(reference: reference, target: LapID(999), distance: 0) == nil)
     }
 
-    @Test func test_delta_at_cursor_reference_leads_and_ties() {
-        // Synthetic strip: reference ahead early (dt > 0), tied at the crossover.
-        let reference = LapID(0)
-        let target = LapID(1)
+    /// Synthetic strip: reference ahead early (dt > 0), tied at the crossover.
+    private func synthetic() -> LapOverlayViewModel {
         let series = [DeltaSample(distance: 0, dt: 0),
                       DeltaSample(distance: 100, dt: 2),
                       DeltaSample(distance: 200, dt: 0)]
-        let model = LapOverlayViewModel(
-            selection: LapSelectionModel(selected: [reference, target], reference: reference),
+        return LapOverlayViewModel(
+            selection: LapSelectionModel(selected: [LapID(0), LapID(1)], reference: LapID(0)),
             laps: [],
-            deltas: [DeltaPair(reference: reference, target: target): series])
+            deltas: [DeltaPair(reference: LapID(0), target: LapID(1)): series])
+    }
 
-        let ahead = try? #require(model.deltaAtCursor(reference: reference, target: target, distance: 100))
-        #expect(ahead?.leader == reference, "dt > 0 → reference leads")
-        let tied = model.deltaAtCursor(reference: reference, target: target, distance: 0)
-        #expect(tied?.leader == nil, "dt == 0 → no leader")
+    @Test func test_delta_at_cursor_reference_leads_when_dt_positive() {
+        let readout = synthetic().deltaAtCursor(reference: LapID(0), target: LapID(1), distance: 100)
+        #expect(readout?.leader == LapID(0), "dt > 0 → reference leads")
+    }
 
-        // A cursor past the last point clamps to the final delta.
-        let past = model.deltaAtCursor(reference: reference, target: target, distance: 10_000)
-        #expect(past?.dt == 0, "clamped to the last sample")
+    @Test func test_delta_at_cursor_ties_when_dt_zero() {
+        let readout = synthetic().deltaAtCursor(reference: LapID(0), target: LapID(1), distance: 0)
+        #expect(readout?.leader == nil, "dt == 0 → no leader")
+    }
+
+    @Test func test_delta_at_cursor_clamps_past_the_last_sample() {
+        let readout = synthetic().deltaAtCursor(reference: LapID(0), target: LapID(1), distance: 10_000)
+        #expect(readout?.dt == 0, "clamped to the last sample")
+    }
+
+    @Test func test_delta_at_cursor_rejects_nonfinite_distance() {
+        #expect(synthetic().deltaAtCursor(reference: LapID(0), target: LapID(1), distance: .nan) == nil)
+        #expect(synthetic().deltaAtCursor(reference: LapID(0), target: LapID(1), distance: .infinity) == nil)
+    }
+
+    @Test func test_delta_strip_reversed_pair_is_negated() {
+        // Only (A, B) is supplied; querying (B, A) negates it (antisymmetry),
+        // so a reference swap in the UI never blanks the strip.
+        let series = [DeltaSample(distance: 0, dt: 0), DeltaSample(distance: 100, dt: -1.5)]
+        let model = LapOverlayViewModel(
+            selection: LapSelectionModel(selected: [LapID(0), LapID(1)], reference: LapID(1)),
+            laps: [],
+            deltas: [DeltaPair(reference: LapID(0), target: LapID(1)): series])
+
+        let reversed = model.deltaStrip(reference: LapID(1), target: LapID(0))
+        #expect(reversed.map(\.distance) == [0, 100])
+        #expect(reversed.map(\.dt) == [0, 1.5], "reversed orientation negates dt")
     }
 
     @Test func test_duplicate_lap_ids_keep_first() {
