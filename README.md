@@ -168,12 +168,18 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   detection) the summary views bind to. 2.5 adds `DecodeProgress` (clamped/monotonic
   progress), `ImportError(decodeError:)` (total `DecodeError` → title/message/recovery
   mapping), and `SessionStore` progress threading + `cancel()`.
+  4.1 adds the `Plot/` geometry — `LinearScale` (value↔pixel), `TickGenerator`
+  (nice 1/2/5 ticks), `PlotViewport` (anchor-preserving zoom/pan), and `PlotModel`
+  (`XAxisMode`, `ChannelTrace`, `hitTest`, min/max `envelope` decimation) — all the
+  testable math behind the time/distance line plot.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
   `.xrk`/`.xrz` files under the App Sandbox; its file-type logic
   (`SupportedFileType`, `UTType.xrk`/`.xrz`) and byte-loading (`DocumentContents`)
-  live in `RaceStudioCore`.
+  live in `RaceStudioCore`. 4.1 adds `Views/TimeDistancePlotView` (the reusable
+  multi-channel line plot) with a Metal-primary / Swift Charts fallback renderer
+  (ADR 0003); it owns gestures and drawing only — all geometry is in the Core.
 
 ## Layout
 
