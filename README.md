@@ -186,6 +186,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   with extrapolation flagging), `ReadoutTableModel` (channels × laps grid with
   stable cell identity and no-data cells), and `ChannelFormatter` (unit/precision
   formatting, em dash for NaN/no-data) — the logic behind the channel table.
+  4.5 adds the `Stats/` model — `Histogram` (equal-count and fixed-width binning,
+  non-finite-safe, edges aligned to zero), `LinearRegression` (least-squares
+  slope/intercept/R², `nil` for degenerate input), and `ScatterModel` (paired
+  channel-vs-channel points with NaN-drop and window restriction) — the math
+  behind the distribution and XY-scatter plots.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -200,6 +205,9 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   channel, sector marks, cursor marker), drawing the Core `Map/` geometry.
   4.4 adds `Views/ChannelTableView` (the channels × laps value-at-cursor grid +
   pinned digital readouts), rendering the Core `Readout/` model.
+  4.5 adds `Views/HistogramView` (bin bars) and `Views/ScatterView` (points +
+  fitted trend line), drawing the Core `Stats/` model with the 4.1
+  `LinearScale`/`TickGenerator` axes.
 
 ## Layout
 
