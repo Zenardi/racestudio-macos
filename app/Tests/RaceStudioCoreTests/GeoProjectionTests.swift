@@ -55,14 +55,27 @@ import CoreGraphics
         let projection = GeoProjection.fit(to: single, in: CGRect(x: 0, y: 0, width: 100, height: 100))
         let point = projection.project(single[0])
 
+        // A degenerate (single-point) set collapses to the rect center, finite.
         #expect(point.x.isFinite && point.y.isFinite)
-        // A degenerate (single-point) set collapses to the rect center.
         #expect(abs(point.x - 50) < 1e-9)
         #expect(abs(point.y - 50) < 1e-9)
+    }
 
-        // Empty input is also safe (no NaN).
+    @Test func test_empty_input_projects_finitely() {
         let empty = GeoProjection.fit(to: [], in: CGRect(x: 0, y: 0, width: 100, height: 100))
-        #expect(empty.project(GPSCoord(latitude: 0, longitude: 0)).x.isFinite)
+        let point = empty.project(GPSCoord(latitude: 0, longitude: 0))
+        #expect(point.x.isFinite && point.y.isFinite)
+        #expect(abs(point.x - 50) < 1e-9 && abs(point.y - 50) < 1e-9)
+    }
+
+    @Test func test_fit_survives_degenerate_rect() {
+        // A null rect (inset larger than the view) or a zero-size rect must not
+        // produce infinite projections — the map collapses to a finite point.
+        for rect in [CGRect.null, CGRect(x: 0, y: 0, width: 0, height: 0)] {
+            let projection = GeoProjection.fit(to: corners, in: rect)
+            let point = projection.project(corners[0])
+            #expect(point.x.isFinite && point.y.isFinite)
+        }
     }
 
     @Test func test_projection_fits_real_gps_bounds() throws {

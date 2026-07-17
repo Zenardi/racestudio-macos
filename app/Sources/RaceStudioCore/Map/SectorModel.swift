@@ -17,7 +17,9 @@ public struct SectorModel: Sendable {
     }
 
     /// `count` contiguous, equal-length mini-sector ranges partitioning the lap;
-    /// the boundaries at distance 0 and lap-end appear exactly once.
+    /// the boundaries at distance 0 and lap-end appear exactly once. Pass a
+    /// multiple of the sector-split count so the mini-sectors nest within (share
+    /// boundaries with) the sectors.
     public func miniSectors(count: Int) -> [ClosedRange<Double>] {
         equalRanges(count)
     }

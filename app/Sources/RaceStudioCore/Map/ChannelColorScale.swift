@@ -1,8 +1,13 @@
+import CoreGraphics
 import Foundation
 
 /// Maps a channel value to a color along an evenly-spaced stop palette
 /// (issue 4.3) — the racing line's color-by-channel gradient. Reuses the shared
 /// ``PlotColor`` from the overlay palette so map and plots color consistently.
+///
+/// The gradient rises monotonically only between adjacent stops; supply
+/// monotonic stops (as the two-stop initializer always does) for a globally
+/// monotonic color.
 public struct ChannelColorScale: Sendable {
     /// The channel value range: `domain.lowerBound` maps to the first stop,
     /// `domain.upperBound` to the last.
@@ -27,8 +32,13 @@ public struct ChannelColorScale: Sendable {
     public func color(for value: Double) -> PlotColor {
         // Both initializers guarantee at least one stop, so stops[0] is safe.
         guard stops.count > 1 else { return stops[0] }
-        let span = domain.upperBound - domain.lowerBound
-        let fraction = span > 0 ? ((value - domain.lowerBound) / span).clamped(to: 0...1) : 0
+        // A NaN value (a GPS dropout or a 0/0 math channel) has no position on
+        // the gradient — pin it to the first stop rather than trapping Int(NaN).
+        // (±∞ is fine: the LinearScale clamp maps it to an end stop.)
+        guard !value.isNaN else { return stops[0] }
+        // Reuse 4.1's LinearScale for the clamped domain→[0,1] map (incl. its
+        // zero-span guard) rather than re-deriving the affine fraction here.
+        let fraction = Double(LinearScale(domain: domain, range: 0...1).mapClamped(value))
         let position = fraction * Double(stops.count - 1)
         let lower = Int(position.rounded(.down))
         let upper = min(lower + 1, stops.count - 1)

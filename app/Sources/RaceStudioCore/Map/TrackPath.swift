@@ -3,7 +3,10 @@ import CoreGraphics
 /// Builds and queries the racing-line polyline from projected points (issue 4.3).
 public enum TrackPath {
     /// The ordered polyline of the finite points in `points` (non-finite points
-    /// — e.g. from a GPS dropout — are dropped).
+    /// — e.g. from a GPS dropout — are dropped, so the result may be shorter than
+    /// the input and its indices no longer align with the original per-sample
+    /// arrays). Use it for drawing; drive the cursor marker / color-by-channel
+    /// from the original coordinate index instead.
     public static func build(from points: [CGPoint]) -> [CGPoint] {
         points.filter { $0.x.isFinite && $0.y.isFinite }
     }

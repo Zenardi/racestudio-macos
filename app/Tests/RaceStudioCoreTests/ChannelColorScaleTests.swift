@@ -36,9 +36,23 @@ import Foundation
             PlotColor(red: 1, green: 1, blue: 1)
         ]
         let scale = ChannelColorScale(domain: 0...10, stops: stops)
+        // Endpoints land on their stops exactly (blend with t == 0).
         #expect(scale.color(for: 0) == stops[0])
-        #expect(scale.color(for: 5) == stops[1]) // domain midpoint = middle stop
         #expect(scale.color(for: 10) == stops[2])
+        // The domain midpoint is the middle stop (tolerant of interpolation).
+        let mid = scale.color(for: 5)
+        #expect(abs(mid.red - 0.5) < 1e-9 && abs(mid.green - 0.5) < 1e-9 && abs(mid.blue - 0.5) < 1e-9)
+    }
+
+    @Test func test_color_scale_handles_nonfinite_value() {
+        let scale = ChannelColorScale(domain: 0...100,
+                                      low: PlotColor(red: 0, green: 0, blue: 1),
+                                      high: PlotColor(red: 1, green: 0, blue: 0))
+        // NaN (a GPS dropout / 0-over-0 channel) pins to the low stop, never traps.
+        #expect(scale.color(for: .nan) == PlotColor(red: 0, green: 0, blue: 1))
+        // ±∞ still clamp to the end stops.
+        #expect(scale.color(for: .infinity) == PlotColor(red: 1, green: 0, blue: 0))
+        #expect(scale.color(for: -.infinity) == PlotColor(red: 0, green: 0, blue: 1))
     }
 
     @Test func test_color_scale_degenerate_domain_and_empty_stops() {
