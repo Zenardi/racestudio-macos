@@ -177,7 +177,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `LapSelectionModel` (selected set + single reference with promotion),
   `LapOverlayViewModel` (distance-aligned `ChannelTrace` per lap, deterministic
   `PlotColor` palette, and the delta-t strip/cursor readout consuming the 3.2
-  delta output) — the logic behind lap overlay comparison.
+  delta output) — the logic behind lap overlay comparison. 4.3 adds the `Map/`
+  geometry — `GeoProjection` (auto-fit equirectangular projection),
+  `TrackPath` (racing-line polyline + nearest-point lookup),
+  `ChannelColorScale` (value→color gradient), and `SectorModel`
+  (sector/mini-sector partitioning) — the testable math behind the GPS track map.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -188,6 +192,8 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   (ADR 0003); it owns gestures and drawing only — all geometry is in the Core.
   4.2 adds `Views/LapOverlayView` (lap picker + overlaid plot) and
   `Views/DeltaStripView` (the gain/loss strip), reusing `TimeDistancePlotView`.
+  4.3 adds `Views/TrackMapView` (the GPS track map: racing line colored by
+  channel, sector marks, cursor marker), drawing the Core `Map/` geometry.
 
 ## Layout
 
