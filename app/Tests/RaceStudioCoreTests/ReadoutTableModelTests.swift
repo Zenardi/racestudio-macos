@@ -54,6 +54,21 @@ import Foundation
             .cells(at: WorkspaceCursor(x: 0)).isEmpty)
     }
 
+    @Test func test_model_deduplicates_rows_and_columns() {
+        // Duplicate rows/columns would collide ReadoutCell.id and break SwiftUI
+        // diffing — the model drops later duplicates, keeping first order.
+        let model = ReadoutTableModel(
+            rows: [rpm, speed, rpm],
+            columns: [lap0, lap1, lap0],
+            series: [:])
+        #expect(model.rows == [rpm, speed])
+        #expect(model.columns == [lap0, lap1])
+
+        let cells = model.cells(at: WorkspaceCursor(x: 0))
+        let ids = cells.flatMap { $0.map(\.id) }
+        #expect(Set(ids).count == ids.count, "every cell id is unique")
+    }
+
     @Test func test_cell_identity_is_stable_across_cursor_moves() {
         let table = model()
         let atA = table.cells(at: WorkspaceCursor(x: 25))

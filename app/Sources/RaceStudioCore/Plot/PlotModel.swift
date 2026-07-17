@@ -184,7 +184,8 @@ public func plotPolyline(
 }
 
 /// First index of ascending `xs` whose value is `>= target` (the count if none).
-private func sortedLowerBound(_ xs: [Double], _ target: Double) -> Int {
+/// Module-internal so the readout path (4.4) reuses one binary search.
+func sortedLowerBound(_ xs: [Double], _ target: Double) -> Int {
     var low = 0, high = xs.count
     while low < high {
         let mid = (low + high) / 2

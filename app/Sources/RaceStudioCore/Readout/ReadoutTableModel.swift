@@ -7,15 +7,13 @@ public struct ChannelID: Hashable, Sendable {
 }
 
 /// The shared workspace cursor position (issue 4.4; the full shared cursor is
-/// 4.7). It carries the x-position and which axis that position is on; the
-/// readout's per-cell series are supplied already on `axis`.
+/// 4.7). It carries the x-position on the current axis; the readout's per-cell
+/// series are supplied already on that same basis by the caller.
 public struct WorkspaceCursor: Equatable, Sendable {
     public let x: Double
-    public let axis: XAxisMode
 
-    public init(x: Double, axis: XAxisMode = .distance) {
+    public init(x: Double) {
         self.x = x
-        self.axis = axis
     }
 }
 
@@ -44,9 +42,9 @@ public struct ReadoutCell: Equatable, Sendable, Identifiable {
         self.readout = readout
     }
 
-    /// Stable row×column identity (channel name + lap index), unaffected by the
-    /// cursor position.
-    public var id: String { "\(channel.name)\u{1}\(lap.index)" }
+    /// Stable row×column identity, unaffected by the cursor position (reuses the
+    /// composite ``CellKey`` rather than a stringly-typed key).
+    public var id: CellKey { CellKey(channel: channel, lap: lap) }
 
     /// Whether the lap has data for this channel.
     public var hasData: Bool { readout != nil }
@@ -60,8 +58,12 @@ public struct ReadoutTableModel: Sendable {
     private let series: [CellKey: ChannelSeries]
 
     public init(rows: [ChannelID], columns: [LapID], series: [CellKey: ChannelSeries]) {
-        self.rows = rows
-        self.columns = columns
+        // Deduplicate (keeping first occurrence) so the grid never has two cells
+        // with the same identity — which would break SwiftUI's ForEach diffing.
+        var seenRows = Set<ChannelID>()
+        var seenColumns = Set<LapID>()
+        self.rows = rows.filter { seenRows.insert($0).inserted }
+        self.columns = columns.filter { seenColumns.insert($0).inserted }
         self.series = series
     }
 

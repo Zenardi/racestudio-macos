@@ -15,14 +15,25 @@ public struct ChannelFormatter: Sendable {
         self.precision = precision
     }
 
+    /// The default formatter for a channel with no configured unit/precision:
+    /// two decimals, dimensionless.
+    public static let plain = ChannelFormatter(unit: "", precision: 2)
+
     /// `value` formatted to ``precision`` decimals with the ``unit`` suffix, or
     /// ``ChannelFormatting/emDash`` when it is `nil` or non-finite.
     public func string(for value: Double?) -> String {
         guard let value, value.isFinite else { return ChannelFormatting.emDash }
+        // Clamp precision to a sane range: <0 is meaningless, and beyond a
+        // Double's significant digits it just prints noise (and a very large
+        // width would balloon the string / overflow printf's int precision).
+        let places = min(max(0, precision), 15)
         // Fixed POSIX locale so the decimal separator is always ".", stable
         // across machines and asserted against goldens (matches ChannelFormatting).
-        let number = String(format: "%.\(max(0, precision))f",
+        var number = String(format: "%.\(places)f",
                             locale: Locale(identifier: "en_US_POSIX"), value)
+        // Drop a sign that rounded to zero so a tiny negative / -0.0 doesn't
+        // display as "-0.00".
+        if number.hasPrefix("-"), Double(number) == 0 { number.removeFirst() }
         return unit.isEmpty ? number : "\(number) \(unit)"
     }
 }

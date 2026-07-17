@@ -33,6 +33,9 @@ public enum ValueAtCursor {
     /// two bracketing samples, the exact value at a sample, or the clamped
     /// endpoint (flagged `extrapolated`) before the first / after the last
     /// sample. An empty series or a non-finite `x` yields no value.
+    ///
+    /// - Precondition: `series.xs` is ascending — as the 3.8 resampled time /
+    ///   distance grid is. A non-monotonic x-basis returns an unspecified value.
     public static func value(at x: Double, in series: ChannelSeries) -> Readout {
         let xs = series.xs
         guard x.isFinite, let firstX = xs.first else { return Readout(value: nil, extrapolated: false) }
@@ -43,13 +46,9 @@ public enum ValueAtCursor {
         if x <= firstX { return Readout(value: series.values.first, extrapolated: x < firstX) }
         if x >= xs[last] { return Readout(value: series.values[last], extrapolated: x > xs[last]) }
 
-        // Binary search for the first index whose x is >= the cursor.
-        var low = 0, high = last
-        while low < high {
-            let mid = (low + high) / 2
-            if xs[mid] < x { low = mid + 1 } else { high = mid }
-        }
-        let upper = low, lower = low - 1
+        // First index whose x is >= the cursor (the shared 4.1 binary search).
+        let upper = sortedLowerBound(xs, x)
+        let lower = upper - 1
         let x0 = xs[lower], x1 = xs[upper]
         if x == x1 { return Readout(value: series.values[upper], extrapolated: false) } // exact sample
 
