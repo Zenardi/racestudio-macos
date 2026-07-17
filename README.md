@@ -182,6 +182,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `TrackPath` (racing-line polyline + nearest-point lookup),
   `ChannelColorScale` (value→color gradient), and `SectorModel`
   (sector/mini-sector partitioning) — the testable math behind the GPS track map.
+  4.4 adds the `Readout/` model — `ValueAtCursor` (interpolated value-at-cursor
+  with extrapolation flagging), `ReadoutTableModel` (channels × laps grid with
+  stable cell identity and no-data cells), and `ChannelFormatter` (unit/precision
+  formatting, em dash for NaN/no-data) — the logic behind the channel table.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -194,6 +198,8 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `Views/DeltaStripView` (the gain/loss strip), reusing `TimeDistancePlotView`.
   4.3 adds `Views/TrackMapView` (the GPS track map: racing line colored by
   channel, sector marks, cursor marker), drawing the Core `Map/` geometry.
+  4.4 adds `Views/ChannelTableView` (the channels × laps value-at-cursor grid +
+  pinned digital readouts), rendering the Core `Readout/` model.
 
 ## Layout
 
