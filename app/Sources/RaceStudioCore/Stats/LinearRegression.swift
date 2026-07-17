@@ -31,9 +31,15 @@ public enum LinearRegression {
         guard finite.count >= 2 else { return nil }
 
         let count = Double(finite.count)
-        let meanX = finite.reduce(0) { $0 + Double($1.x) } / count
-        let meanY = finite.reduce(0) { $0 + Double($1.y) } / count
+        var sumX = 0.0, sumY = 0.0
+        for point in finite {
+            sumX += Double(point.x)
+            sumY += Double(point.y)
+        }
+        let meanX = sumX / count, meanY = sumY / count
 
+        // A second pass for the deviations (subtracting the mean first is the
+        // numerically stable form).
         var sxx = 0.0, sxy = 0.0, syy = 0.0
         for point in finite {
             let dx = Double(point.x) - meanX
@@ -47,7 +53,9 @@ public enum LinearRegression {
         let slope = sxy / sxx
         let intercept = meanY - slope * meanX
         // Sxy²/(Sxx·Syy); a flat y (Syy == 0) is fit perfectly by y = meanY.
-        let r2 = syy == 0 ? 1 : (sxy * sxy) / (sxx * syy)
+        // Clamped to 0...1 because rounding can push a near-perfect fit a hair
+        // past 1 (Cauchy–Schwarz holds only in exact arithmetic).
+        let r2 = syy == 0 ? 1 : ((sxy * sxy) / (sxx * syy)).clamped(to: 0...1)
         return Fit(slope: slope, intercept: intercept, r2: r2)
     }
 }

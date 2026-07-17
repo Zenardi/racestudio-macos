@@ -74,7 +74,7 @@ public struct ScatterView: View {
             line.move(to: CGPoint(x: px, y: 0))
             line.addLine(to: CGPoint(x: px, y: height))
             context.stroke(line, with: grid, lineWidth: 0.5)
-            context.draw(label(tick), at: CGPoint(x: px, y: height - 8))
+            context.draw(AxisLabel.text(tick), at: CGPoint(x: px, y: height - 8))
         }
         for tick in TickGenerator.ticks(for: yDomain, targetCount: 5) {
             let py = height - yScale.map(tick)
@@ -82,11 +82,7 @@ public struct ScatterView: View {
             line.move(to: CGPoint(x: 0, y: py))
             line.addLine(to: CGPoint(x: width, y: py))
             context.stroke(line, with: grid, lineWidth: 0.5)
-            context.draw(label(tick), at: CGPoint(x: 16, y: py))
+            context.draw(AxisLabel.text(tick), at: CGPoint(x: 16, y: py))
         }
-    }
-
-    private func label(_ value: Double) -> Text {
-        Text(String(format: "%g", value)).font(.caption2).foregroundColor(.secondary)
     }
 }

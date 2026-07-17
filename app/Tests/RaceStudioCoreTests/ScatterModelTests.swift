@@ -41,4 +41,13 @@ import CoreGraphics
         let y = ChannelSeries(xs: [0, 1], values: [3, 4])
         #expect(ScatterModel.points(x: x, y: y, window: 100...200).isEmpty)
     }
+
+    @Test func test_scatter_window_drops_nonfinite_basis() {
+        // A sample whose basis is NaN can't be inside any window, so it's dropped
+        // even though its x/y values are finite.
+        let x = ChannelSeries(xs: [0, .nan, 20], values: [1, 2, 3])
+        let y = ChannelSeries(xs: [0, 10, 20], values: [9, 8, 7])
+        #expect(ScatterModel.points(x: x, y: y, window: -100...100) ==
+                [CGPoint(x: 1, y: 9), CGPoint(x: 3, y: 7)])
+    }
 }

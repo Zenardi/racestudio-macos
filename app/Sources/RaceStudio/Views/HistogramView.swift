@@ -12,16 +12,28 @@ public struct HistogramView: View {
     private let bins: [Bin]
     private let barColor: PlotColor
 
+    // Derived once from the (immutable) bins, not per frame. `valueDomain` is
+    // `nil` when the bins are empty or not strictly ordered, so the Canvas never
+    // builds an inverted/degenerate `ClosedRange` (which would trap).
+    private let maxCount: Int
+    private let valueDomain: ClosedRange<Double>?
+
     public init(bins: [Bin], barColor: PlotColor = PlotColor.palette[0]) {
         self.bins = bins
         self.barColor = barColor
+        self.maxCount = bins.map(\.count).max() ?? 0
+        if let first = bins.first, let last = bins.last,
+           first.lower.isFinite, last.upper.isFinite, first.lower < last.upper {
+            self.valueDomain = first.lower...last.upper
+        } else {
+            self.valueDomain = nil
+        }
     }
 
     public var body: some View {
         Canvas { context, size in
-            guard let first = bins.first, let last = bins.last,
-                  let maxCount = bins.map(\.count).max(), maxCount > 0 else { return }
-            let xScale = LinearScale(domain: first.lower...last.upper, range: 0...max(size.width, 1))
+            guard let valueDomain, maxCount > 0 else { return }
+            let xScale = LinearScale(domain: valueDomain, range: 0...max(size.width, 1))
             let yScale = LinearScale(domain: 0...Double(maxCount), range: 0...max(size.height, 1))
 
             drawGrid(context, size: size, xScale: xScale, yScale: yScale)
@@ -58,14 +70,10 @@ public struct HistogramView: View {
             line.move(to: CGPoint(x: 0, y: py))
             line.addLine(to: CGPoint(x: size.width, y: py))
             context.stroke(line, with: grid, lineWidth: 0.5)
-            context.draw(label(tick), at: CGPoint(x: 12, y: py))
+            context.draw(AxisLabel.text(tick), at: CGPoint(x: 12, y: py))
         }
         for tick in TickGenerator.ticks(for: xScale.domain, targetCount: 6) {
-            context.draw(label(tick), at: CGPoint(x: xScale.map(tick), y: size.height - 8))
+            context.draw(AxisLabel.text(tick), at: CGPoint(x: xScale.map(tick), y: size.height - 8))
         }
-    }
-
-    private func label(_ value: Double) -> Text {
-        Text(String(format: "%g", value)).font(.caption2).foregroundColor(.secondary)
     }
 }
