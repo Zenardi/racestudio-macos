@@ -40,8 +40,9 @@ public final class MathChannelEditorModel: ObservableObject {
     @Published public private(set) var state: EditorState = .idle
     /// The preview trace for a valid expression, or `nil` otherwise.
     @Published public private(set) var preview: ChannelTrace?
-    /// The latest expression text handed to ``update(text:)``.
-    @Published public private(set) var text: String = ""
+    /// The latest expression text handed to ``update(text:)``. Not published: the
+    /// view owns the edited text and drives the model one-way.
+    public private(set) var text: String = ""
 
     /// How long to wait after the latest keystroke before validating.
     public let debounceInterval: Duration
@@ -71,9 +72,12 @@ public final class MathChannelEditorModel: ObservableObject {
 
     // MARK: - Internals
 
+    /// Cancel the in-flight validation and start a new generation. The cancel and
+    /// the token bump happen together, so a cancelled validation is always
+    /// token-stale — every result exit re-checks `token`, which thereby also
+    /// honors cancellation. Keep the two in lockstep if this is refactored.
     private func beginNewValidation() -> Int {
         task?.cancel()
-        task = nil
         token += 1
         return token
     }
@@ -83,29 +87,30 @@ public final class MathChannelEditorModel: ObservableObject {
         try? await Task.sleep(for: debounceInterval)
         guard !Task.isCancelled, token == self.token else { return }
 
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            apply(.idle, preview: nil, token: token)
+        guard !text.allSatisfy(\.isWhitespace) else {
+            publish(.idle, preview: nil)
             return
         }
 
         do {
             let samples = try await evaluator.evaluate(text)
             guard token == self.token else { return } // superseded during eval → discard
-            apply(.valid, preview: makePreview(name: text, samples: samples), token: token)
+            publish(.valid, preview: makePreview(name: text, samples: samples))
         } catch is CancellationError {
             return
         } catch let error as ExpressionEngineError {
             guard token == self.token else { return }
-            apply(.invalid(.map(engineError: error)), preview: nil, token: token)
+            publish(.invalid(.map(engineError: error)), preview: nil)
         } catch {
             guard token == self.token else { return }
-            apply(.invalid(ExpressionDiagnostic(message: "\(error)")), preview: nil, token: token)
+            publish(.invalid(ExpressionDiagnostic(message: "\(error)")), preview: nil)
         }
     }
 
-    /// Apply a result only while `token` is still the current validation.
-    private func apply(_ newState: EditorState, preview newPreview: ChannelTrace?, token: Int) {
-        guard token == self.token else { return }
+    /// Publish a result. Every caller guards `token == self.token` immediately
+    /// before this call, and there is no suspension point in between, so a stale
+    /// validation never reaches here.
+    private func publish(_ newState: EditorState, preview newPreview: ChannelTrace?) {
         state = newState
         preview = newPreview
     }

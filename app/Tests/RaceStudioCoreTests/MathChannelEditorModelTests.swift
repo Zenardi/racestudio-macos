@@ -167,6 +167,22 @@ import RaceStudioFFIBindings
         #expect(await spy.calls == ["RPM"], "earlier keystrokes are cancelled before evaluation")
     }
 
+    @MainActor @Test func test_debounce_delays_evaluation_until_quiet() async {
+        let spy = SpyEvaluator(result: [MathSample(time: 0, value: 1)])
+        let model = MathChannelEditorModel(evaluator: spy, debounceInterval: .milliseconds(300))
+
+        model.update(text: "RPM")
+        // Right after the keystroke — inside the debounce window — nothing has run.
+        for _ in 0..<5 { await Task.yield() }
+        #expect(await spy.calls.isEmpty, "evaluation waits for the quiet interval, not per keystroke")
+        #expect(model.state == .idle)
+
+        // Once the interval elapses, the latest text is evaluated exactly once.
+        await model.awaitValidation()
+        #expect(await spy.calls == ["RPM"])
+        #expect(model.state == .valid)
+    }
+
     @MainActor @Test func test_stale_validation_result_discarded() async {
         let evaluator = GatedEvaluator(
             slowExpr: "SLOW",
@@ -215,9 +231,25 @@ import RaceStudioFFIBindings
         let preview = try #require(model.preview)
         try #require(preview.samples.count == expected.count)
         for (got, want) in zip(preview.samples, expected) {
-            #expect(abs(got.time - want.timecode) < 1e-9)
+            // The preview's time is seconds; the engine's timecode is milliseconds.
+            #expect(abs(got.time - want.timecode / 1000) < 1e-9)
             #expect(abs(got.value - want.value) < 1e-9)
         }
+    }
+
+    @Test func test_analysis_error_maps_to_engine_error() {
+        // Fixture-free: constructing AnalysisError cases directly covers the whole
+        // mapping (mirrors FFISessionLoaderTests' DecodeError(_:) test) so the gate
+        // stays green even when the .xrk fixture is absent.
+        #expect(ExpressionEngineError(AnalysisError.InvalidExpression(message: "bad at 1:1"))
+            == .invalidExpression(message: "bad at 1:1"))
+        #expect(ExpressionEngineError(AnalysisError.MissingChannel(message: "no chan"))
+            == .missingChannel(message: "no chan"))
+        #expect(ExpressionEngineError(AnalysisError.EmptyLap(message: "a")) == .other(message: "a"))
+        #expect(ExpressionEngineError(AnalysisError.DistanceNotMonotonic(message: "b")) == .other(message: "b"))
+        #expect(ExpressionEngineError(AnalysisError.EmptyRange(message: "c")) == .other(message: "c"))
+        #expect(ExpressionEngineError(AnalysisError.LapOutOfRange(message: "d")) == .other(message: "d"))
+        #expect(ExpressionEngineError(AnalysisError.WindowOutOfBounds(message: "e")) == .other(message: "e"))
     }
 
     @MainActor @Test func test_ffi_evaluator_maps_engine_errors() async throws {
@@ -233,6 +265,10 @@ import RaceStudioFFIBindings
             guard case .invalidExpression = error else {
                 Issue.record("expected invalidExpression, got \(error)"); return
             }
+            // Guard the real message format: the engine still emits `at line:col`,
+            // so the mapped diagnostic gets a caret span (catches an engine reword).
+            #expect(ExpressionDiagnostic.map(engineError: error).span != nil,
+                    "the real engine's positional error still yields a caret span")
         }
 
         // An unknown channel → missingChannel.

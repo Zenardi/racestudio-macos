@@ -28,7 +28,9 @@ public struct FFIExpressionEvaluator: ExpressionEvaluating, @unchecked Sendable 
     public func evaluate(_ expression: String) async throws -> [MathSample] {
         do {
             return try session.evalMathChannel(expr: expression, window: window)
-                .map { MathSample(time: $0.timecode, value: $0.value) }
+                // `timecode` is milliseconds (the FFI window unit); `MathSample.time`
+                // is seconds, matching the app's lap / plot time convention.
+                .map { MathSample(time: $0.timecode / 1000, value: $0.value) }
         } catch let error as AnalysisError {
             throw ExpressionEngineError(error)
         }

@@ -7,12 +7,25 @@ public struct ExpressionDiagnostic: Equatable, Sendable {
     /// The engine's error message, shown verbatim.
     public let message: String
     /// The character range to underline, or `nil` when the error carries no
-    /// position (e.g. a missing channel). The view clamps it to the visible text.
+    /// position (e.g. a missing channel). This is a raw engine position and may
+    /// extend past the current text; render it through ``caret(forTextLength:)``,
+    /// which clamps it, rather than indexing a string with it directly.
     public let span: Range<Int>?
 
     public init(message: String, span: Range<Int>? = nil) {
         self.message = message
         self.span = span
+    }
+
+    /// A caret string (e.g. `"   ^"`) placing a `^` under ``span``, clamped to
+    /// `textLength` so it never runs past the field (and never traps on a
+    /// negative count). `nil` when there is no span.
+    public func caret(forTextLength textLength: Int) -> String? {
+        guard let span else { return nil }
+        let width = max(0, textLength)
+        let start = min(max(span.lowerBound, 0), width)
+        let length = max(1, min(span.count, max(1, width - start)))
+        return String(repeating: " ", count: start) + String(repeating: "^", count: length)
     }
 }
 
@@ -49,11 +62,18 @@ public enum ExpressionEngineError: Error, Equatable, Sendable {
 
 extension ExpressionDiagnostic {
     /// Maps an engine error to a diagnostic: the message verbatim, plus a
-    /// single-character `span` parsed from a trailing `at line:col` position when
-    /// the engine supplied one (syntax / lex / arity errors do; a missing channel
-    /// does not).
+    /// single-character `span` parsed from a trailing `at line:col` position.
+    /// Only ``ExpressionEngineError/invalidExpression`` carries a position (the
+    /// engine appends it to syntax / lex / arity errors); a missing-channel or
+    /// other error never does — so its message is not scanned for a position,
+    /// avoiding a false caret when a channel name happens to contain `"… 9:5"`.
     public static func map(engineError: ExpressionEngineError) -> ExpressionDiagnostic {
-        ExpressionDiagnostic(message: engineError.message, span: span(in: engineError.message))
+        let span: Range<Int>?
+        switch engineError {
+        case let .invalidExpression(message): span = self.span(in: message)
+        case .missingChannel, .other: span = nil
+        }
+        return ExpressionDiagnostic(message: engineError.message, span: span)
     }
 
     /// Parses the trailing `at line:col` (1-based) of an engine message into a

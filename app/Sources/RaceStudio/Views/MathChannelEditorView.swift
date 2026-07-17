@@ -35,11 +35,11 @@ public struct MathChannelEditorView: View {
 
     /// The inline diagnostic for an invalid expression: a monospaced caret line
     /// under the offending span (aligned with the field's monospaced glyphs) and
-    /// the engine's message.
+    /// the engine's message. The caret is computed and clamped in Core.
     @ViewBuilder private var diagnostic: some View {
         if case let .invalid(diagnostic) = model.state {
             VStack(alignment: .leading, spacing: 2) {
-                if let caret = caretLine(for: diagnostic.span) {
+                if let caret = diagnostic.caret(forTextLength: text.count) {
                     Text(caret)
                         .font(.system(.body, design: .monospaced))
                         .foregroundColor(.red)
@@ -55,17 +55,10 @@ public struct MathChannelEditorView: View {
     /// channel is time-keyed). Hidden until there is something to show.
     @ViewBuilder private var previewPlot: some View {
         if let trace = model.preview, !trace.samples.isEmpty {
+            // A math channel is time-keyed (the preview trace mirrors distance to
+            // time), so the plot is shown in time mode.
             TimeDistancePlotView(traces: [trace], mode: .time, renderer: .swiftCharts)
                 .frame(minHeight: 160)
         }
-    }
-
-    /// A caret string (`"   ^"`) placing a `^` under the diagnostic's character
-    /// span, clamped to the current text length so it never runs past the field.
-    private func caretLine(for span: Range<Int>?) -> String? {
-        guard let span else { return nil }
-        let start = min(max(span.lowerBound, 0), text.count)
-        let length = max(1, min(span.count, max(1, text.count - start)))
-        return String(repeating: " ", count: start) + String(repeating: "^", count: length)
     }
 }
