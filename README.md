@@ -197,6 +197,13 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   message + character-span mapping), and the `ExpressionEvaluating` seam whose
   `FFIExpressionEvaluator` runs the 3.5 engine over the session via UniFFI — the
   logic behind the math-channel editor.
+  4.7 adds the `Workspace/` model — `WorkspaceCursor` (one canonical cursor whose
+  `timePosition`/`distancePosition` interpolate through the 3.8 mapping so linked
+  views agree on the same physical point), `CursorSelection` (normalized,
+  emptiness-aware drag range), and `LinkedViewRegistry`/`CursorBroadcaster` (weak,
+  identity-keyed broadcast that skips the originator) — the shared cursor &
+  selection contract the M4 tiles consume. (4.4's placeholder `WorkspaceCursor`
+  struct became a scalar `cells(atX:)` argument, freeing the name for it.)
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -216,6 +223,8 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `LinearScale`/`TickGenerator` axes.
   4.6 adds `Views/MathChannelEditorView` (expression field + inline diagnostic
   caret + embedded 4.1 preview plot), rendering the Core `MathChannelEditorModel`.
+  4.7 adds `Views/WorkspaceView` (tiles the M4 views and binds them to one shared
+  `WorkspaceCursor`, injected with the `LinkedViewRegistry` via the environment).
 
 ## Layout
 

@@ -25,7 +25,7 @@ import Foundation
     }
 
     @Test func test_table_has_row_per_channel_column_per_lap() {
-        let cells = model().cells(at: WorkspaceCursor(x: 50))
+        let cells = model().cells(atX: 50)
         #expect(cells.count == 2, "a row per channel")
         #expect(cells.allSatisfy { $0.count == 2 }, "a column per lap")
         // Row/column order follows the selection order.
@@ -36,7 +36,7 @@ import Foundation
     }
 
     @Test func test_missing_channel_yields_no_data_cell() {
-        let cells = model().cells(at: WorkspaceCursor(x: 50))
+        let cells = model().cells(atX: 50)
         let missing = cells[1][1] // (speed, lap1)
         #expect(missing.hasData == false)
         #expect(missing.readout == nil)
@@ -48,10 +48,10 @@ import Foundation
         let series = [CellKey(channel: rpm, lap: lap0): ChannelSeries(xs: [0], values: [1])]
         // Empty channel list…
         #expect(ReadoutTableModel(rows: [], columns: [lap0], series: series)
-            .cells(at: WorkspaceCursor(x: 0)).isEmpty)
+            .cells(atX: 0).isEmpty)
         // …or empty lap selection → empty table, no error.
         #expect(ReadoutTableModel(rows: [rpm], columns: [], series: series)
-            .cells(at: WorkspaceCursor(x: 0)).isEmpty)
+            .cells(atX: 0).isEmpty)
     }
 
     @Test func test_model_deduplicates_rows_and_columns() {
@@ -64,15 +64,15 @@ import Foundation
         #expect(model.rows == [rpm, speed])
         #expect(model.columns == [lap0, lap1])
 
-        let cells = model.cells(at: WorkspaceCursor(x: 0))
+        let cells = model.cells(atX: 0)
         let ids = cells.flatMap { $0.map(\.id) }
         #expect(Set(ids).count == ids.count, "every cell id is unique")
     }
 
     @Test func test_cell_identity_is_stable_across_cursor_moves() {
         let table = model()
-        let atA = table.cells(at: WorkspaceCursor(x: 25))
-        let atB = table.cells(at: WorkspaceCursor(x: 75))
+        let atA = table.cells(atX: 25)
+        let atB = table.cells(atX: 75)
 
         // Same grid identity regardless of cursor — smooth SwiftUI diffing.
         let idsA = atA.map { $0.map(\.id) }
