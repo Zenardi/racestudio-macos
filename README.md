@@ -173,7 +173,11 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `plotDomain` (finite-only axis range), and `PlotModel` (`XAxisMode`,
   `ChannelTrace`, `hitTest`, the min/max `envelope` and the visible-window
   `plotPolyline` both render paths draw) — all the testable math behind the
-  time/distance line plot.
+  time/distance line plot. 4.2 adds the `Overlay/` comparison model —
+  `LapSelectionModel` (selected set + single reference with promotion),
+  `LapOverlayViewModel` (distance-aligned `ChannelTrace` per lap, deterministic
+  `PlotColor` palette, and the delta-t strip/cursor readout consuming the 3.2
+  delta output) — the logic behind lap overlay comparison.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -182,6 +186,8 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   live in `RaceStudioCore`. 4.1 adds `Views/TimeDistancePlotView` (the reusable
   multi-channel line plot) with a Metal-primary / Swift Charts fallback renderer
   (ADR 0003); it owns gestures and drawing only — all geometry is in the Core.
+  4.2 adds `Views/LapOverlayView` (lap picker + overlaid plot) and
+  `Views/DeltaStripView` (the gain/loss strip), reusing `TimeDistancePlotView`.
 
 ## Layout
 
