@@ -138,7 +138,7 @@ public struct ChannelLapSelectionModel: Equatable, Sendable {
             let selectionIndex = selection.channels.firstIndex(of: id)
             return ChannelRow(id: offset, channel: id, name: channel.name, unit: channel.unit,
                               isSelected: selectionIndex != nil,
-                              color: paletteColor(at: selectionIndex))
+                              color: PlotColor.selectionColor(at: selectionIndex))
         }
     }
 
@@ -172,9 +172,9 @@ public struct ChannelLapSelectionModel: Equatable, Sendable {
     // MARK: - Laps
 
     /// The fastest valid lap — minimum duration, earliest on a tie — or `nil` when
-    /// no lap is valid.
+    /// no lap is valid. Validity is the shared ``Lap/hasValidDuration`` rule.
     private static func bestLap(_ laps: [Lap]) -> LapID? {
-        laps.filter(isValid)
+        laps.filter(\.hasValidDuration)
             .min { $0.durationS < $1.durationS }
             .map { LapID(Int($0.index)) }
     }
@@ -183,26 +183,15 @@ public struct ChannelLapSelectionModel: Equatable, Sendable {
         laps.map { lap in
             let id = LapID(Int(lap.index))
             let selectionIndex = selection.laps.selected.firstIndex(of: id)
+            let valid = lap.hasValidDuration
+            // An invalid (zero/non-finite) lap has no meaningful time, so show the
+            // placeholder rather than a bogus, real-looking "0:00.000".
             return LapRow(id: Int(lap.index), lap: id, number: Int(lap.index) + 1,
-                          time: LapTimeFormatter.string(from: lap.durationS),
-                          isValid: isValid(lap), isBest: best == id,
+                          time: valid ? LapTimeFormatter.string(from: lap.durationS)
+                                      : LapTimeFormatter.placeholder,
+                          isValid: valid, isBest: best == id,
                           isVisible: selectionIndex != nil,
-                          color: paletteColor(at: selectionIndex))
+                          color: PlotColor.selectionColor(at: selectionIndex))
         }
-    }
-
-    /// A lap is valid when its duration is finite and strictly positive; a
-    /// non-positive or non-finite duration marks an out/in or degenerate lap.
-    private static func isValid(_ lap: Lap) -> Bool {
-        lap.durationS.isFinite && lap.durationS > 0
-    }
-
-    // MARK: - Shared
-
-    /// The palette colour at a selection position (wrapping past the palette), or
-    /// ``PlotColor/unselected`` when the item is not selected.
-    private static func paletteColor(at selectionIndex: Int?) -> PlotColor {
-        guard let index = selectionIndex else { return .unselected }
-        return PlotColor.palette[index % PlotColor.palette.count]
     }
 }

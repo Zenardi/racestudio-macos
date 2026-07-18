@@ -94,4 +94,12 @@ public struct Lap: Equatable, Sendable {
         self.durationS = durationS
         self.endTimeS = endTimeS
     }
+
+    /// Whether the lap's duration is finite and strictly positive. A degenerate
+    /// (zero-length) or non-finite lap is invalid: it is excluded from best-lap
+    /// selection and greyed in the side panel (issues 2.4 / 8.4). Shared so every
+    /// screen agrees on which laps count.
+    public var hasValidDuration: Bool {
+        durationS.isFinite && durationS > 0
+    }
 }

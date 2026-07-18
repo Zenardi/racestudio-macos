@@ -10,7 +10,8 @@ import RaceStudioCore
 /// logic lives in `RaceStudioCore.ChannelLapSelectionModel`, rebuilt by
 /// ``AnalysisWindowModel/sidePanel``. This view only renders the derived rows and
 /// forwards search text, sort changes, and taps back into the shared model, so a
-/// toggle updates the plot and the colour squares together.
+/// toggle updates the plot's traces and the panel's colour squares together (the
+/// square is the panel's selection-order colour, the shared cue across panels).
 struct ChannelsLapsPanelView: View {
     @ObservedObject var model: AnalysisWindowModel
 
@@ -89,16 +90,19 @@ private struct LapRowView: View {
             HStack(spacing: 8) {
                 ColorSquare(color: row.color, filled: row.isVisible)
                 Text("Lap \(row.number)")
-                Text(row.isBest ? "★" : " ").foregroundColor(.yellow)
+                // Fixed-width star column so best and non-best rows stay aligned.
+                Text(row.isBest ? "★" : "").foregroundColor(.yellow).frame(width: 12)
                 Spacer()
                 Text(row.time).font(.body.monospacedDigit()).foregroundColor(.secondary)
                 Image(systemName: row.isVisible ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(row.isVisible ? .accentColor : .secondary)
             }
             .contentShape(Rectangle())
-            // Invalid laps (out/in or degenerate) are greyed so the user reads
-            // them as excluded from the best-lap math.
-            .foregroundColor(row.isValid ? .primary : .secondary)
+            // Invalid laps (out/in or degenerate) are dimmed as a whole — opacity
+            // composes over the row's own per-element colours (star, checkmark,
+            // colour square), which an outer foregroundColor cannot override — so
+            // the user reads them as excluded from the best-lap math.
+            .opacity(row.isValid ? 1 : 0.4)
         }
         .buttonStyle(.plain)
     }

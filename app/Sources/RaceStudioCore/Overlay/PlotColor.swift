@@ -31,4 +31,13 @@ public struct PlotColor: Hashable, Sendable {
         PlotColor(red: 0.60, green: 0.45, blue: 0.90), // purple
         PlotColor(red: 0.90, green: 0.75, blue: 0.20)  // gold
     ]
+
+    /// The colour for an item at `selectionIndex` in the selection: the palette
+    /// colour at that position (wrapping past the palette), or ``unselected`` when
+    /// the item is not selected (`nil`). The single rule the window's panels use
+    /// to colour laps and channels by selection order (issues 4.2 / 8.4).
+    public static func selectionColor(at selectionIndex: Int?) -> PlotColor {
+        guard let index = selectionIndex else { return .unselected }
+        return palette[index % palette.count]
+    }
 }

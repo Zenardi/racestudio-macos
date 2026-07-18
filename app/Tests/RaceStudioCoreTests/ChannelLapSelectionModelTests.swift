@@ -208,6 +208,13 @@ import Foundation
         #expect(m.lapRows.first?.time == LapTimeFormatter.placeholder)
     }
 
+    @Test func test_zero_duration_lap_shows_the_placeholder_not_a_bogus_time() {
+        // The zero-duration lap (index 2) is invalid, so it must not render a
+        // real-looking "0:00.000" that reads as an impossibly fast lap.
+        let row = model().lapRows.first { $0.lap == LapID(2) }
+        #expect(row?.time == LapTimeFormatter.placeholder)
+    }
+
     // MARK: - Laps: visibility + colour
 
     @Test func test_visible_laps_take_the_palette_colour_by_selection_order() {
@@ -228,6 +235,16 @@ import Foundation
 
     @Test func test_lap_row_id_is_the_lap_index() {
         #expect(model().lapRows.map(\.id) == [0, 1, 2, 3])
+    }
+
+    // MARK: - Shared lap-validity rule (also used by the 2.4 summary screen)
+
+    @Test func test_lap_validity_requires_a_finite_positive_duration() {
+        #expect(Lap(index: 0, startTimeS: 0, durationS: 35, endTimeS: 35).hasValidDuration)
+        #expect(!Lap(index: 0, startTimeS: 0, durationS: 0, endTimeS: 0).hasValidDuration)
+        #expect(!Lap(index: 0, startTimeS: 0, durationS: -1, endTimeS: 0).hasValidDuration)
+        #expect(!Lap(index: 0, startTimeS: 0, durationS: .nan, endTimeS: 0).hasValidDuration)
+        #expect(!Lap(index: 0, startTimeS: 0, durationS: .infinity, endTimeS: 0).hasValidDuration)
     }
 
     // MARK: - Empty session

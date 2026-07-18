@@ -86,8 +86,7 @@ public struct LapOverlayViewModel: Sendable {
     /// The distinct, stable color for `lap`, assigned by its position in the
     /// selection (``PlotColor/unselected`` when not selected).
     public func colorForLap(_ lap: LapID) -> PlotColor {
-        guard let index = selection.selected.firstIndex(of: lap) else { return .unselected }
-        return PlotColor.palette[index % PlotColor.palette.count]
+        PlotColor.selectionColor(at: selection.selected.firstIndex(of: lap))
     }
 
     /// The delta-t strip of `target` versus `reference`: the 3.2 series for the

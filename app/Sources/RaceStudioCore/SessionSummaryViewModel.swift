@@ -79,10 +79,12 @@ public struct SessionSummaryViewModel: Equatable, Sendable {
     }
 
     /// The index of the fastest valid lap (minimum duration; ties resolve to the
-    /// earliest lap), or `nil` when there is no valid lap.
+    /// earliest lap), or `nil` when there is no valid lap. Validity is the shared
+    /// ``Lap/hasValidDuration`` rule so this and the 8.4 side panel never disagree
+    /// on the best lap.
     private static func bestLapIndex(_ laps: [Lap]) -> Int? {
         laps.enumerated()
-            .filter { $0.element.durationS.isFinite && $0.element.durationS >= 0 }
+            .filter { $0.element.hasValidDuration }
             .min { $0.element.durationS < $1.element.durationS }?
             .offset
     }
