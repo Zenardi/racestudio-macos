@@ -291,6 +291,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_fft_spectrum(void*_Nonn
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_gps_summary(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_GPS_TRACK
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_GPS_TRACK
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_gps_track(void*_Nonnull ptr, uint32_t start, uint32_t count, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_LAPS
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_laps(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -309,6 +314,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_metadata(void*_Nonnull 
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples(void*_Nonnull ptr, uint32_t channel_index, uint32_t start, uint32_t count, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples_with_distance(void*_Nonnull ptr, uint32_t channel_index, uint32_t start, uint32_t count, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
@@ -661,6 +671,12 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_GPS_TRACK
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_GPS_TRACK
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_track(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_LAPS
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_laps(void
@@ -682,6 +698,12 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_metadata(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples_with_distance(void
     
 );
 #endif

@@ -205,6 +205,20 @@ pub fn segment_laps(session: &Session) -> Vec<Lap> {
         .collect()
 }
 
+/// The cumulative distance (m) at each sample of a `(timecode_ms, value)` speed
+/// series (m/s), by the trapezoidal rule with each step's area floored at `0`, so
+/// the axis is guaranteed monotonically non-decreasing (one value per sample,
+/// starting at `0`). This is the session-wide odometer the distance-mode plots
+/// and the track map (8.2) read; an empty series yields an empty axis.
+///
+/// Clamping matches [`distance_axis`]: a spurious negative speed cannot make the
+/// distance dip, keeping the axis usable as the monotonic grid
+/// [`to_distance_grid`](crate::to_distance_grid) requires.
+#[must_use]
+pub fn cumulative_distance(speed: &[(f64, f64)]) -> Vec<f64> {
+    cumulative_trapezoid(speed, true)
+}
+
 /// The cumulative distance axis for `lap`, integrating `speed_channel` over time
 /// with the trapezoidal rule (one distance value per speed sample, starting at
 /// `0`). A non-negative speed channel yields a monotonically non-decreasing axis.
@@ -214,7 +228,7 @@ pub fn segment_laps(session: &Session) -> Vec<Lap> {
 #[must_use]
 pub fn distance_axis(lap: &Lap, speed_channel: &str) -> Vec<f64> {
     lap.channel(speed_channel)
-        .map(|channel| cumulative_trapezoid(channel.samples(), true))
+        .map(|channel| cumulative_distance(channel.samples()))
         .unwrap_or_default()
 }
 

@@ -101,6 +101,14 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   no evaluation) that re-validates a stored math channel's source against the M2
   grammar when a project file is loaded, throwing `AnalysisError::InvalidExpression`
   on malformed input.
+  8.2 adds the **distance-domain** accessors for distance-mode plots and the track
+  map: `samples_with_distance(channel, start, count)` returns
+  `(timecode, distance, value)` `DistanceSample`s — a channel window paired with
+  the cumulative track distance (metres) at each sample — and
+  `gps_track(start, count)` returns per-fix `GpsTrackPoint`s
+  `(latitude, longitude, distance, timecode)`, an empty vec when the session has no
+  GPS. Both derive distance by integrating `GPS Speed` (`cumulative_distance`) and
+  interpolating that axis; neither traps.
   See [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target. As of 2.2 it owns the load
@@ -201,7 +209,7 @@ core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
   racestudio-io/               # import/export — AiM CSV writer (5.1) + reader (5.2)
-  racestudio-ffi/              # UniFFI boundary — open_session, windowed samples, validate_math_expression
+  racestudio-ffi/              # UniFFI boundary — open_session, windowed samples (+distance), gps_track, validate_math_expression
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
   Sources/RaceStudioCore/      # logic library — session store, analysis/plot models, session library, project files, FFI bindings

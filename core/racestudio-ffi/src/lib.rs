@@ -22,12 +22,17 @@ use std::sync::{Arc, OnceLock};
 
 use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
-    delta_t, resample_uniform, segment_laps, spectrum, stats_over_range, to_distance_grid,
-    AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
+    cumulative_distance, delta_t, resample_uniform, segment_laps, spectrum, stats_over_range,
+    to_distance_grid, AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 
 uniffi::setup_scaffolding!();
+
+/// The GPS ground-speed channel integrated into the cumulative track distance
+/// axis — the same channel the analysis crate's `distance_axis` uses for the
+/// distance-domain accessors (issues 3.1 / 8.2).
+const SPEED_CHANNEL: &str = "GPS Speed";
 
 /// The RaceStudio Rust core version, exported across the UniFFI boundary.
 ///
@@ -112,6 +117,38 @@ pub struct Sample {
     pub timecode: f64,
     /// The sample's physical value.
     pub value: f64,
+}
+
+/// One distance-paired channel sample: a `(timecode, distance, value)` triple —
+/// the same `(timecode, value)` as [`Sample`] plus the cumulative track distance
+/// (metres) at that timecode. [`SessionHandle::samples_with_distance`] returns
+/// these so the UI can plot a channel against distance without a second round
+/// trip and without shipping the distance axis separately.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct DistanceSample {
+    /// Logger timecode (milliseconds for most channels).
+    pub timecode: f64,
+    /// Cumulative track distance (metres) at `timecode`, `0` when the session
+    /// carries no `GPS Speed` channel to integrate.
+    pub distance: f64,
+    /// The sample's physical value.
+    pub value: f64,
+}
+
+/// One point of the GPS track: a fix's position, the cumulative track distance
+/// (metres) at it, and its timecode — the row [`SessionHandle::gps_track`]
+/// returns for the track map and the distance axis.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct GpsTrackPoint {
+    /// Latitude in degrees (WGS84).
+    pub latitude: f64,
+    /// Longitude in degrees (WGS84).
+    pub longitude: f64,
+    /// Cumulative track distance (metres) at this fix, `0` when there is no
+    /// `GPS Speed` channel to integrate.
+    pub distance: f64,
+    /// Logger timecode (milliseconds).
+    pub timecode: f64,
 }
 
 /// A half-open analysis window `[start, end)` on an accessor's natural axis —
@@ -399,6 +436,57 @@ impl SessionHandle {
         self.segmented_laps
             .get_or_init(|| segment_laps(&self.session))
     }
+
+    /// The clamped `[start, start + count)` sample window of channel
+    /// `channel_index` — an empty slice when `start` is at or past the end, and
+    /// truncated when `count` overruns it (never an over-read). Shared by
+    /// [`Self::samples`] and [`Self::samples_with_distance`].
+    ///
+    /// # Errors
+    /// [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+    /// channel.
+    fn channel_window(
+        &self,
+        channel_index: u32,
+        start: u32,
+        count: u32,
+    ) -> Result<&[(f64, f64)], FfiDecodeError> {
+        let channels = self.session.channels();
+        let channel = channels.get(channel_index as usize).ok_or_else(|| {
+            FfiDecodeError::ChannelOutOfRange {
+                index: channel_index,
+                channel_count: u32::try_from(channels.len()).unwrap_or(u32::MAX),
+            }
+        })?;
+        let samples = channel.samples();
+        let start = start as usize;
+        if start >= samples.len() {
+            return Ok(&[]);
+        }
+        let end = start.saturating_add(count as usize).min(samples.len());
+        Ok(&samples[start..end])
+    }
+
+    /// The cumulative track distance (m) at each of `timecodes`, by integrating
+    /// the session's `GPS Speed` channel into a distance axis
+    /// ([`cumulative_distance`]) and linearly interpolating it onto that timebase
+    /// (reusing [`to_distance_grid`]).
+    ///
+    /// Total by construction: a session with no (or an empty) `GPS Speed` channel
+    /// has no odometer, so every distance is `0`; a non-monotonic speed timebase —
+    /// which the decoder does not produce — likewise falls back to zeros rather
+    /// than surfacing an error across this boundary.
+    fn distance_at(&self, timecodes: &[f64]) -> Vec<f64> {
+        let zeros = || vec![0.0; timecodes.len()];
+        let Some(speed) = channel_samples(&self.session, SPEED_CHANNEL).filter(|s| !s.is_empty())
+        else {
+            return zeros();
+        };
+        let speed_times: Vec<f64> = speed.iter().map(|&(t, _)| t).collect();
+        let axis = cumulative_distance(speed);
+        let series: Vec<(f64, f64)> = speed_times.iter().copied().zip(axis).collect();
+        to_distance_grid(&series, &speed_times, timecodes).unwrap_or_else(|_| zeros())
+    }
 }
 
 #[uniffi::export]
@@ -481,23 +569,77 @@ impl SessionHandle {
         start: u32,
         count: u32,
     ) -> Result<Vec<Sample>, FfiDecodeError> {
-        let channels = self.session.channels();
-        let channel = channels.get(channel_index as usize).ok_or_else(|| {
-            FfiDecodeError::ChannelOutOfRange {
-                index: channel_index,
-                channel_count: u32::try_from(channels.len()).unwrap_or(u32::MAX),
-            }
-        })?;
-        let samples = channel.samples();
-        let start = start as usize;
-        if start >= samples.len() {
-            return Ok(Vec::new());
-        }
-        let end = start.saturating_add(count as usize).min(samples.len());
-        Ok(samples[start..end]
+        Ok(self
+            .channel_window(channel_index, start, count)?
             .iter()
             .map(|&(timecode, value)| Sample { timecode, value })
             .collect())
+    }
+
+    /// Like [`Self::samples`], but each sample is paired with the cumulative
+    /// track distance (metres) at its timecode — a `(timecode, distance, value)`
+    /// triple on the channel's own timebase — so the UI can plot the channel
+    /// against distance directly.
+    ///
+    /// The distance axis is the session's `GPS Speed` channel integrated with
+    /// [`cumulative_distance`] and interpolated onto each sample's timecode; a
+    /// session without `GPS Speed` reports `0` for every distance. The window is
+    /// clamped exactly as [`Self::samples`].
+    ///
+    /// # Errors
+    /// [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+    /// channel. Never panics.
+    pub fn samples_with_distance(
+        &self,
+        channel_index: u32,
+        start: u32,
+        count: u32,
+    ) -> Result<Vec<DistanceSample>, FfiDecodeError> {
+        let window = self.channel_window(channel_index, start, count)?;
+        let timecodes: Vec<f64> = window.iter().map(|&(t, _)| t).collect();
+        let distances = self.distance_at(&timecodes);
+        Ok(window
+            .iter()
+            .zip(distances)
+            .map(|(&(timecode, value), distance)| DistanceSample {
+                timecode,
+                distance,
+                value,
+            })
+            .collect())
+    }
+
+    /// The GPS track as `(latitude, longitude, distance, timecode)` points, one
+    /// per fix, over the clamped `[start, start + count)` fix window.
+    ///
+    /// `distance` is the cumulative track distance (metres) at each fix, from
+    /// integrating `GPS Speed` ([`cumulative_distance`]). A session with **no**
+    /// GPS returns an empty vec — never an error or panic — and a `start` at or
+    /// past the last fix likewise yields an empty vec.
+    #[must_use]
+    pub fn gps_track(&self, start: u32, count: u32) -> Vec<GpsTrackPoint> {
+        let Some(gps) = self.session.gps() else {
+            return Vec::new();
+        };
+        let fixes = gps.fixes();
+        let start = start as usize;
+        if start >= fixes.len() {
+            return Vec::new();
+        }
+        let end = start.saturating_add(count as usize).min(fixes.len());
+        let window = &fixes[start..end];
+        let timecodes: Vec<f64> = window.iter().map(|fix| fix.timecode_ms).collect();
+        let distances = self.distance_at(&timecodes);
+        window
+            .iter()
+            .zip(distances)
+            .map(|(fix, distance)| GpsTrackPoint {
+                latitude: fix.latitude,
+                longitude: fix.longitude,
+                distance,
+                timecode: fix.timecode_ms,
+            })
+            .collect()
     }
 
     /// The laps whose time span intersects `window` (seconds) — a windowed view
@@ -752,6 +894,216 @@ pub fn validate_math_expression(expr: String) -> Result<(), AnalysisError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::path::PathBuf;
+
+    use racestudio_decode::{Channel, ChannelMeta, LapData, Metadata};
+
+    /// A CHS channel with the given `(timecode, value)` samples (unit/precision
+    /// are irrelevant to the distance accessors).
+    fn channel(name: &str, samples: &[(f64, f64)]) -> Channel {
+        Channel::new(
+            ChannelMeta::new(name.to_string(), String::new(), 0.0, 2, true),
+            samples.to_vec(),
+        )
+    }
+
+    /// A GPS-less handle over the given CHS channels — enough to exercise the
+    /// windowed sample accessors deterministically, with `GPS Speed` synthesised
+    /// as a plain channel so the distance axis is fully under the test's control.
+    fn handle_with_channels(channels: Vec<Channel>) -> SessionHandle {
+        SessionHandle {
+            session: Session::new(
+                Metadata::default(),
+                channels,
+                None,
+                LapData::new(Vec::new()),
+                None,
+            ),
+            segmented_laps: OnceLock::new(),
+        }
+    }
+
+    /// The repo-root path to a fixture, and whether it is a genuine `.xrk`.
+    fn xrk_or_skip(name: &str) -> Option<PathBuf> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(|core| core.parent())
+            .map(|root| root.join("fixtures").join(name))?;
+        match std::fs::read(&path) {
+            Ok(bytes) if bytes.starts_with(b"<h") => Some(path),
+            _ => {
+                eprintln!(
+                    "skipping: {} is not a real .xrk — run `make fixtures`",
+                    path.display()
+                );
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn test_samples_with_distance_pairs_each_sample_with_interpolated_distance() {
+        // GPS Speed held at 10 m/s over two 1 s steps → distance axis [0, 10, 20]
+        // at t = [0, 1000, 2000]. A value channel is interpolated onto that axis.
+        let speed = channel(
+            SPEED_CHANNEL,
+            &[(0.0, 10.0), (1000.0, 10.0), (2000.0, 10.0)],
+        );
+        let ax = channel(
+            "AX",
+            &[(0.0, 1.0), (500.0, 2.0), (1000.0, 3.0), (2000.0, 4.0)],
+        );
+        let handle = handle_with_channels(vec![speed, ax]);
+
+        let out = handle
+            .samples_with_distance(1, 0, 10)
+            .expect("valid channel index");
+
+        let got: Vec<(f64, f64, f64)> = out
+            .iter()
+            .map(|s| (s.timecode, s.distance, s.value))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                (0.0, 0.0, 1.0),   // t=0    → distance 0
+                (500.0, 5.0, 2.0), // t=500  → half-way to 10 m
+                (1000.0, 10.0, 3.0),
+                (2000.0, 20.0, 4.0),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_samples_with_distance_clamps_window_and_rejects_bad_index() {
+        let speed = channel(
+            SPEED_CHANNEL,
+            &[(0.0, 10.0), (1000.0, 10.0), (2000.0, 10.0)],
+        );
+        let ax = channel("AX", &[(0.0, 1.0), (1000.0, 3.0), (2000.0, 4.0)]);
+        let handle = handle_with_channels(vec![speed, ax]);
+
+        // A mid-channel window returns only the requested slice, distance intact.
+        let mid = handle.samples_with_distance(1, 1, 1).expect("in range");
+        assert_eq!(mid.len(), 1);
+        assert_eq!(
+            (mid[0].timecode, mid[0].distance, mid[0].value),
+            (1000.0, 10.0, 3.0)
+        );
+
+        // A start at/past the end is an empty vec, never an over-read.
+        assert!(handle
+            .samples_with_distance(1, 9, 5)
+            .expect("in range")
+            .is_empty());
+
+        // An out-of-range channel index is a thrown ChannelOutOfRange, not a panic.
+        let err = handle
+            .samples_with_distance(7, 0, 1)
+            .expect_err("bad index");
+        assert!(matches!(
+            err,
+            FfiDecodeError::ChannelOutOfRange {
+                index: 7,
+                channel_count: 2
+            }
+        ));
+    }
+
+    #[test]
+    fn test_samples_with_distance_without_speed_reports_zero_distance() {
+        // No GPS Speed channel → no odometer → distance 0 for every sample, but
+        // the timecodes and values still cross intact.
+        let handle = handle_with_channels(vec![channel("AX", &[(0.0, 1.0), (100.0, 2.0)])]);
+
+        let out = handle.samples_with_distance(0, 0, 10).expect("valid index");
+
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|s| s.distance == 0.0));
+        assert_eq!((out[1].timecode, out[1].value), (100.0, 2.0));
+    }
+
+    #[test]
+    fn test_samples_with_distance_non_monotonic_speed_falls_back_to_zero() {
+        // A non-monotonic speed timebase (which the decoder never emits) makes the
+        // distance axis unusable; the boundary stays total by reporting 0, not by
+        // throwing or panicking.
+        let speed = channel(SPEED_CHANNEL, &[(0.0, 10.0), (500.0, 10.0), (200.0, 10.0)]);
+        let ax = channel("AX", &[(0.0, 1.0), (100.0, 2.0)]);
+        let handle = handle_with_channels(vec![speed, ax]);
+
+        let out = handle
+            .samples_with_distance(1, 0, 10)
+            .expect("no error across boundary");
+
+        assert_eq!(out.len(), 2);
+        assert!(out.iter().all(|s| s.distance == 0.0));
+        assert_eq!(out[1].value, 2.0);
+    }
+
+    #[test]
+    fn test_gps_track_without_gps_is_empty() {
+        // A session with no GPS yields an empty typed result — never an error.
+        let handle = handle_with_channels(vec![channel("AX", &[(0.0, 1.0)])]);
+        assert!(handle.gps_track(0, 100).is_empty());
+    }
+
+    #[test]
+    fn test_gps_track_matches_decoded_fixes_and_distance() {
+        let Some(path) = xrk_or_skip("aim_official_test.xrk") else {
+            return;
+        };
+        let handle = open_session(path.to_string_lossy().into_owned()).expect("decode");
+        let gps = handle.session.gps().expect("fixture has GPS");
+        let fixes = gps.fixes();
+
+        let track = handle.gps_track(0, u32::MAX);
+
+        assert_eq!(track.len(), fixes.len(), "one point per fix");
+        // Position and timecode are the decoded fix verbatim.
+        for (point, fix) in track.iter().zip(fixes) {
+            assert_eq!(point.latitude, fix.latitude);
+            assert_eq!(point.longitude, fix.longitude);
+            assert_eq!(point.timecode, fix.timecode_ms);
+        }
+        // Distance is the clamped cumulative integral of GPS Speed, index-aligned
+        // with the fixes and monotonically non-decreasing.
+        let axis = cumulative_distance(gps.channel(SPEED_CHANNEL).expect("GPS Speed").samples());
+        for (point, &distance) in track.iter().zip(&axis) {
+            assert!((point.distance - distance).abs() < 1e-9);
+        }
+        assert!(track
+            .windows(2)
+            .all(|w| w[1].distance >= w[0].distance - 1e-9));
+        assert!(track.last().expect("non-empty").distance > 0.0);
+
+        // A start past the last fix is an empty vec.
+        assert!(handle
+            .gps_track(u32::try_from(fixes.len()).unwrap_or(u32::MAX), 10)
+            .is_empty());
+    }
+
+    #[test]
+    fn test_samples_with_distance_on_real_session_augments_samples() {
+        let Some(path) = xrk_or_skip("aim_official_test.xrk") else {
+            return;
+        };
+        let handle = open_session(path.to_string_lossy().into_owned()).expect("decode");
+
+        let with = handle
+            .samples_with_distance(0, 0, 100)
+            .expect("samples_with_distance");
+        let plain = handle.samples(0, 0, 100).expect("samples");
+
+        assert_eq!(with.len(), plain.len());
+        // The timecode/value pair is exactly `samples`; distance is finite added on.
+        for (a, b) in with.iter().zip(&plain) {
+            assert_eq!(a.timecode, b.timecode);
+            assert_eq!(a.value, b.value);
+            assert!(a.distance.is_finite());
+        }
+    }
 
     #[test]
     fn test_validate_math_expression_accepts_valid_and_rejects_invalid() {

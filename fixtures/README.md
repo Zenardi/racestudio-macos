@@ -25,6 +25,10 @@ fixtures/
                                #   libxrk storage dtype per channel (3.4)
     <name>.derived.json        # GPS-derived channels window: heading, yaw_rate,
                                #   inline/lateral accel — inputs + outputs (3.6)
+    <name>.distance.json       # cumulative track-distance axis (trapezoidal
+                               #   integral of GPS Speed) at fix indices, relative
+                               #   to a reference fix — oracle for the 8.2 FFI
+                               #   distance accessors (cumulative_distance)
     fuji_0033.csv              # byte golden: the RaceChrono AiM CSV this repo's
                                #   writer emits for fuji_0033.xrk (5.1)
     fuji_0033.session.json     # structural golden: the Session that read_csv

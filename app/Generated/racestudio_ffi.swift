@@ -576,6 +576,17 @@ public protocol SessionHandleProtocol : AnyObject {
     func gpsSummary()  -> GpsSummary?
     
     /**
+     * The GPS track as `(latitude, longitude, distance, timecode)` points, one
+     * per fix, over the clamped `[start, start + count)` fix window.
+     *
+     * `distance` is the cumulative track distance (metres) at each fix, from
+     * integrating `GPS Speed` ([`cumulative_distance`]). A session with **no**
+     * GPS returns an empty vec — never an error or panic — and a `start` at or
+     * past the last fix likewise yields an empty vec.
+     */
+    func gpsTrack(start: UInt32, count: UInt32)  -> [GpsTrackPoint]
+    
+    /**
      * The lap timing as a listing.
      */
     func laps()  -> [LapInfo]
@@ -607,6 +618,23 @@ public protocol SessionHandleProtocol : AnyObject {
      * channel. Never panics.
      */
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) throws  -> [Sample]
+    
+    /**
+     * Like [`Self::samples`], but each sample is paired with the cumulative
+     * track distance (metres) at its timecode — a `(timecode, distance, value)`
+     * triple on the channel's own timebase — so the UI can plot the channel
+     * against distance directly.
+     *
+     * The distance axis is the session's `GPS Speed` channel integrated with
+     * [`cumulative_distance`] and interpolated onto each sample's timecode; a
+     * session without `GPS Speed` reports `0` for every distance. The window is
+     * clamped exactly as [`Self::samples`].
+     *
+     * # Errors
+     * [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+     * channel. Never panics.
+     */
+    func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32) throws  -> [DistanceSample]
     
 }
 
@@ -770,6 +798,24 @@ open func gpsSummary() -> GpsSummary? {
 }
     
     /**
+     * The GPS track as `(latitude, longitude, distance, timecode)` points, one
+     * per fix, over the clamped `[start, start + count)` fix window.
+     *
+     * `distance` is the cumulative track distance (metres) at each fix, from
+     * integrating `GPS Speed` ([`cumulative_distance`]). A session with **no**
+     * GPS returns an empty vec — never an error or panic — and a `start` at or
+     * past the last fix likewise yields an empty vec.
+     */
+open func gpsTrack(start: UInt32, count: UInt32) -> [GpsTrackPoint] {
+    return try!  FfiConverterSequenceTypeGpsTrackPoint.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_gps_track(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(start),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
+}
+    
+    /**
      * The lap timing as a listing.
      */
 open func laps() -> [LapInfo] {
@@ -819,6 +865,31 @@ open func metadata() -> SessionMetadata {
 open func samples(channelIndex: UInt32, start: UInt32, count: UInt32)throws  -> [Sample] {
     return try  FfiConverterSequenceTypeSample.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
     uniffi_racestudio_ffi_fn_method_sessionhandle_samples(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(channelIndex),
+        FfiConverterUInt32.lower(start),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
+}
+    
+    /**
+     * Like [`Self::samples`], but each sample is paired with the cumulative
+     * track distance (metres) at its timecode — a `(timecode, distance, value)`
+     * triple on the channel's own timebase — so the UI can plot the channel
+     * against distance directly.
+     *
+     * The distance axis is the session's `GPS Speed` channel integrated with
+     * [`cumulative_distance`] and interpolated onto each sample's timecode; a
+     * session without `GPS Speed` reports `0` for every distance. The window is
+     * clamped exactly as [`Self::samples`].
+     *
+     * # Errors
+     * [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
+     * channel. Never panics.
+     */
+open func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32)throws  -> [DistanceSample] {
+    return try  FfiConverterSequenceTypeDistanceSample.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_samples_with_distance(self.uniffiClonePointer(),
         FfiConverterUInt32.lower(channelIndex),
         FfiConverterUInt32.lower(start),
         FfiConverterUInt32.lower(count),$0
@@ -1088,6 +1159,107 @@ public func FfiConverterTypeDeltaPoint_lower(_ value: DeltaPoint) -> RustBuffer 
 
 
 /**
+ * One distance-paired channel sample: a `(timecode, distance, value)` triple —
+ * the same `(timecode, value)` as [`Sample`] plus the cumulative track distance
+ * (metres) at that timecode. [`SessionHandle::samples_with_distance`] returns
+ * these so the UI can plot a channel against distance without a second round
+ * trip and without shipping the distance axis separately.
+ */
+public struct DistanceSample {
+    /**
+     * Logger timecode (milliseconds for most channels).
+     */
+    public var timecode: Double
+    /**
+     * Cumulative track distance (metres) at `timecode`, `0` when the session
+     * carries no `GPS Speed` channel to integrate.
+     */
+    public var distance: Double
+    /**
+     * The sample's physical value.
+     */
+    public var value: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Logger timecode (milliseconds for most channels).
+         */timecode: Double, 
+        /**
+         * Cumulative track distance (metres) at `timecode`, `0` when the session
+         * carries no `GPS Speed` channel to integrate.
+         */distance: Double, 
+        /**
+         * The sample's physical value.
+         */value: Double) {
+        self.timecode = timecode
+        self.distance = distance
+        self.value = value
+    }
+}
+
+
+
+extension DistanceSample: Equatable, Hashable {
+    public static func ==(lhs: DistanceSample, rhs: DistanceSample) -> Bool {
+        if lhs.timecode != rhs.timecode {
+            return false
+        }
+        if lhs.distance != rhs.distance {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(timecode)
+        hasher.combine(distance)
+        hasher.combine(value)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDistanceSample: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DistanceSample {
+        return
+            try DistanceSample(
+                timecode: FfiConverterDouble.read(from: &buf), 
+                distance: FfiConverterDouble.read(from: &buf), 
+                value: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DistanceSample, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.timecode, into: &buf)
+        FfiConverterDouble.write(value.distance, into: &buf)
+        FfiConverterDouble.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDistanceSample_lift(_ buf: RustBuffer) throws -> DistanceSample {
+    return try FfiConverterTypeDistanceSample.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDistanceSample_lower(_ value: DistanceSample) -> RustBuffer {
+    return FfiConverterTypeDistanceSample.lower(value)
+}
+
+
+/**
  * A half-open analysis window `[start, end)` on an accessor's natural axis —
  * seconds for laps, channel timecode (ms) for channel accessors, cumulative
  * distance (m) for delta-t. Every windowed accessor takes one so the UI can
@@ -1278,6 +1450,119 @@ public func FfiConverterTypeGpsSummary_lift(_ buf: RustBuffer) throws -> GpsSumm
 #endif
 public func FfiConverterTypeGpsSummary_lower(_ value: GpsSummary) -> RustBuffer {
     return FfiConverterTypeGpsSummary.lower(value)
+}
+
+
+/**
+ * One point of the GPS track: a fix's position, the cumulative track distance
+ * (metres) at it, and its timecode — the row [`SessionHandle::gps_track`]
+ * returns for the track map and the distance axis.
+ */
+public struct GpsTrackPoint {
+    /**
+     * Latitude in degrees (WGS84).
+     */
+    public var latitude: Double
+    /**
+     * Longitude in degrees (WGS84).
+     */
+    public var longitude: Double
+    /**
+     * Cumulative track distance (metres) at this fix, `0` when there is no
+     * `GPS Speed` channel to integrate.
+     */
+    public var distance: Double
+    /**
+     * Logger timecode (milliseconds).
+     */
+    public var timecode: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Latitude in degrees (WGS84).
+         */latitude: Double, 
+        /**
+         * Longitude in degrees (WGS84).
+         */longitude: Double, 
+        /**
+         * Cumulative track distance (metres) at this fix, `0` when there is no
+         * `GPS Speed` channel to integrate.
+         */distance: Double, 
+        /**
+         * Logger timecode (milliseconds).
+         */timecode: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.distance = distance
+        self.timecode = timecode
+    }
+}
+
+
+
+extension GpsTrackPoint: Equatable, Hashable {
+    public static func ==(lhs: GpsTrackPoint, rhs: GpsTrackPoint) -> Bool {
+        if lhs.latitude != rhs.latitude {
+            return false
+        }
+        if lhs.longitude != rhs.longitude {
+            return false
+        }
+        if lhs.distance != rhs.distance {
+            return false
+        }
+        if lhs.timecode != rhs.timecode {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(latitude)
+        hasher.combine(longitude)
+        hasher.combine(distance)
+        hasher.combine(timecode)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGpsTrackPoint: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GpsTrackPoint {
+        return
+            try GpsTrackPoint(
+                latitude: FfiConverterDouble.read(from: &buf), 
+                longitude: FfiConverterDouble.read(from: &buf), 
+                distance: FfiConverterDouble.read(from: &buf), 
+                timecode: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GpsTrackPoint, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.latitude, into: &buf)
+        FfiConverterDouble.write(value.longitude, into: &buf)
+        FfiConverterDouble.write(value.distance, into: &buf)
+        FfiConverterDouble.write(value.timecode, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGpsTrackPoint_lift(_ buf: RustBuffer) throws -> GpsTrackPoint {
+    return try FfiConverterTypeGpsTrackPoint.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGpsTrackPoint_lower(_ value: GpsTrackPoint) -> RustBuffer {
+    return FfiConverterTypeGpsTrackPoint.lower(value)
 }
 
 
@@ -2364,6 +2649,56 @@ fileprivate struct FfiConverterSequenceTypeDeltaPoint: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDistanceSample: FfiConverterRustBuffer {
+    typealias SwiftType = [DistanceSample]
+
+    public static func write(_ value: [DistanceSample], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDistanceSample.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DistanceSample] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DistanceSample]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDistanceSample.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeGpsTrackPoint: FfiConverterRustBuffer {
+    typealias SwiftType = [GpsTrackPoint]
+
+    public static func write(_ value: [GpsTrackPoint], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeGpsTrackPoint.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [GpsTrackPoint] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [GpsTrackPoint]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeGpsTrackPoint.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeLapInfo: FfiConverterRustBuffer {
     typealias SwiftType = [LapInfo]
 
@@ -2499,6 +2834,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_summary() != 37226) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_track() != 36905) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_laps() != 1553) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2509,6 +2847,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_samples() != 44387) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_samples_with_distance() != 3731) {
         return InitializationResult.apiChecksumMismatch
     }
 

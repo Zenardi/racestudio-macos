@@ -16,6 +16,8 @@ mod support;
 mod delta;
 #[path = "analysis/derived.rs"]
 mod derived;
+#[path = "analysis/distance.rs"]
+mod distance;
 #[path = "analysis/expr.rs"]
 mod expr;
 #[path = "analysis/fft.rs"]
