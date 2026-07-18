@@ -281,4 +281,54 @@ import Foundation
         #expect(model.session == sess)
         #expect(model.traces.map(\.name) == ["Speed"])
     }
+
+    // MARK: - Side panel (issue 8.4: search / sort / colour, driven by the shared model)
+
+    @Test func test_side_panel_defaults_to_configuration_order_and_no_query() {
+        let model = makeModel()
+        #expect(model.channelQuery.isEmpty)
+        #expect(model.channelSort == .configuration)
+        #expect(model.sidePanel.channelRows.map(\.name) == ["Speed", "RPM"])
+    }
+
+    @Test func test_side_panel_reflects_the_default_channel_selection() {
+        // The window opens with the first channel selected, so its side-panel row
+        // is on and carries the first palette colour.
+        let speed = makeModel().sidePanel.channelRows.first { $0.name == "Speed" }
+        #expect(speed?.isSelected == true)
+        #expect(speed?.color == PlotColor.palette[0])
+    }
+
+    @Test func test_setting_the_query_filters_the_side_panel_channels() {
+        let model = makeModel()
+        model.setChannelQuery("rpm")
+        #expect(model.channelQuery == "rpm")
+        #expect(model.sidePanel.channelRows.map(\.name) == ["RPM"])
+    }
+
+    @Test func test_setting_the_sort_reorders_the_side_panel_channels() {
+        let model = makeModel()
+        model.setChannelSort(.alphabetical)
+        #expect(model.channelSort == .alphabetical)
+        #expect(model.sidePanel.channelRows.map(\.name) == ["RPM", "Speed"])
+    }
+
+    @Test func test_toggling_a_channel_updates_both_the_side_panel_and_the_plot() {
+        let model = makeModel()
+        model.toggleChannel(ChannelID("RPM"))
+        // The plot sees the new trace…
+        #expect(model.traces.map(\.name) == ["Speed", "RPM"])
+        // …and the side panel shows RPM on, with the second palette colour.
+        let rpm = model.sidePanel.channelRows.first { $0.name == "RPM" }
+        #expect(rpm?.isSelected == true)
+        #expect(rpm?.color == PlotColor.palette[1])
+    }
+
+    @Test func test_toggling_a_lap_updates_the_side_panel_visibility() {
+        let model = makeModel()
+        model.toggleLap(LapID(1))
+        let lap = model.sidePanel.lapRows.first { $0.lap == LapID(1) }
+        #expect(lap?.isVisible == true)
+        #expect(lap?.color == PlotColor.palette[0])
+    }
 }
