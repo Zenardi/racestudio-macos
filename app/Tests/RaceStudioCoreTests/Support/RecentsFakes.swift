@@ -45,13 +45,13 @@ final class CountingSessionLoader: SessionLoading, @unchecked Sendable {
     func load(
         _ url: URL,
         onProgress: @escaping @MainActor (DecodeProgress) -> Void
-    ) async throws -> Session {
+    ) async throws -> LoadedSession {
         callCount += 1
         loadedURLs.append(url)
-        return Session(
+        return LoadedSession(session: Session(
             metadata: SessionMetadata(
                 vehicle: "", track: "", driver: "", session: "",
                 series: "", logDate: "", logTime: "", datetimeUtc: 0),
-            channels: [], laps: [])
+            channels: [], laps: []))
     }
 }

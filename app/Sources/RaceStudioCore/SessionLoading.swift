@@ -1,5 +1,25 @@
 import Foundation
 
+/// The product of a successful load (issue 8.1): the decoded ``Session`` value
+/// snapshot plus the live ``SessionDataSource`` that retains the underlying
+/// handle for windowed sample reads.
+///
+/// `dataSource` is optional so loaders that only model the load lifecycle (the
+/// counting/cancellation test fakes) need not vend one — the store then leaves
+/// ``SessionViewModel/analysis`` `nil`. The production `FFISessionLoader` always
+/// provides it, so a real `.loaded` session can pump samples to the analysis UI.
+public struct LoadedSession: Sendable {
+    /// The decoded metadata/channels/laps snapshot.
+    public let session: Session
+    /// The live source for windowed reads, or `nil` when the loader models none.
+    public let dataSource: SessionDataSource?
+
+    public init(session: Session, dataSource: SessionDataSource? = nil) {
+        self.session = session
+        self.dataSource = dataSource
+    }
+}
+
 /// Strategy for decoding a ``Session`` from a file URL, reporting progress
 /// (issues 2.2 + 2.5).
 ///
@@ -9,11 +29,13 @@ import Foundation
 /// deterministically.
 public protocol SessionLoading: Sendable {
     /// Decode the session at `url`, reporting decode progress, throwing a
-    /// ``DecodeError`` (or other error) on failure.
+    /// ``DecodeError`` (or other error) on failure. Returns the decoded snapshot
+    /// plus a live ``SessionDataSource`` (issue 8.1) so the loaded session can
+    /// feed the analysis UI without re-decoding.
     func load(
         _ url: URL,
         onProgress: @escaping @MainActor (DecodeProgress) -> Void
-    ) async throws -> Session
+    ) async throws -> LoadedSession
 }
 
 #if canImport(RaceStudioFFIBindings)
@@ -33,7 +55,7 @@ public struct FFISessionLoader: SessionLoading {
     public func load(
         _ url: URL,
         onProgress: @escaping @MainActor (DecodeProgress) -> Void
-    ) async throws -> Session {
+    ) async throws -> LoadedSession {
         await onProgress(DecodeProgress(fraction: 0, phase: .reading))
         let handle: SessionHandle
         do {
@@ -45,7 +67,9 @@ public struct FFISessionLoader: SessionLoading {
         let session = FFISessionLoader.makeSession(
             metadata: handle.metadata(), channels: handle.channels(), laps: handle.laps())
         await onProgress(DecodeProgress(fraction: 1, phase: .complete))
-        return session
+        // Retain the live handle behind the data-source seam so the loaded
+        // session can read sample windows for the analysis UI (issue 8.1).
+        return LoadedSession(session: session, dataSource: FFISessionDataSource(handle: handle))
     }
 
     /// Pure map from the FFI handle's readouts into Core's ``Session``. Split out
@@ -69,6 +93,44 @@ public struct FFISessionLoader: SessionLoading {
                 Lap(index: $0.index, startTimeS: $0.startTimeS,
                     durationS: $0.durationS, endTimeS: $0.endTimeS)
             })
+    }
+}
+
+/// Production ``SessionDataSource``: reads windowed samples and stats from a live
+/// `SessionHandle` over the 3.8 UniFFI boundary (issue 8.1), mapping each FFI
+/// `Sample` into a ``DataSample`` (timecode ms → seconds) and `StatsDto` into a
+/// ``ChannelStats``.
+///
+/// A logic-free 1:1 adapter: `AnalysisSession` owns all windowing/clamping, so
+/// this only translates types and units. Available only when the xcframework has
+/// been built; a fresh checkout without it compiles without this type.
+/// `@unchecked Sendable` because the opaque handle is immutable here and the Rust
+/// accessors are thread-safe (matching `FFIExpressionEvaluator`).
+public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
+    private let handle: SessionHandle
+
+    public init(handle: SessionHandle) {
+        self.handle = handle
+    }
+
+    public func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
+        // The window is pre-clamped by `AnalysisSession`; the only throw here is
+        // `ChannelOutOfRange` for a bad index, which that guard already excludes —
+        // fall back to empty rather than trap (no `try!` in shipped paths).
+        let raw = (try? handle.samples(channelIndex: channelIndex, start: start, count: count)) ?? []
+        // `timecode` is milliseconds; `DataSample.time` is seconds, matching the
+        // app's lap/plot time convention (as `FFIExpressionEvaluator` does).
+        return raw.map { DataSample(time: $0.timecode / 1000, value: $0.value) }
+    }
+
+    public func statistics(channel: String, start: Double, end: Double) throws -> ChannelStats {
+        // The FFI stats window is in the same timecode unit as samples (ms);
+        // Core speaks seconds, so scale the bounds (±∞ is preserved).
+        let dto = try handle.channelStats(
+            channel: channel, window: FfiWindow(start: start * 1000, end: end * 1000))
+        return ChannelStats(
+            count: dto.count, min: dto.min, max: dto.max, mean: dto.mean,
+            stdPop: dto.stdPop, stdSample: dto.stdSample, rms: dto.rms, range: dto.range)
     }
 }
 

@@ -82,12 +82,17 @@ public final class SessionStore: ObservableObject {
     private func run(url: URL, token: Int) async {
         setState(.loading(DecodeProgress()), token: token)
         do {
-            let session = try await loader.load(url) { progress in
+            let loaded = try await loader.load(url) { progress in
                 self.applyProgress(progress, token: token)
             }
             try Task.checkCancellation()
             setState(.loading(DecodeProgress(fraction: 1, phase: .complete)), token: token)
-            setState(.loaded(SessionViewModel(session: session)), token: token)
+            // Retain the live pump when the loader vends a data source (issue 8.1),
+            // so the loaded session can feed the analysis UI.
+            let analysis = loaded.dataSource.map {
+                AnalysisSession(session: loaded.session, dataSource: $0)
+            }
+            setState(.loaded(SessionViewModel(session: loaded.session, analysis: analysis)), token: token)
         } catch is CancellationError {
             setState(.idle, token: token)
         } catch {

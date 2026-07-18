@@ -83,7 +83,7 @@ import RaceStudioFFIBindings
     @Test func test_ffi_loader_decodes_real_xrk_matching_golden() async throws {
         guard let url = fixtureURLOrSkip() else { return }
 
-        let session = try await FFISessionLoader().load(url) { _ in }
+        let session = try await FFISessionLoader().load(url) { _ in }.session
 
         #expect(session.channels.count == (try GoldenSession.channelCount(Self.fixtureName)))
         #expect(session.laps.count == (try GoldenSession.lapCount(Self.fixtureName)))

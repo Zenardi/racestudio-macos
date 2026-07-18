@@ -23,8 +23,8 @@ import Combine
         func load(
             _ url: URL,
             onProgress: @escaping @MainActor (DecodeProgress) -> Void
-        ) async throws -> Session {
-            try result.get()
+        ) async throws -> LoadedSession {
+            LoadedSession(session: try result.get())
         }
     }
 
