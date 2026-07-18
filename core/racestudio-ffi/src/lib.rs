@@ -428,6 +428,33 @@ pub struct SessionHandle {
     /// accessors so an interactive caller does not re-slice the whole session on
     /// every windowed call.
     segmented_laps: OnceLock<Vec<Lap>>,
+    /// Lazily-computed session distance axis (8.2), shared by the distance-domain
+    /// accessors so a paged caller does not re-integrate the whole session on
+    /// every windowed call.
+    distance_axis: OnceLock<DistanceAxis>,
+}
+
+/// The session's cumulative distance axis, derived once from `GPS Speed` and
+/// cached: `series` is `(timecode, distance)` samples and `times` is the bare
+/// timecode column [`to_distance_grid`] interpolates over. Both vecs are empty
+/// when the session has no `GPS Speed` channel — then every queried distance is
+/// `0`.
+#[derive(Debug)]
+struct DistanceAxis {
+    times: Vec<f64>,
+    series: Vec<(f64, f64)>,
+}
+
+/// The clamped `[start, start + count)` slice of `items` — an empty slice when
+/// `start` is at or past the end, truncated when `count` overruns it (never an
+/// over-read). Shared by every windowed index accessor.
+fn window<T>(items: &[T], start: u32, count: u32) -> &[T] {
+    let start = start as usize;
+    if start >= items.len() {
+        return &[];
+    }
+    let end = start.saturating_add(count as usize).min(items.len());
+    &items[start..end]
 }
 
 impl SessionHandle {
@@ -437,10 +464,34 @@ impl SessionHandle {
             .get_or_init(|| segment_laps(&self.session))
     }
 
+    /// The session distance axis (`GPS Speed` integrated into cumulative distance
+    /// via [`cumulative_distance`]), computed once and cached — mirroring
+    /// [`Self::segmented`] so a paged caller does not re-integrate the whole
+    /// session on every windowed distance query. Empty when there is no (or an
+    /// empty) `GPS Speed` channel.
+    fn distance_axis(&self) -> &DistanceAxis {
+        self.distance_axis.get_or_init(|| {
+            let Some(speed) =
+                channel_samples(&self.session, SPEED_CHANNEL).filter(|s| !s.is_empty())
+            else {
+                return DistanceAxis {
+                    times: Vec::new(),
+                    series: Vec::new(),
+                };
+            };
+            let times: Vec<f64> = speed.iter().map(|&(t, _)| t).collect();
+            let series = times
+                .iter()
+                .copied()
+                .zip(cumulative_distance(speed))
+                .collect();
+            DistanceAxis { times, series }
+        })
+    }
+
     /// The clamped `[start, start + count)` sample window of channel
-    /// `channel_index` — an empty slice when `start` is at or past the end, and
-    /// truncated when `count` overruns it (never an over-read). Shared by
-    /// [`Self::samples`] and [`Self::samples_with_distance`].
+    /// `channel_index`. Shared by [`Self::samples`] and
+    /// [`Self::samples_with_distance`].
     ///
     /// # Errors
     /// [`FfiDecodeError::ChannelOutOfRange`] when `channel_index` is not a valid
@@ -458,34 +509,24 @@ impl SessionHandle {
                 channel_count: u32::try_from(channels.len()).unwrap_or(u32::MAX),
             }
         })?;
-        let samples = channel.samples();
-        let start = start as usize;
-        if start >= samples.len() {
-            return Ok(&[]);
-        }
-        let end = start.saturating_add(count as usize).min(samples.len());
-        Ok(&samples[start..end])
+        Ok(window(channel.samples(), start, count))
     }
 
-    /// The cumulative track distance (m) at each of `timecodes`, by integrating
-    /// the session's `GPS Speed` channel into a distance axis
-    /// ([`cumulative_distance`]) and linearly interpolating it onto that timebase
-    /// (reusing [`to_distance_grid`]).
+    /// The cumulative track distance (m) at each of `timecodes`, by interpolating
+    /// the cached session distance axis ([`Self::distance_axis`]) onto that
+    /// timebase (reusing [`to_distance_grid`]).
     ///
-    /// Total by construction: a session with no (or an empty) `GPS Speed` channel
-    /// has no odometer, so every distance is `0`; a non-monotonic speed timebase —
-    /// which the decoder does not produce — likewise falls back to zeros rather
-    /// than surfacing an error across this boundary.
+    /// Total by construction: a session with no `GPS Speed` channel has no
+    /// odometer, so every distance is `0`; a non-monotonic speed timebase — which
+    /// the decoder does not produce — likewise falls back to zeros rather than
+    /// surfacing an error across this boundary.
     fn distance_at(&self, timecodes: &[f64]) -> Vec<f64> {
-        let zeros = || vec![0.0; timecodes.len()];
-        let Some(speed) = channel_samples(&self.session, SPEED_CHANNEL).filter(|s| !s.is_empty())
-        else {
-            return zeros();
-        };
-        let speed_times: Vec<f64> = speed.iter().map(|&(t, _)| t).collect();
-        let axis = cumulative_distance(speed);
-        let series: Vec<(f64, f64)> = speed_times.iter().copied().zip(axis).collect();
-        to_distance_grid(&series, &speed_times, timecodes).unwrap_or_else(|_| zeros())
+        let axis = self.distance_axis();
+        if axis.series.is_empty() {
+            return vec![0.0; timecodes.len()];
+        }
+        to_distance_grid(&axis.series, &axis.times, timecodes)
+            .unwrap_or_else(|_| vec![0.0; timecodes.len()])
     }
 }
 
@@ -621,16 +662,10 @@ impl SessionHandle {
         let Some(gps) = self.session.gps() else {
             return Vec::new();
         };
-        let fixes = gps.fixes();
-        let start = start as usize;
-        if start >= fixes.len() {
-            return Vec::new();
-        }
-        let end = start.saturating_add(count as usize).min(fixes.len());
-        let window = &fixes[start..end];
-        let timecodes: Vec<f64> = window.iter().map(|fix| fix.timecode_ms).collect();
+        let fixes = window(gps.fixes(), start, count);
+        let timecodes: Vec<f64> = fixes.iter().map(|fix| fix.timecode_ms).collect();
         let distances = self.distance_at(&timecodes);
-        window
+        fixes
             .iter()
             .zip(distances)
             .map(|(fix, distance)| GpsTrackPoint {
@@ -871,6 +906,7 @@ pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> 
     Ok(Arc::new(SessionHandle {
         session,
         segmented_laps: OnceLock::new(),
+        distance_axis: OnceLock::new(),
     }))
 }
 
@@ -921,6 +957,7 @@ mod tests {
                 None,
             ),
             segmented_laps: OnceLock::new(),
+            distance_axis: OnceLock::new(),
         }
     }
 
