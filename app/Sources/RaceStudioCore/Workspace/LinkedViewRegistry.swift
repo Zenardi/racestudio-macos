@@ -49,12 +49,24 @@ public final class LinkedViewRegistry: CursorBroadcaster {
     }
 
     /// Notify every registered view except `origin` that the cursor moved.
+    public func broadcast(_ cursor: WorkspaceCursor, from origin: CursorLinked) {
+        deliver(cursor, skipping: ObjectIdentifier(origin))
+    }
+
+    /// Notify *every* registered view — no originator to skip — for a move made
+    /// by a non-registered input (issue 8.3's ``LinkedCursor`` scrub, which
+    /// observes the published position rather than registering as a view).
+    public func broadcastToAll(_ cursor: WorkspaceCursor) {
+        deliver(cursor, skipping: nil)
+    }
+
+    /// Deliver `cursor` to every registered view whose identity differs from
+    /// `originID` (all of them when it is `nil`).
     ///
     /// Delivery iterates a snapshot of the registrations, so a receiver may
     /// (un)register during delivery without mutating the collection being walked;
     /// entries whose view has deallocated are pruned as they are encountered.
-    public func broadcast(_ cursor: WorkspaceCursor, from origin: CursorLinked) {
-        let originID = ObjectIdentifier(origin)
+    private func deliver(_ cursor: WorkspaceCursor, skipping originID: ObjectIdentifier?) {
         for (id, box) in Array(views) {
             guard let view = box.value else {
                 views.removeValue(forKey: id) // safe: iterating the snapshot, not `views`

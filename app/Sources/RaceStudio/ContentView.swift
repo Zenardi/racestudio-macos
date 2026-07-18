@@ -6,9 +6,9 @@ import RaceStudioCore
 ///
 /// It renders the `SessionStore` state (issues 2.2–2.5): a drop prompt when
 /// idle, a determinate progress bar with a Cancel button while loading, the
-/// session summary once loaded, and an error alert on failure. Drag-and-drop of
-/// `.xrk`/`.xrz` is forwarded to the shared `AppModel`; all logic lives in
-/// `RaceStudioCore`, so this view carries none of its own.
+/// analysis window once loaded (issue 8.3), and an error alert on failure.
+/// Drag-and-drop of `.xrk`/`.xrz` is forwarded to the shared `AppModel`; all
+/// logic lives in `RaceStudioCore`, so this view carries none of its own.
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var store: SessionStore
@@ -40,7 +40,10 @@ struct ContentView: View {
     private var content: some View {
         switch store.state {
         case let .loaded(viewModel):
-            SessionSummaryView(viewModel: SessionSummaryViewModel(session: viewModel.session))
+            // Rebuild the window's model only when a *different* session loads,
+            // so selection/cursor survive unrelated re-renders of the same one.
+            AnalysisWindowView(viewModel: viewModel)
+                .id(windowIdentity(of: viewModel))
         case let .loading(progress):
             loadingView(progress)
         case .idle, .failed:
@@ -48,6 +51,19 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
                 .padding()
         }
+    }
+
+    /// A stable per-session key for the window's `@StateObject`: the live analysis
+    /// pump's object identity in production (a fresh instance per load), falling
+    /// back to the decoded session's content for the analysis-less loaders — so
+    /// two such sessions never collide on a constant `nil` and leave a stale model.
+    private func windowIdentity(of viewModel: SessionViewModel) -> String {
+        if let analysis = viewModel.analysis {
+            return "pump:\(ObjectIdentifier(analysis).hashValue)"
+        }
+        let metadata = viewModel.session.metadata
+        return "session:\(metadata.datetimeUtc)|\(metadata.vehicle)|\(metadata.track)|"
+            + "\(metadata.driver)|\(viewModel.session.channels.count)|\(viewModel.session.laps.count)"
     }
 
     private func loadingView(_ progress: DecodeProgress) -> some View {
