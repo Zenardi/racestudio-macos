@@ -21,14 +21,14 @@ import Combine
             self.suspendUntilCancelled = suspendUntilCancelled
         }
 
-        func load(_ url: URL, onProgress: @escaping @MainActor (DecodeProgress) -> Void) async throws -> Session {
+        func load(_ url: URL, onProgress: @escaping @MainActor (DecodeProgress) -> Void) async throws -> LoadedSession {
             for fraction in progresses {
                 await onProgress(DecodeProgress(fraction: fraction, phase: .decoding))
             }
             if suspendUntilCancelled {
                 try await Task.sleep(nanoseconds: 5_000_000_000)
             }
-            return try result.get()
+            return LoadedSession(session: try result.get())
         }
     }
 
@@ -46,12 +46,12 @@ import Combine
             self.second = second
         }
 
-        func load(_ url: URL, onProgress: @escaping @MainActor (DecodeProgress) -> Void) async throws -> Session {
+        func load(_ url: URL, onProgress: @escaping @MainActor (DecodeProgress) -> Void) async throws -> LoadedSession {
             if url == suspendingURL {
                 try await Task.sleep(nanoseconds: 5_000_000_000)
-                return first
+                return LoadedSession(session: first)
             }
-            return second
+            return LoadedSession(session: second)
         }
     }
 
