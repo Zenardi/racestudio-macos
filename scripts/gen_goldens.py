@@ -10,6 +10,7 @@ diffed:
     fixtures/golden/<name>.gps.json        GPS lat/long/altitude summary
     fixtures/golden/<name>.laps.json       beacon lap table (index / start / end / duration)
     fixtures/golden/<name>.stats.json      per-channel whole-session statistics (3.4)
+    fixtures/golden/<name>.distance.json   cumulative distance axis + interpolation (8.2)
 
 Output is sorted and rounded to each channel's own decimal precision, so
 re-running on the same input is byte-identical.
@@ -323,6 +324,90 @@ def _resample_golden(log, fname):
     values = resampled.channels[channel].column(channel).to_numpy().astype(float)
     points = [{"t": int(t) - origin, "v": _round(v, 6)} for t, v in zip(targets, values)]
     return {"file": fname, "channel": channel, "points": points}
+
+
+# --------------------------------------------------------------------------- #
+# Distance-axis golden (issue 8.2).
+#
+# The oracle for the FFI distance accessors' shared quantity: cumulative track
+# distance (m) from integrating the GPS Speed channel (m/s) with the trapezoidal
+# rule, each step floored at 0 — matching the Rust `cumulative_distance` (clamped
+# so the axis is monotonically non-decreasing). `track` samples that axis at a
+# spread of fix indices — the oracle for `gps_track`'s distance and, once linearly
+# interpolated onto a channel timebase (`to_distance_grid`, whose interpolation is
+# itself golden-tested by the resample golden), `samples_with_distance`.
+#
+# All distances are stored **relative to fix `ref_index`** and only fixes at or
+# after it are emitted. This skips the session's initial GPS gap — where the Rust
+# decoder and libxrk reconstruct the first fixes' timecodes differently (the same
+# gap the derived golden skips via `_DERIVED_START`) — and cancels the constant
+# timecode-origin offset between the two decoders. From `ref_index` onward the two
+# decoders' fix timecodes differ only by that constant, so the trapezoidal `dt`s
+# (and hence relative distance) are identical; reconciling the absolute origin is
+# a decode-semantics matter outside 8.2 (see docs/DECODE_TOLERANCES.md). Distances
+# are rounded to 4 dp (~0.1 mm).
+# --------------------------------------------------------------------------- #
+
+_DISTANCE_POINTS = 40
+# Skip the initial GPS gap (fix 0→1 spans tens of seconds); mirrors the derived
+# golden's `_DERIVED_START`. Distances are measured from this fix.
+_DISTANCE_REF_INDEX = 2
+
+
+def _downsample_indices(lo, n, k):
+    """Up to `k` evenly spread, strictly increasing indices over `[lo, n)`."""
+    if n <= lo:
+        return []
+    k = min(k, n - lo)
+    if k <= 1:
+        return [lo]
+    return sorted({lo + (j * (n - 1 - lo)) // (k - 1) for j in range(k)})
+
+
+def _clamped_cumulative_distance(speed, timecodes):
+    """Cumulative distance (m) from a speed series (m/s) over ms timecodes, each
+    trapezoid step floored at 0 — mirrors Rust `cumulative_trapezoid(.., True)`."""
+    if len(speed) == 0:
+        return np.empty(0, dtype=np.float64)
+    dt_s = np.diff(timecodes.astype(np.float64)) / 1000.0
+    step = 0.5 * (speed[:-1] + speed[1:]) * dt_s
+    step = np.maximum(step, 0.0)
+    return np.concatenate([[0.0], np.cumsum(step)])
+
+
+def _empty_distance(fname):
+    return {
+        "file": fname,
+        "speed_channel": None,
+        "ref_index": 0,
+        "fix_count": 0,
+        "total_distance_m": 0.0,
+        "track": [],
+    }
+
+
+def _distance_golden(log, fname):
+    if "GPS Speed" not in log.channels:
+        return _empty_distance(fname)
+    speed = log.channels["GPS Speed"].column("GPS Speed").to_numpy().astype(float)
+    speed_tc = log.channels["GPS Speed"].column("timecodes").to_numpy().astype(np.int64)
+    axis = _clamped_cumulative_distance(speed, speed_tc)
+    ref = _DISTANCE_REF_INDEX
+    if len(axis) <= ref:
+        return _empty_distance(fname)
+    ref_dist = float(axis[ref])
+    track = [
+        {"i": int(i), "distance": _round(axis[i] - ref_dist, 4)}
+        for i in _downsample_indices(ref, len(axis), _DISTANCE_POINTS)
+    ]
+    return {
+        "file": fname,
+        "speed_channel": "GPS Speed",
+        "ref_index": ref,
+        "fix_count": int(len(axis)),
+        "total_distance_m": _round(axis[-1] - ref_dist, 4),
+        "track": track,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -698,7 +783,8 @@ def main(argv):
         _write_json(os.path.join(out_dir, f"{stem}.resample.json"), _resample_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.stats.json"), _stats_golden(log, fname))
         _write_json(os.path.join(out_dir, f"{stem}.derived.json"), _derived_golden(log, raw, fname))
-        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample,stats,derived}}.json")
+        _write_json(os.path.join(out_dir, f"{stem}.distance.json"), _distance_golden(log, fname))
+        print(f"  golden  {stem}.{{channels,gps,laps,metadata,resample,stats,derived,distance}}.json")
     return 0
 
 

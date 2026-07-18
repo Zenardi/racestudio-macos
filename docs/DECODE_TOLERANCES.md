@@ -77,6 +77,36 @@ was generated.
   conformance issue (the 1.3 contract is names/units/rate/count + first/last/min/
   max **values**), so the harness asserts those and not the absolute timecodes.
 
+## Distance axis (8.2)
+
+The `<name>.distance.json` golden is an **analysis-layer** oracle (asserted by
+`core/racestudio-analysis/tests/analysis/distance.rs`, not the decode e2e
+harness) for the FFI distance accessors' shared quantity: the cumulative track
+distance from integrating the `GPS Speed` channel
+([`cumulative_distance`](../core/racestudio-analysis/src/laps.rs)). numpy
+recomputes the same clamped trapezoidal integral over libxrk's decode as the
+independent reference.
+
+| Aspect | Field | Comparison | Tolerance |
+| --- | --- | --- | --- |
+| **distance** | cumulative distance at a fix, **relative to `ref_index`** | metres | **1e-2 m** |
+
+- **Why relative to a reference fix.** Distance is the integral of speed over
+  timecode **differences**, so it is invariant to the constant timecode-origin
+  offset between the Rust and libxrk decoders — *except* across the session's
+  initial GPS gap, where the two reconstruct the first fixes' timecodes
+  differently (the same gap the derived golden skips, `_DERIVED_START`). Measuring
+  every distance from `ref_index` (the first fix past that gap) cancels both the
+  origin offset and the initial-gap divergence; from `ref_index` onward the two
+  decoders' fix timecodes differ only by the constant, so the `dt`s — and hence
+  relative distance — are identical. Reconciling the absolute first-fix origin is
+  a decode-semantics matter outside 8.2 (cf. *Absolute channel timecodes are not
+  compared*, above).
+- **Why 1e-2 m.** The integral's only inputs are timecode differences and the
+  per-sample `GPS Speed`, which the decoder matches to libxrk within the 6-dp
+  GPS-speed golden (~5e-7 m/s); accumulated over a sub-hour session this stays far
+  inside a centimetre.
+
 ## Adding a fixture
 
 The harness is **data-driven**: drop a new `<name>.xrk` into `fixtures/` and its

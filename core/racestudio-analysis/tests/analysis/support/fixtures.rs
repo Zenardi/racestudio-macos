@@ -132,6 +132,35 @@ pub struct StatsChannel {
     pub range: f64,
 }
 
+/// `<name>.distance.json` — the session-wide cumulative distance axis (issue
+/// 8.2), the oracle for the quantity the FFI distance accessors share. `track` is
+/// the clamped trapezoidal integral of the `GPS Speed` channel (m/s → m) at a set
+/// of fix indices — the oracle for
+/// [`cumulative_distance`](racestudio_analysis::cumulative_distance) and, once
+/// [`to_distance_grid`](racestudio_analysis::to_distance_grid)-interpolated onto a
+/// channel timebase, `samples_with_distance` / `gps_track`. Distances are measured
+/// **relative to `ref_index`** (past the session's initial GPS gap), which cancels
+/// the constant timecode-origin offset between the two decoders — so relative
+/// distance matches to full precision despite that offset.
+#[derive(Debug, Deserialize)]
+pub struct DistanceGolden {
+    pub file: String,
+    pub speed_channel: Option<String>,
+    /// Reference fix: distances are measured from `cumulative_distance[ref_index]`,
+    /// skipping the initial GPS gap so the decoder-origin offset cancels.
+    pub ref_index: usize,
+    pub fix_count: usize,
+    pub total_distance_m: f64,
+    pub track: Vec<DistancePoint>,
+}
+
+/// One `(fix index, cumulative distance m)` point of the `track` axis.
+#[derive(Debug, Deserialize)]
+pub struct DistancePoint {
+    pub i: usize,
+    pub distance: f64,
+}
+
 /// `<name>.derived.json` — a contiguous window of GPS-derived channels (issue
 /// 3.6). Heading is reconstructed via libxrk's own `gps.ecef_velocity_to_enu`;
 /// the acceleration/yaw outputs match libxrk's stored `GPS_*` channels to

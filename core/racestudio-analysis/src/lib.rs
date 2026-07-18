@@ -61,8 +61,8 @@ pub use derived::{
 pub use error::AnalysisError;
 pub use fft::{apply_window, spectrum, Spectrum, Window};
 pub use laps::{
-    align_by_distance, align_by_time, distance_axis, segment_laps, Alignment, Lap, LapAxis,
-    LapChannel,
+    align_by_distance, align_by_time, cumulative_distance, distance_axis, segment_laps, Alignment,
+    Lap, LapAxis, LapChannel,
 };
 pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid};
 pub use stats::{channel_stats, stats_over_range, stats_per_lap, Stats};
