@@ -11,16 +11,16 @@ import RaceStudioCore
 /// only lays the results into a grid and colors the extrapolated ones.
 public struct ChannelTableView: View {
     private let model: ReadoutTableModel
-    private let cursor: WorkspaceCursor
+    private let cursorX: Double
     private let formatters: [ChannelID: ChannelFormatter]
     private let pinned: [ChannelID]
     private let referenceLap: LapID?
 
-    public init(model: ReadoutTableModel, cursor: WorkspaceCursor,
+    public init(model: ReadoutTableModel, cursorX: Double,
                 formatters: [ChannelID: ChannelFormatter], pinned: [ChannelID] = [],
                 referenceLap: LapID? = nil) {
         self.model = model
-        self.cursor = cursor
+        self.cursorX = cursorX
         self.formatters = formatters
         self.pinned = pinned
         self.referenceLap = referenceLap
@@ -36,7 +36,7 @@ public struct ChannelTableView: View {
 
     public var body: some View {
         // One lookup per render; SwiftUI diffs the stable cell ids.
-        let rows = model.cells(at: cursor).map { TableRow(channel: $0.first?.channel ?? ChannelID(""), cells: $0) }
+        let rows = model.cells(atX: cursorX).map { TableRow(channel: $0.first?.channel ?? ChannelID(""), cells: $0) }
         VStack(alignment: .leading, spacing: 12) {
             if !pinned.isEmpty {
                 pinnedReadouts(rows)

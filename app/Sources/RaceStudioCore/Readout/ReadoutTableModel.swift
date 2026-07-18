@@ -6,17 +6,6 @@ public struct ChannelID: Hashable, Sendable {
     public init(_ name: String) { self.name = name }
 }
 
-/// The shared workspace cursor position (issue 4.4; the full shared cursor is
-/// 4.7). It carries the x-position on the current axis; the readout's per-cell
-/// series are supplied already on that same basis by the caller.
-public struct WorkspaceCursor: Equatable, Sendable {
-    public let x: Double
-
-    public init(x: Double) {
-        self.x = x
-    }
-}
-
 /// The `(channel, lap)` key under which a cell's series is supplied (issue 4.4).
 public struct CellKey: Hashable, Sendable {
     public let channel: ChannelID
@@ -67,14 +56,16 @@ public struct ReadoutTableModel: Sendable {
         self.series = series
     }
 
-    /// The grid of cells at `cursor` (rows × columns). An empty channel list or
-    /// lap selection yields an empty table.
-    public func cells(at cursor: WorkspaceCursor) -> [[ReadoutCell]] {
+    /// The grid of cells at cursor x-position `x` on the series' axis (rows ×
+    /// columns). An empty channel list or lap selection yields an empty table.
+    /// The shared 4.7 ``WorkspaceCursor`` supplies `x` as its `timePosition` or
+    /// `distancePosition` for whichever axis the readout series are on.
+    public func cells(atX x: Double) -> [[ReadoutCell]] {
         guard !rows.isEmpty, !columns.isEmpty else { return [] }
         return rows.map { channel in
             columns.map { lap in
                 let readout = series[CellKey(channel: channel, lap: lap)]
-                    .map { ValueAtCursor.value(at: cursor.x, in: $0) }
+                    .map { ValueAtCursor.value(at: x, in: $0) }
                 return ReadoutCell(channel: channel, lap: lap, readout: readout)
             }
         }
