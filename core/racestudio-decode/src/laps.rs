@@ -461,6 +461,23 @@ mod tests {
     }
 
     #[test]
+    fn test_lapdata_new_constructor_and_best_lap() {
+        // The public constructor (used by the CSV importer, 5.2) selects the
+        // minimum-duration lap as best.
+        let data = LapData::new(vec![
+            Lap::new(0, 0.0, 60.0),
+            Lap::new(1, 60.0, 55.0),
+            Lap::new(2, 115.0, 58.0),
+        ]);
+        assert_eq!(data.len(), 3);
+        assert_eq!(data.best_lap_index(), Some(1), "fastest is lap 1 (55 s)");
+        assert!((data.best_lap().expect("best").duration_s() - 55.0).abs() < 1e-9);
+        assert!((data.laps()[2].end_time_s() - 173.0).abs() < 1e-9);
+        // No laps → no best lap.
+        assert_eq!(LapData::new(Vec::new()).best_lap_index(), None);
+    }
+
+    #[test]
     fn test_first_lap_origin_is_end_minus_duration() {
         // The first LAP marker's end_time (offset 16) minus its duration is the
         // recording origin. Two markers: only the first is used.

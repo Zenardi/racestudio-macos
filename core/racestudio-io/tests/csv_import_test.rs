@@ -52,6 +52,21 @@ fn test_aim_header_populates_session_metadata() {
     assert_eq!(m.series, "Fuji Practice");
     assert_eq!(m.log_date, "11/04/2025");
     assert_eq!(m.log_time, "15:50:07");
+    // datetime_utc is parsed from the raw date/time, like the .xrk decoder.
+    assert_eq!(m.datetime_utc, 1_762_271_407);
+}
+
+#[test]
+fn test_imported_channel_metadata_defaults() {
+    // Sample rate is derived from the grid interval; interpolate defaults to true
+    // (import cannot recover the per-channel hold/interpolate flag).
+    let session = read(AIM_CSV).expect("import");
+    let rpm = channel(&session, "RPM");
+    assert!(
+        (rpm.sample_rate_hz() - 20.0).abs() < 1e-9,
+        "0.05 s step → 20 Hz"
+    );
+    assert!(rpm.interpolate());
 }
 
 #[test]
@@ -105,6 +120,50 @@ fn test_generic_csv_without_unit_row_defaults_units() {
         session.channels().iter().all(|c| c.name() != "Time"),
         "the Time column is the axis, not a channel"
     );
+}
+
+#[test]
+fn test_numeric_label_column_is_not_a_unit_row() {
+    // A generic CSV whose first data row has a numeric leading column and a Time
+    // column at a NON-zero position: the first data row must not be mistaken for
+    // a unit row, and the named Time column (not column 0) is the axis.
+    let csv = "Marker,Time,Speed\n1,0.0,50\n2,0.1,55\n3,0.2,60\n";
+    let session = read(csv).expect("import");
+    let marker = channel(&session, "Marker");
+    assert_eq!(marker.samples().len(), 3, "no data row consumed as units");
+    assert_eq!(marker.samples()[0], (0.0, 1.0));
+    assert_eq!(
+        marker.samples()[2],
+        (200.0, 3.0),
+        "Time (col 1) drives the axis"
+    );
+    assert!(session.channels().iter().all(|c| c.name() != "Time"));
+}
+
+#[test]
+fn test_first_numeric_column_is_time_when_unnamed() {
+    // No column named "Time": the first all-numeric column becomes the axis.
+    let csv = "Elapsed,Speed\n0.0,50\n0.1,55\n";
+    let session = read(csv).expect("import");
+    let speed = channel(&session, "Speed");
+    assert_eq!(
+        speed.samples()[1].0,
+        100.0,
+        "Elapsed (col 0) is the time axis"
+    );
+    assert!(session.channels().iter().all(|c| c.name() != "Elapsed"));
+}
+
+#[test]
+fn test_all_empty_column_is_all_nan() {
+    let csv = "Time,A,B\n0.0,,1\n0.1,,2\n";
+    let session = read(csv).expect("import");
+    let a = channel(&session, "A");
+    assert!(
+        a.samples().iter().all(|&(_, v)| v.is_nan()),
+        "all cells blank → NaN"
+    );
+    assert_eq!(channel(&session, "B").samples()[1].1, 2.0);
 }
 
 #[test]
@@ -198,6 +257,40 @@ fn test_bad_time_value_returns_error() {
     // A non-numeric cell in the time column is reported too.
     let csv = "Time,A\n0.0,1\nx,2\n";
     assert!(matches!(read(csv), Err(ImportError::BadNumber { .. })));
+}
+
+#[test]
+fn test_non_finite_time_returns_error() {
+    // `f64::parse` accepts "nan"/"inf"; a non-finite time would evade the
+    // monotonic check, so it is rejected rather than silently stored.
+    for bad in ["nan", "inf", "1e400"] {
+        let csv = format!("Time,A\n0.0,1\n{bad},2\n");
+        assert!(
+            matches!(read(&csv), Err(ImportError::BadNumber { .. })),
+            "time {bad:?} must be rejected"
+        );
+    }
+}
+
+#[test]
+fn test_duplicate_leading_timestamp_still_derives_rate() {
+    // A repeated first timestamp (allowed by the non-strict monotonic check) must
+    // not zero the derived sample rate.
+    let csv = "Time,A\n0.0,1\n0.0,2\n0.05,3\n";
+    let session = read(csv).expect("import");
+    assert!((channel(&session, "A").sample_rate_hz() - 20.0).abs() < 1e-9);
+}
+
+#[test]
+fn test_io_error_from_failing_reader() {
+    struct FailReader;
+    impl std::io::Read for FailReader {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::other("boom"))
+        }
+    }
+    assert!(matches!(read_csv(FailReader), Err(ImportError::Io(_))));
+    assert!(ImportError::Io("boom".into()).to_string().contains("boom"));
 }
 
 #[test]
@@ -305,6 +398,15 @@ fn test_import_reference_matches_session_golden() {
     let golden_path = support::fixtures_dir()
         .join("golden")
         .join("fuji_0033.session.json");
+
+    // `RS_WRITE_GOLDEN=1` blesses the current output (used by
+    // scripts/gen_session_golden.sh); the same function then asserts against it,
+    // so the generator and the oracle can never drift.
+    if std::env::var_os("RS_WRITE_GOLDEN").is_some() {
+        std::fs::write(&golden_path, &summary).expect("write session golden");
+        return;
+    }
+
     let expected = std::fs::read_to_string(&golden_path).unwrap_or_else(|e| {
         panic!(
             "missing session golden {} ({e}); regenerate with scripts/gen_session_golden.sh",

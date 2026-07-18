@@ -6,16 +6,13 @@
 //! `.xrk`: a `km/h` value on a speed-like channel is divided by 3.6 and its unit
 //! relabelled `m/s`; every other channel passes through unchanged.
 
-/// m/s ↔ km/h — must match `csv_export::MS_TO_KMH`.
-const MS_TO_KMH: f64 = 3.6;
-
-/// The output channel names the 5.1 writer stores in km/h (scaled from m/s):
-/// `GPS Speed` and `GPS SpdAccuracy`. Import reverses the scale for these.
-const KMH_CHANNELS: &[&str] = &["GPS Speed", "GPS SpdAccuracy"];
+// The scale factor and the km/h column set are owned by the writer (5.1), so the
+// two paths cannot drift; a consistency test pins the set to `GPS_COLUMN_MAP`.
+use crate::csv_export::{KMH_OUTPUT_CHANNELS, MS_TO_KMH};
 
 /// Whether `(name, unit)` is a km/h speed-like channel that import rescales.
 fn is_scaled_speed(name: &str, unit: &str) -> bool {
-    KMH_CHANNELS.contains(&name) && unit.eq_ignore_ascii_case("km/h")
+    KMH_OUTPUT_CHANNELS.contains(&name) && unit.eq_ignore_ascii_case("km/h")
 }
 
 /// Normalize a value for `(name, unit)`: a km/h speed-like channel is converted

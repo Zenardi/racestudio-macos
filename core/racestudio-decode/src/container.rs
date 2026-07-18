@@ -326,7 +326,11 @@ pub(crate) fn nullterm(bytes: &[u8]) -> String {
 
 /// `MM/DD/YYYY` + `HH:MM:SS` (logger wall-clock, treated as UTC) -> epoch
 /// seconds. Returns 0 when either field is missing or unparseable.
-fn parse_datetime_utc(date: &str, time: &str) -> i64 {
+///
+/// Public so a consumer reconstructing [`Metadata`] from another source (e.g. the
+/// CSV importer, 5.2) can populate `datetime_utc` the same way the decoder does.
+#[must_use]
+pub fn parse_datetime_utc(date: &str, time: &str) -> i64 {
     let date: Vec<&str> = date.split('/').collect();
     let time: Vec<&str> = time.split(':').collect();
     if date.len() != 3 || time.len() != 3 {

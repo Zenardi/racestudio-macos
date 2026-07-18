@@ -30,7 +30,7 @@ pub fn read_csv<R: Read>(mut reader: R) -> Result<Session, ImportError> {
     let mut bytes = Vec::new();
     reader
         .read_to_end(&mut bytes)
-        .map_err(|_| ImportError::Empty)?;
+        .map_err(|err| ImportError::Io(err.to_string()))?;
     let text = String::from_utf8_lossy(&bytes);
     parse(&text)
 }
@@ -90,6 +90,10 @@ fn parse_aim(rows: &[Vec<String>], start: usize) -> Result<Session, ImportError>
         i += 1;
     }
 
+    // Populate the epoch timestamp from the raw date/time exactly as the decoder
+    // does, so an imported AiM session is not stuck at 1970.
+    meta.datetime_utc = racestudio_decode::parse_datetime_utc(&meta.log_date, &meta.log_time);
+
     // Skip the blank separator(s) to the name row.
     while i < rows.len() && rows[i].is_empty() {
         i += 1;
@@ -119,11 +123,12 @@ fn build_session(
     let names = body.first().ok_or(ImportError::NoHeader)?.1;
     let ncols = names.len();
 
-    // A unit row is a row whose first cell is non-numeric (AiM's "s"); otherwise
-    // the row after the names is already data (a generic CSV without units).
+    // A unit row is a row with NO numeric cell (AiM's "s","km/h",…); a data row
+    // always has at least a numeric time value, so this never mistakes a data row
+    // with a leading text/label column for units.
     let has_units = body
         .get(1)
-        .is_some_and(|(_, row)| row.first().is_some_and(|f| f.parse::<f64>().is_err()));
+        .is_some_and(|(_, row)| !row.iter().any(|f| f.parse::<f64>().is_ok()));
     let units: Option<&Vec<String>> = if has_units { Some(body[1].1) } else { None };
     let data = &body[if has_units { 2 } else { 1 }..];
 
@@ -147,6 +152,14 @@ fn build_session(
             line,
             text: cell.clone(),
         })?;
+        // `f64::from_str` accepts "nan"/"inf"; a non-finite time would slip past
+        // the monotonic check (NaN comparisons are always false), so reject it.
+        if !t.is_finite() {
+            return Err(ImportError::BadNumber {
+                line,
+                text: cell.clone(),
+            });
+        }
         if t < prev {
             return Err(ImportError::NonMonotonicTime { line });
         }
@@ -207,12 +220,13 @@ fn find_time_column(names: &[String], data: &[(usize, &Vec<String>)]) -> Option<
     })
 }
 
-/// Sample rate (Hz) from the first grid interval; `0` when under two samples.
+/// Sample rate (Hz) from the first strictly-increasing grid interval — robust to
+/// a leading duplicate timestamp; `0` when no interval increases.
 fn derive_sample_rate(times_ms: &[f64]) -> f64 {
-    match times_ms {
-        [a, b, ..] if b > a => 1000.0 / (b - a),
-        _ => 0.0,
-    }
+    times_ms
+        .windows(2)
+        .find_map(|w| (w[1] > w[0]).then(|| 1000.0 / (w[1] - w[0])))
+        .unwrap_or(0.0)
 }
 
 /// Decimal places in a numeric cell's text (`"36.0000"` → 4, `"3000"` → 0).

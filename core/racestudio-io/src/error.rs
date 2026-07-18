@@ -53,6 +53,8 @@ impl From<std::io::Error> for IoError {
 /// enum; no input ever panics.
 #[derive(Debug, PartialEq)]
 pub enum ImportError {
+    /// The reader failed (an I/O error); carries the error's message.
+    Io(String),
     /// The input had no rows (or only blank lines).
     Empty,
     /// No usable header (name) row was found.
@@ -85,6 +87,7 @@ pub enum ImportError {
 impl fmt::Display for ImportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ImportError::Io(msg) => write!(f, "failed to read CSV: {msg}"),
             ImportError::Empty => write!(f, "the CSV input was empty"),
             ImportError::NoHeader => write!(f, "no header (name) row found"),
             ImportError::RaggedRow {

@@ -677,6 +677,23 @@ mod tests {
     }
 
     #[test]
+    fn test_channel_and_meta_constructors() {
+        // The public constructors (used by the CSV importer, 5.2) round-trip
+        // through the accessors, including NaN sample values.
+        let meta = ChannelMeta::new("RPM".to_string(), "rpm".to_string(), 20.0, 2, true);
+        assert_eq!(meta.name(), "RPM");
+        assert_eq!(meta.unit(), "rpm");
+        assert!((meta.sample_rate_hz() - 20.0).abs() < 1e-9);
+        assert_eq!(meta.decimals(), 2);
+        assert!(meta.interpolate());
+
+        let channel = Channel::new(meta, vec![(0.0, 3000.0), (50.0, f64::NAN)]);
+        assert_eq!(channel.name(), "RPM");
+        assert_eq!(channel.samples().len(), 2);
+        assert!(channel.samples()[1].1.is_nan());
+    }
+
+    #[test]
     fn test_single_channel_int_samples() {
         // A CNF defining one i32 channel (unit rpm, 100 Hz) + three (S samples.
         let mut cnf = frame("CHS", &chs(0, "RPM", 15, 0, 4, 10_000));

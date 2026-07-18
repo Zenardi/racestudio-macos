@@ -66,6 +66,13 @@ else
   # Full gate: run the whole harness, enabling the script self-test.
   RS_REQUIRE_CORPUS=1 RS_RUN_E2E_SCRIPT_TEST=1 \
     cargo test -p racestudio-decode --test golden_e2e_test
+
+  # Arm the same non-vacuous guard for the CSV import/export corpus tests (5.1 /
+  # 5.2): with RS_REQUIRE_CORPUS set, an absent fixture/reference is a hard
+  # failure, so a fetch regression can't let these pass green.
+  echo "==> [e2e 4b/4] CSV import/export corpus conformance (require fixtures)"
+  RS_REQUIRE_CORPUS=1 \
+    cargo test -p racestudio-io --test csv_export_test --test csv_import_test
 fi
 
 if [ "$GOLDENS_ONLY" -eq 1 ]; then
