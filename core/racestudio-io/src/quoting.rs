@@ -32,9 +32,11 @@ pub fn quote_all(fields: &[&str]) -> String {
 /// format (e.g. `193611.0` → `"3:13.611"`).
 #[must_use]
 pub fn fmt_seg_time(ms: f64) -> String {
-    let total = ms / 1000.0;
-    let minutes = (total / 60.0).floor() as i64;
-    let seconds = total - (minutes as f64) * 60.0;
+    // Round to whole milliseconds first, then split, so the seconds field can
+    // never round up to `60.000` (e.g. `59_999.6` → `1:00.000`, not `0:60.000`).
+    let total_ms = ms.round().max(0.0) as i64;
+    let minutes = total_ms / 60_000;
+    let seconds = (total_ms % 60_000) as f64 / 1000.0;
     // `{:06.3}` → zero-padded width 6 (SS.mmm) at 3 decimals.
     format!("{minutes}:{seconds:06.3}")
 }

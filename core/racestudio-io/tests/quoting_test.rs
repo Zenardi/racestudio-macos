@@ -55,3 +55,10 @@ fn test_fmt_seg_time_zero() {
 fn test_fmt_seg_time_whole_minutes() {
     assert_eq!(fmt_seg_time(120_000.0), "2:00.000");
 }
+
+#[test]
+fn test_fmt_seg_time_rounds_up_across_a_minute() {
+    // A fractional near-minute rounds the whole value up rather than emitting the
+    // illegal "0:60.000".
+    assert_eq!(fmt_seg_time(59_999.6), "1:00.000");
+}

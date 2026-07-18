@@ -148,15 +148,22 @@ pub fn metadata_frames() -> Vec<u8> {
     out
 }
 
-/// Write `bytes` to a unique temp `.xrk` and decode it into a real `Session`.
+/// Write `bytes` to a unique temp `.xrk` and decode it into a real `Session`. The
+/// temp file is removed via an RAII guard, so it is cleaned up even if
+/// `decode_session` panics.
 pub fn decode_bytes(bytes: &[u8]) -> Session {
+    struct TempFile(std::path::PathBuf);
+    impl Drop for TempFile {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     let path = std::env::temp_dir().join(format!("rs_io_synth_{}_{id}.xrk", std::process::id()));
     std::fs::write(&path, bytes).expect("write synthetic .xrk");
-    let session = decode_session(&path).expect("decode synthetic session");
-    let _ = std::fs::remove_file(&path);
-    session
+    let _guard = TempFile(path.clone());
+    decode_session(&path).expect("decode synthetic session")
 }
 
 /// A session with metadata, one analog channel (`RPM`), six moving GPS fixes at a
@@ -213,6 +220,31 @@ pub fn no_gps_session() -> Session {
     decode_bytes(&file)
 }
 
+/// A session whose samples begin at raw tc 1000 ms and whose first lap starts at
+/// raw 1500 ms — so tc 1000..1400 is a pre-lap "out-lap". The recording origin is
+/// therefore `min(1500, 1000) = 1000`, distinct from the first-lap origin (1500),
+/// exercising origin normalization (non-zero) and the beacon offset (500 ms).
+pub fn offset_origin_session() -> Session {
+    let mut file = Vec::new();
+    file.extend(frame(
+        "CNF",
+        &frame("CHS", &chs(0, "RPM", 15, 0, 4, 100_000)),
+    ));
+    file.extend(metadata_frames());
+    for i in 0..11i32 {
+        let tc = 1000 + i * 100; // 1000..2000
+        file.extend(frame(
+            "GPS",
+            &gps_record(tc, 35.0, 139.0, 100.0, (1000, 0, 0), 200, 100, 140, 3, 8),
+        ));
+        file.extend(data_s(0, tc, &(3000 + i * 100).to_le_bytes()));
+    }
+    // One 0.4 s lap ending at raw 1900 ms → first-lap origin 1500, beacon at
+    // 0.4 s (duration) + 0.5 s (origin offset) = 0.9 s on the data axis.
+    file.extend(frame("LAP", &lap_marker(0, 1, 400, 1900)));
+    decode_bytes(&file)
+}
+
 /// A no-GPS session with a valid `RPM` channel plus a `MATH` channel whose
 /// samples are all `NaN` (an f32 NaN), so its resampled cells are written empty.
 pub fn nan_channel_session() -> Session {
@@ -225,6 +257,21 @@ pub fn nan_channel_session() -> Session {
         file.extend(data_s(0, i * 100, &(3000 + i * 100).to_le_bytes()));
         file.extend(data_s(1, i * 100, &f32::NAN.to_le_bytes()));
     }
+    decode_bytes(&file)
+}
+
+/// A session with a step channel (`STEP`, i32 decoder → held) and a float channel
+/// (`SMOOTH`, f32 decoder → interpolated), each stepping 10 → 20 over tc 0..100,
+/// so a mid-grid point distinguishes sample-hold from linear interpolation.
+pub fn hold_vs_interp_session() -> Session {
+    let mut cnf = frame("CHS", &chs(0, "STEP", 6, 0, 4, 100_000)); // i32 → held
+    cnf.extend(frame("CHS", &chs(1, "SMOOTH", 6, 6, 4, 100_000))); // f32 → interpolated
+    let mut file = frame("CNF", &cnf);
+    file.extend(metadata_frames());
+    file.extend(data_s(0, 0, &10i32.to_le_bytes()));
+    file.extend(data_s(0, 100, &20i32.to_le_bytes()));
+    file.extend(data_s(1, 0, &10.0f32.to_le_bytes()));
+    file.extend(data_s(1, 100, &20.0f32.to_le_bytes()));
     decode_bytes(&file)
 }
 

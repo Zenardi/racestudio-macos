@@ -46,6 +46,7 @@ pub struct GpsChannel {
     name: String,
     kind: GpsChannelKind,
     unit: String,
+    interpolate: bool,
     samples: Vec<(f64, f64)>,
 }
 
@@ -67,6 +68,14 @@ impl GpsChannel {
     #[must_use]
     pub fn unit(&self) -> &str {
         &self.unit
+    }
+
+    /// Whether the channel is linearly interpolated (`true`, matching libxrk for
+    /// position/speed/accel/accuracy) or step-held (`false`, for the discrete
+    /// satellite count, fix type, and pDOP). Governs resampling between fixes.
+    #[must_use]
+    pub fn interpolate(&self) -> bool {
+        self.interpolate
     }
 
     /// The channel's samples as `(timecode_ms, value)` pairs.
@@ -314,10 +323,11 @@ fn build_gps(raw: &[u8]) -> GpsData {
 
     let (inline, lateral, yaw) = derived_channels(&timecodes, &speed, &heading);
 
-    let mk = |name: &str, kind, unit: &str, values: &[f64]| GpsChannel {
+    let mk = |name: &str, kind, unit: &str, interpolate: bool, values: &[f64]| GpsChannel {
         name: name.to_string(),
         kind,
         unit: unit.to_string(),
+        interpolate,
         samples: timecodes
             .iter()
             .zip(values)
@@ -325,19 +335,21 @@ fn build_gps(raw: &[u8]) -> GpsData {
             .collect(),
     };
     use GpsChannelKind::{Computed, Raw};
+    // libxrk interpolates position/speed/accel/accuracy; the discrete satellite
+    // count, fix type, and pDOP are step-held.
     let channels = vec![
-        mk("GPS Latitude", Raw, "deg", &lat),
-        mk("GPS Longitude", Raw, "deg", &lon),
-        mk("GPS Altitude", Raw, "m", &alt),
-        mk("GPS Speed", Raw, "m/s", &speed),
-        mk("GPS_Satellites", Raw, "", &sats),
-        mk("GPS_Fix", Raw, "", &fix),
-        mk("GPS_pDOP", Raw, "", &pdop),
-        mk("GPS_Position_Accuracy", Raw, "m", &pos_acc),
-        mk("GPS_Velocity_Accuracy", Raw, "m/s", &vel_acc),
-        mk("GPS_InlineAcc", Computed, "g", &inline),
-        mk("GPS_LateralAcc", Computed, "g", &lateral),
-        mk("GPS_Yaw_Rate", Computed, "deg/s", &yaw),
+        mk("GPS Latitude", Raw, "deg", true, &lat),
+        mk("GPS Longitude", Raw, "deg", true, &lon),
+        mk("GPS Altitude", Raw, "m", true, &alt),
+        mk("GPS Speed", Raw, "m/s", true, &speed),
+        mk("GPS_Satellites", Raw, "", false, &sats),
+        mk("GPS_Fix", Raw, "", false, &fix),
+        mk("GPS_pDOP", Raw, "", false, &pdop),
+        mk("GPS_Position_Accuracy", Raw, "m", true, &pos_acc),
+        mk("GPS_Velocity_Accuracy", Raw, "m/s", true, &vel_acc),
+        mk("GPS_InlineAcc", Computed, "g", true, &inline),
+        mk("GPS_LateralAcc", Computed, "g", true, &lateral),
+        mk("GPS_Yaw_Rate", Computed, "deg/s", true, &yaw),
     ];
 
     GpsData { fixes, channels }
@@ -601,6 +613,15 @@ mod tests {
         assert_eq!(data.channel("GPS Latitude").unwrap().name(), "GPS Latitude");
         assert_eq!(data.channel("GPS Latitude").unwrap().unit(), "deg");
         assert_eq!(data.channel("GPS Speed").unwrap().unit(), "m/s");
+        // Position/speed/accel interpolate; the discrete count/fix/pDOP are held.
+        assert!(data.channel("GPS Speed").unwrap().interpolate());
+        assert!(data.channel("GPS_LateralAcc").unwrap().interpolate());
+        for held in ["GPS_Satellites", "GPS_Fix", "GPS_pDOP"] {
+            assert!(
+                !data.channel(held).unwrap().interpolate(),
+                "{held} is step-held"
+            );
+        }
         assert_eq!(data.channels().len(), 12);
         assert!(data.channel("nope").is_none());
         assert!(!data.is_empty());

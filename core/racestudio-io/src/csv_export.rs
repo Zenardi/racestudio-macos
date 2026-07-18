@@ -105,51 +105,91 @@ pub fn write_aim_csv<W: Write>(
         return Err(IoError::NoChannels);
     }
 
-    // Sample timecodes are stored raw; normalize to the recording origin (as
-    // libxrk does) so the first row is t=0 and the axis matches RaceStudio's.
-    let origin = session.time_origin_ms() as f64;
-
-    // The grid spans the whole recording: end = the latest last-timecode across
-    // every channel (analog + GPS), so the tail after the final lap is kept.
-    let mut duration_ms = 0.0_f64;
+    // Sample timecodes are stored raw. The recording origin (libxrk's
+    // `time_offset`) is the earliest of the first lap's start and any sample
+    // timecode; the grid is zeroed there. `latest` gives the recording length.
+    let mut earliest = f64::INFINITY;
+    let mut latest = f64::NEG_INFINITY;
     for channel in analog {
+        if let Some(&(t, _)) = channel.samples().first() {
+            earliest = earliest.min(t);
+        }
         if let Some(&(t, _)) = channel.samples().last() {
-            duration_ms = duration_ms.max(t - origin);
+            latest = latest.max(t);
         }
     }
     if let Some(g) = gps {
         for channel in g.channels() {
+            if let Some(&(t, _)) = channel.samples().first() {
+                earliest = earliest.min(t);
+            }
             if let Some(&(t, _)) = channel.samples().last() {
-                duration_ms = duration_ms.max(t - origin);
+                latest = latest.max(t);
             }
         }
     }
-    duration_ms = duration_ms.floor();
-
-    let grid = uniform_grid_ms(duration_ms, rate);
-    let n = grid.len();
-    let grid_f: Vec<f64> = grid.iter().map(|&t| t as f64).collect();
-
-    // Resample a channel onto the grid: linear interpolation over the channel's
-    // own (origin-normalized) timecodes, clamped at the ends — reusing the 3.3
-    // resampler (the axis is time rather than distance, but the interpolation is
-    // identical). Decoded timecodes are strictly increasing, so the monotonic
-    // precondition holds; a (never-expected) violation yields NaN holes, not a
-    // panic.
-    let resample = |samples: &[(f64, f64)]| -> Vec<f64> {
-        let times: Vec<f64> = samples.iter().map(|&(t, _)| t - origin).collect();
-        to_distance_grid(samples, &times, &grid_f).unwrap_or_else(|_| vec![f64::NAN; n])
+    let earliest = if earliest.is_finite() { earliest } else { 0.0 };
+    let first_lap_origin = session.first_lap_origin_ms().map(|o| o as f64);
+    // Raw timecodes are non-negative, so the origin is too; clamping at 0 also
+    // stops a corrupt lap marker (duration > end_time → negative origin) from
+    // exploding the grid into a multi-gigabyte allocation.
+    let origin = first_lap_origin
+        .map_or(earliest, |o| o.min(earliest))
+        .max(0.0);
+    // Laps are cumulative from the first lap's start; when a sample predates the
+    // first lap the data axis starts earlier, so beacons carry that extra offset.
+    let beacon_offset_ms = first_lap_origin.map_or(0.0, |o| o - origin);
+    let duration_ms = if latest.is_finite() {
+        (latest - origin).floor()
+    } else {
+        0.0
     };
 
-    // GPS latitude/longitude are resampled once and reused for both their columns
-    // and the synthesized heading.
-    let lat = gps
+    let grid_f: Vec<f64> = uniform_grid_ms(duration_ms, rate)
+        .into_iter()
+        .map(|t| t as f64)
+        .collect();
+    let n = grid_f.len();
+
+    // Resample a channel onto the grid, in origin-normalized time. Interpolated
+    // channels use linear interpolation (reusing the 3.3 resampler, clamped at the
+    // ends); step channels (integer counters, satellite count) are sample-held
+    // (zero-order hold) — matching libxrk's `resample_to_timecodes`. Decoded
+    // timecodes are strictly increasing; a (never-expected) non-monotonic series
+    // yields NaN holes rather than a panic.
+    let resample = |samples: &[(f64, f64)], interpolate: bool| -> Vec<f64> {
+        if samples.is_empty() {
+            return vec![f64::NAN; n];
+        }
+        if interpolate {
+            let times: Vec<f64> = samples.iter().map(|&(t, _)| t - origin).collect();
+            to_distance_grid(samples, &times, &grid_f).unwrap_or_else(|_| vec![f64::NAN; n])
+        } else {
+            grid_f
+                .iter()
+                .map(|&g| {
+                    // The last sample at or before g; leading grid points hold the
+                    // first sample.
+                    let i = samples.partition_point(|&(t, _)| t - origin <= g);
+                    samples[i.saturating_sub(1)].1
+                })
+                .collect()
+        }
+    };
+
+    // GPS latitude/longitude are resampled once (interpolated) and reused for both
+    // their own columns and the synthesized heading.
+    let mut lat = gps
         .and_then(|g| g.channel("GPS Latitude"))
-        .map(|c| resample(c.samples()));
-    let lon = gps
+        .map(|c| resample(c.samples(), c.interpolate()));
+    let mut lon = gps
         .and_then(|g| g.channel("GPS Longitude"))
-        .map(|c| resample(c.samples()));
+        .map(|c| resample(c.samples(), c.interpolate()));
     let has_gps = lat.is_some() && lon.is_some();
+    let mut heading = match (&lat, &lon) {
+        (Some(la), Some(lo)) => Some(compute_heading(la, lo)),
+        _ => None,
+    };
 
     let mut columns: Vec<Column> = Vec::new();
     if let Some(g) = gps {
@@ -158,11 +198,13 @@ pub fn write_aim_csv<W: Write>(
         // column.
         for &(src, out, unit, scale, decimals) in GPS_COLUMN_MAP {
             if let Some(channel) = g.channel(src) {
-                // Reuse the already-resampled lat/lon (scale is 1.0 for both).
+                // Move the already-resampled lat/lon into their columns (scale 1.0);
+                // every other channel resamples here, honoring its hold/interpolate
+                // policy, and is scaled.
                 let values = match src {
-                    "GPS Latitude" => lat.clone().unwrap_or_else(|| resample(channel.samples())),
-                    "GPS Longitude" => lon.clone().unwrap_or_else(|| resample(channel.samples())),
-                    _ => resample(channel.samples())
+                    "GPS Latitude" => lat.take().unwrap_or_default(),
+                    "GPS Longitude" => lon.take().unwrap_or_default(),
+                    _ => resample(channel.samples(), channel.interpolate())
                         .into_iter()
                         .map(|v| v * scale)
                         .collect(),
@@ -175,11 +217,11 @@ pub fn write_aim_csv<W: Write>(
                 });
                 // Insert the synthesized heading directly after GPS Speed.
                 if out == "GPS Speed" {
-                    if let (Some(la), Some(lo)) = (&lat, &lon) {
+                    if let Some(values) = heading.take() {
                         columns.push(Column {
                             name: "GPS Heading".to_string(),
                             unit: "deg".to_string(),
-                            values: compute_heading(la, lo),
+                            values,
                             decimals: 4,
                         });
                     }
@@ -198,7 +240,7 @@ pub fn write_aim_csv<W: Write>(
         columns.push(Column {
             name: channel.name().to_string(),
             unit,
-            values: resample(channel.samples()),
+            values: resample(channel.samples(), channel.interpolate()),
             decimals: channel.decimals() as usize,
         });
     }
@@ -211,7 +253,15 @@ pub fn write_aim_csv<W: Write>(
         duration_s: duration_ms / 1000.0,
     };
 
-    write_csv(session, w, rate, duration_ms, &grid_f, &columns)?;
+    write_csv(
+        session,
+        w,
+        rate,
+        duration_ms,
+        beacon_offset_ms,
+        &grid_f,
+        &columns,
+    )?;
     Ok(report)
 }
 
@@ -221,6 +271,7 @@ fn write_csv<W: Write>(
     w: &mut W,
     rate: f64,
     duration_ms: f64,
+    beacon_offset_ms: f64,
     grid_f: &[f64],
     columns: &[Column],
 ) -> Result<(), IoError> {
@@ -239,7 +290,12 @@ fn write_csv<W: Write>(
     write_row(w, &["Segment", "Session"])?;
 
     let laps = session.laps().laps();
-    let beacons: Vec<String> = laps.iter().map(|l| fmt_g(l.end_time_s())).collect();
+    // Beacons live on the data axis (zeroed at the recording origin); lap end
+    // times are cumulative from the first lap's start, so add the offset between.
+    let beacons: Vec<String> = laps
+        .iter()
+        .map(|l| fmt_g(l.end_time_s() + beacon_offset_ms / 1000.0))
+        .collect();
     write_row(w, &prepend("Beacon Markers", &beacons))?;
     let seg_times: Vec<String> = laps
         .iter()

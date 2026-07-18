@@ -4,6 +4,18 @@
 //! resolve acceleration direction. This computes the great-circle bearing
 //! between consecutive fixes, holding the last valid heading across
 //! near-stationary segments — a direct port of `xrk2csv.compute_heading`.
+//!
+//! This deliberately differs from `racestudio_analysis::derived::heading`, which
+//! derives a bearing from per-fix ECEF velocity (unavailable at export time). The
+//! export must reproduce `xrk2csv`'s lat/long bearing with its stationary-mask +
+//! forward/back-fill contract, so the two are not interchangeable.
+
+/// Earth radius (metres) used for the equirectangular stationary-mask distance.
+const EARTH_RADIUS_M: f64 = 6_371_000.0;
+
+/// Segments shorter than this (metres) are treated as stationary — their bearing
+/// is undefined and held at the last valid heading.
+const STATIONARY_M: f64 = 0.05;
 
 /// Great-circle bearing (degrees, `0..360`) from each fix to the next, aligned
 /// to `lat`/`lon` (which must be equal-length and index-aligned).
@@ -12,13 +24,6 @@
 /// and are held at the last valid heading (forward-fill, then back-fill any
 /// leading gap); the result is never `NaN` (holes collapse to `0`). Fewer than
 /// two fixes yields all-zero.
-/// Earth radius (metres) used for the equirectangular stationary-mask distance.
-const EARTH_RADIUS_M: f64 = 6_371_000.0;
-
-/// Segments shorter than this (metres) are treated as stationary — their bearing
-/// is undefined and held at the last valid heading.
-const STATIONARY_M: f64 = 0.05;
-
 #[must_use]
 pub fn compute_heading(lat: &[f64], lon: &[f64]) -> Vec<f64> {
     let n = lat.len().min(lon.len());

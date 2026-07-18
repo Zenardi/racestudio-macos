@@ -12,10 +12,10 @@
 use std::path::Path;
 
 use crate::channels::{decode_channels, Channel};
-use crate::container::{open_container, Container, Metadata};
+use crate::container::{open_container, Metadata};
 use crate::error::DecodeError;
 use crate::gps::{decode_gps, GpsData};
-use crate::laps::{decode_laps, LapData};
+use crate::laps::{decode_laps_and_origin, LapData};
 
 /// A fully decoded `.xrk` session: the container [`Metadata`] plus every decoded
 /// layer — [`Channel`]s (1.3), [`GpsData`] (1.4), and [`LapData`] (1.5).
@@ -30,7 +30,7 @@ pub struct Session {
     channels: Vec<Channel>,
     gps: Option<GpsData>,
     laps: LapData,
-    time_origin_ms: i64,
+    first_lap_origin_ms: Option<i64>,
 }
 
 impl Session {
@@ -58,14 +58,18 @@ impl Session {
         &self.laps
     }
 
-    /// The raw logger timecode (ms) of the recording origin — the earliest of the
-    /// first lap's start and every channel's first sample, matching libxrk's
-    /// `time_offset`. Channel/GPS sample timecodes are stored raw; a consumer that
-    /// needs a session-relative axis (e.g. the AiM CSV export, 5.1) subtracts this.
-    /// `0` when the session has no laps and no samples.
+    /// The raw logger timecode (ms) at which lap timing began — the first LAP
+    /// marker's `end_time − duration` — or `None` when the session has no laps.
+    ///
+    /// Channel/GPS sample timecodes are stored **raw**. A consumer that needs a
+    /// session-relative axis (e.g. the AiM CSV export, 5.1) derives the recording
+    /// origin as `min(first_lap_origin, earliest sample timecode)` — matching
+    /// libxrk's `time_offset` — and subtracts it. Exposing the raw lap origin
+    /// (rather than a pre-combined offset) keeps this a decoded fact and leaves
+    /// the axis policy to the consumer.
     #[must_use]
-    pub fn time_origin_ms(&self) -> i64 {
-        self.time_origin_ms
+    pub fn first_lap_origin_ms(&self) -> Option<i64> {
+        self.first_lap_origin_ms
     }
 }
 
@@ -98,33 +102,13 @@ pub fn decode_session(path: impl AsRef<Path>) -> Result<Session, DecodeError> {
     let container = open_container(path)?;
     let channels = decode_channels(&container)?;
     let gps = decode_gps(&container)?;
-    let laps = decode_laps(&container)?;
-    let time_origin_ms = compute_time_origin(&container, &channels, gps.as_ref());
+    // One walk yields both the laps and the raw first-lap origin.
+    let (laps, first_lap_origin_ms) = decode_laps_and_origin(&container)?;
     Ok(Session {
         metadata: container.metadata().clone(),
         channels,
         gps,
         laps,
-        time_origin_ms,
+        first_lap_origin_ms,
     })
-}
-
-/// The recording origin (raw ms): the minimum of the first lap's start and every
-/// channel's / GPS stream's first sample timecode — libxrk's `time_offset`.
-fn compute_time_origin(container: &Container, channels: &[Channel], gps: Option<&GpsData>) -> i64 {
-    let mut candidates: Vec<i64> = Vec::new();
-    if let Some(origin) = crate::laps::first_lap_origin_ms(container) {
-        candidates.push(origin);
-    }
-    for channel in channels {
-        if let Some(&(t, _)) = channel.samples().first() {
-            candidates.push(t as i64);
-        }
-    }
-    if let Some(gps) = gps {
-        if let Some(fix) = gps.fixes().first() {
-            candidates.push(fix.timecode_ms as i64);
-        }
-    }
-    candidates.into_iter().min().unwrap_or(0)
 }

@@ -112,22 +112,28 @@ impl LapData {
 /// [`DecodeError::TruncatedLaps`] if a LAP marker is too short to hold its
 /// timing fields. Malformed input never panics.
 pub fn decode_laps(container: &Container) -> Result<LapData, DecodeError> {
+    Ok(decode_laps_and_origin(container)?.0)
+}
+
+/// Decode the lap timing **and** the raw first-lap origin in a single walk.
+///
+/// The origin is the first LAP marker's `end_time − duration` (raw logger ms) —
+/// libxrk's primary `time_offset` candidate, the recording origin the AiM CSV
+/// export (5.1) normalizes to; `None` when the container has no LAP markers.
+/// [`decode_laps`] is the thin public wrapper; [`decode_session`](crate::decode_session)
+/// uses this to avoid walking the message stream twice.
+///
+/// # Errors
+/// [`DecodeError::TruncatedLaps`] if a LAP marker is too short.
+pub(crate) fn decode_laps_and_origin(
+    container: &Container,
+) -> Result<(LapData, Option<i64>), DecodeError> {
     let mut gatherer = Gatherer::default();
     gatherer.walk(container.raw(), true);
     if gatherer.truncated {
         return Err(DecodeError::TruncatedLaps);
     }
-    Ok(build_laps(&gatherer.markers))
-}
-
-/// The raw logger timecode (ms) at which lap timing began — the first LAP
-/// marker's `end_time − duration`. This is libxrk's primary `time_offset`
-/// candidate: the recording origin the AiM CSV export (5.1) normalizes to.
-/// `None` when the container has no LAP markers.
-pub(crate) fn first_lap_origin_ms(container: &Container) -> Option<i64> {
-    let mut gatherer = Gatherer::default();
-    gatherer.walk(container.raw(), true);
-    gatherer.first_origin
+    Ok((build_laps(&gatherer.markers), gatherer.first_origin))
 }
 
 /// Walks the message stream collecting `(segment, lap, duration_ms)` from every
@@ -451,6 +457,21 @@ mod tests {
         let mut gatherer = Gatherer::default();
         gatherer.walk(&frame("RCR", b"BOB\0"), true);
         assert_eq!(gatherer.first_origin, None);
+    }
+
+    #[test]
+    fn test_first_lap_origin_uses_first_marker_regardless_of_segment() {
+        // A leading split (segment 1) marker still sets the origin — matching
+        // libxrk, which caches the first LAP message of any segment.
+        let mut split = lap_marker(1, 0, 5_000);
+        split[16..20].copy_from_slice(&12_000u32.to_le_bytes()); // end_time
+        let mut gatherer = Gatherer::default();
+        gatherer.walk(&frame("LAP", &split), true);
+        assert_eq!(
+            gatherer.first_origin,
+            Some(7_000),
+            "12000 − 5000, from a segment-1 marker"
+        );
     }
 
     #[test]

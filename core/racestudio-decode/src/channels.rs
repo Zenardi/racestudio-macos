@@ -43,6 +43,7 @@ pub struct ChannelMeta {
     unit: String,
     sample_rate_hz: f64,
     decimals: u8,
+    interpolate: bool,
 }
 
 impl ChannelMeta {
@@ -70,6 +71,15 @@ impl ChannelMeta {
     #[must_use]
     pub fn decimals(&self) -> u8 {
         self.decimals
+    }
+
+    /// Whether the channel is linearly interpolated (`true`, for the `H`/`f`
+    /// float-like decoders libxrk marks so) or held as a step (`false`, integer
+    /// counters/status). Governs how a resampler (e.g. the AiM CSV export, 5.1)
+    /// fills grid points between samples.
+    #[must_use]
+    pub fn interpolate(&self) -> bool {
+        self.interpolate
     }
 }
 
@@ -110,6 +120,13 @@ impl Channel {
     #[must_use]
     pub fn decimals(&self) -> u8 {
         self.meta.decimals()
+    }
+
+    /// Whether the channel is interpolated or step-held (see
+    /// [`ChannelMeta::interpolate`]).
+    #[must_use]
+    pub fn interpolate(&self) -> bool {
+        self.meta.interpolate()
     }
 
     /// The channel's samples as `(timecode_ms, value)` pairs.
@@ -386,7 +403,7 @@ impl Builder {
         let mut channels = Vec::new();
         for index in order {
             // Every index in `order` was inserted alongside its `Def`.
-            let (name, unit, decimals, period_us) = {
+            let (name, unit, decimals, period_us, interpolate) = {
                 let def = &self.defs[&index];
                 if !def.keep {
                     continue;
@@ -396,6 +413,7 @@ impl Builder {
                     def.unit.clone(),
                     def.decimals,
                     def.period_us,
+                    def.decoder.is_some_and(Decoder::interpolates),
                 )
             };
             let samples = self.samples.remove(&index).unwrap_or_default();
@@ -413,6 +431,7 @@ impl Builder {
                     unit,
                     sample_rate_hz,
                     decimals,
+                    interpolate,
                 },
                 samples,
             });
@@ -443,6 +462,13 @@ impl Decoder {
             Decoder::I16 | Decoder::U16 | Decoder::F16 | Decoder::Gear => 2,
             Decoder::U8 => 1,
         }
+    }
+
+    /// Whether libxrk linearly interpolates this decoder's channel. Only the
+    /// float-like `H`/`f` decoders (`U16`, `F32`, `F16` — CHS types 1, 6, 20) are
+    /// interpolated; integer counters, status, and gear channels are step-held.
+    fn interpolates(self) -> bool {
+        matches!(self, Decoder::U16 | Decoder::F32 | Decoder::F16)
     }
 
     fn decode(self, block: &[u8]) -> Option<f64> {
@@ -638,6 +664,11 @@ mod tests {
         assert_eq!(ch.unit(), "rpm");
         assert!((ch.sample_rate_hz() - 100.0).abs() < 1e-9);
         assert_eq!(ch.decimals(), 0);
+        assert!(
+            !ch.interpolate(),
+            "an i32 channel is step-held, not interpolated"
+        );
+        assert!(!ch.meta().interpolate());
         assert_eq!(
             ch.samples(),
             &[(100.0, 1000.0), (200.0, 2000.0), (300.0, 3000.0)]
@@ -721,6 +752,10 @@ mod tests {
         assert_eq!(by("F16").samples()[0].1, 1.5);
         assert_eq!(by("F32").samples()[0].1, 2.5);
         assert_eq!(by("Gear").samples()[0].1, 3.0);
+        // Float-like decoders interpolate; gear (a step channel) does not.
+        assert!(by("F16").interpolate(), "F16 is interpolated");
+        assert!(by("F32").interpolate(), "F32 is interpolated");
+        assert!(!by("Gear").interpolate(), "gear is step-held");
     }
 
     #[test]

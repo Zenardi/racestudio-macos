@@ -13,8 +13,9 @@ use racestudio_decode::{decode_session, Session};
 use racestudio_io::{write_aim_csv, ExportOptions, ExportReport, IoError};
 
 use support::{
-    column_index, empty_session, equirect_distance, fixtures_dir, gps_session, is_genuine_xrk,
-    nan_channel_session, no_gps_session, parse_csv,
+    column_index, empty_session, equirect_distance, fixtures_dir, gps_session,
+    hold_vs_interp_session, is_genuine_xrk, nan_channel_session, no_gps_session,
+    offset_origin_session, parse_csv,
 };
 
 /// Export `session` at the default rate, returning the CSV text and the report.
@@ -203,6 +204,44 @@ fn test_blank_separator_rows_frame_the_names_and_units() {
 }
 
 #[test]
+fn test_step_channels_are_held_not_interpolated() {
+    // Grid 0, 50, 100 ms. At t=50 (row 1) the i32 STEP channel holds its last
+    // value (10) while the f32 SMOOTH channel interpolates to 15 — matching
+    // libxrk's per-channel interpolate flag.
+    let (text, _) = export(&hold_vs_interp_session());
+    let (names, _, data) = sections(&text);
+    let step = column_index(&names, "STEP");
+    let smooth = column_index(&names, "SMOOTH");
+    assert_eq!(data[1][step], "10", "a step channel holds the last sample");
+    assert_eq!(
+        data[1][smooth], "15",
+        "a float channel is linearly interpolated"
+    );
+}
+
+#[test]
+fn test_origin_normalization_and_beacon_offset() {
+    // Samples start at raw tc 1000 ms and the first lap starts at raw 1500 ms, so
+    // the recording origin is min(1500, 1000) = 1000. The grid is zeroed there
+    // (spanning 0..1000 ms = 21 rows) and the lap end (raw 1900 ms → 0.9 s on the
+    // data axis) carries the 0.5 s offset between the two origins.
+    let (text, report) = export(&offset_origin_session());
+    assert_eq!(
+        report.samples, 21,
+        "grid zeroed at origin=1000ms over a 1000ms span"
+    );
+    let (_, _, data) = sections(&text);
+    assert_eq!(data[0][0], "0.000");
+    assert_eq!(data.last().expect("rows")[0], "1.000");
+    let rows = parse_csv(&text);
+    assert_eq!(
+        rows[11],
+        vec!["Beacon Markers", "0.9"],
+        "beacon = 0.4s lap duration + 0.5s origin offset"
+    );
+}
+
+#[test]
 fn test_nan_values_written_as_empty_field() {
     // Missing / NaN values are written as an empty (quoted) field, never a number.
     let (text, _) = export(&nan_channel_session());
@@ -267,16 +306,23 @@ fn test_default_rate_is_twenty_hz() {
 }
 
 #[test]
-fn test_io_error_displays_and_wraps_source() {
-    // The write path surfaces the underlying io::Error (Display + source()).
-    use std::error::Error;
+fn test_io_error_display_messages() {
     let inner = std::io::Error::new(std::io::ErrorKind::BrokenPipe, "pipe");
-    let err = IoError::from(inner);
-    assert!(err.to_string().contains("pipe"));
-    assert!(err.source().is_some(), "Write wraps its io::Error source");
-    assert!(IoError::NoChannels.source().is_none());
+    assert!(IoError::from(inner).to_string().contains("pipe"));
     assert!(IoError::NoChannels.to_string().contains("no channels"));
     assert!(IoError::InvalidRate(0.0).to_string().contains("positive"));
+}
+
+#[test]
+fn test_io_error_source_wraps_only_write() {
+    use std::error::Error;
+    let inner = std::io::Error::new(std::io::ErrorKind::BrokenPipe, "pipe");
+    assert!(
+        IoError::from(inner).source().is_some(),
+        "Write wraps its io::Error"
+    );
+    assert!(IoError::NoChannels.source().is_none());
+    assert!(IoError::InvalidRate(0.0).source().is_none());
 }
 
 #[test]
@@ -300,11 +346,24 @@ fn test_write_failure_is_reported() {
 // Corpus conformance (skips when the git-ignored fixtures are absent)
 // --------------------------------------------------------------------------- //
 
+/// Honor the repo's `RS_REQUIRE_CORPUS` convention: when it is set, an absent
+/// fixture is a hard failure (so a CI fetch regression can't pass a corpus test
+/// vacuously); otherwise the test skips with a note. Returns `true` (skip).
+fn corpus_absent(reason: &str) -> bool {
+    assert!(
+        std::env::var_os("RS_REQUIRE_CORPUS").is_none(),
+        "RS_REQUIRE_CORPUS is set but {reason}"
+    );
+    eprintln!("skip: {reason}");
+    true
+}
+
 #[test]
 fn test_fuji_export_matches_byte_golden() {
     let xrk = fixtures_dir().join("fuji_0033.xrk");
-    if !is_genuine_xrk(&xrk) {
-        eprintln!("skip: {} absent (run `make fixtures`)", xrk.display());
+    if !is_genuine_xrk(&xrk)
+        && corpus_absent(&format!("{} absent (run `make fixtures`)", xrk.display()))
+    {
         return;
     }
     let session = decode_session(&xrk).expect("decode fuji_0033.xrk");
@@ -326,27 +385,29 @@ fn test_fuji_export_matches_byte_golden() {
     );
 }
 
-/// A `(GPS Speed, GPS Latitude, GPS Longitude)` sample from one CSV row.
-type GpsSample = (f64, f64, f64);
+/// A `(GPS Speed, GPS Latitude, GPS Longitude, GPS Altitude)` sample from one row.
+type GpsSample = (f64, f64, f64, f64);
 
-/// Build `time_string → (GPS Speed, GPS Latitude, GPS Longitude)` from a parsed
-/// AiM CSV, for the field-tolerant reference comparison.
+/// Build `time_string → GpsSample` from a parsed AiM CSV, for the field-tolerant
+/// reference comparison.
 fn gps_by_time(text: &str) -> HashMap<String, GpsSample> {
     let (names, _, data) = sections(text);
-    let (t, s) = (
-        column_index(&names, "Time"),
-        column_index(&names, "GPS Speed"),
-    );
-    let (la, lo) = (
-        column_index(&names, "GPS Latitude"),
-        column_index(&names, "GPS Longitude"),
-    );
+    let t = column_index(&names, "Time");
+    let s = column_index(&names, "GPS Speed");
+    let la = column_index(&names, "GPS Latitude");
+    let lo = column_index(&names, "GPS Longitude");
+    let al = column_index(&names, "GPS Altitude");
     let parse = |row: &[String], i: usize| row[i].parse::<f64>().ok();
     data.iter()
         .filter_map(|row| {
             Some((
                 row[t].clone(),
-                (parse(row, s)?, parse(row, la)?, parse(row, lo)?),
+                (
+                    parse(row, s)?,
+                    parse(row, la)?,
+                    parse(row, lo)?,
+                    parse(row, al)?,
+                ),
             ))
         })
         .collect()
@@ -357,8 +418,9 @@ fn gps_by_time(text: &str) -> HashMap<String, GpsSample> {
 fn fuji_vs_reference() -> Option<Vec<(GpsSample, GpsSample)>> {
     let xrk = fixtures_dir().join("fuji_0033.xrk");
     let reference = fixtures_dir().join("fuji_0033_reference.csv");
-    if !is_genuine_xrk(&xrk) || std::fs::metadata(&reference).map(|m| m.len()).unwrap_or(0) < 1024 {
-        eprintln!("skip: fuji fixture or reference CSV absent (run `make fixtures`)");
+    if (!is_genuine_xrk(&xrk) || std::fs::metadata(&reference).map(|m| m.len()).unwrap_or(0) < 1024)
+        && corpus_absent("fuji fixture or reference CSV absent (run `make fixtures`)")
+    {
         return None;
     }
     let session = decode_session(&xrk).expect("decode fuji_0033.xrk");
@@ -393,7 +455,7 @@ fn test_speed_within_half_kmh_of_reference() {
         return;
     };
     let mut worst = 0.0_f64;
-    for ((ms, _, _), (rs, _, _)) in pairs {
+    for ((ms, ..), (rs, ..)) in pairs {
         worst = worst.max((ms - rs).abs());
     }
     assert!(
@@ -408,11 +470,26 @@ fn test_position_within_one_meter_of_reference() {
         return;
     };
     let mut worst = 0.0_f64;
-    for ((_, mlat, mlon), (_, rlat, rlon)) in pairs {
+    for ((_, mlat, mlon, _), (_, rlat, rlon, _)) in pairs {
         worst = worst.max(equirect_distance(mlat, mlon, rlat, rlon));
     }
     assert!(
         worst <= 1.0,
         "worst position error {worst:.4} m exceeds 1.0"
+    );
+}
+
+#[test]
+fn test_altitude_within_one_meter_of_reference() {
+    let Some(pairs) = fuji_vs_reference() else {
+        return;
+    };
+    let mut worst = 0.0_f64;
+    for ((.., malt), (.., ralt)) in pairs {
+        worst = worst.max((malt - ralt).abs());
+    }
+    assert!(
+        worst <= 1.0,
+        "worst GPS Altitude error {worst:.4} m exceeds 1.0"
     );
 }
