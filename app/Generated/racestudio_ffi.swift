@@ -2440,6 +2440,22 @@ public func openSession(path: String)throws  -> SessionHandle {
     )
 })
 }
+/**
+ * Parse-validate a math-channel expression against the M2 grammar (issue 5.4).
+ *
+ * Runs `expr` through the same lexer/parser [`SessionHandle::eval_math_channel`]
+ * uses, but **does not evaluate** — no session or channel data is required, so a
+ * stored math channel can be re-validated when a project/workspace file is
+ * loaded. Returns `Ok(())` for syntactically valid input; otherwise a thrown
+ * [`AnalysisError::InvalidExpression`] carrying the parser's `(line, col)`
+ * message. Never panics.
+ */
+public func validateMathExpression(expr: String)throws  {try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_func_validate_math_expression(
+        FfiConverterString.lower(expr),$0
+    )
+}
+}
 
 private enum InitializationResult {
     case ok
@@ -2460,6 +2476,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_func_validate_math_expression() != 44744) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_channel_stats() != 5142) {

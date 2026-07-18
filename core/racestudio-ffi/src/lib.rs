@@ -732,9 +732,35 @@ pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> 
     }))
 }
 
+/// Parse-validate a math-channel expression against the M2 grammar (issue 5.4).
+///
+/// Runs `expr` through the same lexer/parser [`SessionHandle::eval_math_channel`]
+/// uses, but **does not evaluate** — no session or channel data is required, so a
+/// stored math channel can be re-validated when a project/workspace file is
+/// loaded. Returns `Ok(())` for syntactically valid input; otherwise a thrown
+/// [`AnalysisError::InvalidExpression`] carrying the parser's `(line, col)`
+/// message. Never panics.
+#[uniffi::export]
+pub fn validate_math_expression(expr: String) -> Result<(), AnalysisError> {
+    parse_str(&expr)
+        .map(|_| ())
+        .map_err(|e| AnalysisError::InvalidExpression {
+            message: e.to_string(),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_validate_math_expression_accepts_valid_and_rejects_invalid() {
+        // A syntactically valid expression parses (no session needed).
+        assert!(validate_math_expression("sqrt(Ax*Ax + Ay*Ay)".to_string()).is_ok());
+        // A malformed expression is a thrown InvalidExpression, never a panic.
+        let err = validate_math_expression("Ax +* 2".to_string()).unwrap_err();
+        assert!(matches!(err, AnalysisError::InvalidExpression { .. }));
+    }
 
     #[test]
     fn test_core_version_returns_crate_version() {
