@@ -62,7 +62,7 @@ import Foundation
         #expect(source.lastRequest?.count == 4)
     }
 
-    @MainActor @Test func test_trace_clamps_a_window_exceeding_channel_bounds_and_never_over_reads() {
+    @MainActor @Test func test_trace_clamps_a_window_exceeding_channel_bounds_and_never_over_reads() throws {
         let source = FakeSessionDataSource(banks: [bank(10)])
         let sut = AnalysisSession(session: session([channel("Speed", count: 10)]), dataSource: source)
 
@@ -71,10 +71,10 @@ import Foundation
         // Clamped to the 2 remaining samples, and the request issued across the
         // seam never reaches past the channel's sample count.
         #expect(trace.samples.count == 2)
-        let request = try? #require(source.lastRequest)
-        #expect(request?.start == 8)
-        #expect(request?.count == 2)
-        #expect(Int(request?.start ?? 0) + Int(request?.count ?? 0) <= 10)
+        let request = try #require(source.lastRequest)
+        #expect(request.start == 8)
+        #expect(request.count == 2)
+        #expect(Int(request.start) + Int(request.count) <= 10)   // never over-reads
     }
 
     @MainActor @Test func test_trace_with_start_beyond_bounds_is_empty_and_issues_no_read() {
@@ -96,6 +96,40 @@ import Foundation
         #expect(trace.name.isEmpty)
         #expect(trace.samples.isEmpty)
         #expect(source.lastRequest == nil)
+    }
+
+    // MARK: - trace: degenerate channels / windows
+
+    @MainActor @Test func test_trace_over_an_empty_channel_is_empty_and_issues_no_read() {
+        let source = FakeSessionDataSource(banks: [[]])
+        let sut = AnalysisSession(session: session([channel("Empty", count: 0)]), dataSource: source)
+
+        let trace = sut.trace(channelIndex: 0, window: .all)
+
+        #expect(trace.name == "Empty")
+        #expect(trace.samples.isEmpty)
+        #expect(source.lastRequest == nil)   // sampleCount 0 → count clamps to 0
+    }
+
+    @MainActor @Test func test_trace_with_a_zero_count_window_issues_no_read() {
+        let source = FakeSessionDataSource(banks: [bank(10)])
+        let sut = AnalysisSession(session: session([channel("Speed", count: 10)]), dataSource: source)
+
+        let trace = sut.trace(channelIndex: 0, window: SampleWindow(start: 0, count: 0))
+
+        #expect(trace.samples.isEmpty)
+        #expect(source.lastRequest == nil)
+    }
+
+    @MainActor @Test func test_trace_reads_a_single_sample_channel() {
+        let source = FakeSessionDataSource(banks: [bank(1)])
+        let sut = AnalysisSession(session: session([channel("Speed", count: 1)]), dataSource: source)
+
+        let trace = sut.trace(channelIndex: 0, window: .all)
+
+        #expect(trace.samples == [PlotSample(time: 0, distance: 0, value: 0)])
+        #expect(source.lastRequest?.start == 0)
+        #expect(source.lastRequest?.count == 1)
     }
 
     // MARK: - series
@@ -132,6 +166,9 @@ import Foundation
         let got = try sut.stats(channel: "Speed", window: TimeWindow(start: 0, end: 5))
 
         #expect(got == stats)
+        // The exact channel + window bounds are forwarded across the seam (not
+        // swapped, not silently widened to `.all`).
+        #expect(source.lastStatsRequest == FakeSessionDataSource.StatsRequest(channel: "Speed", start: 0, end: 5))
     }
 
     @MainActor @Test func test_stats_throws_for_an_unknown_channel() {

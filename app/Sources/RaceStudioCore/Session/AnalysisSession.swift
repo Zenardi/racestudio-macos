@@ -111,6 +111,12 @@ public protocol SessionDataSource: Sendable {
 /// UI reads from it on the main actor; it stays behind the ``SessionDataSource``
 /// seam so Core never links the FFI binary.
 ///
+/// Reads are **synchronous on the main actor**, so hot-path callers should pass a
+/// bounded `window` (a viewport) rather than ``SampleWindow/all`` for large
+/// channels — the windowed FFI read exists precisely so the UI never copies a
+/// whole channel to show part of it. Off-main / async reads for full-channel work
+/// arrive with the window shell in issue 8.3.
+///
 /// The distance axis of returned traces is populated in issue 8.2; until then it
 /// is a placeholder (`0`) and only the time basis carries data.
 @MainActor

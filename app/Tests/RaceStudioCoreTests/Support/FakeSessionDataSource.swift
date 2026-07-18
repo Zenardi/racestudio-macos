@@ -31,6 +31,17 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     /// (e.g. a zero-width window that `AnalysisSession` short-circuits).
     private(set) var lastRequest: SampleRequest?
 
+    /// One recorded `statistics(...)` call, so a test can assert the exact
+    /// `TimeWindow` bounds `AnalysisSession` forwarded (not swapped, not `.all`).
+    struct StatsRequest: Equatable {
+        let channel: String
+        let start: Double
+        let end: Double
+    }
+
+    /// The most recent `statistics(...)` call, or `nil` if never invoked.
+    private(set) var lastStatsRequest: StatsRequest?
+
     struct UnknownChannel: Error {}
 
     init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil) {
@@ -49,6 +60,7 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     }
 
     func statistics(channel: String, start: Double, end: Double) throws -> ChannelStats {
+        lastStatsRequest = StatsRequest(channel: channel, start: start, end: end)
         if let statsError { throw statsError }
         guard let value = stats[channel] else { throw UnknownChannel() }
         return value
