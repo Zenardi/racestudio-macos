@@ -52,6 +52,14 @@ import Foundation
         #expect(cursor.timePosition == 7.5)
     }
 
+    @Test func test_nonfinite_move_is_ignored() {
+        let cursor = linked(time: 3)
+        cursor.moveTime(.nan)
+        #expect(cursor.timePosition == 3, "a non-finite time never moves the cursor")
+        cursor.moveDistance(.infinity)
+        #expect(cursor.timePosition == 3, "a non-finite distance never moves the cursor")
+    }
+
     // MARK: - Fan-out to imperative linked views
 
     @Test func test_move_from_origin_notifies_others_but_not_the_originator() {
@@ -79,6 +87,18 @@ import Foundation
         #expect(b.notifications == 1)
     }
 
+    @Test func test_move_distance_from_origin_notifies_others_but_not_the_originator() {
+        let cursor = linked()
+        let a = SpyView(), b = SpyView()
+        cursor.register(a); cursor.register(b)
+
+        cursor.moveDistance(700, from: a) // → time 7.5
+
+        #expect(a.notifications == 0, "the originator is skipped on a distance-domain move too")
+        #expect(b.notifications == 1)
+        #expect(b.lastTime == 7.5)
+    }
+
     @Test func test_unregister_stops_delivery() {
         let cursor = linked()
         let a = SpyView(), b = SpyView()
@@ -98,5 +118,18 @@ import Foundation
 
     @Test func test_time_bounds_are_nil_without_a_basis() {
         #expect(LinkedCursor(times: [], distances: []).timeBounds == nil)
+    }
+
+    @Test func test_scrub_range_is_the_bounds_when_they_have_positive_width() {
+        #expect(linked().scrubRange == 0...10)
+    }
+
+    @Test func test_scrub_range_is_nil_for_a_zero_width_extent() {
+        // A single-instant session has bounds but no width to scrub over.
+        #expect(LinkedCursor(times: [3, 3], distances: [0, 0]).scrubRange == nil)
+    }
+
+    @Test func test_scrub_range_is_nil_without_a_basis() {
+        #expect(LinkedCursor(times: [], distances: []).scrubRange == nil)
     }
 }

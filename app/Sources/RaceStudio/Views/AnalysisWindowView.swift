@@ -82,7 +82,9 @@ private struct SidePanel: View {
     var body: some View {
         List {
             Section("Channels") {
-                ForEach(channels, id: \.name) { channel in
+                // Key by position, not name: logger data can repeat a channel
+                // name, and duplicate ForEach ids are undefined in SwiftUI.
+                ForEach(Array(channels.enumerated()), id: \.offset) { _, channel in
                     let id = ChannelID(channel.name)
                     row(title: channel.name, subtitle: channel.unit,
                         selected: selection.channels.contains(id)) { onToggleChannel(id) }
@@ -174,10 +176,10 @@ private struct MeasuresBar: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// A slider bound to the cursor's time position over its bounds; disabled when
-    /// the session has no usable time extent.
+    /// A slider bound to the cursor's time position over its scrub range; hidden
+    /// when the session has no positive-width extent (decided in Core).
     @ViewBuilder private var scrubber: some View {
-        if let range = scrubRange {
+        if let range = cursor.scrubRange {
             HStack(spacing: 12) {
                 Text(String(format: "t = %.2f s", cursor.timePosition))
                     .font(.caption.monospacedDigit()).foregroundColor(.secondary)
@@ -187,12 +189,5 @@ private struct MeasuresBar: View {
                        in: range)
             }
         }
-    }
-
-    /// The cursor's usable time range, or `nil` when there is no positive-width
-    /// extent to scrub over (so the slider is hidden rather than crashing).
-    private var scrubRange: ClosedRange<Double>? {
-        guard let bounds = cursor.timeBounds, bounds.lowerBound < bounds.upperBound else { return nil }
-        return bounds
     }
 }

@@ -164,10 +164,12 @@ public final class AnalysisWindowModel: ObservableObject {
         }
         self.selection = selection
 
-        // The cursor's basis is the session's time extent (from the laps); the
+        // The cursor's basis is the session's time extent — the lap span, or the
+        // selected channel's sample extent when the session has no laps. The
         // distance basis is a placeholder until real distances are wired in a
         // later issue, so the window scrubs on the time axis.
-        let basis = Self.timeBasis(of: session)
+        let basis = Self.timeBasis(session: session, analysis: analysis,
+                                   channelIndexByID: index, selection: selection)
         self.linkedCursor = LinkedCursor(times: basis.times, distances: basis.distances,
                                          time: basis.times.first ?? 0)
 
@@ -243,15 +245,27 @@ public final class AnalysisWindowModel: ObservableObject {
         }
     }
 
-    /// The session's time extent `[earliest lap start, latest lap end]` as a
-    /// two-point cursor basis, or empty arrays when the session has no laps (the
-    /// cursor then has no bounds). Distances are placeholders (`0`) until the
-    /// real distance axis is wired in.
-    private static func timeBasis(of session: Session) -> (times: [Double], distances: [Double]) {
-        guard let start = session.laps.map(\.startTimeS).min(),
-              let end = session.laps.map(\.endTimeS).max(), start <= end else {
-            return (times: [], distances: [])
+    /// The session's time extent as a two-point cursor basis: the lap span
+    /// `[earliest lap start, latest lap end]`, or — when the session has no laps —
+    /// the first selected channel's sample-time extent, so a lapless session is
+    /// still scrubbable. Empty arrays when neither is available (the cursor then
+    /// has no bounds). Distances are placeholders (`0`) — the reverse distance↔time
+    /// mapping and ``LinkedCursor/distancePosition`` are not meaningful until the
+    /// real distance axis is wired in a later issue.
+    private static func timeBasis(session: Session, analysis: AnalysisSession?,
+                                  channelIndexByID: [ChannelID: Int],
+                                  selection: AnalysisSelection) -> (times: [Double], distances: [Double]) {
+        if let start = session.laps.map(\.startTimeS).min(),
+           let end = session.laps.map(\.endTimeS).max(), start <= end {
+            return (times: [start, end], distances: [0, 0])
         }
-        return (times: [start, end], distances: [0, 0])
+        // No laps: bound the cursor by the first selected channel's sample times.
+        if let analysis, let id = selection.channels.first, let index = channelIndexByID[id] {
+            let xs = analysis.series(channelIndex: index).xs
+            if let first = xs.first, let last = xs.last, first <= last {
+                return (times: [first, last], distances: [0, 0])
+            }
+        }
+        return (times: [], distances: [])
     }
 }

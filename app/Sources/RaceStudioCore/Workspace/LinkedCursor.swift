@@ -51,6 +51,15 @@ public final class LinkedCursor: ObservableObject {
     /// The cursor's distance position, interpolated through the mapping.
     public var distancePosition: Double { cursor.distancePosition }
 
+    /// The cursor's usable scrub range — its ``timeBounds`` when they have
+    /// positive width, else `nil` (a single-instant or basis-less session, where
+    /// a slider over a zero-width range is meaningless). Kept in Core, not the
+    /// view, so the empty/degenerate decision is covered by tests.
+    public var scrubRange: ClosedRange<Double>? {
+        guard let bounds = timeBounds, bounds.lowerBound < bounds.upperBound else { return nil }
+        return bounds
+    }
+
     /// Register `view` to receive cursor-move callbacks (idempotent by identity).
     public func register(_ view: CursorLinked) { registry.register(view) }
 

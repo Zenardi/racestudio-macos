@@ -70,11 +70,14 @@ import Foundation
         #expect(model.activeLayout == .timeDistance)
     }
 
-    @Test func test_layout_titles_and_icons_are_defined() {
+    @Test func test_layout_titles_label_the_rail() {
         #expect(WindowLayout.timeDistance.title == "Time / Distance")
         #expect(WindowLayout.summary.title == "Summary")
-        #expect(!WindowLayout.timeDistance.systemImageName.isEmpty)
-        #expect(!WindowLayout.summary.systemImageName.isEmpty)
+    }
+
+    @Test func test_layout_system_image_names_are_stable() {
+        #expect(WindowLayout.timeDistance.systemImageName == "chart.xyaxis.line")
+        #expect(WindowLayout.summary.systemImageName == "list.bullet.rectangle")
     }
 
     // MARK: - Default selection
@@ -196,9 +199,27 @@ import Foundation
         #expect(model.linkedCursor.timePosition == 10)
     }
 
-    @Test func test_cursor_has_no_bounds_for_a_session_without_laps() {
+    @Test func test_cursor_has_no_bounds_for_a_lapless_session_without_a_pump() {
         let sess = session([channel("Speed")], laps: [])
         let model = AnalysisWindowModel(session: sess, analysis: nil)
+        #expect(model.linkedCursor.timeBounds == nil)
+    }
+
+    @Test func test_cursor_bounds_fall_back_to_the_channel_extent_without_laps() {
+        let sess = session([channel("Speed", count: 10)], laps: [])
+        let source = FakeSessionDataSource(banks: [bank(10, scale: 2)])
+        let model = AnalysisWindowModel(session: sess, analysis: AnalysisSession(session: sess, dataSource: source))
+        // No laps → the cursor is bounded by the selected channel's sample times (0…9).
+        #expect(model.linkedCursor.timeBounds == 0...9)
+        #expect(model.linkedCursor.scrubRange == 0...9)
+    }
+
+    @Test func test_empty_session_has_no_selection_traces_or_measures() {
+        let model = AnalysisWindowModel(session: session([], laps: []), analysis: nil)
+        #expect(model.selection.channels.isEmpty)
+        #expect(model.selection.isEmpty)
+        #expect(model.traces.isEmpty)
+        #expect(model.measures.isEmpty)
         #expect(model.linkedCursor.timeBounds == nil)
     }
 

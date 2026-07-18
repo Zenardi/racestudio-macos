@@ -40,12 +40,10 @@ struct ContentView: View {
     private var content: some View {
         switch store.state {
         case let .loaded(viewModel):
-            // Rebuild the window's model only when a *different* session loads:
-            // the live `AnalysisSession` is a fresh reference per load, so its
-            // identity keys the `@StateObject` and preserves selection/cursor
-            // across unrelated re-renders of the same session.
+            // Rebuild the window's model only when a *different* session loads,
+            // so selection/cursor survive unrelated re-renders of the same one.
             AnalysisWindowView(viewModel: viewModel)
-                .id(viewModel.analysis.map(ObjectIdentifier.init))
+                .id(windowIdentity(of: viewModel))
         case let .loading(progress):
             loadingView(progress)
         case .idle, .failed:
@@ -53,6 +51,19 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
                 .padding()
         }
+    }
+
+    /// A stable per-session key for the window's `@StateObject`: the live analysis
+    /// pump's object identity in production (a fresh instance per load), falling
+    /// back to the decoded session's content for the analysis-less loaders — so
+    /// two such sessions never collide on a constant `nil` and leave a stale model.
+    private func windowIdentity(of viewModel: SessionViewModel) -> String {
+        if let analysis = viewModel.analysis {
+            return "pump:\(ObjectIdentifier(analysis).hashValue)"
+        }
+        let metadata = viewModel.session.metadata
+        return "session:\(metadata.datetimeUtc)|\(metadata.vehicle)|\(metadata.track)|"
+            + "\(metadata.driver)|\(viewModel.session.channels.count)|\(viewModel.session.laps.count)"
     }
 
     private func loadingView(_ progress: DecodeProgress) -> some View {
