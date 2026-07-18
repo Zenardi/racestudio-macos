@@ -6,9 +6,9 @@ import RaceStudioCore
 ///
 /// It renders the `SessionStore` state (issues 2.2–2.5): a drop prompt when
 /// idle, a determinate progress bar with a Cancel button while loading, the
-/// session summary once loaded, and an error alert on failure. Drag-and-drop of
-/// `.xrk`/`.xrz` is forwarded to the shared `AppModel`; all logic lives in
-/// `RaceStudioCore`, so this view carries none of its own.
+/// analysis window once loaded (issue 8.3), and an error alert on failure.
+/// Drag-and-drop of `.xrk`/`.xrz` is forwarded to the shared `AppModel`; all
+/// logic lives in `RaceStudioCore`, so this view carries none of its own.
 struct ContentView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var store: SessionStore
@@ -40,7 +40,12 @@ struct ContentView: View {
     private var content: some View {
         switch store.state {
         case let .loaded(viewModel):
-            SessionSummaryView(viewModel: SessionSummaryViewModel(session: viewModel.session))
+            // Rebuild the window's model only when a *different* session loads:
+            // the live `AnalysisSession` is a fresh reference per load, so its
+            // identity keys the `@StateObject` and preserves selection/cursor
+            // across unrelated re-renders of the same session.
+            AnalysisWindowView(viewModel: viewModel)
+                .id(viewModel.analysis.map(ObjectIdentifier.init))
         case let .loading(progress):
             loadingView(progress)
         case .idle, .failed:
