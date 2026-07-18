@@ -20,11 +20,7 @@ struct AnalysisWindowView: View {
         HStack(spacing: 0) {
             LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
             Divider()
-            SidePanel(channels: model.session.channels,
-                      laps: model.session.laps,
-                      selection: model.selection,
-                      onToggleChannel: { model.toggleChannel($0) },
-                      onToggleLap: { model.toggleLap($0) })
+            ChannelsLapsPanelView(model: model)
                 .frame(width: 240)
             Divider()
             VStack(spacing: 0) {
@@ -65,54 +61,6 @@ private struct LayoutRail: View {
         }
         .padding(.vertical, 8)
         .frame(width: 80)
-    }
-}
-
-// MARK: - Side panel (channels + laps)
-
-/// The channels + laps side panel. Selection is reflected with a checkmark and
-/// toggled through the model.
-private struct SidePanel: View {
-    let channels: [Channel]
-    let laps: [Lap]
-    let selection: AnalysisSelection
-    let onToggleChannel: (ChannelID) -> Void
-    let onToggleLap: (LapID) -> Void
-
-    var body: some View {
-        List {
-            Section("Channels") {
-                // Key by position, not name: logger data can repeat a channel
-                // name, and duplicate ForEach ids are undefined in SwiftUI.
-                ForEach(Array(channels.enumerated()), id: \.offset) { _, channel in
-                    let id = ChannelID(channel.name)
-                    row(title: channel.name, subtitle: channel.unit,
-                        selected: selection.channels.contains(id)) { onToggleChannel(id) }
-                }
-            }
-            Section("Laps") {
-                ForEach(laps, id: \.index) { lap in
-                    let id = LapID(Int(lap.index))
-                    row(title: "Lap \(lap.index + 1)", subtitle: "",
-                        selected: selection.laps.selected.contains(id)) { onToggleLap(id) }
-                }
-            }
-        }
-        .listStyle(.sidebar)
-    }
-
-    private func row(title: String, subtitle: String, selected: Bool, toggle: @escaping () -> Void) -> some View {
-        Button(action: toggle) {
-            HStack {
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(selected ? .accentColor : .secondary)
-                Text(title)
-                Spacer()
-                if !subtitle.isEmpty { Text(subtitle).foregroundColor(.secondary) }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

@@ -117,6 +117,13 @@ public final class AnalysisWindowModel: ObservableObject {
     /// The channel + lap selection, preserved across layout switches.
     @Published public private(set) var selection: AnalysisSelection
 
+    /// The channel search text for the side panel (issue 8.4); empty lists every
+    /// channel.
+    @Published public private(set) var channelQuery: String = ""
+
+    /// The channel ordering for the side panel (issue 8.4).
+    @Published public private(set) var channelSort: ChannelSort = .configuration
+
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor
 
@@ -205,6 +212,24 @@ public final class AnalysisWindowModel: ObservableObject {
     /// overlay is a later issue), so no read is needed.
     public func toggleLap(_ lap: LapID) {
         selection.toggleLap(lap)
+    }
+
+    /// Set the side panel's channel search text (issue 8.4).
+    public func setChannelQuery(_ query: String) {
+        channelQuery = query
+    }
+
+    /// Set the side panel's channel ordering (issue 8.4).
+    public func setChannelSort(_ sort: ChannelSort) {
+        channelSort = sort
+    }
+
+    /// The channels & laps side panel derived from the current session, selection,
+    /// query, and sort (issue 8.4). Rebuilt on demand — a cheap pass over the
+    /// channel/lap listings — so it always reflects the latest selection.
+    public var sidePanel: ChannelLapSelectionModel {
+        ChannelLapSelectionModel(channels: session.channels, laps: session.laps,
+                                 selection: selection, query: channelQuery, sort: channelSort)
     }
 
     // MARK: - Central host (Time/Distance)
