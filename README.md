@@ -5,9 +5,9 @@
 A native macOS re-implementation of AiM **RaceStudio 3** telemetry analysis —
 successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter).
 
-> **Status:** **M0–M4 complete**; **M5 — Import/Export & Session Management** in
-> progress. The logic core (the Rust crates + the Swift `RaceStudioCore` library)
-> stays green, warning-free, and ≥95% line-covered, enforced in CI.
+> **Status:** **M0–M5 complete**; **M6 — Device Connectivity (WiFi)** next. The
+> logic core (the Rust crates + the Swift `RaceStudioCore` library) stays green,
+> warning-free, and ≥95% line-covered, enforced in CI.
 
 | Milestone | Scope | Issues | Status |
 | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 | **M2 — App Shell & File Import** | Document-based SwiftUI shell (App Sandbox, AiM UTIs), the `SessionStore` `idle → loading → loaded / failed` load lifecycle, file import (Open panel / drag-and-drop / security-scoped **Recent Files**), the session summary screen, and async decode with progress + cancellation. | 2.1–2.5 | ✅ Complete |
 | **M3 — Analysis Engine** | Lap segmentation & alignment, delta-t, resampling, Welford statistics, a math-channel **expression engine**, derived channels (heading / yaw-rate / accel / gear), and a windowed **FFT** — panic-free with typed errors, exposed to Swift over UniFFI (3.8). | 3.1–3.8 | ✅ Complete |
 | **M4 — Analysis UI** | Time/distance line plot, lap overlay + delta-t strip, GPS track map, channel table & digital readouts, histogram / XY-scatter, a live-validated math editor, and a **linked workspace cursor** shared across tiles. | 4.1–4.7 | ✅ Complete |
-| **M5 — Import/Export & Session Management** | RaceChrono **AiM-CSV export** (5.1) and **CSV import** (5.2) in Rust `racestudio-io`; the **session library index** — content-id-keyed summaries with search / filter and atomic, crash-safe on-disk persistence (5.3, `RaceStudioCore`); project / workspace files (5.4). | 5.1–5.3 ✅ · 5.4 ⏳ | 🚧 In progress |
+| **M5 — Import/Export & Session Management** | RaceChrono **AiM-CSV export** (5.1) and **CSV import** (5.2) in Rust `racestudio-io`; the **session library index** — content-id-keyed summaries with search / filter and atomic, crash-safe on-disk persistence (5.3); and versioned, atomic **project / workspace files** (`.rsproj`) with forward migration and FFI-parsed math channels (5.4) — both in `RaceStudioCore`. | 5.1–5.4 ✅ | ✅ Complete |
 | **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. | 6.x | ⏳ Planned |
 | **M7 — Parity, Performance & Release** | Feature parity with RaceStudio 3, performance tuning, and a packaged release. | 7.x | ⏳ Planned |
 
@@ -97,6 +97,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `eval_math_channel`, and `fft_spectrum` (each taking an `FfiWindow`), returning
   DTOs (`LapInfo` / `DeltaPoint` / `StatsDto` / `SpectrumDto`) and throwing a
   typed `AnalysisError` — never a trap.
+  5.4 adds `validate_math_expression(expr)` — a **parse-only** entry (no session,
+  no evaluation) that re-validates a stored math channel's source against the M2
+  grammar when a project file is loaded, throwing `AnalysisError::InvalidExpression`
+  on malformed input.
   See [`docs/adr/0001-ffi-boundary.md`](docs/adr/0001-ffi-boundary.md).
 - **`RaceStudioCore`** — the Swift logic library; all testable behaviour lives
   here. It is the 95% Swift coverage target. As of 2.2 it owns the load
@@ -155,6 +159,17 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   index loads as empty (typed `LibraryError`) and a moved/deleted source is
   flagged unavailable rather than dropped — the browsable, searchable session
   library.
+  5.4 adds the `Project/` model — the versioned `.rsproj` workspace document:
+  `ProjectDocument` (`schemaVersion`, session refs, `AnalysisLayout` panes +
+  X-axis mode, `LapSelection`s, `MathChannelDef`s) and `ProjectStore` for atomic,
+  crash-safe save/load with a v1→current `migrate`. On load it resolves session
+  refs and clamps lap selections against the 5.3 library (a `LibraryContext`),
+  and re-validates each math channel by **parsing** its source through the M2
+  grammar over an injected `ExpressionValidating` seam (production
+  `FFIExpressionValidator` → the new `validate_math_expression` FFI) — an invalid
+  expression is recorded as a typed `ProjectError.invalidMathChannel` without
+  aborting the load; a newer `schemaVersion` is refused, and a garbage file loads
+  to `ProjectError.corruptDocument` rather than crashing.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -186,16 +201,16 @@ core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
   racestudio-io/               # import/export — AiM CSV writer (5.1) + reader (5.2)
-  racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
+  racestudio-ffi/              # UniFFI boundary — open_session, windowed samples, validate_math_expression
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
-  Sources/RaceStudioCore/      # logic library — session store, analysis/plot models, session library, FFI bindings
+  Sources/RaceStudioCore/      # logic library — session store, analysis/plot models, session library, project files, FFI bindings
   Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup, open/drop/recents, summary views
   Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
   .swiftlint.yml               # SwiftLint config
   RaceStudioFFI.xcframework/   # built artifact (git-ignored, ~34 MB)
-fixtures/                      # decode goldens (0.5): golden/*.json committed,
+fixtures/                      # decode goldens (0.5): golden/*.json + sample.v1.rsproj committed,
                                #   .xrk/.csv samples git-ignored (make fixtures)
 scripts/
   coverage.sh                  # Rust + Swift quality + coverage gate

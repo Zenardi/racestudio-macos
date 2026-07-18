@@ -322,6 +322,11 @@ RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull o
 void*_Nonnull uniffi_racestudio_ffi_fn_func_open_session(RustBuffer path, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_VALIDATE_MATH_EXPRESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_VALIDATE_MATH_EXPRESSION
+void uniffi_racestudio_ffi_fn_func_validate_math_expression(RustBuffer expr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_RACESTUDIO_FFI_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_RACESTUDIO_FFI_RUSTBUFFER_ALLOC
 RustBuffer ffi_racestudio_ffi_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -611,6 +616,12 @@ uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 uint16_t uniffi_racestudio_ffi_checksum_func_open_session(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_VALIDATE_MATH_EXPRESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_VALIDATE_MATH_EXPRESSION
+uint16_t uniffi_racestudio_ffi_checksum_func_validate_math_expression(void
     
 );
 #endif

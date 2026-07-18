@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "sessionRefs": [
+    { "id": "fuji_0033_abc123", "displayName": "Fuji Practice" }
+  ],
+  "layout": {
+    "panes": [
+      { "channelNames": ["Speed", "RPM"] },
+      { "channelNames": ["GPS Speed"] }
+    ],
+    "xAxisMode": "distance"
+  },
+  "selectedLaps": [
+    { "sessionID": "fuji_0033_abc123", "lapIndices": [11, 12] }
+  ],
+  "mathChannels": [
+    { "name": "AccelMag", "expression": "sqrt(Ax*Ax + Ay*Ay)" }
+  ]
+}
