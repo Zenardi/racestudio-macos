@@ -25,6 +25,8 @@ fixtures/
                                #   libxrk storage dtype per channel (3.4)
     <name>.derived.json        # GPS-derived channels window: heading, yaw_rate,
                                #   inline/lateral accel — inputs + outputs (3.6)
+    fuji_0033.csv              # byte golden: the RaceChrono AiM CSV this repo's
+                               #   writer emits for fuji_0033.xrk (5.1)
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are
@@ -45,11 +47,24 @@ fixtures/
 Both resolve this directory relative to the repo root and fail with a clear,
 actionable error when a fixture is missing.
 
+## The AiM CSV byte golden (`golden/fuji_0033.csv`, issue 5.1)
+
+Unlike the JSON goldens (libxrk-derived), the CSV golden is the deterministic
+output of **this repo's own** writer (`racestudio-io::write_aim_csv`) for
+`fuji_0033.xrk`. It is committed (git compresses it in the packfile) and the
+`test_fuji_export_matches_byte_golden` test asserts the writer still reproduces
+it byte-for-byte — a regression lock. Independent correctness is proven
+separately: `test_speed_within_half_kmh_of_reference` /
+`test_position_within_one_meter_of_reference` compare the same output
+field-by-field against the RaceStudio reference CSV (`fuji_0033_reference.csv`,
+git-ignored, fetched) over 200–1600 s, agreeing to within 0.5 km/h and 1.0 m.
+
 ## Regenerating goldens
 
 ```sh
-make fixtures     # fetch .xrk samples + regenerate golden/*.json via libxrk
+make fixtures                    # fetch .xrk samples + regenerate golden/*.json via libxrk
+bash scripts/gen_csv_golden.sh   # regenerate the AiM CSV byte golden from fuji_0033.xrk
 ```
 
 Goldens are byte-identical across runs on the same input; review any diff as a
-decode-behaviour change.
+decode- or writer-behaviour change.

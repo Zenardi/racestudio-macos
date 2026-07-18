@@ -1,0 +1,19 @@
+[package]
+name = "racestudio-io"
+description = "RaceChrono-compatible AiM CSV export (and future import) for RaceStudio."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# The writer consumes the decoded, immutable `Session` model (1.6).
+racestudio-decode = { path = "../racestudio-decode" }
+# Reuses the resampler (3.3) to place channels on the uniform export grid —
+# the writer never re-implements interpolation.
+racestudio-analysis = { path = "../racestudio-analysis" }
+
+[lints.clippy]
+all = "warn"

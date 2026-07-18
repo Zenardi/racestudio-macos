@@ -4,6 +4,7 @@ members = [
     "core/racestudio-decode",
     "core/racestudio-analysis",
     "core/racestudio-ffi",
+    "core/racestudio-io",
 ]
 
 [workspace.package]

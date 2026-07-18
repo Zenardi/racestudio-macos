@@ -120,6 +120,16 @@ pub fn decode_laps(container: &Container) -> Result<LapData, DecodeError> {
     Ok(build_laps(&gatherer.markers))
 }
 
+/// The raw logger timecode (ms) at which lap timing began — the first LAP
+/// marker's `end_time − duration`. This is libxrk's primary `time_offset`
+/// candidate: the recording origin the AiM CSV export (5.1) normalizes to.
+/// `None` when the container has no LAP markers.
+pub(crate) fn first_lap_origin_ms(container: &Container) -> Option<i64> {
+    let mut gatherer = Gatherer::default();
+    gatherer.walk(container.raw(), true);
+    gatherer.first_origin
+}
+
 /// Walks the message stream collecting `(segment, lap, duration_ms)` from every
 /// LAP marker, size-skipping data messages so all markers are reached.
 #[derive(Default)]
@@ -127,6 +137,8 @@ struct Gatherer {
     channel_sizes: HashMap<u16, usize>,
     group_sizes: HashMap<u16, usize>,
     markers: Vec<(u8, u16, u32)>,
+    /// The first LAP marker's `end_time − duration` (raw recording origin).
+    first_origin: Option<i64>,
     truncated: bool,
 }
 
@@ -162,13 +174,19 @@ impl Gatherer {
             }
             "GRP" => self.register_group(payload),
             "LAP" => {
-                // LAP payload: [_pad, segment, lap(2), duration(4), …].
+                // LAP payload: [_pad, segment, lap(2), duration(4), _pad(8), end_time(4), …].
                 if payload.len() < LAP_MIN_PAYLOAD {
                     self.truncated = true;
                 } else {
                     let segment = payload[1];
                     let lap = le_u16(payload, 2).unwrap_or(0);
                     let duration = le_u32(payload, 4).unwrap_or(0);
+                    if self.first_origin.is_none() {
+                        // libxrk caches the first marker's start (end − duration)
+                        // as the recording origin, regardless of segment.
+                        let end_time = le_u32(payload, 16).unwrap_or(0);
+                        self.first_origin = Some(i64::from(end_time) - i64::from(duration));
+                    }
                     self.markers.push((segment, lap, duration));
                 }
             }
@@ -406,6 +424,33 @@ mod tests {
         assert_eq!(data.best_lap_index(), None);
         assert!(data.best_lap().is_none());
         assert_eq!(data.len(), 0);
+    }
+
+    #[test]
+    fn test_first_lap_origin_is_end_minus_duration() {
+        // The first LAP marker's end_time (offset 16) minus its duration is the
+        // recording origin. Two markers: only the first is used.
+        let mut m1 = lap_marker(0, 1, 10_000);
+        m1[16..20].copy_from_slice(&30_015u32.to_le_bytes()); // end_time
+        let mut m2 = lap_marker(0, 2, 55_000);
+        m2[16..20].copy_from_slice(&85_015u32.to_le_bytes());
+        let mut file = frame("LAP", &m1);
+        file.extend(frame("LAP", &m2));
+
+        let mut gatherer = Gatherer::default();
+        gatherer.walk(&file, true);
+        assert_eq!(
+            gatherer.first_origin,
+            Some(20_015),
+            "origin = first end_time − duration = 30015 − 10000"
+        );
+    }
+
+    #[test]
+    fn test_first_lap_origin_absent_without_markers() {
+        let mut gatherer = Gatherer::default();
+        gatherer.walk(&frame("RCR", b"BOB\0"), true);
+        assert_eq!(gatherer.first_origin, None);
     }
 
     #[test]
