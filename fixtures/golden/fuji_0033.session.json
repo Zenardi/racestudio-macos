@@ -1,0 +1,169 @@
+{
+  "channel_count": 31,
+  "channels": [
+    {
+      "name": "GPS Speed",
+      "samples": 33960,
+      "unit": "m/s"
+    },
+    {
+      "name": "GPS Nsat",
+      "samples": 33960,
+      "unit": " "
+    },
+    {
+      "name": "GPS LatAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "GPS LonAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "GPS Slope",
+      "samples": 33960,
+      "unit": "deg"
+    },
+    {
+      "name": "GPS Heading",
+      "samples": 33960,
+      "unit": "deg"
+    },
+    {
+      "name": "GPS Gyro",
+      "samples": 33960,
+      "unit": "deg/s"
+    },
+    {
+      "name": "GPS Altitude",
+      "samples": 33960,
+      "unit": "m"
+    },
+    {
+      "name": "GPS PosAccuracy",
+      "samples": 33960,
+      "unit": "mm"
+    },
+    {
+      "name": "GPS SpdAccuracy",
+      "samples": 33960,
+      "unit": "m/s"
+    },
+    {
+      "name": "GPS Radius",
+      "samples": 33960,
+      "unit": "m"
+    },
+    {
+      "name": "GPS Latitude",
+      "samples": 33960,
+      "unit": "deg"
+    },
+    {
+      "name": "GPS Longitude",
+      "samples": 33960,
+      "unit": "deg"
+    },
+    {
+      "name": "LoggerTemp",
+      "samples": 33960,
+      "unit": "°C"
+    },
+    {
+      "name": "External Voltage",
+      "samples": 33960,
+      "unit": "V"
+    },
+    {
+      "name": "RPM",
+      "samples": 33960,
+      "unit": "rpm"
+    },
+    {
+      "name": "WT",
+      "samples": 33960,
+      "unit": "°C"
+    },
+    {
+      "name": "steering",
+      "samples": 33960,
+      "unit": "deg"
+    },
+    {
+      "name": "BRK",
+      "samples": 33960,
+      "unit": "bar"
+    },
+    {
+      "name": "ACCEL",
+      "samples": 33960,
+      "unit": "mm"
+    },
+    {
+      "name": "InlineAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "LateralAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "VerticalAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "RollRate",
+      "samples": 33960,
+      "unit": "deg/s"
+    },
+    {
+      "name": "PitchRate",
+      "samples": 33960,
+      "unit": "deg/s"
+    },
+    {
+      "name": "YawRate",
+      "samples": 33960,
+      "unit": "deg/s"
+    },
+    {
+      "name": "GPS LateralAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "GPS InlineAcc",
+      "samples": 33960,
+      "unit": "g"
+    },
+    {
+      "name": "GPS Yaw Rate",
+      "samples": 33960,
+      "unit": "deg/s"
+    },
+    {
+      "name": "Luminosity",
+      "samples": 33960,
+      "unit": "%"
+    },
+    {
+      "name": "StartRec",
+      "samples": 33960,
+      "unit": "#"
+    }
+  ],
+  "lap_count": 13,
+  "metadata": {
+    "driver": "CMD",
+    "log_date": "Tuesday, November 4, 2025",
+    "log_time": "3:50 PM",
+    "series": "Fuji Practice",
+    "track": "Fuji GP Sh",
+    "vehicle": "SFJ"
+  }
+}

@@ -34,6 +34,27 @@ pub struct Session {
 }
 
 impl Session {
+    /// Assemble a `Session` from already-built parts — for callers that
+    /// reconstruct a session from a source other than an `.xrk` file (e.g. the
+    /// CSV importer, issue 5.2). `first_lap_origin_ms` is `None` for such
+    /// sessions (their timecodes are already session-relative).
+    #[must_use]
+    pub fn new(
+        metadata: Metadata,
+        channels: Vec<Channel>,
+        gps: Option<GpsData>,
+        laps: LapData,
+        first_lap_origin_ms: Option<i64>,
+    ) -> Self {
+        Session {
+            metadata,
+            channels,
+            gps,
+            laps,
+            first_lap_origin_ms,
+        }
+    }
+
     /// The parsed session metadata (driver, vehicle, venue, date/time).
     #[must_use]
     pub fn metadata(&self) -> &Metadata {

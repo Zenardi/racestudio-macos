@@ -38,6 +38,18 @@ pub struct Lap {
 }
 
 impl Lap {
+    /// Construct a lap from its index and session-relative start/duration (both
+    /// seconds) — for callers that reconstruct laps outside the `.xrk` decoder
+    /// (e.g. the CSV importer's `laps_from_beacons`, issue 5.2).
+    #[must_use]
+    pub fn new(index: u32, start_time_s: f64, duration_s: f64) -> Self {
+        Lap {
+            index,
+            start_time_s,
+            duration_s,
+        }
+    }
+
     /// Zero-based lap index within the session.
     #[must_use]
     pub fn index(&self) -> u32 {
@@ -71,6 +83,22 @@ pub struct LapData {
 }
 
 impl LapData {
+    /// Construct lap timing from a list of laps, computing the best-lap index as
+    /// the minimum-duration lap — for callers that reconstruct laps outside the
+    /// `.xrk` decoder (e.g. the CSV importer, issue 5.2). An empty list yields no
+    /// best lap.
+    #[must_use]
+    pub fn new(laps: Vec<Lap>) -> Self {
+        let best_lap_index = laps
+            .iter()
+            .min_by(|a, b| a.duration_s.total_cmp(&b.duration_s))
+            .map(Lap::index);
+        LapData {
+            laps,
+            best_lap_index,
+        }
+    }
+
     /// The decoded laps, in order.
     #[must_use]
     pub fn laps(&self) -> &[Lap] {

@@ -27,6 +27,8 @@ fixtures/
                                #   inline/lateral accel — inputs + outputs (3.6)
     fuji_0033.csv              # byte golden: the RaceChrono AiM CSV this repo's
                                #   writer emits for fuji_0033.xrk (5.1)
+    fuji_0033.session.json     # structural golden: the Session that read_csv
+                               #   reconstructs from fuji_0033_reference.csv (5.2)
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are
@@ -59,11 +61,20 @@ separately: `test_speed_within_half_kmh_of_reference` /
 field-by-field against the RaceStudio reference CSV (`fuji_0033_reference.csv`,
 git-ignored, fetched) over 200–1600 s, agreeing to within 0.5 km/h and 1.0 m.
 
+## The imported-session golden (`golden/fuji_0033.session.json`, issue 5.2)
+
+A deterministic JSON summary (channel names/units/sample counts, lap count,
+metadata) of the `Session` that `racestudio-io::read_csv` reconstructs from
+`fuji_0033_reference.csv`. `test_import_reference_matches_session_golden` asserts
+the importer still produces it. Independent correctness comes from the 5.1 ⇄ 5.2
+round-trip test (`write_aim_csv` then `read_csv` preserves channels/samples).
+
 ## Regenerating goldens
 
 ```sh
-make fixtures                    # fetch .xrk samples + regenerate golden/*.json via libxrk
-bash scripts/gen_csv_golden.sh   # regenerate the AiM CSV byte golden from fuji_0033.xrk
+make fixtures                        # fetch .xrk samples + regenerate golden/*.json via libxrk
+bash scripts/gen_csv_golden.sh       # regenerate the AiM CSV byte golden from fuji_0033.xrk
+bash scripts/gen_session_golden.sh   # regenerate the imported-session golden from the reference CSV
 ```
 
 Goldens are byte-identical across runs on the same input; review any diff as a

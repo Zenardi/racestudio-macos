@@ -115,7 +115,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 │                                               │
 │   racestudio-decode    clean-room .xrk decode │  ← 95% Rust coverage target
 │   racestudio-analysis  channels / math        │  ← 95% Rust coverage target
-│   racestudio-io        CSV export (AiM CSV)   │  ← 95% Rust coverage target
+│   racestudio-io        CSV export + import    │  ← 95% Rust coverage target
 │   racestudio-ffi       UniFFI boundary        │
 └───────────────────────────────────────────────┘
 ```
@@ -155,7 +155,12 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `GPS Heading` (great-circle bearing) after `GPS Speed`, and `QUOTE_ALL`
   serialization with no trailing comma. Validated to within 0.5 km/h speed and
   1.0 m position of the RaceStudio reference, with a byte golden for regression.
-  Panic-free, with a single `IoError`.
+  CSV import (5.2) is the inverse: `read_csv(reader)` parses a generic or AiM
+  RS2Analysis CSV back into a `Session` — reconstructing channels (blank cells →
+  `NaN`), metadata, and laps (from `Beacon Markers`), normalizing km/h speed back
+  to m/s (`normalize_unit`), and tolerating quoting/line-ending/unit-row variants;
+  a 5.1 ⇄ 5.2 round-trip and a structural session golden pin it. Panic-free, with
+  typed `IoError` (export) and `ImportError` (import) enums.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
@@ -245,7 +250,7 @@ rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
-  racestudio-io/               # import/export — RaceChrono AiM CSV writer (5.1)
+  racestudio-io/               # import/export — AiM CSV writer (5.1) + reader (5.2)
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
@@ -264,6 +269,7 @@ scripts/
   fetch_fixtures.sh            # fetch .xrk samples + regenerate goldens
   gen_goldens.py               # libxrk -> deterministic golden JSON
   gen_csv_golden.sh            # regenerate the AiM CSV byte golden (5.1)
+  gen_session_golden.sh        # regenerate the imported-session structural golden (5.2)
   e2e.sh                       # build pipeline + corpus golden conformance (1.8)
   spike_xdrk_linkage.sh        # reproducible xdrk-crate linkage probe (ADR 0002)
 tests/
