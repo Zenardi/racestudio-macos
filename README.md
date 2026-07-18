@@ -1,101 +1,27 @@
 # RaceStudio-macOS
 
+[![CI](https://github.com/Zenardi/racestudio-macos/actions/workflows/ci.yml/badge.svg)](https://github.com/Zenardi/racestudio-macos/actions/workflows/ci.yml)
+
 A native macOS re-implementation of AiM **RaceStudio 3** telemetry analysis —
 successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter).
 
-> **Status:** **M0 — Foundations, Tooling & TDD Harness** complete (0.1–0.7);
-> **M1 — Rust Core: XRK Decode** complete (1.2–1.8). M0 shipped the scaffold, the Rust +
-> Swift **coverage gates**, the **UniFFI xcframework pipeline**, the
-> **golden-fixtures harness** (libxrk-derived oracle JSON + Rust/Swift loaders),
-> the shared DoD/CI/Makefile, and enforceable branch protection — green,
-> warning-free, ≥95% line coverage on the logic core, enforced in CI. M1 opens
-> with the **decode-strategy decision**
-> ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)): a clean-room Rust decoder
-> validated against the `libxrk` oracle, after a spike rejected wrapping the
-> proprietary-linked `xdrk` crate. The full M1 decode layer now ships:
-> **`open_container`** parses the `.xrk` container header into session
-> **metadata** (driver, vehicle, venue, session date/time) plus the structural
-> counts (channels, GPS presence, lap markers) the later decoders consume;
-> **`decode_channels`** turns the container's `CHS` table and `(S`/`(M` sample
-> streams into typed, unit-tagged **channel series** (`name`, `unit`,
-> `sample_rate_hz`, `(timecode, value)` samples); **`decode_gps`** decodes
-> the u-blox **NAV-SOL** stream into `GpsData` — latitude/longitude (ECEF →
-> geodetic, matching the golden to 1e-8), speed (m/s), altitude, accuracy, and
-> satellite count, distinguishing raw from computed GPS channels; and
-> **`decode_laps`** decodes the **LAP marker** table into `LapData` — per-lap
-> cumulative times and the best (fastest) lap. All reproduce the libxrk golden
-> to precision. These now unify (1.6) behind one call — **`decode_session`** —
-> which opens the container and runs every decoder, returning a complete,
-> immutable **`Session`** (metadata + channels + GPS + laps) through one typed,
-> `#[non_exhaustive]` **`DecodeError`**; the whole decode path is panic-free,
-> enforced by a clippy lint forbidding `unwrap`/`expect`/`panic!` on library
-> code. That `Session` is now exposed to Swift over **UniFFI** (1.7):
-> **`open_session(path)`** returns an opaque, `Arc`-backed **`SessionHandle`**,
-> and Swift reads channel data through a **windowed** `samples(channel, start,
-> count)` accessor — a bounded slice per call — so the UI never copies a whole
-> channel across the boundary; a Swift round-trip test opens the real sample,
-> lists channels, and stitches two adjacent windows. Closing M1, a **corpus-wide
-> conformance harness** (1.8) decodes **every** `fixtures/*.xrk` with
-> `decode_session` and asserts metadata/channels/GPS/laps match the committed
-> libxrk goldens within [documented tolerances](docs/DECODE_TOLERANCES.md),
-> emitting a precise diff on any mismatch and gating CI via `scripts/e2e.sh` —
-> the milestone's regression net. **M2** now stands up the app itself:
-> RaceStudio is a **document-based SwiftUI shell** (2.1) that opens
-> `.xrk`/`.xrz` files — declaring the imported AiM UTIs, running under the
-> **App Sandbox** with user-selected read-only access, and loading a picked
-> file's bytes into memory (`XRKDocument`) with a typed error on empty/unreadable
-> input, all **without decoding** yet. `SessionStore` (2.2) then drives the load
-> lifecycle: a `@MainActor ObservableObject` that decodes a URL through an
-> injected `SessionLoading` (production `FFISessionLoader` → Rust core) and
-> publishes an `idle → loading → loaded / failed` state machine, so views render
-> purely from state. File import (2.3) then brings files in three ways — Open
-> panel, drag-and-drop, and a **Recent Files** list that survives relaunch via
-> **security-scoped bookmarks**: `ImportCoordinator` validates/dedupes incoming
-> URLs and drives the store, while `RecentFilesStore` persists a most-recent-first,
-> path-deduped, max-10 list behind injectable bookmark/key-value protocols. The
-> summary screen (2.4) is the milestone's payoff — open a real `.xrk` and see its
-> contents: `SessionSummaryViewModel` turns a decoded `Session` into a metadata
-> panel, a channel list (name/unit/`"100 Hz"` rate), and a lap list
-> (`m:ss.mmm` times, best-lap marker) — all formatting, em-dash fallbacks, and
-> best-lap detection are pure/tested in Core, so the SwiftUI views are trivial
-> bindings. Closing M2, async decode (2.5) threads a clamped/monotonic
-> `DecodeProgress` through the `.loading` state, maps every `DecodeError` to a
-> user-facing `ImportError` (title/message/recovery), and supports **cancellation**
-> (a new load cancels the prior) — so opening a large `.xrk` shows a progress bar,
-> recovers from a bad file with a clear alert, and can be cancelled. **M2 is
-> complete.** **M3** opens the **analysis engine**: lap segmentation & alignment
-> (3.1) splits a decoded `Session` into per-lap views — each channel (CHS + GPS)
-> sliced to the lap's half-open time window — then derives a trapezoidal distance
-> axis from GPS speed and aligns any two laps in the **time** or **distance**
-> domain for overlay comparison, all validated against the beacon-lap golden.
-> Delta-t (3.2) is the overlay's core metric: `delta_t` returns the cumulative
-> time a comparison lap has gained or lost versus a reference lap as a function
-> of distance (positive ⇒ slower) — zero at the start line, the lap-time
-> difference at the finish, with both laps aligned by track position. Resampling
-> (3.3) puts heterogeneously-sampled channels on a common grid: `resample_uniform`
-> (fixed-rate, endpoint-preserving, holes across gaps wider than `max_gap`) and
-> `to_distance_grid` (onto a supplied distance axis), linearly interpolated and
-> cross-checked against libxrk's `resample_to_timecodes`. Statistics (3.4) reduce
-> any channel — whole-session, per-lap, or over a half-open `[t0, t1)` window — to
-> `channel_stats` (min / max / mean / population & sample std / RMS / count /
-> range) using Welford's numerically stable one-pass moments, ignoring `NaN`
-> holes and cross-checked per channel against a numpy oracle. Math channels (3.5)
-> add a small expression language — lexer, precedence-climbing parser, and
-> evaluator — for user-defined channels like `sqrt(Ax*Ax + Ay*Ay)`: `+ - * /`
-> with correct precedence, parentheses, unary minus, scientific-notation
-> literals, a built-in function set (`abs min max sqrt sin cos tan log exp pow
-> clamp`), and channel references resolved to a scalar or a per-sample series.
-> Every malformed input returns a typed `ExprError` with a `(line, col)` — never
-> a panic. Derived channels (3.6) compute what the logger doesn't record —
-> GPS `heading` (ENU bearing, `atan2(V_east, V_north)`), `yaw_rate` (with ±180°
-> wrap), longitudinal and lateral acceleration in g, and a nearest-centroid
-> `gear_estimate` — matching XRKConverter/libxrk's computed channels on the
-> golden so overlays agree with the reference tool. Finally the windowed FFT
-> (3.7) gives a channel's frequency spectrum: `spectrum` applies a window
-> (rectangular / Hann / Hamming / Blackman), transforms with a mixed-radix FFT,
-> and returns a coherent-gain-corrected single-sided amplitude spectrum on a
-> `k·fs/N` axis — peak amplitudes physical to ~1%, Parseval-conserving. **M3 is
-> complete.**
+> **Status:** **M0–M4 complete**; **M5 — Import/Export & Session Management** in
+> progress. The logic core (the Rust crates + the Swift `RaceStudioCore` library)
+> stays green, warning-free, and ≥95% line-covered, enforced in CI.
+
+| Milestone | Scope | Issues | Status |
+| --- | --- | --- | --- |
+| **M0 — Foundations, Tooling & TDD Harness** | Scaffold, Rust + Swift **coverage gates**, the **UniFFI xcframework pipeline**, the **golden-fixtures harness** (libxrk oracle JSON + Rust/Swift loaders), the shared DoD/CI/Makefile, and enforceable branch protection. | 0.1–0.7 | ✅ Complete |
+| **M1 — Rust Core: XRK Decode** | Clean-room `.xrk` decoder ([ADR 0002](docs/adr/0002-xrk-decode-strategy.md)) — `open_container`, `decode_channels`, `decode_gps`, and `decode_laps` unified behind `decode_session` into an immutable, panic-free `Session`, with a corpus-wide conformance harness gating CI to within [documented tolerances](docs/DECODE_TOLERANCES.md). | 1.1–1.8 | ✅ Complete |
+| **M2 — App Shell & File Import** | Document-based SwiftUI shell (App Sandbox, AiM UTIs), the `SessionStore` `idle → loading → loaded / failed` load lifecycle, file import (Open panel / drag-and-drop / security-scoped **Recent Files**), the session summary screen, and async decode with progress + cancellation. | 2.1–2.5 | ✅ Complete |
+| **M3 — Analysis Engine** | Lap segmentation & alignment, delta-t, resampling, Welford statistics, a math-channel **expression engine**, derived channels (heading / yaw-rate / accel / gear), and a windowed **FFT** — panic-free with typed errors, exposed to Swift over UniFFI (3.8). | 3.1–3.8 | ✅ Complete |
+| **M4 — Analysis UI** | Time/distance line plot, lap overlay + delta-t strip, GPS track map, channel table & digital readouts, histogram / XY-scatter, a live-validated math editor, and a **linked workspace cursor** shared across tiles. | 4.1–4.7 | ✅ Complete |
+| **M5 — Import/Export & Session Management** | RaceChrono **AiM-CSV export** (5.1) and **CSV import** (5.2) in Rust `racestudio-io`; the **session library index** — content-id-keyed summaries with search / filter and atomic, crash-safe on-disk persistence (5.3, `RaceStudioCore`); project / workspace files (5.4). | 5.1–5.3 ✅ · 5.4 ⏳ | 🚧 In progress |
+| **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. | 6.x | ⏳ Planned |
+| **M7 — Parity, Performance & Release** | Feature parity with RaceStudio 3, performance tuning, and a packaged release. | 7.x | ⏳ Planned |
+
+Per-feature detail lives in **[Architecture](#architecture)**, which documents
+each sub-issue's contribution to its crate/target.
 
 ## Architecture
 
@@ -220,6 +146,15 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   identity-keyed broadcast that skips the originator) — the shared cursor &
   selection contract the M4 tiles consume. (4.4's placeholder `WorkspaceCursor`
   struct became a scalar `cells(atX:)` argument, freeing the name for it.)
+  5.3 adds the `Library/` model — `SessionSummary` (a `Codable` per-session
+  summary: venue / date / vehicle / driver / lap count / best lap / source), a
+  `SessionIndex` that summarises each decoded/imported `Session` and keeps
+  entries de-duplicated by a stable, content-derived SHA-256 id with
+  case-insensitive `search` and a structured `filter` (both date-descending),
+  and `LibraryStore` for **atomic, crash-safe** JSON persistence — a corrupt
+  index loads as empty (typed `LibraryError`) and a moved/deleted source is
+  flagged unavailable rather than dropped — the browsable, searchable session
+  library.
 - **`RaceStudio`** — a thin `@main` SwiftUI shell that holds no logic and is
   excluded from the coverage metric by target. As of 2.1 it is a
   **document-based** app (`DocumentGroup` over `XRKDocument`) that opens
@@ -254,7 +189,7 @@ core/
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
-  Sources/RaceStudioCore/      # logic library — session store, file types, doc bytes, FFI bindings
+  Sources/RaceStudioCore/      # logic library — session store, analysis/plot models, session library, FFI bindings
   Sources/RaceStudio/          # @main SwiftUI shell — DocumentGroup, open/drop/recents, summary views
   Tests/RaceStudioCoreTests/   # swift-testing smoke + FFI round-trip + file-type/document tests
   Generated/                   # checked-in uniffi-generated Swift bindings
@@ -280,7 +215,7 @@ tests/
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
 docs/DECODE_TOLERANCES.md      # decode conformance tolerance table (1.8)
-docs/adr/                      # architecture decision records (0001 FFI, 0002 decode)
+docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render)
 docs/spike/                    # spike evidence (xdrk linkage finding)
 Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
 ```
