@@ -22,8 +22,14 @@ use crate::grid::uniform_grid_ms;
 use crate::heading::compute_heading;
 use crate::quoting::{fmt_seg_time, quote_all};
 
-/// m/s → km/h, for GPS speed and velocity-accuracy.
-const MS_TO_KMH: f64 = 3.6;
+/// m/s → km/h, for GPS speed and velocity-accuracy. Shared with the importer
+/// (5.2), which divides by it to invert the scale.
+pub(crate) const MS_TO_KMH: f64 = 3.6;
+
+/// The output column names this writer stores in km/h (scaled by [`MS_TO_KMH`]);
+/// the importer (5.2) reverses the scale for exactly these. Kept in sync with
+/// [`GPS_COLUMN_MAP`] by `test_kmh_output_channels_match_column_map`.
+pub(crate) const KMH_OUTPUT_CHANNELS: &[&str] = &["GPS Speed", "GPS SpdAccuracy"];
 
 /// The GPS columns to emit, in order: `(source channel, output name, unit,
 /// scale, decimals)` — ported verbatim from `xrk2csv.GPS_COLUMN_MAP`. A
@@ -394,6 +400,19 @@ fn strip_scientific(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_kmh_output_channels_match_column_map() {
+        // The importer inverts the km/h scale for KMH_OUTPUT_CHANNELS; those must
+        // be exactly the GPS_COLUMN_MAP entries scaled by MS_TO_KMH, or the
+        // export/import round-trip silently breaks when the map changes.
+        let scaled: Vec<&str> = GPS_COLUMN_MAP
+            .iter()
+            .filter(|&&(_, _, _, scale, _)| scale == MS_TO_KMH)
+            .map(|&(_, out, _, _, _)| out)
+            .collect();
+        assert_eq!(scaled, KMH_OUTPUT_CHANNELS);
+    }
 
     #[test]
     fn test_fmt_g_fixed_range() {

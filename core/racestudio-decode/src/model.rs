@@ -34,6 +34,27 @@ pub struct Session {
 }
 
 impl Session {
+    /// Assemble a `Session` from already-built parts — for callers that
+    /// reconstruct a session from a source other than an `.xrk` file (e.g. the
+    /// CSV importer, issue 5.2). `first_lap_origin_ms` is `None` for such
+    /// sessions (their timecodes are already session-relative).
+    #[must_use]
+    pub fn new(
+        metadata: Metadata,
+        channels: Vec<Channel>,
+        gps: Option<GpsData>,
+        laps: LapData,
+        first_lap_origin_ms: Option<i64>,
+    ) -> Self {
+        Session {
+            metadata,
+            channels,
+            gps,
+            laps,
+            first_lap_origin_ms,
+        }
+    }
+
     /// The parsed session metadata (driver, vehicle, venue, date/time).
     #[must_use]
     pub fn metadata(&self) -> &Metadata {
@@ -111,4 +132,33 @@ pub fn decode_session(path: impl AsRef<Path>) -> Result<Session, DecodeError> {
         laps,
         first_lap_origin_ms,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::channels::ChannelMeta;
+
+    #[test]
+    fn test_session_new_assembles_parts() {
+        // The public constructor (used by the CSV importer, 5.2) bundles the
+        // parts without decoding; accessors return exactly what was passed.
+        let channel = Channel::new(
+            ChannelMeta::new("RPM".to_string(), "rpm".to_string(), 20.0, 0, true),
+            vec![(0.0, 3000.0)],
+        );
+        let session = Session::new(
+            Metadata::default(),
+            vec![channel],
+            None,
+            LapData::new(Vec::new()),
+            None,
+        );
+        assert_eq!(session.channels().len(), 1);
+        assert_eq!(session.channels()[0].name(), "RPM");
+        assert!(session.gps().is_none());
+        assert!(session.laps().is_empty());
+        assert_eq!(session.first_lap_origin_ms(), None);
+        assert_eq!(session.metadata(), &Metadata::default());
+    }
 }

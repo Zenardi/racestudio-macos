@@ -38,6 +38,18 @@ pub struct Lap {
 }
 
 impl Lap {
+    /// Construct a lap from its index and session-relative start/duration (both
+    /// seconds) — for callers that reconstruct laps outside the `.xrk` decoder
+    /// (e.g. the CSV importer's `laps_from_beacons`, issue 5.2).
+    #[must_use]
+    pub fn new(index: u32, start_time_s: f64, duration_s: f64) -> Self {
+        Lap {
+            index,
+            start_time_s,
+            duration_s,
+        }
+    }
+
     /// Zero-based lap index within the session.
     #[must_use]
     pub fn index(&self) -> u32 {
@@ -71,6 +83,22 @@ pub struct LapData {
 }
 
 impl LapData {
+    /// Construct lap timing from a list of laps, computing the best-lap index as
+    /// the minimum-duration lap — for callers that reconstruct laps outside the
+    /// `.xrk` decoder (e.g. the CSV importer, issue 5.2). An empty list yields no
+    /// best lap.
+    #[must_use]
+    pub fn new(laps: Vec<Lap>) -> Self {
+        let best_lap_index = laps
+            .iter()
+            .min_by(|a, b| a.duration_s.total_cmp(&b.duration_s))
+            .map(Lap::index);
+        LapData {
+            laps,
+            best_lap_index,
+        }
+    }
+
     /// The decoded laps, in order.
     #[must_use]
     pub fn laps(&self) -> &[Lap] {
@@ -430,6 +458,23 @@ mod tests {
         assert_eq!(data.best_lap_index(), None);
         assert!(data.best_lap().is_none());
         assert_eq!(data.len(), 0);
+    }
+
+    #[test]
+    fn test_lapdata_new_constructor_and_best_lap() {
+        // The public constructor (used by the CSV importer, 5.2) selects the
+        // minimum-duration lap as best.
+        let data = LapData::new(vec![
+            Lap::new(0, 0.0, 60.0),
+            Lap::new(1, 60.0, 55.0),
+            Lap::new(2, 115.0, 58.0),
+        ]);
+        assert_eq!(data.len(), 3);
+        assert_eq!(data.best_lap_index(), Some(1), "fastest is lap 1 (55 s)");
+        assert!((data.best_lap().expect("best").duration_s() - 55.0).abs() < 1e-9);
+        assert!((data.laps()[2].end_time_s() - 173.0).abs() < 1e-9);
+        // No laps → no best lap.
+        assert_eq!(LapData::new(Vec::new()).best_lap_index(), None);
     }
 
     #[test]

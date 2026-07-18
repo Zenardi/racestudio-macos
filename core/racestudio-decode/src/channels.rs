@@ -47,6 +47,26 @@ pub struct ChannelMeta {
 }
 
 impl ChannelMeta {
+    /// Construct channel metadata directly — for callers that build a
+    /// [`Session`](crate::Session) from a source other than an `.xrk` (e.g. the
+    /// CSV importer, issue 5.2).
+    #[must_use]
+    pub fn new(
+        name: String,
+        unit: String,
+        sample_rate_hz: f64,
+        decimals: u8,
+        interpolate: bool,
+    ) -> Self {
+        ChannelMeta {
+            name,
+            unit,
+            sample_rate_hz,
+            decimals,
+            interpolate,
+        }
+    }
+
     /// Channel name (the `CHS` long name, e.g. `AccelerometerX`).
     #[must_use]
     pub fn name(&self) -> &str {
@@ -92,6 +112,15 @@ pub struct Channel {
 }
 
 impl Channel {
+    /// Construct a channel from its metadata and `(timecode_ms, value)` samples —
+    /// for callers that build a [`Session`](crate::Session) from a non-`.xrk`
+    /// source (e.g. the CSV importer, issue 5.2). Sample values may be `NaN`
+    /// (a missing/blank cell); no ordering is enforced here.
+    #[must_use]
+    pub fn new(meta: ChannelMeta, samples: Vec<(f64, f64)>) -> Self {
+        Channel { meta, samples }
+    }
+
     /// The channel's metadata (name, unit, sample rate, precision).
     #[must_use]
     pub fn meta(&self) -> &ChannelMeta {
@@ -645,6 +674,23 @@ mod tests {
         let mut b = Builder::default();
         b.walk(bytes, true)?;
         Ok(b.into_channels())
+    }
+
+    #[test]
+    fn test_channel_and_meta_constructors() {
+        // The public constructors (used by the CSV importer, 5.2) round-trip
+        // through the accessors, including NaN sample values.
+        let meta = ChannelMeta::new("RPM".to_string(), "rpm".to_string(), 20.0, 2, true);
+        assert_eq!(meta.name(), "RPM");
+        assert_eq!(meta.unit(), "rpm");
+        assert!((meta.sample_rate_hz() - 20.0).abs() < 1e-9);
+        assert_eq!(meta.decimals(), 2);
+        assert!(meta.interpolate());
+
+        let channel = Channel::new(meta, vec![(0.0, 3000.0), (50.0, f64::NAN)]);
+        assert_eq!(channel.name(), "RPM");
+        assert_eq!(channel.samples().len(), 2);
+        assert!(channel.samples()[1].1.is_nan());
     }
 
     #[test]

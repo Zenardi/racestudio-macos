@@ -9,14 +9,17 @@
 //! consecutive fixes, and serializes the header + name/unit + data blocks with
 //! AiM's `QUOTE_ALL` quoting and the no-trailing-comma rule RaceChrono requires.
 //!
-//! [`write_aim_csv`] is the entry point; the [`compute_heading`], [`quote_all`],
-//! [`fmt_seg_time`], and [`uniform_grid_ms`] building blocks are public so they
-//! can be tested and reused directly. It is the inverse target of 5.2 (CSV
-//! import); import, the library index (5.3), and any SwiftUI export dialog are
-//! out of scope here.
+//! [`write_aim_csv`] is the export entry point; [`read_csv`] is its inverse (5.2)
+//! — it parses a generic or AiM RS2Analysis CSV back into a
+//! [`Session`](racestudio_decode::Session), reconstructing channels, metadata,
+//! and laps (from `Beacon Markers`) and normalizing km/h speed back to m/s. The
+//! [`compute_heading`], [`quote_all`], [`fmt_seg_time`], [`uniform_grid_ms`],
+//! [`normalize_unit`], and [`laps_from_beacons`] building blocks are public so
+//! they can be tested and reused directly. The library index (5.3), project
+//! files (5.4), and any SwiftUI dialog are out of scope here.
 //!
-//! Every entry point returns [`Result`] with the single [`IoError`] enum and
-//! never panics on caller input.
+//! Every entry point returns [`Result`] — [`IoError`] for export, [`ImportError`]
+//! for import — and never panics on caller input.
 
 // The writer is a pure, panic-free library (mirrors the decode/analysis crates):
 // forbid unwrap/expect/panic on shipped code; test code is exempt.
@@ -26,13 +29,19 @@
 )]
 
 pub mod csv_export;
+pub mod csv_import;
 pub mod error;
 pub mod grid;
 pub mod heading;
+pub mod laps_from_beacons;
 pub mod quoting;
+pub mod units;
 
 pub use csv_export::{write_aim_csv, ExportOptions, ExportReport};
-pub use error::IoError;
+pub use csv_import::read_csv;
+pub use error::{ImportError, IoError};
 pub use grid::uniform_grid_ms;
 pub use heading::compute_heading;
+pub use laps_from_beacons::laps_from_beacons;
 pub use quoting::{fmt_seg_time, quote_all};
+pub use units::{normalize_unit, normalized_unit};

@@ -369,3 +369,53 @@ pub fn equirect_distance(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let dy = (lat2 - lat1).to_radians() * 6_371_000.0;
     dx.hypot(dy)
 }
+
+/// The RaceStudio reference CSV (`fuji_0033_reference.csv`), or `None` when the
+/// git-ignored fixture is absent (fetched in CI).
+pub fn reference_csv_or_skip() -> Option<std::path::PathBuf> {
+    let path = fixtures_dir().join("fuji_0033_reference.csv");
+    if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0) >= 1024 {
+        return Some(path);
+    }
+    corpus_absent("fuji_0033_reference.csv absent (run `make fixtures`)");
+    None
+}
+
+/// Honor the repo's `RS_REQUIRE_CORPUS` convention: when it is set, an absent
+/// fixture is a hard failure (so a CI fetch regression can't pass a corpus test
+/// vacuously); otherwise the test skips with a note. Returns `true` (skip).
+pub fn corpus_absent(reason: &str) -> bool {
+    assert!(
+        std::env::var_os("RS_REQUIRE_CORPUS").is_none(),
+        "RS_REQUIRE_CORPUS is set but {reason}"
+    );
+    eprintln!("skip: {reason}");
+    true
+}
+
+/// A deterministic structural summary of an imported `Session` (channel
+/// names/units/sample-counts, lap count, metadata) as pretty JSON — the shape of
+/// the committed `fuji_0033.session.json` golden.
+pub fn session_summary(session: &Session) -> String {
+    use serde_json::json;
+    let meta = session.metadata();
+    let channels: Vec<_> = session
+        .channels()
+        .iter()
+        .map(|c| json!({"name": c.name(), "unit": c.unit(), "samples": c.samples().len()}))
+        .collect();
+    let value = json!({
+        "channel_count": session.channels().len(),
+        "lap_count": session.laps().len(),
+        "metadata": {
+            "track": meta.track,
+            "vehicle": meta.vehicle,
+            "driver": meta.driver,
+            "series": meta.series,
+            "log_date": meta.log_date,
+            "log_time": meta.log_time,
+        },
+        "channels": channels,
+    });
+    serde_json::to_string_pretty(&value).unwrap_or_default()
+}
