@@ -115,6 +115,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 │                                               │
 │   racestudio-decode    clean-room .xrk decode │  ← 95% Rust coverage target
 │   racestudio-analysis  channels / math        │  ← 95% Rust coverage target
+│   racestudio-io        CSV export (AiM CSV)   │  ← 95% Rust coverage target
 │   racestudio-ffi       UniFFI boundary        │
 └───────────────────────────────────────────────┘
 ```
@@ -145,6 +146,16 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   The windowed FFT (3.7, module `fft`) adds `spectrum` / `apply_window` / `Window`
   — a `rustfft`-backed single-sided amplitude spectrum with per-window coherent-
   gain correction. Panic-free, with typed errors throughout.
+- **`racestudio-io`** — import/export (M5), built on the decoded `Session`. CSV
+  export (5.1) is the first layer: `write_aim_csv(session, w, opts)` reproduces,
+  in Rust, the RaceChrono-compatible "AiM CSV File" that XRKConverter's
+  `xrk2csv.py` writes — every channel resampled onto a uniform 20 Hz grid
+  (reusing `racestudio-analysis`'s resampler), GPS speed / velocity-accuracy
+  converted m/s → km/h, latitude/longitude at 8 decimals, a synthesized
+  `GPS Heading` (great-circle bearing) after `GPS Speed`, and `QUOTE_ALL`
+  serialization with no trailing comma. Validated to within 0.5 km/h speed and
+  1.0 m position of the RaceStudio reference, with a byte golden for regression.
+  Panic-free, with a single `IoError`.
 - **`racestudio-ffi`** — the UniFFI boundary that bridges the Rust core to
   Swift, packaged as a universal (arm64 + x86_64) `RaceStudioFFI.xcframework`.
   As of 1.7 it exposes the decode interface — `open_session(path)`, an opaque
@@ -234,6 +245,7 @@ rustfmt.toml · clippy.toml     # shared Rust format/lint config
 core/
   racestudio-decode/           # .xrk decoder — container/channels/gps/laps/session
   racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
+  racestudio-io/               # import/export — RaceChrono AiM CSV writer (5.1)
   racestudio-ffi/              # UniFFI boundary — open_session + windowed samples
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
@@ -251,6 +263,7 @@ scripts/
   build_xcframework.sh         # universal xcframework + Swift bindings
   fetch_fixtures.sh            # fetch .xrk samples + regenerate goldens
   gen_goldens.py               # libxrk -> deterministic golden JSON
+  gen_csv_golden.sh            # regenerate the AiM CSV byte golden (5.1)
   e2e.sh                       # build pipeline + corpus golden conformance (1.8)
   spike_xdrk_linkage.sh        # reproducible xdrk-crate linkage probe (ADR 0002)
 tests/
