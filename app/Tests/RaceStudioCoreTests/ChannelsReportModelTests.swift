@@ -177,14 +177,18 @@ import Foundation
         #expect(table.columns.map(\.label) == ["Lap 1 · S1", "Lap 1 · S2"])
     }
 
-    @Test func test_per_segment_mode_computes_statistics_per_segment() throws {
+    @Test func test_per_segment_mode_partitions_each_lap_without_double_counting() throws {
         let model = ChannelsReportModel()
         model.setMode(.perSegment)
         model.setSegmentCount(2)
-        // Lap [0, 10] split at 5 → segment 1 [0, 5] max 5, segment 2 [5, 10] max 10.
+        // Lap [0, 10] at 1 Hz splits at t = 5 into the half-open [0, 5) and the
+        // inclusive [5, 10], so the boundary sample t = 5 belongs to segment 2 only.
         let cells = model.table(traces: [trace("Speed")], laps: wholeLap()).rows[0].cells
-        #expect(try #require(cells[0].statistics).maximum == 5)
-        #expect(try #require(cells[1].statistics).maximum == 10)
+        let first = try #require(cells[0].statistics)
+        let second = try #require(cells[1].statistics)
+        #expect(first.maximum == 4, "segment 1 [0, 5) excludes the boundary sample t = 5")
+        #expect(second.maximum == 10)
+        #expect(first.count + second.count == 11, "the 11 samples are partitioned, not double-counted")
     }
 
     @Test func test_report_mode_titles_and_ids_label_the_control() {

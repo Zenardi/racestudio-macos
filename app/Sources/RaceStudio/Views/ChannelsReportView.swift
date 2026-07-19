@@ -10,8 +10,8 @@ import RaceStudioCore
 ///
 /// Deliberately thin: the stat assembly, the graph mapping, and the presets are all
 /// derived in `RaceStudioCore.ChannelsReportModel`; this view only lays out the
-/// table + graph and forwards taps. Rows drive the graph; tapping a cell hot-tracks
-/// its point.
+/// table + graph and forwards taps. Tapping a cell plots its channel row and
+/// hot-tracks its column, so the graph highlights exactly that cell's point.
 struct ChannelsReportPanel: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var report: ChannelsReportModel
@@ -26,7 +26,7 @@ struct ChannelsReportPanel: View {
                 controls
                 Divider()
                 VSplitView {
-                    tableView(table)
+                    tableView(table, selected: graph.channel)
                     graphView(graph)
                 }
             }
@@ -101,7 +101,8 @@ struct ChannelsReportPanel: View {
 
     /// The channels × columns grid: a header of interval labels, then a row per
     /// channel showing each cell's min/max/avg/median (the chosen statistic bold).
-    private func tableView(_ table: ReportTable) -> some View {
+    /// `selected` is the row the graph plots, resolved once by the caller.
+    private func tableView(_ table: ReportTable, selected: ChannelID?) -> some View {
         ScrollView([.horizontal, .vertical]) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
@@ -113,7 +114,7 @@ struct ChannelsReportPanel: View {
                 Divider()
                 ForEach(table.rows) { row in
                     GridRow {
-                        rowHeader(row.channel, in: table)
+                        rowHeader(row.channel, selected: selected)
                         ForEach(row.cells) { cell in cellView(cell, statistic: table.statistic) }
                     }
                 }
@@ -123,8 +124,8 @@ struct ChannelsReportPanel: View {
     }
 
     /// A channel name button that selects the row the graph plots (bold when active).
-    private func rowHeader(_ channel: ChannelID, in table: ReportTable) -> some View {
-        let isActive = report.resolvedSelectedRow(table.rows.map(\.channel)) == channel
+    private func rowHeader(_ channel: ChannelID, selected: ChannelID?) -> some View {
+        let isActive = channel == selected
         return Button { report.selectRow(channel) } label: {
             Text(channel.name)
                 .font(.caption.weight(isActive ? .bold : .regular))
@@ -135,11 +136,11 @@ struct ChannelsReportPanel: View {
     }
 
     /// One cell: the chosen statistic prominent, with min/max/avg/median beneath.
-    /// Tapping hot-tracks the cell's column on the graph.
+    /// Tapping plots the cell's channel and hot-tracks its column on the graph.
     @ViewBuilder
     private func cellView(_ cell: ReportCell, statistic: ReportStatistic) -> some View {
         if let stats = cell.statistics {
-            Button { report.highlightColumn(cell.column) } label: {
+            Button { select(cell) } label: {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(format(stats.value(for: statistic)))
                         .font(.caption.monospacedDigit().bold())
@@ -156,6 +157,13 @@ struct ChannelsReportPanel: View {
         } else {
             Text("—").foregroundColor(.secondary)
         }
+    }
+
+    /// Tapping a cell plots its channel (row) and hot-tracks its column, so the
+    /// graph highlights exactly the tapped cell's point.
+    private func select(_ cell: ReportCell) {
+        report.selectRow(cell.channel)
+        report.highlightColumn(cell.column)
     }
 
     private func isHighlighted(_ column: String) -> Bool {
@@ -192,18 +200,28 @@ struct ChannelsReportPanel: View {
     }
 
     /// A single-channel trace of the graph's points (x = lap number, y = statistic),
-    /// so the reused line plot draws the stat-vs-lap curve.
+    /// so the reused line plot draws the stat-vs-lap curve. The lap-number x is
+    /// mirrored onto both the time and distance bases, so the reused plot's built-in
+    /// Time/Distance toggle renders the same curve either way instead of collapsing.
     private func graphTrace(_ graph: ReportGraph) -> ChannelTrace {
         let name = graph.channel.map { "\($0.name) \(graph.statistic.title)" } ?? graph.statistic.title
         let xs = graph.points.map(\.x)
-        return ChannelTrace(name: name, times: xs,
-                            distances: Array(repeating: 0, count: xs.count),
-                            values: graph.points.map(\.value))
+        return ChannelTrace(name: name, times: xs, distances: xs, values: graph.points.map(\.value))
     }
 
-    /// A compact numeric format (up to two decimals, trailing zeros trimmed).
+    /// Up to two decimals, trailing zeros trimmed (whole numbers show no decimals);
+    /// an em dash for a non-finite value.
     private func format(_ value: Double) -> String {
         guard value.isFinite else { return "—" }
-        return String(format: "%.2f", value)
+        return Self.numberFormatter.string(from: NSNumber(value: value)) ?? String(value)
     }
+
+    private static let numberFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 0
+        return formatter
+    }()
 }

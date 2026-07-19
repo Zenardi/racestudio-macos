@@ -31,17 +31,24 @@ public struct ReportInterval: Equatable, Sendable, Identifiable {
     public let lap: LapID
     /// The graph x-position — the lap number (segments add a within-lap fraction).
     public let x: Double
-    /// The inclusive time window `[start, end]` (seconds) the statistics cover.
+    /// The time window (seconds) the statistics cover, `[start, end]` when
+    /// ``includesEnd`` else half-open `[start, end)`.
     public let start: Double
     public let end: Double
+    /// Whether `end` is inclusive. Laps and each lap's final segment include their
+    /// end; a lap's internal segment boundaries are half-open so a sample landing
+    /// exactly on a boundary is counted in one segment, not both.
+    public let includesEnd: Bool
 
-    public init(id: String, label: String, lap: LapID, x: Double, start: Double, end: Double) {
+    public init(id: String, label: String, lap: LapID, x: Double,
+                start: Double, end: Double, includesEnd: Bool = true) {
         self.id = id
         self.label = label
         self.lap = lap
         self.x = x
         self.start = start
         self.end = end
+        self.includesEnd = includesEnd
     }
 }
 
@@ -240,11 +247,11 @@ public final class ChannelsReportModel: ObservableObject {
         let rows = traces.compactMap { trace -> ReportRow? in
             guard seenChannels.insert(trace.name).inserted else { return nil }
             let channel = ChannelID(trace.name)
-            let series = ChannelSeries(xs: trace.samples.map(\.time), values: trace.samples.map(\.value))
+            let series = trace.timeSeries
             let cells = columns.map { column -> ReportCell in
-                let slice = series.windowed(from: column.start, through: column.end)
+                let values = Self.values(of: series, in: column)
                 return ReportCell(channel: channel, column: column.id,
-                                  statistics: ChannelStatistics.from(slice.values))
+                                  statistics: ChannelStatistics.from(values))
             }
             return ReportRow(channel: channel, cells: cells)
         }
@@ -292,13 +299,32 @@ public final class ChannelsReportModel: ObservableObject {
         }
         let width = span / Double(segmentCount)
         return (0..<segmentCount).map { segment in
+            let isLast = segment == segmentCount - 1
+            // A segment's end and the next segment's start both use the same
+            // `start + k·width` form, so adjacent boundaries are bit-identical; the
+            // half-open windows then partition the lap with no gap and no overlap,
+            // and the last segment pins its end to the lap end and includes it.
             let start = lap.startTimeS + Double(segment) * width
-            // The last segment ends exactly at the lap end (no floating-point gap).
-            let end = segment == segmentCount - 1 ? lap.endTimeS : start + width
+            let end = isLast ? lap.endTimeS : lap.startTimeS + Double(segment + 1) * width
             return ReportInterval(id: "lap-\(lap.index)-seg-\(segment)",
                                   label: "Lap \(number) · S\(segment + 1)", lap: id,
                                   x: Double(number) + Double(segment) / Double(segmentCount),
-                                  start: start, end: end)
+                                  start: start, end: end, includesEnd: isLast)
         }
+    }
+
+    /// The channel values inside `interval`'s window — inclusive `[start, end]` when
+    /// ``ReportInterval/includesEnd`` (laps and each lap's final segment), else the
+    /// half-open `[start, end)` so a boundary sample is not counted in two adjacent
+    /// segments. `series.xs` is ascending, so this is one linear scan.
+    private static func values(of series: ChannelSeries, in interval: ReportInterval) -> [Double] {
+        var out: [Double] = []
+        for index in series.xs.indices {
+            let x = series.xs[index]
+            let withinEnd = interval.includesEnd ? x <= interval.end : x < interval.end
+            guard x >= interval.start, withinEnd else { continue }
+            out.append(series.values[index])
+        }
+        return out
     }
 }
