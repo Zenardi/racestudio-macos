@@ -50,7 +50,7 @@ import Foundation
     // MARK: - Layout rail (panel set + active layout)
 
     @Test func test_layouts_expose_the_rail_panel_set_in_order() {
-        #expect(makeModel().layouts == [.timeDistance, .channelTable, .trackMap, .summary])
+        #expect(makeModel().layouts == [.timeDistance, .channelTable, .trackMap, .lapOverlay, .summary])
     }
 
     @Test func test_initial_active_layout_is_time_distance_not_the_summary() {
@@ -74,6 +74,7 @@ import Foundation
         #expect(WindowLayout.timeDistance.title == "Time / Distance")
         #expect(WindowLayout.channelTable.title == "Channels")
         #expect(WindowLayout.trackMap.title == "Track Map")
+        #expect(WindowLayout.lapOverlay.title == "Lap Overlay")
         #expect(WindowLayout.summary.title == "Summary")
     }
 
@@ -81,6 +82,7 @@ import Foundation
         #expect(WindowLayout.timeDistance.systemImageName == "chart.xyaxis.line")
         #expect(WindowLayout.channelTable.systemImageName == "tablecells")
         #expect(WindowLayout.trackMap.systemImageName == "map")
+        #expect(WindowLayout.lapOverlay.systemImageName == "point.3.connected.trianglepath.dotted")
         #expect(WindowLayout.summary.systemImageName == "list.bullet.rectangle")
     }
 
@@ -259,6 +261,7 @@ import Foundation
         #expect(WindowLayout.timeDistance.id == "timeDistance")
         #expect(WindowLayout.channelTable.id == "channelTable")
         #expect(WindowLayout.trackMap.id == "trackMap")
+        #expect(WindowLayout.lapOverlay.id == "lapOverlay")
         #expect(WindowLayout.summary.id == "summary")
     }
 

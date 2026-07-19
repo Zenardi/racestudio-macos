@@ -50,6 +50,22 @@ public struct DataSample: Equatable, Sendable {
     }
 }
 
+/// One distance-paired channel sample (issue 8.7): a logger `time` (seconds), the
+/// cumulative track `distance` (metres) at it, and the physical `value`. Core's
+/// mirror of the FFI `DistanceSample` (timecode ms → seconds), so the lap-overlay
+/// adapter never depends on the generated bindings.
+public struct DistanceSample: Equatable, Sendable {
+    public let time: Double
+    public let distance: Double
+    public let value: Double
+
+    public init(time: Double, distance: Double, value: Double) {
+        self.time = time
+        self.distance = distance
+        self.value = value
+    }
+}
+
 /// One point of the GPS racing line (issue 8.6): a fix's WGS84 position, the
 /// cumulative track distance (metres) at it, and its logger time. Core's own
 /// mirror of the FFI `GpsTrackPoint`, so the seam and its consumers never depend
@@ -126,6 +142,17 @@ public protocol SessionDataSource: Sendable {
     /// to the real fix count and never trap — a session with no GPS track returns
     /// `[]`.
     func gpsTrack(start: UInt32, count: UInt32) -> [GPSTrackPoint]
+
+    /// Read `count` distance-paired samples of channel `channelIndex` starting at
+    /// sample index `start` (issue 8.7), for the lap-overlay distance axis. Bounded
+    /// like ``samples(channelIndex:start:count:)``; an out-of-range channel returns
+    /// `[]`.
+    func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DistanceSample]
+
+    /// The delta-t of the `comparisonLap` versus the `referenceLap` as `(distance,
+    /// dt)` points over the distance window `[start, end]` metres (issue 8.7).
+    /// Throws when a lap index is invalid or the delta-t computation fails.
+    func deltaT(referenceLap: UInt32, comparisonLap: UInt32, start: Double, end: Double) throws -> [DeltaSample]
 }
 
 /// The live analysis pump for a loaded session (issue 8.1) — the linchpin of the
@@ -205,7 +232,48 @@ public final class AnalysisSession {
         return dataSource.gpsTrack(start: window.start, count: requested)
     }
 
+    // MARK: - Lap overlay + delta-t (issue 8.7)
+
+    /// A distance-aligned ``OverlayLap`` for each of `laps` carrying `channel`,
+    /// built from the channel's distance-paired samples (8.2) sliced to each lap's
+    /// `[startTimeS, endTimeS]` window and re-based so every lap starts at time 0 /
+    /// distance 0 — so laps of different lengths overlay on one shared distance
+    /// axis. Reads the channel once; an unknown channel or a lap with no samples in
+    /// range contributes nothing.
+    public func overlayLaps(channel: String, laps: [Lap]) -> [OverlayLap] {
+        guard let index = session.channels.firstIndex(where: { $0.name == channel }) else { return [] }
+        let samples = read(distanceChannelIndex: index, sampleCount: session.channels[index].sampleCount)
+        return laps.compactMap { lap in
+            let inLap = samples.filter { $0.time >= lap.startTimeS && $0.time <= lap.endTimeS }
+            guard let first = inLap.first else { return nil }
+            return OverlayLap(id: LapID(Int(lap.index)), label: Self.lapLabel(lap),
+                              times: inLap.map { $0.time - lap.startTimeS },
+                              distances: inLap.map { $0.distance - first.distance },
+                              channels: [channel: inLap.map(\.value)])
+        }
+    }
+
+    /// The delta-t strip of `comparison` versus `reference` over the whole lap
+    /// (3.2), or `[]` when they are the same lap or the computation is unavailable
+    /// (e.g. a lap the core rejects) — the overlay then shows an empty strip rather
+    /// than surfacing the error.
+    public func deltaSeries(reference: Lap, comparison: Lap) -> [DeltaSample] {
+        guard reference.index != comparison.index else { return [] }
+        return (try? dataSource.deltaT(referenceLap: reference.index, comparisonLap: comparison.index,
+                                       start: -.infinity, end: .infinity)) ?? []
+    }
+
     // MARK: - Internals
+
+    /// The lap's display label, `"Lap N"` (1-based, matching the UI's lap picker).
+    private static func lapLabel(_ lap: Lap) -> String { "Lap \(lap.index + 1)" }
+
+    /// Read the whole distance-paired channel, clamped to `[0, sampleCount]` so no
+    /// read runs past the channel's end.
+    private func read(distanceChannelIndex index: Int, sampleCount: UInt32) -> [DistanceSample] {
+        guard sampleCount > 0 else { return [] }
+        return dataSource.samplesWithDistance(channelIndex: UInt32(index), start: 0, count: sampleCount)
+    }
 
     private func channel(at index: Int) -> Channel? {
         session.channels.indices.contains(index) ? session.channels[index] : nil

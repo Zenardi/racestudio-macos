@@ -142,6 +142,23 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
                           distance: $0.distance, time: $0.timecode / 1000)
         }
     }
+
+    public func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DistanceSample] {
+        // Pre-clamped by `AnalysisSession`; the only throw is `ChannelOutOfRange`
+        // for a bad index, already excluded — fall back to empty rather than trap.
+        let raw = (try? handle.samplesWithDistance(channelIndex: channelIndex, start: start, count: count)) ?? []
+        // `timecode` is milliseconds; Core's `time` is seconds, as `samples` maps.
+        return raw.map { DistanceSample(time: $0.timecode / 1000, distance: $0.distance, value: $0.value) }
+    }
+
+    public func deltaT(referenceLap: UInt32, comparisonLap: UInt32,
+                       start: Double, end: Double) throws -> [DeltaSample] {
+        // The delta-t window is a distance window (metres), not time — pass it
+        // through unscaled (`±∞` preserved), mapping each FFI point 1:1.
+        let raw = try handle.deltaTSeries(
+            reference: referenceLap, comparison: comparisonLap, window: FfiWindow(start: start, end: end))
+        return raw.map { DeltaSample(distance: $0.distance, dt: $0.dt) }
+    }
 }
 
 extension DecodeError {

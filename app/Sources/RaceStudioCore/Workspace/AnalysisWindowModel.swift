@@ -83,6 +83,11 @@ public final class AnalysisWindowModel: ObservableObject {
     /// colour channel onto the fixes.
     private var trackMapCache = TrackMapModel(track: [])
 
+    /// The distance-aligned overlay laps and the delta-t strips keyed by
+    /// `(reference, other lap)`, rebuilt on a lap/channel selection change (8.7).
+    private var overlayLapsCache: [OverlayLap] = []
+    private var overlayDeltasCache: [DeltaPair: [DeltaSample]] = [:]
+
     /// The channel explicitly chosen to colour the line, or `nil` to follow the
     /// first selected channel (issue 8.6). `@Published` so a colour-picker change
     /// (via ``setColorChannel(_:)``) notifies observers even though the resulting
@@ -132,8 +137,8 @@ public final class AnalysisWindowModel: ObservableObject {
         // selected channel's sample extent when the session has no laps. The
         // distance basis is a placeholder until real distances are wired in a
         // later issue, so the window scrubs on the time axis.
-        let basis = Self.timeBasis(session: session, analysis: analysis,
-                                   channelIndexByID: index, selection: selection)
+        let basis = analysisCursorTimeBasis(session: session, analysis: analysis,
+                                            channelIndexByID: index, selection: selection)
         self.linkedCursor = LinkedCursor(times: basis.times, distances: basis.distances,
                                          time: basis.times.first ?? 0)
 
@@ -176,20 +181,21 @@ public final class AnalysisWindowModel: ObservableObject {
         rebuildSelectionData()
     }
 
-    /// Toggle `lap` in the selection and refresh the readout grid's columns. Laps
-    /// do not yet scope the traces (lap overlay is a later issue), so the plot
-    /// needs no read.
+    /// Toggle `lap` in the selection and refresh the readout grid's columns and the
+    /// lap overlay (which laps are overlaid, issue 8.7).
     public func toggleLap(_ lap: LapID) {
         selection.toggleLap(lap)
         rebuildReadoutTable()
+        rebuildOverlay()
     }
 
-    /// Make `lap` the reference the measures panel compares against (issue 8.5),
-    /// selecting it if needed, and refresh the grid (a newly-added reference adds a
-    /// column).
+    /// Make `lap` the reference the measures panel and delta strip compare against
+    /// (issues 8.5 / 8.7), selecting it if needed, and refresh the grid (a
+    /// newly-added reference adds a column) and the overlay deltas.
     public func setReferenceLap(_ lap: LapID) {
         selection.setReferenceLap(lap)
         rebuildReadoutTable()
+        rebuildOverlay()
     }
 
     /// Pin or unpin `channel` as a large digital readout in the measures panel
@@ -300,6 +306,19 @@ public final class AnalysisWindowModel: ObservableObject {
         linkedCursor.moveTime(time)
     }
 
+    // MARK: - Lap overlay (issue 8.7)
+
+    /// The distance-aligned overlay laps for the selected laps, carrying the
+    /// ``overlayChannel`` — the input to the reused `LapOverlayViewModel`.
+    public var overlayLaps: [OverlayLap] { overlayLapsCache }
+
+    /// The reference lap's delta-t versus each other selected lap, keyed by
+    /// ``DeltaPair`` for ``LapOverlayViewModel`` (issue 8.7).
+    public var overlayDeltas: [DeltaPair: [DeltaSample]] { overlayDeltasCache }
+
+    /// The channel overlaid across the laps — the first selected channel, `""` when none.
+    public var overlayChannel: String { selection.channels.first?.name ?? "" }
+
     // MARK: - Internals
 
     /// Re-read the selected channels once (trace + series + formatter), so cursor
@@ -309,6 +328,7 @@ public final class AnalysisWindowModel: ObservableObject {
         defer {
             rebuildReadoutTable()
             rebuildTrackMap()
+            rebuildOverlay()
             var formatters: [ChannelID: ChannelFormatter] = [:]
             for entry in selectionData { formatters[entry.channel] = entry.formatter }
             channelFormattersCache = formatters
@@ -355,27 +375,26 @@ public final class AnalysisWindowModel: ObservableObject {
         trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries)
     }
 
-    /// The session's time extent as a two-point cursor basis: the lap span
-    /// `[earliest lap start, latest lap end]`, or — when the session has no laps —
-    /// the first selected channel's sample-time extent, so a lapless session is
-    /// still scrubbable. Empty arrays when neither is available (the cursor then
-    /// has no bounds). Distances are placeholders (`0`) — the reverse distance↔time
-    /// mapping and ``LinkedCursor/distancePosition`` are not meaningful until the
-    /// real distance axis is wired in a later issue.
-    private static func timeBasis(session: Session, analysis: AnalysisSession?,
-                                  channelIndexByID: [ChannelID: Int],
-                                  selection: AnalysisSelection) -> (times: [Double], distances: [Double]) {
-        if let start = session.laps.map(\.startTimeS).min(),
-           let end = session.laps.map(\.endTimeS).max(), start <= end {
-            return (times: [start, end], distances: [0, 0])
+    /// Rebuild the lap overlay (issue 8.7): a distance-aligned ``OverlayLap`` per
+    /// selected lap, plus the reference lap's delta-t versus each other lap.
+    private func rebuildOverlay() {
+        let channel = overlayChannel
+        guard let analysis, !channel.isEmpty else {
+            overlayLapsCache = []
+            overlayDeltasCache = [:]
+            return
         }
-        // No laps: bound the cursor by the first selected channel's sample times.
-        if let analysis, let id = selection.channels.first, let index = channelIndexByID[id] {
-            let xs = analysis.series(channelIndex: index).xs
-            if let first = xs.first, let last = xs.last, first <= last {
-                return (times: [first, last], distances: [0, 0])
+        let selectedLaps = selection.laps.selected.compactMap { lapByID[$0] }
+        overlayLapsCache = analysis.overlayLaps(channel: channel, laps: selectedLaps)
+
+        var deltas: [DeltaPair: [DeltaSample]] = [:]
+        if let referenceID = selection.laps.reference, let reference = lapByID[referenceID] {
+            for lap in selectedLaps where lap.index != reference.index {
+                let strip = analysis.deltaSeries(reference: reference, comparison: lap)
+                guard !strip.isEmpty else { continue }
+                deltas[DeltaPair(reference: referenceID, target: LapID(Int(lap.index)))] = strip
             }
         }
-        return (times: [], distances: [])
+        overlayDeltasCache = deltas
     }
 }
