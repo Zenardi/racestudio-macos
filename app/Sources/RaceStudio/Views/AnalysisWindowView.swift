@@ -18,9 +18,16 @@ struct AnalysisWindowView: View {
     // The Channels Report knobs (issue 8.10) — statistic, mode, selected row —
     // likewise held at the window level so they survive layout switches.
     @StateObject private var report = ChannelsReportModel()
+    // The Split Times knobs (issue 8.11) — split count, editable layout, focus —
+    // likewise held at the window level so they survive layout switches.
+    @StateObject private var splitReport = SplitReportModel()
+    // The live analysis pump the Split Times panel reads the per-lap base grid from
+    // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
+    private let analysis: AnalysisSession?
 
     init(viewModel: SessionViewModel) {
         _model = StateObject(wrappedValue: AnalysisWindowModel(viewModel: viewModel))
+        analysis = viewModel.analysis
         // Back the Math Channels editor with the evaluator over the retained handle
         // (issue 8.8); a non-FFI build/preview falls back to a rejecting evaluator.
         _mathManager = StateObject(wrappedValue: MathChannelsManagerModel(
@@ -35,7 +42,8 @@ struct AnalysisWindowView: View {
                 .frame(width: 240)
             Divider()
             VStack(spacing: 0) {
-                PanelHost(model: model, mathManager: mathManager, stats: stats, report: report)
+                PanelHost(model: model, mathManager: mathManager, stats: stats,
+                          report: report, splitReport: splitReport, analysis: analysis)
                 Divider()
                 MeasuresBar(model: model, cursor: model.linkedCursor)
             }
@@ -84,6 +92,8 @@ private struct PanelHost: View {
     @ObservedObject var mathManager: MathChannelsManagerModel
     @ObservedObject var stats: StatsPanelsModel
     @ObservedObject var report: ChannelsReportModel
+    @ObservedObject var splitReport: SplitReportModel
+    let analysis: AnalysisSession?
 
     var body: some View {
         Group {
@@ -106,6 +116,8 @@ private struct PanelHost: View {
                 ScatterPanel(model: model, stats: stats)
             case .channelsReport:
                 ChannelsReportPanel(model: model, report: report)
+            case .splitTimes:
+                SplitTimesPanel(model: model, report: splitReport, analysis: analysis)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:

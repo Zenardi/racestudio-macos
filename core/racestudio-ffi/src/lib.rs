@@ -22,8 +22,9 @@ use std::sync::{Arc, OnceLock};
 
 use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
-    cumulative_distance, delta_t, resample_uniform, segment_laps, spectrum, stats_over_range,
-    to_distance_grid, AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
+    cumulative_distance, delta_t, resample_uniform, segment_laps,
+    segment_times as lap_segment_times, spectrum, stats_over_range, to_distance_grid,
+    AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 
@@ -185,6 +186,18 @@ pub struct DeltaPoint {
     pub distance: f64,
     /// Delta-t in seconds (positive ⇒ the comparison lap is slower).
     pub dt: f64,
+}
+
+/// One lap's per-segment split times for the Split Times report (issue 8.11):
+/// the lap divided into `N` equal-distance segments, and the seconds spent in
+/// each (in track order).
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LapSegmentTimes {
+    /// Zero-based lap index (matches [`LapInfo::index`]).
+    pub lap_index: u32,
+    /// Seconds spent in each of the `N` segments, in track order. Always sums to
+    /// the lap duration.
+    pub segment_times: Vec<f64>,
 }
 
 /// Summary statistics for a channel window (issue 3.4).
@@ -699,6 +712,28 @@ impl SessionHandle {
             .collect())
     }
 
+    /// Split every lap into `splits` equal-distance segments and report the time
+    /// (seconds) spent in each, lap by lap (issue 8.11) — the raw grid the Split
+    /// Times report groups, times, and derives the best theoretical/rolling laps
+    /// from.
+    ///
+    /// One [`LapSegmentTimes`] per session lap, indexed by lap number, each holding
+    /// `splits.max(1)` segment times that sum to the lap duration (see
+    /// [`racestudio_analysis::segment_times`] for the distance-cut construction and
+    /// the GPS-less equal-time fallback). A session with no lap markers returns an
+    /// empty vec. Never panics.
+    #[must_use]
+    pub fn segment_times(&self, splits: u32) -> Vec<LapSegmentTimes> {
+        let n = splits.max(1) as usize;
+        self.segmented()
+            .iter()
+            .map(|lap| LapSegmentTimes {
+                lap_index: lap.number(),
+                segment_times: lap_segment_times(lap, n),
+            })
+            .collect()
+    }
+
     /// The delta-t of the `comparison` lap versus the `reference` lap, as
     /// `(distance, dt)` points restricted to the distance `window` (metres,
     /// issue 3.2).
@@ -958,6 +993,106 @@ mod tests {
             ),
             segmented_laps: OnceLock::new(),
             distance_axis: OnceLock::new(),
+        }
+    }
+
+    /// A GPS-less handle over the given CHS channels **and** lap markers — enough
+    /// to exercise the lap-based accessors (segment times, 8.11) deterministically,
+    /// with `GPS Speed` synthesised as a plain channel so the per-lap distance axis
+    /// is fully under the test's control.
+    fn handle_with_laps(
+        channels: Vec<Channel>,
+        laps: Vec<racestudio_decode::Lap>,
+    ) -> SessionHandle {
+        SessionHandle {
+            session: Session::new(
+                Metadata::default(),
+                channels,
+                None,
+                LapData::new(laps),
+                None,
+            ),
+            segmented_laps: OnceLock::new(),
+            distance_axis: OnceLock::new(),
+        }
+    }
+
+    #[test]
+    fn test_segment_times_partitions_each_lap_and_conserves_duration() {
+        // Two 5 s laps over a 10 m/s `GPS Speed` stream. Each lap is cut into 4
+        // equal-distance segments; whatever the exact cuts, every lap yields one row
+        // (indexed by lap number) of 4 segment times that sum to the 5 s duration.
+        let speed = channel(
+            SPEED_CHANNEL,
+            &(0..20)
+                .map(|i| (i as f64 * 500.0, 10.0))
+                .collect::<Vec<_>>(),
+        );
+        let laps = vec![
+            racestudio_decode::Lap::new(0, 0.0, 5.0),
+            racestudio_decode::Lap::new(1, 5.0, 5.0),
+        ];
+        let handle = handle_with_laps(vec![speed], laps);
+
+        let rows = handle.segment_times(4);
+
+        assert_eq!(rows.len(), 2, "one row per lap");
+        assert_eq!(rows[0].lap_index, 0);
+        assert_eq!(rows[1].lap_index, 1);
+        for row in &rows {
+            assert_eq!(row.segment_times.len(), 4, "4 segments per lap");
+            assert!(row.segment_times.iter().all(|&t| t >= 0.0));
+            let total: f64 = row.segment_times.iter().sum();
+            assert!(
+                (total - 5.0).abs() < 1e-9,
+                "segments sum to the 5 s duration, got {total}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_segment_times_clamps_zero_splits_and_is_empty_without_laps() {
+        // A 0 request collapses to a single whole-lap segment (never an empty inner
+        // vec); a session with no lap markers yields no rows at all.
+        let speed = channel(
+            SPEED_CHANNEL,
+            &[(0.0, 10.0), (1000.0, 10.0), (2000.0, 10.0)],
+        );
+        let one_lap = handle_with_laps(vec![speed], vec![racestudio_decode::Lap::new(0, 0.0, 2.0)]);
+        let rows = one_lap.segment_times(0);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(
+            rows[0].segment_times.len(),
+            1,
+            "0 splits → one whole-lap segment"
+        );
+        assert!((rows[0].segment_times[0] - 2.0).abs() < 1e-9);
+
+        let no_laps = handle_with_channels(vec![channel("AX", &[(0.0, 1.0)])]);
+        assert!(no_laps.segment_times(4).is_empty());
+    }
+
+    #[test]
+    fn test_segment_times_on_real_session_conserves_each_lap_duration() {
+        let Some(path) = xrk_or_skip("aim_official_test.xrk") else {
+            return;
+        };
+        let handle = open_session(path.to_string_lossy().into_owned()).expect("decode");
+        let laps = handle.laps();
+
+        let rows = handle.segment_times(6);
+
+        assert_eq!(rows.len(), laps.len(), "one row per decoded lap");
+        for (row, lap) in rows.iter().zip(&laps) {
+            assert_eq!(row.lap_index, lap.index);
+            assert_eq!(row.segment_times.len(), 6);
+            let total: f64 = row.segment_times.iter().sum();
+            assert!(
+                (total - lap.duration_s).abs() < 1e-6,
+                "lap {} segments sum to its {} s duration, got {total}",
+                lap.index,
+                lap.duration_s
+            );
         }
     }
 

@@ -153,6 +153,11 @@ public protocol SessionDataSource: Sendable {
     /// dt)` points over the distance window `[start, end]` metres (issue 8.7).
     /// Throws when a lap index is invalid or the delta-t computation fails.
     func deltaT(referenceLap: UInt32, comparisonLap: UInt32, start: Double, end: Double) throws -> [DeltaSample]
+
+    /// Per-lap split times: each lap divided into `splits` equal-distance segments,
+    /// the seconds spent in each (issue 8.11). Never traps — a session with no laps
+    /// returns `[]`.
+    func segmentTimes(splits: UInt32) -> [LapSegments]
 }
 
 /// The live analysis pump for a loaded session (issue 8.1) — the linchpin of the
@@ -275,6 +280,17 @@ public final class AnalysisSession {
         guard reference.index != comparison.index else { return [] }
         return (try? dataSource.deltaT(referenceLap: reference.index, comparisonLap: comparison.index,
                                        start: -.infinity, end: .infinity)) ?? []
+    }
+
+    // MARK: - Split times (issue 8.11)
+
+    /// The per-lap split times for `splits` equal-distance segments per lap (issue
+    /// 8.11), read through 8.11's `segment_times` accessor — the fine base grid the
+    /// Split Times report groups, times, and derives its best laps from. A
+    /// non-positive `splits` reads nothing; a session with no laps yields `[]`.
+    public func segmentTimes(splits: Int) -> [LapSegments] {
+        guard splits > 0 else { return [] }
+        return dataSource.segmentTimes(splits: UInt32(splits))
     }
 
     // MARK: - Internals

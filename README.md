@@ -162,6 +162,18 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   segment) into a min/max/avg/median table and maps the chosen statistic across the
   laps into a graph hot-tracked to the selected table row, all from the window's
   channel traces so it renders live under the M8 rail.
+  8.11 adds the `Splits/` model — the RS3 **Split Times** report. A new analysis
+  primitive `segment_times` (in `racestudio-analysis`, exported over UniFFI as
+  `SessionHandle::segment_times`) cuts each lap into `N` equal-**distance**
+  segments off its `GPS Speed` odometer — the same track pieces lap after lap —
+  and returns the seconds spent in each (pinned to the lap's `[0, duration]` so
+  they sum to the lap time exactly; GPS-less laps fall back to equal-time). On top
+  of that base grid, `SplitLayout` groups the cells into editable splits (pure
+  merge / divide / rename / type / lock), `SplitReport` derives the per-lap table,
+  the **best theoretical** lap (sum of each split's fastest time across laps) and
+  the **best rolling** lap (fastest one-lap-length window over the concatenated
+  grid), and `SplitReportModel` is the `@MainActor` state driving it — so editing a
+  split re-groups the base grid and recomputes without re-reading the session.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

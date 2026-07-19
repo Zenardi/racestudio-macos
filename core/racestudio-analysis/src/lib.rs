@@ -52,6 +52,7 @@ pub mod fft;
 pub mod laps;
 mod math;
 pub mod resample;
+pub mod splits;
 pub mod stats;
 
 pub use delta::delta_t;
@@ -65,4 +66,5 @@ pub use laps::{
     Lap, LapAxis, LapChannel,
 };
 pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid};
+pub use splits::segment_times;
 pub use stats::{channel_stats, stats_over_range, stats_per_lap, Stats};

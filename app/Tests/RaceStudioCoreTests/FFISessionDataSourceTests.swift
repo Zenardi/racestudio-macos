@@ -162,5 +162,22 @@ import RaceStudioFFIBindings
             #expect(got.dt == base.dt)
         }
     }
+
+    // MARK: - segmentTimes: FFI LapSegmentTimes → LapSegments (issue 8.11)
+
+    @Test func test_segment_times_maps_ffi_rows_to_core_lap_segments() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        let mapped = source.segmentTimes(splits: 5)
+        let raw = session.segmentTimes(splits: 5)
+
+        try #require(mapped.count == raw.count)
+        try #require(!mapped.isEmpty)
+        for (got, base) in zip(mapped, raw) {
+            #expect(got.lap.index == Int(base.lapIndex), "lap index crosses the seam")
+            #expect(got.baseTimes == base.segmentTimes, "the segment times map 1:1 (already seconds)")
+        }
+    }
 }
 #endif

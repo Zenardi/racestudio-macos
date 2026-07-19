@@ -636,6 +636,20 @@ public protocol SessionHandleProtocol : AnyObject {
      */
     func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32) throws  -> [DistanceSample]
     
+    /**
+     * Split every lap into `splits` equal-distance segments and report the time
+     * (seconds) spent in each, lap by lap (issue 8.11) — the raw grid the Split
+     * Times report groups, times, and derives the best theoretical/rolling laps
+     * from.
+     *
+     * One [`LapSegmentTimes`] per session lap, indexed by lap number, each holding
+     * `splits.max(1)` segment times that sum to the lap duration (see
+     * [`racestudio_analysis::segment_times`] for the distance-cut construction and
+     * the GPS-less equal-time fallback). A session with no lap markers returns an
+     * empty vec. Never panics.
+     */
+    func segmentTimes(splits: UInt32)  -> [LapSegmentTimes]
+    
 }
 
 /**
@@ -893,6 +907,26 @@ open func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32
         FfiConverterUInt32.lower(channelIndex),
         FfiConverterUInt32.lower(start),
         FfiConverterUInt32.lower(count),$0
+    )
+})
+}
+    
+    /**
+     * Split every lap into `splits` equal-distance segments and report the time
+     * (seconds) spent in each, lap by lap (issue 8.11) — the raw grid the Split
+     * Times report groups, times, and derives the best theoretical/rolling laps
+     * from.
+     *
+     * One [`LapSegmentTimes`] per session lap, indexed by lap number, each holding
+     * `splits.max(1)` segment times that sum to the lap duration (see
+     * [`racestudio_analysis::segment_times`] for the distance-cut construction and
+     * the GPS-less equal-time fallback). A session with no lap markers returns an
+     * empty vec. Never panics.
+     */
+open func segmentTimes(splits: UInt32) -> [LapSegmentTimes] {
+    return try!  FfiConverterSequenceTypeLapSegmentTimes.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_segment_times(self.uniffiClonePointer(),
+        FfiConverterUInt32.lower(splits),$0
     )
 })
 }
@@ -1672,6 +1706,91 @@ public func FfiConverterTypeLapInfo_lift(_ buf: RustBuffer) throws -> LapInfo {
 #endif
 public func FfiConverterTypeLapInfo_lower(_ value: LapInfo) -> RustBuffer {
     return FfiConverterTypeLapInfo.lower(value)
+}
+
+
+/**
+ * One lap's per-segment split times for the Split Times report (issue 8.11):
+ * the lap divided into `N` equal-distance segments, and the seconds spent in
+ * each (in track order).
+ */
+public struct LapSegmentTimes {
+    /**
+     * Zero-based lap index (matches [`LapInfo::index`]).
+     */
+    public var lapIndex: UInt32
+    /**
+     * Seconds spent in each of the `N` segments, in track order. Always sums to
+     * the lap duration.
+     */
+    public var segmentTimes: [Double]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Zero-based lap index (matches [`LapInfo::index`]).
+         */lapIndex: UInt32, 
+        /**
+         * Seconds spent in each of the `N` segments, in track order. Always sums to
+         * the lap duration.
+         */segmentTimes: [Double]) {
+        self.lapIndex = lapIndex
+        self.segmentTimes = segmentTimes
+    }
+}
+
+
+
+extension LapSegmentTimes: Equatable, Hashable {
+    public static func ==(lhs: LapSegmentTimes, rhs: LapSegmentTimes) -> Bool {
+        if lhs.lapIndex != rhs.lapIndex {
+            return false
+        }
+        if lhs.segmentTimes != rhs.segmentTimes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(lapIndex)
+        hasher.combine(segmentTimes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLapSegmentTimes: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LapSegmentTimes {
+        return
+            try LapSegmentTimes(
+                lapIndex: FfiConverterUInt32.read(from: &buf), 
+                segmentTimes: FfiConverterSequenceDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LapSegmentTimes, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.lapIndex, into: &buf)
+        FfiConverterSequenceDouble.write(value.segmentTimes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLapSegmentTimes_lift(_ buf: RustBuffer) throws -> LapSegmentTimes {
+    return try FfiConverterTypeLapSegmentTimes.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLapSegmentTimes_lower(_ value: LapSegmentTimes) -> RustBuffer {
+    return FfiConverterTypeLapSegmentTimes.lower(value)
 }
 
 
@@ -2724,6 +2843,31 @@ fileprivate struct FfiConverterSequenceTypeLapInfo: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeLapSegmentTimes: FfiConverterRustBuffer {
+    typealias SwiftType = [LapSegmentTimes]
+
+    public static func write(_ value: [LapSegmentTimes], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLapSegmentTimes.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LapSegmentTimes] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LapSegmentTimes]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLapSegmentTimes.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeSample: FfiConverterRustBuffer {
     typealias SwiftType = [Sample]
 
@@ -2850,6 +2994,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_samples_with_distance() != 3731) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times() != 29882) {
         return InitializationResult.apiChecksumMismatch
     }
 
