@@ -41,6 +41,19 @@ import Combine
         #expect(store.state == .idle)
     }
 
+    @MainActor @Test func test_reset_returns_a_loaded_store_to_idle() async {
+        // The library browser's "back to library" path: a completed session is
+        // discarded so the main window can show the browser again (issue 8.14).
+        let store = SessionStore(loader: FakeSessionLoader(.success(SessionFixture.make())))
+        await store.load(url: anyURL)
+        #expect(store.viewModel != nil)
+
+        store.reset()
+
+        #expect(store.state == .idle)
+        #expect(store.viewModel == nil)
+    }
+
     // MARK: - Success path
 
     @MainActor @Test func test_load_transitions_idle_loading_loaded() async throws {

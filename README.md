@@ -200,6 +200,21 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `AnalysisWindowModel.reorderSelectedLap`. The thin `WorkspaceBar` / `StoryBoardView`
   surface File-style Open/Save `.rsproj` commands and the reorderable strip; `make run`
   builds + launches the app.
+  8.14 adds the `Library/LibraryBrowserModel` — the RaceStudio 3 **session library
+  browser**, and makes it the app's landing window. Over the 5.3
+  `SessionIndex`/`LibraryStore` it lists indexed sessions date-descending; imports add
+  to the index (dedup by content id) and persist via `save(to:)`; a left filtering
+  column (vehicle facet + free-text search) narrows the list; and a selected session
+  previews its laps summary + a `MapPreviewModel` racing-line thumbnail
+  (`SessionPreview`) — decoded through the injected `SessionLoading` + `AnalysisSession`,
+  **without opening full analysis**. A missing/corrupt library loads empty (5.3
+  semantics). The shell makes the browser the **primary `Window` scene**
+  (`LibraryRootView` → `LibraryBrowserView`), so launching RaceStudio opens the browser
+  rather than a file-open panel; `SessionStore.reset()` returns from analysis to the
+  browser. `make run` now wraps the built binary in a minimal `.app` bundle (via
+  `scripts/run_app.sh`) so it launches with a real window — a bare `swift run`
+  executable gets non-GUI activation and never shows one — and `make help` lists every
+  target.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →
@@ -364,7 +379,9 @@ One command per intent — `make ci` is the exact sequence CI runs, so a green
 
 | Target | Does |
 | --- | --- |
+| `make help` | list every target with its description (the default target) |
 | `make setup` | install toolchains + fetch fixtures |
+| `make run` | build + launch the app as a `.app` bundle so it shows a window |
 | `make test` | Rust + Swift test suites (`test-rust`, `test-swift`) |
 | `make coverage` | the ≥95% line-coverage gate (Rust + Swift) |
 | `make lint` | `clippy -D warnings` + `cargo fmt --check` + `swiftlint` |
