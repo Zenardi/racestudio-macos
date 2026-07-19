@@ -42,6 +42,9 @@ struct SplitTimesPanel: View {
             }
         }
         .onAppear { loadSegments() }
+        // The base resolution is constant today, so this only ever fires on the
+        // first appear; it is here so the read still tracks the base if a future
+        // build makes the resolution configurable.
         .onChange(of: report.layout.base) { _ in loadSegments() }
     }
 

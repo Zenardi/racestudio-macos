@@ -5,8 +5,8 @@
 //! each. The lap's distance axis is its `GPS Speed` channel integrated with the
 //! trapezoidal rule ([`cumulative_distance`]); the cut times are read back off
 //! that axis. The first and last cuts are pinned to the lap's own `[0, duration]`,
-//! so the returned times always **sum to the lap duration exactly** — no time is
-//! lost or double-counted at a boundary.
+//! so the returned times **sum to the lap duration** (to floating-point precision)
+//! — no time is lost or double-counted at a boundary.
 //!
 //! A lap with no `GPS Speed` channel (or a zero-length distance axis) has no
 //! odometer to cut on, so it falls back to `N` equal-*time* segments — still
@@ -51,8 +51,8 @@ pub fn segment_times(lap: &Lap, splits: usize) -> Vec<f64> {
 
     // The cut time at the `k`-th of `n + 1` equal-distance boundaries. The ends are
     // pinned to the lap's own `[0, duration]` so the segment times telescope to the
-    // duration exactly; interior boundaries are interpolated off the distance axis.
-    let boundary_time = |k: usize| -> f64 {
+    // duration; interior boundaries are interpolated off the distance axis.
+    let cut_time = |k: usize| -> f64 {
         if k == 0 {
             0.0
         } else if k == n {
@@ -61,9 +61,11 @@ pub fn segment_times(lap: &Lap, splits: usize) -> Vec<f64> {
             interp(&distances, &times_s, k as f64 * total / n as f64)
         }
     };
-    (0..n)
-        .map(|i| (boundary_time(i + 1) - boundary_time(i)).max(0.0))
-        .collect()
+    // Cut once at every boundary, then difference adjacent cuts — so each interior
+    // boundary is interpolated a single time. The cuts are non-decreasing, so the
+    // `max(0.0)` only guards against floating-point noise.
+    let cuts: Vec<f64> = (0..=n).map(cut_time).collect();
+    cuts.windows(2).map(|w| (w[1] - w[0]).max(0.0)).collect()
 }
 
 #[cfg(test)]
@@ -148,6 +150,30 @@ mod tests {
         let times = segment_times(&lap, 3);
 
         assert_eq!(times, vec![2.0, 2.0, 2.0]);
+    }
+
+    #[test]
+    fn test_zero_speed_stall_mid_lap_still_conserves_the_duration() {
+        // 10 m/s for 2 s (→ 20 m), a 4 s stall at 0 m/s (no distance — a flat spot in
+        // the cumulative-distance axis), then 10 m/s for 2 s (→ 20 m): 40 m over 8 s.
+        // The 20 m cut lands inside the flat spot, where several samples share one
+        // distance; the interpolation's tie-breaking must still leave the segment
+        // times non-negative and summing to the 8 s duration.
+        let speed = [
+            (0.0, 10.0),
+            (2000.0, 10.0),
+            (2000.0, 0.0),
+            (6000.0, 0.0),
+            (6000.0, 10.0),
+            (8000.0, 10.0),
+        ];
+        let lap = lap_with_speed(0, 0.0, 8000.0, &speed);
+
+        let times = segment_times(&lap, 4);
+
+        assert_eq!(times.len(), 4);
+        assert!(times.iter().all(|&t| t >= 0.0));
+        assert!((times.iter().sum::<f64>() - 8.0).abs() < 1e-9);
     }
 
     #[test]
