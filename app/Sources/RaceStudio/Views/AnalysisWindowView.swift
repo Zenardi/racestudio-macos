@@ -80,11 +80,42 @@ private struct PanelHost: View {
                 } else {
                     TimeDistancePlotView(traces: model.traces, mode: .time)
                 }
+            case .channelTable:
+                ChannelTablePanel(model: model, cursor: model.linkedCursor)
             case .summary:
                 SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Channel table / measures panel (issue 8.5)
+
+/// Hosts the reused ``ChannelTableView`` bound to the shared cursor: it observes
+/// ``LinkedCursor`` so the value-at-cursor readouts re-render as the cursor moves,
+/// while the channels × selected-laps grid (and its per-lap extrapolation) is
+/// derived in `RaceStudioCore.AnalysisWindowModel`. Tapping a channel name pins
+/// it as a large readout; tapping a lap header makes it the reference the row
+/// deltas are measured against.
+private struct ChannelTablePanel: View {
+    @ObservedObject var model: AnalysisWindowModel
+    @ObservedObject var cursor: LinkedCursor
+
+    var body: some View {
+        if model.readoutTable.rows.isEmpty || model.readoutTable.columns.isEmpty {
+            ContentUnavailableHint(text: "Select channels and laps to compare")
+        } else {
+            ScrollView([.horizontal, .vertical]) {
+                ChannelTableView(model: model.readoutTable,
+                                 cursorX: cursor.timePosition,
+                                 formatters: model.channelFormatters,
+                                 pinned: model.pinnedChannels,
+                                 referenceLap: model.selection.laps.reference,
+                                 onPin: { model.togglePinned($0) },
+                                 onSetReference: { model.setReferenceLap($0) })
+            }
+        }
     }
 }
 
