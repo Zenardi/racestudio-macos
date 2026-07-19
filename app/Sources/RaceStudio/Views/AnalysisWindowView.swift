@@ -12,6 +12,9 @@ import RaceStudioCore
 struct AnalysisWindowView: View {
     @StateObject private var model: AnalysisWindowModel
     @StateObject private var mathManager: MathChannelsManagerModel
+    // The histogram + scatter panel knobs (issue 8.9), held at the window level so
+    // they survive layout switches.
+    @StateObject private var stats = StatsPanelsModel()
 
     init(viewModel: SessionViewModel) {
         _model = StateObject(wrappedValue: AnalysisWindowModel(viewModel: viewModel))
@@ -29,7 +32,7 @@ struct AnalysisWindowView: View {
                 .frame(width: 240)
             Divider()
             VStack(spacing: 0) {
-                PanelHost(model: model, mathManager: mathManager)
+                PanelHost(model: model, mathManager: mathManager, stats: stats)
                 Divider()
                 MeasuresBar(model: model, cursor: model.linkedCursor)
             }
@@ -76,6 +79,7 @@ private struct LayoutRail: View {
 private struct PanelHost: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
+    @ObservedObject var stats: StatsPanelsModel
 
     var body: some View {
         Group {
@@ -92,6 +96,10 @@ private struct PanelHost: View {
                 TrackMapPanel(model: model, cursor: model.linkedCursor)
             case .lapOverlay:
                 LapOverlayPanel(model: model)
+            case .histogram:
+                HistogramPanel(model: model, stats: stats)
+            case .scatter:
+                ScatterPanel(model: model, stats: stats)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
@@ -280,7 +288,8 @@ private struct LapOverlayPanel: View {
 }
 
 /// A centered, secondary placeholder shown when a panel has nothing to render.
-private struct ContentUnavailableHint: View {
+/// Shared across the window's panel views (issues 8.3 / 8.9).
+struct ContentUnavailableHint: View {
     let text: String
     var body: some View {
         Text(text).foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -145,6 +145,14 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   slope/intercept/R², `nil` for degenerate input), and `ScatterModel` (paired
   channel-vs-channel points with NaN-drop and window restriction) — the math
   behind the distribution and XY-scatter plots.
+  8.9 adds the `Stats/` feed adapters that drive those two plots as analysis-window
+  panels: `HistogramPanelModel` (a channel's whole-window distribution at a
+  configurable bin count plus one per-lap distribution on a shared, zero-aligned
+  value grid, coloured by selection order), `ScatterPanelModel` (two channels paired
+  into the friction-circle **G-G** cloud with an optional least-squares trend line),
+  and `StatsPanelsModel` — the `@MainActor` panel state (bin count, trend-line
+  toggle, scatter axes) that assembles both from the analysis window's channel
+  traces, so the reused `HistogramView`/`ScatterView` render live under the M8 rail.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

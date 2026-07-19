@@ -19,6 +19,12 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     /// The 4.2 lap overlay + delta-t strip — laps overlaid on distance with the
     /// predictive gain/loss versus the reference lap (issue 8.7).
     case lapOverlay
+    /// The 4.5 channel-distribution histogram — the selected channel's value
+    /// distribution at a configurable bin count, coloured per lap (issue 8.9).
+    case histogram
+    /// The 4.5 channel-vs-channel scatter — the friction-circle G-G cloud of two
+    /// channels with an optional least-squares trend line (issue 8.9).
+    case scatter
     /// The 4.6 math-channel editor + manager — author/validate an expression, add
     /// it as a channel, browse the function library (issue 8.8).
     case mathChannels
@@ -34,6 +40,8 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .channelTable: return "Channels"
         case .trackMap: return "Track Map"
         case .lapOverlay: return "Lap Overlay"
+        case .histogram: return "Histogram"
+        case .scatter: return "Scatter"
         case .mathChannels: return "Math"
         case .summary: return "Summary"
         }
@@ -47,6 +55,8 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .channelTable: return "tablecells"
         case .trackMap: return "map"
         case .lapOverlay: return "point.3.connected.trianglepath.dotted"
+        case .histogram: return "chart.bar.xaxis"
+        case .scatter: return "chart.dots.scatter"
         case .mathChannels: return "function"
         case .summary: return "list.bullet.rectangle"
         }
