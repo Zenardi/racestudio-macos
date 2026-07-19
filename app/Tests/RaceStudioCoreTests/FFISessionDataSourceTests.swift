@@ -103,5 +103,24 @@ import RaceStudioFFIBindings
             _ = try source.statistics(channel: "NoSuchChannel", start: -.infinity, end: .infinity)
         }
     }
+
+    // MARK: - gpsTrack: FFI GpsTrackPoint → GPSTrackPoint (timecode ms → seconds)
+
+    @Test func test_gps_track_maps_ffi_fixes_to_core_track_points() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        let mapped = source.gpsTrack(start: 0, count: 8)
+        let raw = session.gpsTrack(start: 0, count: 8)
+
+        try #require(mapped.count == raw.count)
+        try #require(!mapped.isEmpty)
+        for (got, base) in zip(mapped, raw) {
+            #expect(got.coordinate.latitude == base.latitude)
+            #expect(got.coordinate.longitude == base.longitude)
+            #expect(got.distance == base.distance)
+            #expect(abs(got.time - base.timecode / 1000) < 1e-9, "timecode ms → seconds")
+        }
+    }
 }
 #endif

@@ -1,104 +1,6 @@
 import Foundation
 import Combine
 
-/// A layout offered by the analysis window's left rail (issue 8.3): the "panel
-/// set" the central host can show. The Time/Distance plot is the primary
-/// layout; the 2.4 session summary is demoted to one of these.
-///
-/// Named `WindowLayout` to avoid colliding with the 5.4 `AnalysisLayout`
-/// project-file struct — this is the *kind* of live panel shown, not the
-/// persisted pane configuration.
-public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
-    /// The live multi-channel Time/Distance plot (issue 4.1).
-    case timeDistance
-    /// The 4.4 channel table / measures panel — value-at-cursor per channel × lap
-    /// (issue 8.5).
-    case channelTable
-    /// The 2.4 session summary (metadata + channel/lap listings).
-    case summary
-
-    public var id: String { rawValue }
-
-    /// The rail's human-readable label.
-    public var title: String {
-        switch self {
-        case .timeDistance: return "Time / Distance"
-        case .channelTable: return "Channels"
-        case .summary: return "Summary"
-        }
-    }
-
-    /// The SF Symbol name for the rail button (kept in Core so the rail view is a
-    /// trivial, logic-free binding).
-    public var systemImageName: String {
-        switch self {
-        case .timeDistance: return "chart.xyaxis.line"
-        case .channelTable: return "tablecells"
-        case .summary: return "list.bullet.rectangle"
-        }
-    }
-}
-
-/// The analysis window's side-panel selection (issue 8.3): which channels are
-/// plotted and which laps are chosen. Held at the window level so it is
-/// preserved when the rail swaps the active layout.
-public struct AnalysisSelection: Equatable, Sendable {
-
-    /// The selected channels, in the order the user added them — this order
-    /// drives the trace and measure order.
-    public private(set) var channels: [ChannelID]
-
-    /// The selected laps, reusing the 4.2 model (and its reference-lap invariant).
-    public private(set) var laps: LapSelectionModel
-
-    public init(channels: [ChannelID] = [], laps: LapSelectionModel = LapSelectionModel()) {
-        self.channels = channels
-        self.laps = laps
-    }
-
-    /// Whether no channels are selected (the plot / measures bar is then empty).
-    public var isEmpty: Bool { channels.isEmpty }
-
-    /// Add `channel` if absent, remove it if present (preserving the order of the
-    /// rest).
-    public mutating func toggleChannel(_ channel: ChannelID) {
-        if let index = channels.firstIndex(of: channel) {
-            channels.remove(at: index)
-        } else {
-            channels.append(channel)
-        }
-    }
-
-    /// Toggle `lap` in the lap selection (delegating to the 4.2 invariant).
-    public mutating func toggleLap(_ lap: LapID) {
-        laps.toggle(lap)
-    }
-
-    /// Make `lap` the reference every measure is compared against (issue 8.5),
-    /// selecting it first if needed (delegating to the 4.2 invariant).
-    public mutating func setReferenceLap(_ lap: LapID) {
-        laps.setReference(lap)
-    }
-}
-
-/// One entry in the bottom measures bar (issue 8.3): a selected channel's
-/// value at the shared cursor, both raw and unit-formatted.
-public struct ChannelMeasure: Equatable, Sendable, Identifiable {
-    public let channel: ChannelID
-    /// The value-at-cursor (with the 4.4 extrapolation flag).
-    public let readout: Readout
-    /// The value rendered with the channel's unit + precision (em dash when absent).
-    public let formatted: String
-
-    public var id: String { channel.name }
-
-    public init(channel: ChannelID, readout: Readout, formatted: String) {
-        self.channel = channel
-        self.readout = readout
-        self.formatted = formatted
-    }
-}
-
 /// The `@MainActor` Core state behind the analysis window shell (issue 8.3): the
 /// rail's panel set + active layout, the channel/lap selection, and the window's
 /// shared ``LinkedCursor`` — everything the thin `AnalysisWindowView` binds to.
@@ -139,6 +41,10 @@ public final class AnalysisWindowModel: ObservableObject {
     /// order they were pinned (issue 8.5).
     @Published public private(set) var pinnedChannels: [ChannelID] = []
 
+    /// How many sectors the track map splits the lap into (issue 8.6); `3` by
+    /// default (the common motorsport count). `0` hides the split markers.
+    @Published public private(set) var sectorSplits: Int = 3
+
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor
 
@@ -167,6 +73,19 @@ public final class AnalysisWindowModel: ObservableObject {
     /// Per-selected-channel formatters, cached alongside the grid so a cursor-move
     /// render reads them without rebuilding the dictionary each time (issue 8.5).
     private var channelFormattersCache: [ChannelID: ChannelFormatter] = [:]
+
+    /// The session's GPS racing line, read once from the pump (it is constant for
+    /// the session; only its colour-by-channel changes) — issue 8.6.
+    private let gpsTrackPoints: [GPSTrackPoint]
+
+    /// The assembled track-map inputs, rebuilt when the selection or colour channel
+    /// changes (issue 8.6). The line is constant; the rebuild only re-aligns the
+    /// colour channel onto the fixes.
+    private var trackMapCache = TrackMapModel(track: [])
+
+    /// The channel explicitly chosen to colour the line, or `nil` to follow the
+    /// first selected channel (issue 8.6).
+    private var colorChannelOverride: ChannelID?
 
     private struct SelectionEntry {
         let channel: ChannelID
@@ -215,6 +134,10 @@ public final class AnalysisWindowModel: ObservableObject {
                                    channelIndexByID: index, selection: selection)
         self.linkedCursor = LinkedCursor(times: basis.times, distances: basis.distances,
                                          time: basis.times.first ?? 0)
+
+        // The GPS racing line is constant for the session, so read it once here;
+        // `rebuildSelectionData` then only re-aligns the colour channel onto it.
+        self.gpsTrackPoints = analysis?.gpsTrack() ?? []
 
         rebuildSelectionData()
     }
@@ -329,6 +252,49 @@ public final class AnalysisWindowModel: ObservableObject {
     /// cursor-move render does not rebuild the dictionary.
     public var channelFormatters: [ChannelID: ChannelFormatter] { channelFormattersCache }
 
+    // MARK: - Track map (issue 8.6)
+
+    /// The assembled racing line, colour-by-channel values, colour scale, and
+    /// cursor↔fix mapping feeding the reused `TrackMapView`. Empty when the session
+    /// has no GPS track (or no analysis pump).
+    public var trackMap: TrackMapModel { trackMapCache }
+
+    /// The channel currently colouring the racing line (issue 8.6): the explicit
+    /// override while it stays selected, else the first selected channel. `nil`
+    /// when nothing is selected.
+    public var colorChannel: ChannelID? {
+        if let override = colorChannelOverride, selection.channels.contains(override) { return override }
+        return selection.channels.first
+    }
+
+    /// The GPS fix index under the shared cursor — the marker position on the map
+    /// (issue 8.6). Reads the live cursor, so it follows every cursor move; `nil`
+    /// when the session has no GPS track.
+    public var gpsCursorIndex: Int? {
+        trackMapCache.index(atTime: linkedCursor.timePosition)
+    }
+
+    /// Colour the racing line by `channel` (issue 8.6); ignored when it is not a
+    /// selected channel (only a plotted channel can colour the line).
+    public func setColorChannel(_ channel: ChannelID) {
+        guard selection.channels.contains(channel) else { return }
+        colorChannelOverride = channel
+        rebuildTrackMap()
+    }
+
+    /// Set how many sectors the track map splits the lap into (issue 8.6); clamped
+    /// to be non-negative (`0` hides the markers).
+    public func setSectorSplits(_ splits: Int) {
+        sectorSplits = max(0, splits)
+    }
+
+    /// Move the shared cursor to GPS fix `index` — a hover / click on the map
+    /// drives the window's cursor (issue 8.6). A no-op for an out-of-range index.
+    public func moveTrackCursor(toFix index: Int) {
+        guard let time = trackMapCache.time(atIndex: index) else { return }
+        linkedCursor.moveTime(time)
+    }
+
     // MARK: - Internals
 
     /// Re-read the selected channels once (trace + series + formatter), so cursor
@@ -337,6 +303,7 @@ public final class AnalysisWindowModel: ObservableObject {
     private func rebuildSelectionData() {
         defer {
             rebuildReadoutTable()
+            rebuildTrackMap()
             var formatters: [ChannelID: ChannelFormatter] = [:]
             for entry in selectionData { formatters[entry.channel] = entry.formatter }
             channelFormattersCache = formatters
@@ -370,6 +337,17 @@ public final class AnalysisWindowModel: ObservableObject {
             }
         }
         readoutTableCache = ReadoutTableModel(rows: rows, columns: columns, series: series)
+    }
+
+    /// Rebuild the track map: fold the current colour channel's cached series into
+    /// the (constant) GPS racing line (issue 8.6). The line follows the trajectory;
+    /// only the colour-by-channel re-aligns when the selection or colour channel
+    /// changes.
+    private func rebuildTrackMap() {
+        let colorSeries = colorChannel.flatMap { id in
+            selectionData.first { $0.channel == id }?.series
+        }
+        trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries)
     }
 
     /// The session's time extent as a two-point cursor basis: the lap span

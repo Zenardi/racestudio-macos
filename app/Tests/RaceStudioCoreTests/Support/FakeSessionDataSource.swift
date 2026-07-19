@@ -18,6 +18,8 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     private let stats: [String: ChannelStats]
     /// When set, every `statistics(...)` call throws it (the error path).
     private let statsError: Error?
+    /// The whole GPS track this fake serves (issue 8.6); windowed reads slice it.
+    private let gps: [GPSTrackPoint]
 
     /// One recorded `samples(...)` request, so a test can assert the window
     /// `AnalysisSession` actually issued across the seam.
@@ -42,12 +44,24 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     /// The most recent `statistics(...)` call, or `nil` if never invoked.
     private(set) var lastStatsRequest: StatsRequest?
 
+    /// The most recent `gpsTrack(...)` call, so a test can assert the window
+    /// `AnalysisSession` forwarded across the seam.
+    struct GPSRequest: Equatable {
+        let start: UInt32
+        let count: UInt32
+    }
+
+    /// The most recent `gpsTrack(...)` call, or `nil` when it was never invoked.
+    private(set) var lastGPSRequest: GPSRequest?
+
     struct UnknownChannel: Error {}
 
-    init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil) {
+    init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil,
+         gps: [GPSTrackPoint] = []) {
         self.banks = banks
         self.stats = stats
         self.statsError = statsError
+        self.gps = gps
     }
 
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
@@ -64,5 +78,14 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         if let statsError { throw statsError }
         guard let value = stats[channel] else { throw UnknownChannel() }
         return value
+    }
+
+    func gpsTrack(start: UInt32, count: UInt32) -> [GPSTrackPoint] {
+        lastGPSRequest = GPSRequest(start: start, count: count)
+        // Bound the window to the real fix count exactly as a live handle would,
+        // so an unclamped `.all` (count `.max`) request never traps here.
+        let lo = min(Int(start), gps.count)
+        let take = min(Int(count), gps.count - lo)
+        return Array(gps[lo..<(lo + take)])
     }
 }
