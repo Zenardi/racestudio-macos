@@ -11,6 +11,9 @@ import Combine
 public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     /// The live multi-channel Time/Distance plot (issue 4.1).
     case timeDistance
+    /// The 4.4 channel table / measures panel — value-at-cursor per channel × lap
+    /// (issue 8.5).
+    case channelTable
     /// The 2.4 session summary (metadata + channel/lap listings).
     case summary
 
@@ -20,6 +23,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     public var title: String {
         switch self {
         case .timeDistance: return "Time / Distance"
+        case .channelTable: return "Channels"
         case .summary: return "Summary"
         }
     }
@@ -29,6 +33,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     public var systemImageName: String {
         switch self {
         case .timeDistance: return "chart.xyaxis.line"
+        case .channelTable: return "tablecells"
         case .summary: return "list.bullet.rectangle"
         }
     }
@@ -67,6 +72,12 @@ public struct AnalysisSelection: Equatable, Sendable {
     /// Toggle `lap` in the lap selection (delegating to the 4.2 invariant).
     public mutating func toggleLap(_ lap: LapID) {
         laps.toggle(lap)
+    }
+
+    /// Make `lap` the reference every measure is compared against (issue 8.5),
+    /// selecting it first if needed (delegating to the 4.2 invariant).
+    public mutating func setReferenceLap(_ lap: LapID) {
+        laps.setReference(lap)
     }
 }
 
@@ -124,6 +135,10 @@ public final class AnalysisWindowModel: ObservableObject {
     /// The channel ordering for the side panel (issue 8.4).
     @Published public private(set) var channelSort: ChannelSort = .configuration
 
+    /// The channels pinned as large digital readouts in the measures panel, in the
+    /// order they were pinned (issue 8.5).
+    @Published public private(set) var pinnedChannels: [ChannelID] = []
+
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor
 
@@ -135,9 +150,19 @@ public final class AnalysisWindowModel: ObservableObject {
     /// index-addressed ``AnalysisSession`` reads (first occurrence wins).
     private let channelIndexByID: [ChannelID: Int]
 
+    /// Lap id → lap, so a selected `LapID` maps back onto its time window when the
+    /// readout grid slices each channel per lap (first occurrence wins).
+    private let lapByID: [LapID: Lap]
+
     /// Cached read of the selected channels — rebuilt only when the selection
     /// changes — so a cursor move re-interpolates without re-reading the channels.
     private var selectionData: [SelectionEntry] = []
+
+    /// The channels × selected-laps readout grid, rebuilt only when the channel or
+    /// lap selection changes (issue 8.5). The cursor is applied at read time by
+    /// ``ReadoutTableModel/cells(atX:)``, so scrubbing re-interpolates this cache
+    /// rather than re-slicing the channels.
+    private var readoutTableCache = ReadoutTableModel(rows: [], columns: [], series: [:])
 
     private struct SelectionEntry {
         let channel: ChannelID
@@ -163,6 +188,13 @@ public final class AnalysisWindowModel: ObservableObject {
             if index[id] == nil { index[id] = offset }
         }
         self.channelIndexByID = index
+
+        var lapIndex: [LapID: Lap] = [:]
+        for lap in session.laps {
+            let id = LapID(Int(lap.index))
+            if lapIndex[id] == nil { lapIndex[id] = lap }
+        }
+        self.lapByID = lapIndex
 
         // Default-select the first channel so the window opens on a live plot.
         var selection = AnalysisSelection()
@@ -208,10 +240,31 @@ public final class AnalysisWindowModel: ObservableObject {
         rebuildSelectionData()
     }
 
-    /// Toggle `lap` in the selection. Laps do not yet scope the traces (lap
-    /// overlay is a later issue), so no read is needed.
+    /// Toggle `lap` in the selection and refresh the readout grid's columns. Laps
+    /// do not yet scope the traces (lap overlay is a later issue), so the plot
+    /// needs no read.
     public func toggleLap(_ lap: LapID) {
         selection.toggleLap(lap)
+        rebuildReadoutTable()
+    }
+
+    /// Make `lap` the reference the measures panel compares against (issue 8.5),
+    /// selecting it if needed, and refresh the grid (a newly-added reference adds a
+    /// column).
+    public func setReferenceLap(_ lap: LapID) {
+        selection.setReferenceLap(lap)
+        rebuildReadoutTable()
+    }
+
+    /// Pin or unpin `channel` as a large digital readout in the measures panel
+    /// (issue 8.5). Pinning does not change the grid, only which channels also
+    /// render as big numbers.
+    public func togglePinned(_ channel: ChannelID) {
+        if let index = pinnedChannels.firstIndex(of: channel) {
+            pinnedChannels.remove(at: index)
+        } else {
+            pinnedChannels.append(channel)
+        }
     }
 
     /// Set the side panel's channel search text (issue 8.4).
@@ -254,11 +307,32 @@ public final class AnalysisWindowModel: ObservableObject {
         }
     }
 
+    // MARK: - Channel table / measures panel (issue 8.5)
+
+    /// The channels × selected-laps value-at-cursor grid feeding the reused
+    /// `ChannelTableView`. Read it at the shared cursor with
+    /// ``ReadoutTableModel/cells(atX:)`` / ``ReadoutTableModel/deltaCells(atX:reference:)``;
+    /// the reference lap is ``selection``'s ``AnalysisSelection/laps`` reference.
+    public var readoutTable: ReadoutTableModel { readoutTableCache }
+
+    /// The unit + precision formatter for each selected channel (issue 8.5), so
+    /// the panel renders each cell in the channel's own units. The selection is
+    /// deduplicated, so each channel maps to exactly one formatter.
+    public var channelFormatters: [ChannelID: ChannelFormatter] {
+        var formatters: [ChannelID: ChannelFormatter] = [:]
+        for entry in selectionData {
+            formatters[entry.channel] = entry.formatter
+        }
+        return formatters
+    }
+
     // MARK: - Internals
 
     /// Re-read the selected channels once (trace + series + formatter), so cursor
-    /// moves re-interpolate the cache rather than re-reading across the seam.
+    /// moves re-interpolate the cache rather than re-reading across the seam. Also
+    /// refreshes the readout grid, whose per-lap slices derive from these series.
     private func rebuildSelectionData() {
+        defer { rebuildReadoutTable() }
         guard let analysis else { selectionData = []; return }
         selectionData = selection.channels.compactMap { id in
             guard let index = channelIndexByID[id] else { return nil }
@@ -268,6 +342,26 @@ public final class AnalysisWindowModel: ObservableObject {
             let formatter = ChannelFormatter(unit: channel.unit, precision: Int(channel.decimals))
             return SelectionEntry(channel: id, trace: trace, series: series, formatter: formatter)
         }
+    }
+
+    /// Rebuild the readout grid: a row per selected channel (that has data), a
+    /// column per selected lap, and each cell the channel's series sliced to that
+    /// lap's `[startTimeS, endTimeS]` window — so a cursor outside a lap's range
+    /// reads as extrapolated. A slice with no samples is omitted, leaving a
+    /// no-data cell.
+    private func rebuildReadoutTable() {
+        let rows = selectionData.map(\.channel)
+        let columns = selection.laps.selected
+        var series: [CellKey: ChannelSeries] = [:]
+        for entry in selectionData {
+            for lap in columns {
+                guard let bounds = lapByID[lap] else { continue }
+                let slice = entry.series.windowed(from: bounds.startTimeS, through: bounds.endTimeS)
+                guard !slice.xs.isEmpty else { continue }
+                series[CellKey(channel: entry.channel, lap: lap)] = slice
+            }
+        }
+        readoutTableCache = ReadoutTableModel(rows: rows, columns: columns, series: series)
     }
 
     /// The session's time extent as a two-point cursor basis: the lap span

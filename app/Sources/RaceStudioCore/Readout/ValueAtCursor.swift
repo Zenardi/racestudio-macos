@@ -12,6 +12,24 @@ public struct ChannelSeries: Equatable, Sendable {
         self.xs = Array(xs.prefix(count))
         self.values = Array(values.prefix(count))
     }
+
+    /// The sub-series whose x lies in the inclusive range `[lower, upper]`
+    /// (issue 8.5), preserving order and index-alignment.
+    ///
+    /// Used to scope a whole channel to a single lap's `[startTimeS, endTimeS]`
+    /// window, so a cursor outside that lap's range clamps to the lap's endpoint
+    /// and reads as *extrapolated* (greyed) in the measures panel. An inverted or
+    /// out-of-range window yields an empty series.
+    public func windowed(from lower: Double, through upper: Double) -> ChannelSeries {
+        guard lower <= upper else { return ChannelSeries(xs: [], values: []) }
+        var windowedXs: [Double] = []
+        var windowedValues: [Double] = []
+        for index in xs.indices where xs[index] >= lower && xs[index] <= upper {
+            windowedXs.append(xs[index])
+            windowedValues.append(values[index])
+        }
+        return ChannelSeries(xs: windowedXs, values: windowedValues)
+    }
 }
 
 /// The value read off a channel at the cursor (issue 4.4): the interpolated

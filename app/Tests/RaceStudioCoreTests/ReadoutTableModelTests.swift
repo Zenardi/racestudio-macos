@@ -81,4 +81,57 @@ import Foundation
         // But the values differ as the cursor moves.
         #expect(atA[0][0].readout?.value != atB[0][0].readout?.value)
     }
+
+    // MARK: - Reference deltas (issue 8.5)
+
+    /// A model whose laps carry distinct values so a delta is unambiguous:
+    /// lap 0 reads 15, lap 1 reads 40 for RPM; Speed reads 150 for lap 0 and has
+    /// no data for lap 1.
+    private func deltaModel() -> ReadoutTableModel {
+        ReadoutTableModel(
+            rows: [rpm, speed],
+            columns: [lap0, lap1],
+            series: [
+                CellKey(channel: rpm, lap: lap0): ChannelSeries(xs: [0, 100], values: [10, 20]),   // @50 → 15
+                CellKey(channel: rpm, lap: lap1): ChannelSeries(xs: [0, 100], values: [30, 50]),    // @50 → 40
+                CellKey(channel: speed, lap: lap0): ChannelSeries(xs: [0, 100], values: [100, 200]) // @50 → 150
+                // (speed, lap1) intentionally missing
+            ])
+    }
+
+    @Test func test_delta_cells_report_value_minus_the_reference_lap() {
+        let rows = deltaModel().deltaCells(atX: 50, reference: lap0)
+        // The reference column carries no delta (it is the baseline).
+        #expect(rows[0][0].delta == nil)
+        // RPM lap 1 is 40 vs the lap-0 baseline 15 → +25.
+        #expect(rows[0][1].delta == 25)
+        // The underlying value-at-cursor is preserved alongside the delta.
+        #expect(rows[0][1].cell.readout?.value == 40)
+    }
+
+    @Test func test_delta_cells_have_no_delta_without_a_reference() {
+        let rows = deltaModel().deltaCells(atX: 50, reference: nil)
+        #expect(rows.flatMap { $0 }.allSatisfy { $0.delta == nil })
+        // …yet still carry the value-at-cursor, so the grid still renders.
+        #expect(rows[0][0].cell.readout?.value == 15)
+    }
+
+    @Test func test_delta_is_absent_when_either_side_has_no_data() {
+        let rows = deltaModel().deltaCells(atX: 50, reference: lap0)
+        // Speed lap 1 has no data → no delta even though the baseline exists.
+        #expect(rows[1][1].delta == nil)
+        #expect(rows[1][1].cell.hasData == false)
+
+        // With the missing lap as the reference, the whole Speed row loses its
+        // baseline, so no delta survives.
+        let vsMissing = deltaModel().deltaCells(atX: 50, reference: lap1)
+        #expect(vsMissing[1][0].delta == nil)
+    }
+
+    @Test func test_delta_grid_shape_and_identity_match_the_cells() {
+        let cells = deltaModel().cells(atX: 50)
+        let deltas = deltaModel().deltaCells(atX: 50, reference: lap0)
+        #expect(deltas.map { $0.count } == cells.map { $0.count })
+        #expect(deltas.map { $0.map(\.id) } == cells.map { $0.map(\.id) })
+    }
 }
