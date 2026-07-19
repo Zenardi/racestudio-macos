@@ -28,6 +28,9 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     /// The RS3 Channels Report — a per-lap/segment min/max/avg/median table with a
     /// chosen-statistic-vs-lap graph and magic-wand presets (issue 8.10).
     case channelsReport
+    /// The RS3 Split Times report — per-lap/segment split times with the best
+    /// theoretical/rolling lap and split editing (issue 8.11).
+    case splitTimes
     /// The 4.6 math-channel editor + manager — author/validate an expression, add
     /// it as a channel, browse the function library (issue 8.8).
     case mathChannels
@@ -46,6 +49,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .histogram: return "Histogram"
         case .scatter: return "Scatter"
         case .channelsReport: return "Report"
+        case .splitTimes: return "Splits"
         case .mathChannels: return "Math"
         case .summary: return "Summary"
         }
@@ -62,6 +66,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .histogram: return "chart.bar.xaxis"
         case .scatter: return "chart.dots.scatter"
         case .channelsReport: return "chart.bar.doc.horizontal"
+        case .splitTimes: return "stopwatch"
         case .mathChannels: return "function"
         case .summary: return "list.bullet.rectangle"
         }

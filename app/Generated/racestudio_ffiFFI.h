@@ -321,6 +321,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples(void*_Nonnull p
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples_with_distance(void*_Nonnull ptr, uint32_t channel_index, uint32_t start, uint32_t count, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SEGMENT_TIMES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_SEGMENT_TIMES
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_segment_times(void*_Nonnull ptr, uint32_t splits, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull out_status
@@ -704,6 +709,12 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SAMPLES_WITH_DISTANCE
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples_with_distance(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SEGMENT_TIMES
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SEGMENT_TIMES
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times(void
     
 );
 #endif

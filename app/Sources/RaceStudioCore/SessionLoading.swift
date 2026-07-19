@@ -167,6 +167,15 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
             reference: referenceLap, comparison: comparisonLap, window: FfiWindow(start: start, end: end))
         return raw.map { DeltaSample(distance: $0.distance, dt: $0.dt) }
     }
+
+    public func segmentTimes(splits: UInt32) -> [LapSegments] {
+        // 8.11's `segment_times` clamps `splits` and bounds itself to the real laps,
+        // so the adapter only maps each FFI row into Core's ``LapSegments`` (the
+        // segment times are already seconds; no unit scaling).
+        handle.segmentTimes(splits: splits).map {
+            LapSegments(lap: LapID(Int($0.lapIndex)), baseTimes: $0.segmentTimes)
+        }
+    }
 }
 
 extension DecodeError {

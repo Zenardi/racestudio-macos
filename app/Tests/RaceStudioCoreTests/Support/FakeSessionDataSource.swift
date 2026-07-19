@@ -26,6 +26,8 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     private let deltas: [DeltaKey: [DeltaSample]]
     /// When set, every `deltaT(...)` call throws it (the error path).
     private let deltaError: Error?
+    /// The canned per-lap split times this fake serves (issue 8.11).
+    private let segments: [LapSegments]
 
     /// One recorded `samples(...)` request, so a test can assert the window
     /// `AnalysisSession` actually issued across the seam.
@@ -78,11 +80,16 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     /// The most recent `deltaT(...)` call, or `nil` when it was never invoked.
     private(set) var lastDeltaRequest: DeltaRequest?
 
+    /// The `splits` of the most recent `segmentTimes(...)` call, or `nil` when it
+    /// was never invoked (issue 8.11).
+    private(set) var lastSegmentSplits: UInt32?
+
     struct UnknownChannel: Error {}
 
     init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil,
          gps: [GPSTrackPoint] = [], distanceBanks: [[DistanceSample]] = [],
-         deltas: [DeltaKey: [DeltaSample]] = [:], deltaError: Error? = nil) {
+         deltas: [DeltaKey: [DeltaSample]] = [:], deltaError: Error? = nil,
+         segments: [LapSegments] = []) {
         self.banks = banks
         self.stats = stats
         self.statsError = statsError
@@ -90,6 +97,7 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         self.distanceBanks = distanceBanks
         self.deltas = deltas
         self.deltaError = deltaError
+        self.segments = segments
     }
 
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
@@ -129,5 +137,10 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         lastDeltaRequest = DeltaRequest(reference: referenceLap, comparison: comparisonLap, start: start, end: end)
         if let deltaError { throw deltaError }
         return deltas[DeltaKey(reference: referenceLap, comparison: comparisonLap)] ?? []
+    }
+
+    func segmentTimes(splits: UInt32) -> [LapSegments] {
+        lastSegmentSplits = splits
+        return segments
     }
 }

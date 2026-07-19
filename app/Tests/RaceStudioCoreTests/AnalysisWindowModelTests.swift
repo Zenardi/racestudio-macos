@@ -52,7 +52,7 @@ import Foundation
     @Test func test_layouts_expose_the_rail_panel_set_in_order() {
         #expect(makeModel().layouts
             == [.timeDistance, .channelTable, .trackMap, .lapOverlay,
-                .histogram, .scatter, .channelsReport, .mathChannels, .summary])
+                .histogram, .scatter, .channelsReport, .splitTimes, .mathChannels, .summary])
     }
 
     @Test func test_initial_active_layout_is_time_distance_not_the_summary() {
