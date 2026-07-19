@@ -94,8 +94,14 @@ struct ScatterPanel: View {
     /// Axis pickers (x vs y) over the selected channels + a trend-line toggle and R².
     private func controls(_ panel: ScatterPanelModel) -> some View {
         HStack(spacing: 16) {
-            axisPicker("X", selection: panel.xChannel) { stats.setXChannel($0) }
-            axisPicker("Y", selection: panel.yChannel) { stats.setYChannel($0) }
+            axisPicker("X", selection: panel.xChannel,
+                       options: model.selection.channels) { stats.setXChannel($0) }
+            // Exclude the current x channel from the y menu: y can never collapse onto
+            // x, so offering it would only pick a *different* channel than the one tapped.
+            axisPicker("Y", selection: panel.yChannel,
+                       options: model.selection.channels.filter { $0.name != panel.xChannel }) {
+                stats.setYChannel($0)
+            }
             Toggle("Trend line", isOn: Binding(
                 get: { stats.regression },
                 set: { stats.setRegression($0) }))
@@ -111,11 +117,11 @@ struct ScatterPanel: View {
         .padding(.vertical, 6)
     }
 
-    /// A menu picker over the selected channels for one axis.
-    private func axisPicker(_ label: String, selection: String,
+    /// A menu picker over `options` for one axis.
+    private func axisPicker(_ label: String, selection: String, options: [ChannelID],
                             onSelect: @escaping (String) -> Void) -> some View {
         Picker(label, selection: Binding(get: { selection }, set: { onSelect($0) })) {
-            ForEach(model.selection.channels, id: \.self) { channel in
+            ForEach(options, id: \.self) { channel in
                 Text(channel.name).tag(channel.name)
             }
         }
