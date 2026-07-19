@@ -75,12 +75,11 @@ public struct ReadoutTableModel: Sendable {
     /// lap's value for the same channel (issue 8.5): one interpolation pass, so
     /// the shape and cell identities match ``cells(atX:)``.
     public func deltaCells(atX x: Double, reference: LapID?) -> [[DeltaReadoutCell]] {
-        cells(atX: x).map { row in
-            // The reference cell's value is this channel's baseline; a row missing
-            // it (or with no reference set) has no deltas.
-            let baseline = reference.flatMap { ref in
-                row.first { $0.lap == ref }?.readout?.value
-            }
+        // The reference lap sits at one fixed column for every row, so resolve its
+        // position once rather than re-scanning each row for it.
+        let referenceColumn = reference.flatMap { columns.firstIndex(of: $0) }
+        return cells(atX: x).map { row in
+            let baseline = referenceColumn.flatMap { row[$0].readout?.value }
             return row.map { cell in
                 DeltaReadoutCell(cell: cell, delta: Self.delta(of: cell, vs: baseline, reference: reference))
             }

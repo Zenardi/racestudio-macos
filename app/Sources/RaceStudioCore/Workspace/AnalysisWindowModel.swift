@@ -164,6 +164,10 @@ public final class AnalysisWindowModel: ObservableObject {
     /// rather than re-slicing the channels.
     private var readoutTableCache = ReadoutTableModel(rows: [], columns: [], series: [:])
 
+    /// Per-selected-channel formatters, cached alongside the grid so a cursor-move
+    /// render reads them without rebuilding the dictionary each time (issue 8.5).
+    private var channelFormattersCache: [ChannelID: ChannelFormatter] = [:]
+
     private struct SelectionEntry {
         let channel: ChannelID
         let trace: ChannelTrace
@@ -237,6 +241,11 @@ public final class AnalysisWindowModel: ObservableObject {
     /// Toggle `channel` in the selection and refresh the cached traces/measures.
     public func toggleChannel(_ channel: ChannelID) {
         selection.toggleChannel(channel)
+        // A deselected channel is no longer a grid row, so drop any stale pin —
+        // otherwise it would silently linger and resurrect on re-selection.
+        if !selection.channels.contains(channel) {
+            pinnedChannels.removeAll { $0 == channel }
+        }
         rebuildSelectionData()
     }
 
@@ -316,15 +325,9 @@ public final class AnalysisWindowModel: ObservableObject {
     public var readoutTable: ReadoutTableModel { readoutTableCache }
 
     /// The unit + precision formatter for each selected channel (issue 8.5), so
-    /// the panel renders each cell in the channel's own units. The selection is
-    /// deduplicated, so each channel maps to exactly one formatter.
-    public var channelFormatters: [ChannelID: ChannelFormatter] {
-        var formatters: [ChannelID: ChannelFormatter] = [:]
-        for entry in selectionData {
-            formatters[entry.channel] = entry.formatter
-        }
-        return formatters
-    }
+    /// the panel renders each cell in the channel's own units. Cached, so a
+    /// cursor-move render does not rebuild the dictionary.
+    public var channelFormatters: [ChannelID: ChannelFormatter] { channelFormattersCache }
 
     // MARK: - Internals
 
@@ -332,7 +335,12 @@ public final class AnalysisWindowModel: ObservableObject {
     /// moves re-interpolate the cache rather than re-reading across the seam. Also
     /// refreshes the readout grid, whose per-lap slices derive from these series.
     private func rebuildSelectionData() {
-        defer { rebuildReadoutTable() }
+        defer {
+            rebuildReadoutTable()
+            var formatters: [ChannelID: ChannelFormatter] = [:]
+            for entry in selectionData { formatters[entry.channel] = entry.formatter }
+            channelFormattersCache = formatters
+        }
         guard let analysis else { selectionData = []; return }
         selectionData = selection.channels.compactMap { id in
             guard let index = channelIndexByID[id] else { return nil }

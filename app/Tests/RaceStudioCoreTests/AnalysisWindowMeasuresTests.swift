@@ -182,6 +182,15 @@ import Foundation
         #expect(model.pinnedChannels.isEmpty)
     }
 
+    @Test func test_deselecting_a_channel_drops_its_pin() {
+        let model = makeModel() // Speed selected
+        model.togglePinned(ChannelID("Speed"))
+        #expect(model.pinnedChannels == [ChannelID("Speed")])
+        // Deselecting the channel removes the stale pin rather than orphaning it.
+        model.toggleChannel(ChannelID("Speed"))
+        #expect(model.pinnedChannels.isEmpty)
+    }
+
     @Test func test_channel_formatters_carry_the_units_and_precision() {
         let model = tableModel()
         #expect(model.channelFormatters[ChannelID("Speed")]?.unit == "km/h")

@@ -11,20 +11,24 @@ import RaceStudioCore
 /// (`ReadoutTableModel`) and the unit-aware formatting (`ChannelFormatter`) are
 /// computed in `RaceStudioCore`; this view lays the results into a grid, colors
 /// the extrapolated ones, and forwards pin / set-reference taps back to the model.
+///
+/// The pin / set-reference handlers are optional: when omitted (e.g. the read-only
+/// 4.7 workspace) the channel and lap headers render as plain, non-interactive
+/// labels rather than inert buttons.
 public struct ChannelTableView: View {
     private let model: ReadoutTableModel
     private let cursorX: Double
     private let formatters: [ChannelID: ChannelFormatter]
     private let pinned: [ChannelID]
     private let referenceLap: LapID?
-    private let onPin: (ChannelID) -> Void
-    private let onSetReference: (LapID) -> Void
+    private let onPin: ((ChannelID) -> Void)?
+    private let onSetReference: ((LapID) -> Void)?
 
     public init(model: ReadoutTableModel, cursorX: Double,
                 formatters: [ChannelID: ChannelFormatter], pinned: [ChannelID] = [],
                 referenceLap: LapID? = nil,
-                onPin: @escaping (ChannelID) -> Void = { _ in },
-                onSetReference: @escaping (LapID) -> Void = { _ in }) {
+                onPin: ((ChannelID) -> Void)? = nil,
+                onSetReference: ((LapID) -> Void)? = nil) {
         self.model = model
         self.cursorX = cursorX
         self.formatters = formatters
@@ -43,9 +47,10 @@ public struct ChannelTableView: View {
     }
 
     public var body: some View {
-        // One lookup per render; SwiftUI diffs the stable cell ids.
-        let rows = model.deltaCells(atX: cursorX, reference: referenceLap)
-            .map { TableRow(channel: $0.first?.cell.channel ?? ChannelID(""), cells: $0) }
+        // One lookup per render; SwiftUI diffs the stable cell ids. The channel
+        // list drives the row identity directly (the grid is rows × columns).
+        let rows = zip(model.rows, model.deltaCells(atX: cursorX, reference: referenceLap))
+            .map { TableRow(channel: $0, cells: $1) }
         VStack(alignment: .leading, spacing: 12) {
             if !pinned.isEmpty {
                 pinnedReadouts(rows)
@@ -106,32 +111,40 @@ public struct ChannelTableView: View {
     }
 
     /// A lap column header; tapping it makes that lap the reference (highlighted).
+    /// Renders as a plain label when no set-reference handler is supplied.
+    @ViewBuilder
     private func lapHeader(_ lap: LapID) -> some View {
         let isReference = lap == referenceLap
-        return Button { onSetReference(lap) } label: {
-            Text("Lap \(lap.index + 1)")
-                .font(.caption)
-                .fontWeight(isReference ? .bold : .regular)
-                .foregroundColor(isReference ? .accentColor : .secondary)
+        let label = Text("Lap \(lap.index + 1)")
+            .font(.caption)
+            .fontWeight(isReference ? .bold : .regular)
+            .foregroundColor(isReference ? .accentColor : .secondary)
+        if let onSetReference {
+            Button { onSetReference(lap) } label: { label }
+                .buttonStyle(.plain)
+                .help(isReference ? "Reference lap" : "Set as reference lap")
+        } else {
+            label
         }
-        .buttonStyle(.plain)
-        .help(isReference ? "Reference lap" : "Set as reference lap")
     }
 
     /// A channel row header; tapping it pins/unpins the channel (pin marker shown
-    /// when pinned).
+    /// when pinned). Renders as a plain label when no pin handler is supplied.
+    @ViewBuilder
     private func channelHeader(_ channel: ChannelID) -> some View {
-        Button { onPin(channel) } label: {
-            HStack(spacing: 4) {
-                if pinned.contains(channel) {
-                    Image(systemName: "pin.fill").font(.caption2).foregroundColor(.accentColor)
-                }
-                Text(channel.name)
+        let label = HStack(spacing: 4) {
+            if pinned.contains(channel) {
+                Image(systemName: "pin.fill").font(.caption2).foregroundColor(.accentColor)
             }
-            .contentShape(Rectangle())
+            Text(channel.name)
         }
-        .buttonStyle(.plain)
-        .help(pinned.contains(channel) ? "Unpin" : "Pin as a large readout")
+        if let onPin {
+            Button { onPin(channel) } label: { label.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .help(pinned.contains(channel) ? "Unpin" : "Pin as a large readout")
+        } else {
+            label
+        }
     }
 
     /// One cell: the value-at-cursor (greyed when extrapolated) and, when a
@@ -155,11 +168,15 @@ public struct ChannelTableView: View {
         (formatters[cell.channel] ?? .plain).string(for: cell.readout?.value)
     }
 
-    /// The signed delta string in the channel's units (a leading `+` for a
-    /// positive delta; a negative already carries `-`), or `nil` when absent.
+    /// The signed delta string in the channel's units, or `nil` when absent. A
+    /// delta that rounds to zero at the channel's precision shows an unsigned zero
+    /// (so a `±ε` difference never renders a misleading `+0`); otherwise a `+` is
+    /// prefixed for a positive delta (a negative already carries `-`).
     private func formatDelta(_ delta: Double?, for channel: ChannelID) -> String? {
         guard let delta else { return nil }
-        let formatted = (formatters[channel] ?? .plain).string(for: delta)
+        let formatter = formatters[channel] ?? .plain
+        let formatted = formatter.string(for: delta)
+        if formatted == formatter.string(for: 0) { return formatted }
         return delta > 0 ? "+\(formatted)" : formatted
     }
 }
