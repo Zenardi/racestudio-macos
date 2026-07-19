@@ -117,8 +117,9 @@ public final class StatsPanelsModel: ObservableObject {
         return names.first { $0 != xName }
     }
 
-    /// A time-basis ``ChannelSeries`` from a trace's samples.
+    /// A time-basis ``ChannelSeries`` from a trace's samples (the shared
+    /// ``ChannelTrace/timeSeries`` conversion).
     private static func series(from trace: ChannelTrace) -> ChannelSeries {
-        ChannelSeries(xs: trace.samples.map(\.time), values: trace.samples.map(\.value))
+        trace.timeSeries
     }
 }

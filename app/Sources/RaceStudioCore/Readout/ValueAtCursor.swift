@@ -32,6 +32,15 @@ public struct ChannelSeries: Equatable, Sendable {
     }
 }
 
+extension ChannelTrace {
+    /// This trace's samples as a time-basis ``ChannelSeries`` (`xs` = sample time) —
+    /// the one conversion the stats/report panels share so a trace maps to a series
+    /// in exactly one place (issues 8.9 / 8.10).
+    var timeSeries: ChannelSeries {
+        ChannelSeries(xs: samples.map(\.time), values: samples.map(\.value))
+    }
+}
+
 /// The value read off a channel at the cursor (issue 4.4): the interpolated
 /// value (`nil` when there is no data), and whether it was clamped from beyond
 /// the sampled range (extrapolated).
