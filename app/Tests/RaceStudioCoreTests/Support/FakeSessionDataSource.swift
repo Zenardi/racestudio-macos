@@ -20,6 +20,12 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     private let statsError: Error?
     /// The whole GPS track this fake serves (issue 8.6); windowed reads slice it.
     private let gps: [GPSTrackPoint]
+    /// Distance-paired samples per channel (issue 8.7); windowed reads slice them.
+    private let distanceBanks: [[DistanceSample]]
+    /// Delta-t series keyed by `(reference, comparison)` lap index (issue 8.7).
+    private let deltas: [DeltaKey: [DeltaSample]]
+    /// When set, every `deltaT(...)` call throws it (the error path).
+    private let deltaError: Error?
 
     /// One recorded `samples(...)` request, so a test can assert the window
     /// `AnalysisSession` actually issued across the seam.
@@ -54,14 +60,36 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     /// The most recent `gpsTrack(...)` call, or `nil` when it was never invoked.
     private(set) var lastGPSRequest: GPSRequest?
 
+    /// A `(reference, comparison)` lap-index key for a canned delta-t series.
+    struct DeltaKey: Hashable {
+        let reference: UInt32
+        let comparison: UInt32
+    }
+
+    /// One recorded `deltaT(...)` call, so a test can assert the pair + distance
+    /// window `AnalysisSession` forwarded across the seam.
+    struct DeltaRequest: Equatable {
+        let reference: UInt32
+        let comparison: UInt32
+        let start: Double
+        let end: Double
+    }
+
+    /// The most recent `deltaT(...)` call, or `nil` when it was never invoked.
+    private(set) var lastDeltaRequest: DeltaRequest?
+
     struct UnknownChannel: Error {}
 
     init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil,
-         gps: [GPSTrackPoint] = []) {
+         gps: [GPSTrackPoint] = [], distanceBanks: [[DistanceSample]] = [],
+         deltas: [DeltaKey: [DeltaSample]] = [:], deltaError: Error? = nil) {
         self.banks = banks
         self.stats = stats
         self.statsError = statsError
         self.gps = gps
+        self.distanceBanks = distanceBanks
+        self.deltas = deltas
+        self.deltaError = deltaError
     }
 
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
@@ -87,5 +115,19 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         let lo = min(Int(start), gps.count)
         let take = min(Int(count), gps.count - lo)
         return Array(gps[lo..<(lo + take)])
+    }
+
+    func samplesWithDistance(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DistanceSample] {
+        guard Int(channelIndex) < distanceBanks.count else { return [] }
+        let bank = distanceBanks[Int(channelIndex)]
+        let lo = min(Int(start), bank.count)
+        let take = min(Int(count), bank.count - lo)
+        return Array(bank[lo..<(lo + take)])
+    }
+
+    func deltaT(referenceLap: UInt32, comparisonLap: UInt32, start: Double, end: Double) throws -> [DeltaSample] {
+        lastDeltaRequest = DeltaRequest(reference: referenceLap, comparison: comparisonLap, start: start, end: end)
+        if let deltaError { throw deltaError }
+        return deltas[DeltaKey(reference: referenceLap, comparison: comparisonLap)] ?? []
     }
 }

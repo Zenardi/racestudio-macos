@@ -122,5 +122,45 @@ import RaceStudioFFIBindings
             #expect(abs(got.time - base.timecode / 1000) < 1e-9, "timecode ms → seconds")
         }
     }
+
+    // MARK: - samplesWithDistance: FFI DistanceSample → DistanceSample (ms → seconds)
+
+    @Test func test_samples_with_distance_maps_ffi_triples_to_seconds() throws {
+        guard let session = try openReal() else { return }
+        let index = try rpmIndex(session)
+        let source = FFISessionDataSource(handle: session)
+
+        let mapped = source.samplesWithDistance(channelIndex: index, start: 0, count: 8)
+        let raw = try session.samplesWithDistance(channelIndex: index, start: 0, count: 8)
+
+        try #require(mapped.count == raw.count)
+        try #require(!mapped.isEmpty)
+        for (got, base) in zip(mapped, raw) {
+            #expect(abs(got.time - base.timecode / 1000) < 1e-9, "timecode ms → seconds")
+            #expect(got.distance == base.distance)
+            #expect(got.value == base.value)
+        }
+    }
+
+    // MARK: - deltaT: FFI DeltaPoint → DeltaSample over a distance window
+
+    @Test func test_delta_t_maps_ffi_points_over_the_whole_lap() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+        let laps = session.laps()
+        try #require(laps.count >= 2, "aim sample has ≥ 2 laps")
+
+        let mapped = try source.deltaT(referenceLap: laps[0].index, comparisonLap: laps[1].index,
+                                       start: -.infinity, end: .infinity)
+        let raw = try session.deltaTSeries(reference: laps[0].index, comparison: laps[1].index,
+                                           window: FfiWindow(start: -.infinity, end: .infinity))
+
+        try #require(mapped.count == raw.count)
+        try #require(!mapped.isEmpty)
+        for (got, base) in zip(mapped, raw) {
+            #expect(got.distance == base.distance)
+            #expect(got.dt == base.dt)
+        }
+    }
 }
 #endif

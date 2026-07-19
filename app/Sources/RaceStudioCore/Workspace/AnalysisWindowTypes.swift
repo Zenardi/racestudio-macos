@@ -16,6 +16,9 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
     /// The 4.3 GPS track map — racing line coloured by a channel, cursor marker,
     /// and sector marks (issue 8.6).
     case trackMap
+    /// The 4.2 lap overlay + delta-t strip — laps overlaid on distance with the
+    /// predictive gain/loss versus the reference lap (issue 8.7).
+    case lapOverlay
     /// The 2.4 session summary (metadata + channel/lap listings).
     case summary
 
@@ -27,6 +30,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .timeDistance: return "Time / Distance"
         case .channelTable: return "Channels"
         case .trackMap: return "Track Map"
+        case .lapOverlay: return "Lap Overlay"
         case .summary: return "Summary"
         }
     }
@@ -38,6 +42,7 @@ public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
         case .timeDistance: return "chart.xyaxis.line"
         case .channelTable: return "tablecells"
         case .trackMap: return "map"
+        case .lapOverlay: return "point.3.connected.trianglepath.dotted"
         case .summary: return "list.bullet.rectangle"
         }
     }
@@ -101,4 +106,32 @@ public struct ChannelMeasure: Equatable, Sendable, Identifiable {
         self.readout = readout
         self.formatted = formatted
     }
+}
+
+/// The session's time extent as a two-point cursor basis (issue 8.3): the lap span
+/// `[earliest lap start, latest lap end]`, or — when the session has no laps — the
+/// first selected channel's sample-time extent, so a lapless session is still
+/// scrubbable. Empty arrays when neither is available (the cursor then has no
+/// bounds). Distances are placeholders (`0`) — the reverse distance↔time mapping
+/// and ``LinkedCursor/distancePosition`` are not meaningful until the real distance
+/// axis is wired in a later issue.
+///
+/// A free function (not a method) so ``AnalysisWindowModel`` can call it from `init`
+/// before `self` is fully formed, and to keep the model file focused.
+@MainActor
+func analysisCursorTimeBasis(session: Session, analysis: AnalysisSession?,
+                             channelIndexByID: [ChannelID: Int],
+                             selection: AnalysisSelection) -> (times: [Double], distances: [Double]) {
+    if let start = session.laps.map(\.startTimeS).min(),
+       let end = session.laps.map(\.endTimeS).max(), start <= end {
+        return (times: [start, end], distances: [0, 0])
+    }
+    // No laps: bound the cursor by the first selected channel's sample times.
+    if let analysis, let id = selection.channels.first, let index = channelIndexByID[id] {
+        let xs = analysis.series(channelIndex: index).xs
+        if let first = xs.first, let last = xs.last, first <= last {
+            return (times: [first, last], distances: [0, 0])
+        }
+    }
+    return (times: [], distances: [])
 }

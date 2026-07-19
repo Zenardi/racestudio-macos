@@ -15,9 +15,20 @@ struct SwiftChartsPlotFallback: View {
     let viewport: PlotViewport
     let valueDomain: ClosedRange<Double>
     let columns: Int
+    /// Optional per-series colour (keyed by trace name); when supplied the lines
+    /// use it instead of Swift Charts' automatic palette, so a caller's own legend
+    /// (e.g. the lap-overlay legend) matches the plotted lines. `nil` keeps the
+    /// default palette (issue 8.7).
+    var seriesColors: [String: Color]?
 
     var body: some View {
-        Chart {
+        chart
+            .chartXScale(domain: viewport.visible)
+            .chartYScale(domain: valueDomain)
+    }
+
+    @ViewBuilder private var chart: some View {
+        let base = Chart {
             ForEach(traces) { trace in
                 let polyline = plotPolyline(trace: trace, mode: mode,
                                             visible: viewport.visible, columns: columns)
@@ -31,7 +42,11 @@ struct SwiftChartsPlotFallback: View {
                 }
             }
         }
-        .chartXScale(domain: viewport.visible)
-        .chartYScale(domain: valueDomain)
+        if let seriesColors {
+            base.chartForegroundStyleScale(domain: traces.map(\.name),
+                                           range: traces.map { seriesColors[$0.name] ?? .accentColor })
+        } else {
+            base
+        }
     }
 }

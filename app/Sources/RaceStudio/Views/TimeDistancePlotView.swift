@@ -21,6 +21,10 @@ public enum PlotRenderKind: Sendable {
 public struct TimeDistancePlotView: View {
     private let traces: [ChannelTrace]
     private let renderer: PlotRenderKind
+    /// Optional per-series colour (keyed by trace name) for the Swift Charts
+    /// renderer, so a caller with its own legend can match the plotted lines
+    /// (issue 8.7); `nil` keeps the default palette.
+    private let seriesColors: [String: Color]?
 
     // Domains are derived from the (immutable) traces once, at init, so the
     // per-frame body does not re-scan every sample during a gesture.
@@ -33,9 +37,11 @@ public struct TimeDistancePlotView: View {
     @State private var dragBase: PlotViewport?
     @State private var zoomBase: PlotViewport?
 
-    public init(traces: [ChannelTrace], mode: XAxisMode = .distance, renderer: PlotRenderKind = .metal) {
+    public init(traces: [ChannelTrace], mode: XAxisMode = .distance, renderer: PlotRenderKind = .metal,
+                seriesColors: [String: Color]? = nil) {
         self.traces = traces
         self.renderer = renderer
+        self.seriesColors = seriesColors
         let timeDomain = plotDomain(of: traces.flatMap { $0.xValues(mode: .time) })
         let distanceDomain = plotDomain(of: traces.flatMap { $0.xValues(mode: .distance) })
         self.timeDomain = timeDomain
@@ -81,7 +87,7 @@ public struct TimeDistancePlotView: View {
                               valueDomain: valueDomain, columns: columns)
         case .swiftCharts:
             SwiftChartsPlotFallback(traces: traces, mode: mode, viewport: viewport,
-                                    valueDomain: valueDomain, columns: columns)
+                                    valueDomain: valueDomain, columns: columns, seriesColors: seriesColors)
         }
     }
 

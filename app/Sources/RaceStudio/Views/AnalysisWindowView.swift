@@ -84,6 +84,8 @@ private struct PanelHost: View {
                 ChannelTablePanel(model: model, cursor: model.linkedCursor)
             case .trackMap:
                 TrackMapPanel(model: model, cursor: model.linkedCursor)
+            case .lapOverlay:
+                LapOverlayPanel(model: model)
             case .summary:
                 SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
             }
@@ -181,6 +183,91 @@ private struct TrackMapPanel: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Lap overlay panel (issue 8.7)
+
+/// Hosts the reused lap-overlay comparison surface bound to the window's shared
+/// lap selection: the overlaid distance-mode plot (``TimeDistancePlotView``) for
+/// the overlay channel — one colour per lap — and the reused ``DeltaStripView``
+/// showing the predictive gain/loss versus the reference lap. Trace building,
+/// colouring, and delta interpolation all come from
+/// `RaceStudioCore.LapOverlayViewModel`; tapping a lap in the legend makes it the
+/// reference. The strip's distance scrub cursor is local pending a shared distance
+/// basis (deferred, as in 8.3).
+private struct LapOverlayPanel: View {
+    @ObservedObject var model: AnalysisWindowModel
+    @State private var cursorDistance: Double?
+
+    var body: some View {
+        let laps = model.overlayLaps
+        if model.overlayChannel.isEmpty {
+            ContentUnavailableHint(text: "Select a channel to overlay")
+        } else if laps.count < 2 {
+            ContentUnavailableHint(text: "Select at least two laps to overlay")
+        } else {
+            let overlay = LapOverlayViewModel(selection: model.selection.laps,
+                                              laps: laps, deltas: model.overlayDeltas)
+            VStack(spacing: 4) {
+                legend(overlay)
+                TimeDistancePlotView(traces: overlay.traces(for: model.overlayChannel),
+                                     mode: .distance, renderer: .swiftCharts,
+                                     seriesColors: seriesColors(overlay))
+                deltaStrip(overlay)
+            }
+            .padding(8)
+        }
+    }
+
+    /// The lap → line colour map (keyed by lap label = trace name) so the plotted
+    /// lines match the legend swatches instead of Swift Charts' default palette.
+    private func seriesColors(_ overlay: LapOverlayViewModel) -> [String: Color] {
+        var colors: [String: Color] = [:]
+        for lap in model.overlayLaps { colors[lap.label] = Color(overlay.colorForLap(lap.id)) }
+        return colors
+    }
+
+    /// The lap legend: a colour swatch + label per overlaid lap; tapping one makes
+    /// it the reference the delta strip is measured against.
+    private func legend(_ overlay: LapOverlayViewModel) -> some View {
+        HStack(spacing: 14) {
+            Text(model.overlayChannel).font(.caption.bold())
+            ForEach(model.overlayLaps, id: \.id) { lap in
+                Button { model.setReferenceLap(lap.id) } label: {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color(overlay.colorForLap(lap.id))).frame(width: 9, height: 9)
+                        Text(lap.label).font(.caption)
+                        if model.selection.laps.reference == lap.id {
+                            Text("REF").font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(model.selection.laps.reference == lap.id ? "Reference lap" : "Set as reference lap")
+            }
+            Spacer()
+        }
+    }
+
+    /// The predictive gain/loss strip of the comparison target versus the reference
+    /// lap, scrubbable to read the Δt at the cursor.
+    @ViewBuilder
+    private func deltaStrip(_ overlay: LapOverlayViewModel) -> some View {
+        if let reference = model.selection.laps.reference, let target = model.selection.laps.comparisonTarget {
+            let strip = overlay.deltaStrip(reference: reference, target: target)
+            // A pair the core couldn't compute yields an empty strip — omit it
+            // rather than render an empty band.
+            if !strip.isEmpty {
+                DeltaStripView(
+                    strip: strip,
+                    readout: cursorDistance.flatMap {
+                        overlay.readout(in: strip, at: $0, reference: reference, target: target)
+                    },
+                    cursorDistance: $cursorDistance)
+            }
+        }
     }
 }
 
