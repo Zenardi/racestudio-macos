@@ -20,6 +20,9 @@ struct SwiftChartsPlotFallback: View {
     /// (e.g. the lap-overlay legend) matches the plotted lines. `nil` keeps the
     /// default palette (issue 8.7).
     var seriesColors: [String: Color]?
+    /// The line width + per-sample dot size (issue 8.12); defaults to the Core's
+    /// hairline-no-dots style so existing call sites are unchanged.
+    var lineStyle: PlotLineStyle = PlotLineStyle()
 
     var body: some View {
         chart
@@ -38,7 +41,13 @@ struct SwiftChartsPlotFallback: View {
                         y: .value(trace.name, point.y),
                         series: .value("channel", trace.name)
                     )
+                    .lineStyle(StrokeStyle(lineWidth: lineStyle.lineWidth))
                     .foregroundStyle(by: .value("channel", trace.name))
+                    if lineStyle.showsDots {
+                        PointMark(x: .value("x", point.x), y: .value(trace.name, point.y))
+                            .symbolSize(lineStyle.dotSize * lineStyle.dotSize)
+                            .foregroundStyle(by: .value("channel", trace.name))
+                    }
                 }
             }
         }
