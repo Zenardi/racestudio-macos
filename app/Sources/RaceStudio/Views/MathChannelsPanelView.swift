@@ -12,15 +12,29 @@ import RaceStudioCore
 /// only lays out the regions and forwards edits.
 struct MathChannelsPanel: View {
     @ObservedObject var manager: MathChannelsManagerModel
-    /// The session's channel names — the library's `.channels` section.
-    let channelNames: [String]
+    /// The nested draft editor, observed here too so the Add button's enabled state
+    /// re-renders when its debounced validation completes (the panel observes
+    /// `manager`, which does not publish the editor's changes).
+    @ObservedObject var editor: MathChannelEditorModel
+    /// The function-library reference — a pure value of the immutable channel names,
+    /// built once rather than per render.
+    let library: MathFunctionLibrary
 
     @State private var name = ""
     @State private var unit = ""
-    /// Bumped after each successful add to reset the embedded editor's field.
+    /// Bumped after each add / reference insert so the embedded editor re-seeds its
+    /// field from the (manager-owned) draft text.
     @State private var draftGeneration = 0
     /// The defined channel whose preview trace is shown, if any.
     @State private var previewedChannel: String?
+    /// True while an add is in flight, so a fast second tap can't spawn a duplicate.
+    @State private var isAdding = false
+
+    init(manager: MathChannelsManagerModel, channelNames: [String]) {
+        self.manager = manager
+        self._editor = ObservedObject(wrappedValue: manager.editor)
+        self.library = MathFunctionLibrary(channelNames: channelNames)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -59,7 +73,7 @@ struct MathChannelsPanel: View {
     private var addControls: some View {
         HStack(spacing: 12) {
             Button("Add channel") { commit() }
-                .disabled(!canAdd)
+                .disabled(!canAdd || isAdding)
             if let rejection = manager.rejection {
                 Text(rejection.message)
                     .font(.caption)
@@ -117,18 +131,22 @@ struct MathChannelsPanel: View {
         if let id = previewedChannel,
            let defined = manager.channels.first(where: { $0.id == id }),
            !defined.trace.samples.isEmpty {
+            // `.id` so switching the previewed channel builds a fresh plot rather
+            // than reusing the prior one's viewport @State.
             TimeDistancePlotView(traces: [defined.trace], mode: .time, renderer: .swiftCharts)
                 .frame(minHeight: 140)
+                .id(defined.id)
         }
     }
 
     // MARK: - Function-library reference
 
     private var referenceColumn: some View {
-        let library = MathFunctionLibrary(channelNames: channelNames)
-        return ScrollView {
+        ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Reference").font(.headline)
+                Text("Tap to insert at the end of the expression.")
+                    .font(.caption2).foregroundColor(.secondary)
                 ForEach(MathReferenceCategory.allCases) { category in
                     section(category, entries: library.entries(for: category))
                 }
@@ -144,36 +162,54 @@ struct MathChannelsPanel: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(category.title.uppercased())
                     .font(.caption2.bold()).foregroundColor(.secondary)
-                ForEach(entries) { entry in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(entry.symbol).font(.system(.caption, design: .monospaced))
-                        Text(entry.summary).font(.caption2).foregroundColor(.secondary)
-                    }
-                }
+                ForEach(entries) { entry in referenceRow(entry) }
             }
         }
+    }
+
+    private func referenceRow(_ entry: MathFunctionEntry) -> some View {
+        Button { insert(entry) } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(entry.symbol).font(.system(.caption, design: .monospaced))
+                Text(entry.summary).font(.caption2).foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
 
     /// Whether the draft is a valid, named expression ready to add.
     private var canAdd: Bool {
-        guard case .valid = manager.editor.state else { return false }
+        guard case .valid = editor.state else { return false }
         return !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// Commit the draft; on success clear the fields and reset the editor.
+    /// Commit the draft; on success clear the name/unit fields and re-seed the
+    /// editor field (the manager clears the draft text). The in-flight guard plus a
+    /// disabled button stop a fast second tap from adding a duplicate.
     private func commit() {
-        let expression = manager.editor.text
+        guard !isAdding else { return }
+        isAdding = true
+        let expression = editor.text
         let channelName = name
         let channelUnit = unit
-        Task {
+        Task { @MainActor in
             if await manager.add(name: channelName, unit: channelUnit, expression: expression) {
                 name = ""
                 unit = ""
                 draftGeneration += 1
             }
+            isAdding = false
         }
+    }
+
+    /// Insert a reference token at the end of the draft, then re-seed the field.
+    private func insert(_ entry: MathFunctionEntry) {
+        editor.update(text: editor.text + entry.insertion)
+        draftGeneration += 1
     }
 }
 

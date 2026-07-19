@@ -70,10 +70,20 @@ public struct MathFunctionLibrary: Sendable {
         case .operators: return Self.operators
         case .numbers: return Self.numbers
         case .channels:
-            return channelNames.map {
+            // Only channels whose names are grammar identifiers can be referenced —
+            // the grammar has no quoting, so a spaced/punctuated name (e.g.
+            // "GPS Speed") is not a usable expression token and is omitted.
+            return channelNames.filter(Self.isReferenceableIdentifier).map {
                 MathFunctionEntry(symbol: $0, summary: "channel reference", insertion: $0)
             }
         }
+    }
+
+    /// Whether `name` is a grammar identifier — `[A-Za-z_][A-Za-z0-9_]*` (ASCII),
+    /// matching the M2 lexer (issue 3.5) — and so referenceable in an expression.
+    static func isReferenceableIdentifier(_ name: String) -> Bool {
+        guard let first = name.first, first == "_" || (first.isASCII && first.isLetter) else { return false }
+        return name.dropFirst().allSatisfy { $0 == "_" || ($0.isASCII && ($0.isLetter || $0.isNumber)) }
     }
 
     // MARK: - Static grammar reference

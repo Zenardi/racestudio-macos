@@ -32,6 +32,33 @@ import Foundation
         func evaluate(_ expression: String) async throws -> [MathSample] { throw BoomError() }
     }
 
+    /// Suspends every `evaluate` until `expected` of them are in flight, then
+    /// releases all at once — so two concurrent adds are both past the pre-await
+    /// duplicate guard when they resume, exercising the reentrancy re-check.
+    private final class BarrierEvaluator: ExpressionEvaluating, @unchecked Sendable {
+        private let expected: Int
+        private let samples: [MathSample]
+        private let lock = NSLock()
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        init(expected: Int, samples: [MathSample] = [MathSample(time: 0, value: 1)]) {
+            self.expected = expected
+            self.samples = samples
+        }
+
+        func evaluate(_ expression: String) async throws -> [MathSample] {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                waiters.append(continuation)
+                let release = waiters.count >= expected ? waiters : []
+                if waiters.count >= expected { waiters.removeAll() }
+                lock.unlock()
+                release.forEach { $0.resume() }
+            }
+            return samples
+        }
+    }
+
     private func makeManager(
         failures: [String: ExpressionEngineError] = [:],
         samples: [MathSample] = [MathSample(time: 0, value: 10), MathSample(time: 1, value: 20)],
@@ -170,6 +197,37 @@ import Foundation
 
         #expect(manager.definitions.map(\.name) == ["A", "C"])
         #expect(captured.last?.map(\.name) == ["A", "C"])
+    }
+
+    @Test func test_add_rejects_a_constant_expression_that_produces_no_samples() async {
+        // A reference-free expression (e.g. "9.81") evaluates to no samples — it has
+        // no timebase, so it is rejected rather than committed as an empty channel.
+        let manager = makeManager(samples: [])
+        let added = await manager.add(name: "K", unit: "", expression: "9.81")
+        #expect(!added)
+        #expect(manager.channels.isEmpty)
+        #expect(manager.rejection != nil)
+    }
+
+    @Test func test_concurrent_adds_of_the_same_name_commit_it_at_most_once() async {
+        // Both adds pass the pre-await duplicate guard (channels still empty), then
+        // resume together; the post-await re-check rejects the second.
+        let manager = MathChannelsManagerModel(evaluator: BarrierEvaluator(expected: 2),
+                                               debounceInterval: .zero)
+        async let first = manager.add(name: "A", unit: "", expression: "e1")
+        async let second = manager.add(name: "A", unit: "", expression: "e2")
+        let outcomes = await [first, second]
+
+        #expect(manager.channels.count == 1, "a concurrent duplicate is rejected, not appended twice")
+        #expect(manager.channels.map(\.id) == ["A"])
+        #expect(outcomes.filter { $0 }.count == 1, "exactly one add reports success")
+    }
+
+    @Test func test_successful_add_clears_the_draft_editor() async {
+        let manager = makeManager()
+        manager.editor.update(text: "2 * RPM")
+        _ = await manager.add(name: "Power", unit: "", expression: "2 * RPM")
+        #expect(manager.editor.text == "", "committing consumes the draft so the next channel starts clean")
     }
 
     @Test func test_add_swallows_a_non_engine_error_as_a_rejection() async {

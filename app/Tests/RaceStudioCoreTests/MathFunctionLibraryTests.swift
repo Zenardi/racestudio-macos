@@ -73,6 +73,23 @@ import Foundation
         #expect(library().entries(for: .channels).isEmpty)
     }
 
+    @Test func test_channels_omit_names_the_grammar_cannot_reference() {
+        // The grammar has no quoting, so a spaced/punctuated name (e.g. "GPS Speed")
+        // or a digit-leading name cannot be referenced — only identifiers are listed.
+        let names = ["Speed", "GPS Speed", "Ax", "Water%", "_hidden", "2fast"]
+        #expect(library(channels: names).entries(for: .channels).map(\.insertion)
+            == ["Speed", "Ax", "_hidden"])
+    }
+
+    @Test func test_is_referenceable_identifier_matches_the_grammar() {
+        #expect(MathFunctionLibrary.isReferenceableIdentifier("RPM"))
+        #expect(MathFunctionLibrary.isReferenceableIdentifier("_x1"))
+        #expect(!MathFunctionLibrary.isReferenceableIdentifier(""))
+        #expect(!MathFunctionLibrary.isReferenceableIdentifier("GPS Speed"))
+        #expect(!MathFunctionLibrary.isReferenceableIdentifier("1st"))
+        #expect(!MathFunctionLibrary.isReferenceableIdentifier("a-b"))
+    }
+
     // MARK: - Identity (used by SwiftUI ForEach)
 
     @Test func test_entry_id_is_its_symbol() {

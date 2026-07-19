@@ -14,6 +14,17 @@ public struct MathSample: Equatable, Sendable {
     }
 }
 
+extension ChannelTrace {
+    /// A plottable trace for a math channel's evaluated `samples` (issues 4.6/8.8).
+    /// A math channel is time-keyed and has no independent distance axis, so distance
+    /// mirrors time — the one place that convention lives, shared by the editor
+    /// preview and the ``MathChannelsManagerModel`` committed channel.
+    static func mathChannel(named name: String, samples: [MathSample]) -> ChannelTrace {
+        let times = samples.map(\.time)
+        return ChannelTrace(name: name, times: times, distances: times, values: samples.map(\.value))
+    }
+}
+
 /// Evaluates a math-channel expression over the current session (issue 4.6).
 ///
 /// Abstracted so the editor model is driven by a fake in tests and by the
@@ -115,11 +126,10 @@ public final class MathChannelEditorModel: ObservableObject {
         preview = newPreview
     }
 
-    /// Builds the preview trace from the evaluated samples. A math channel is
-    /// time-keyed, so distance mirrors time and the editor renders it in time mode.
+    /// Builds the preview trace from the evaluated samples (time-keyed, so distance
+    /// mirrors time and the editor renders it in time mode).
     private func makePreview(name: String, samples: [MathSample]) -> ChannelTrace {
-        let times = samples.map(\.time)
-        return ChannelTrace(name: name, times: times, distances: times, values: samples.map(\.value))
+        .mathChannel(named: name, samples: samples)
     }
 
     /// Awaits the in-flight validation. Test hook: production drives validation

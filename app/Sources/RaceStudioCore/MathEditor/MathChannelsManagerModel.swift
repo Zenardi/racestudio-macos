@@ -2,9 +2,11 @@ import Foundation
 import Combine
 
 /// A defined math channel plus the trace it evaluated to over the live session
-/// (issue 8.8). The trace is captured on add, so a panel can plot the channel —
-/// "usable as a channel" — without re-evaluating; the ``definition`` is what
-/// persists into the `.rsproj` (5.4).
+/// (issue 8.8). The trace is captured on add, so the Math panel can plot the
+/// channel's preview without re-evaluating; the ``definition`` is what persists
+/// into the `.rsproj` (5.4). (Surfacing a math channel as a first-class selectable
+/// channel across the other panels awaits the core's derived-channel registration,
+/// issue 3.6.)
 public struct DefinedMathChannel: Equatable, Sendable, Identifiable {
     /// The persisted definition (name, unit, expression source).
     public let definition: MathChannelDef
@@ -53,8 +55,9 @@ public final class MathChannelsManagerModel: ObservableObject {
     public let editor: MathChannelEditorModel
 
     private let evaluator: ExpressionEvaluating
-    /// Fired with the current ``definitions`` after every list change, so the
-    /// workspace can persist them into the project document (5.4).
+    /// Fired with the current ``definitions`` after every list change, so a
+    /// workspace can persist them into the project document once a project-save flow
+    /// is wired (the 5.4 path). Defaults to a no-op — no save UI consumes it yet.
     private let onChange: ([MathChannelDef]) -> Void
 
     /// - Parameters:
@@ -77,10 +80,10 @@ public final class MathChannelsManagerModel: ObservableObject {
     /// ``ProjectDocument/mathChannels``.
     public var definitions: [MathChannelDef] { channels.map(\.definition) }
 
-    /// Validate `expression` and, if it is valid, named, and not a duplicate, add it
-    /// as a defined channel (capturing its evaluated trace) and fire the persist
-    /// hook. Returns whether it was added; on failure sets ``rejection`` and adds
-    /// nothing.
+    /// Validate `expression` and, if it is valid, named, unique, and produces
+    /// samples, add it as a defined channel (capturing its evaluated trace), clear
+    /// the draft editor, and fire the persist hook. Returns whether it was added; on
+    /// failure sets ``rejection`` and adds nothing.
     @discardableResult
     public func add(name: String, unit: String, expression: String) async -> Bool {
         rejection = nil
@@ -89,30 +92,38 @@ public final class MathChannelsManagerModel: ObservableObject {
             rejection = ExpressionDiagnostic(message: "Name the math channel before adding it.")
             return false
         }
-        guard !channels.contains(where: { $0.definition.name == trimmedName }) else {
-            rejection = ExpressionDiagnostic(message: "A math channel named “\(trimmedName)” already exists.")
-            return false
-        }
+        guard !rejectDuplicate(trimmedName) else { return false }
 
         let samples: [MathSample]
         do {
             samples = try await evaluator.evaluate(expression)
-        } catch let error as ExpressionEngineError {
-            rejection = .map(engineError: error)
-            return false
         } catch {
-            rejection = ExpressionDiagnostic(message: "\(error)")
+            rejection = .map(evaluationError: error)
             return false
         }
+        // A reference-free (constant) expression has no timebase, so the engine
+        // returns no samples — that cannot be a plottable channel.
+        guard !samples.isEmpty else {
+            rejection = ExpressionDiagnostic(
+                message: "This expression produces no samples — reference at least one channel.")
+            return false
+        }
+        // `evaluate` suspended above; a concurrent add may have taken the name while
+        // we awaited, so re-check before committing (both adds pass the pre-check).
+        guard !rejectDuplicate(trimmedName) else { return false }
 
         let definition = MathChannelDef(name: trimmedName, unit: unit, expression: expression)
-        // A math channel is time-keyed, so distance mirrors time (as the editor
-        // preview does); the trace makes it plottable as a channel.
-        let times = samples.map(\.time)
-        let trace = ChannelTrace(name: trimmedName, times: times, distances: times,
-                                 values: samples.map(\.value))
-        channels.append(DefinedMathChannel(definition: definition, trace: trace))
+        channels.append(DefinedMathChannel(definition: definition,
+                                           trace: .mathChannel(named: trimmedName, samples: samples)))
         onChange(definitions)
+        editor.update(text: "") // consume the draft so the next channel starts clean
+        return true
+    }
+
+    /// Set ``rejection`` and return `true` when a channel already carries `name`.
+    private func rejectDuplicate(_ name: String) -> Bool {
+        guard channels.contains(where: { $0.definition.name == name }) else { return false }
+        rejection = ExpressionDiagnostic(message: "A math channel named “\(name)” already exists.")
         return true
     }
 
