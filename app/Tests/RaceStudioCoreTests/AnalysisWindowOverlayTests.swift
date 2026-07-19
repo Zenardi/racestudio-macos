@@ -113,4 +113,25 @@ import Foundation
         model.toggleLap(LapID(0)) // only one lap → nothing to compare
         #expect(model.overlayDeltas.isEmpty)
     }
+
+    @Test func test_a_lap_pair_the_source_cannot_delta_is_omitted() {
+        // A pump with distance data but no delta-t for any pair: the laps still
+        // overlay, but each empty strip is skipped rather than stored.
+        let sess = session()
+        let analysis = AnalysisSession(session: sess, dataSource: FakeSessionDataSource(
+            banks: [], distanceBanks: [withDistance(scale: 2), withDistance(scale: 100)], deltas: [:]))
+        let model = AnalysisWindowModel(session: sess, analysis: analysis)
+        model.toggleLap(LapID(0))
+        model.toggleLap(LapID(1))
+        #expect(model.overlayLaps.count == 2)
+        #expect(model.overlayDeltas.isEmpty, "an empty delta pair is not stored")
+    }
+
+    @Test func test_overlay_is_empty_when_no_channel_is_selected() {
+        let model = overlaidModel()          // Speed selected, both laps overlaid
+        model.toggleChannel(ChannelID("Speed")) // deselect the only channel
+        #expect(model.overlayChannel.isEmpty)
+        #expect(model.overlayLaps.isEmpty, "no channel → nothing to overlay")
+        #expect(model.overlayDeltas.isEmpty)
+    }
 }

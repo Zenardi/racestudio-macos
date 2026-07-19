@@ -74,6 +74,42 @@ import Foundation
         #expect(overlays.map(\.id) == [LapID(0)])
     }
 
+    @Test func test_overlay_lap_with_a_single_in_range_sample_is_one_point() {
+        // A zero-length lap at t = 5 catches exactly one sample → a one-point
+        // overlay re-based to (0, 0).
+        let point = Lap(index: 3, startTimeS: 5, durationS: 0, endTimeS: 5)
+        let overlays = makeSession().overlayLaps(channel: "Speed", laps: [point])
+        #expect(overlays.count == 1)
+        #expect(overlays[0].times == [0])
+        #expect(overlays[0].distances == [0])
+        #expect(overlays[0].channels["Speed"] == [10], "value at t = 5 is 2·5")
+    }
+
+    // MARK: - distanceSamples (the cacheable whole-channel read)
+
+    @Test func test_distance_samples_reads_the_named_channel() {
+        let samples = makeSession().distanceSamples(channelNamed: "Speed")
+        #expect(samples.count == 11)
+        #expect(samples.first == DistanceSample(time: 0, distance: 0, value: 0))
+        #expect(samples.last == DistanceSample(time: 10, distance: 100, value: 20))
+    }
+
+    @Test func test_distance_samples_for_an_unknown_channel_is_empty() {
+        #expect(makeSession().distanceSamples(channelNamed: "Nope").isEmpty)
+    }
+
+    @Test func test_overlay_laps_for_a_zero_sample_channel_are_empty() {
+        // A known channel with no samples issues no read and yields nothing.
+        let sess = Session(
+            metadata: SessionMetadata(vehicle: "", track: "", driver: "", session: "",
+                                      series: "", logDate: "", logTime: "", datetimeUtc: 0),
+            channels: [Channel(name: "Empty", unit: "", sampleRateHz: 10, decimals: 0, sampleCount: 0)],
+            laps: laps())
+        let sut = AnalysisSession(session: sess, dataSource: FakeSessionDataSource(banks: [], distanceBanks: [[]]))
+        #expect(sut.distanceSamples(channelNamed: "Empty").isEmpty)
+        #expect(sut.overlayLaps(channel: "Empty", laps: laps()).isEmpty)
+    }
+
     // MARK: - deltaSeries
 
     @Test func test_delta_series_returns_the_pairs_series_over_the_whole_lap() throws {

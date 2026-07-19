@@ -202,7 +202,9 @@ private struct LapOverlayPanel: View {
 
     var body: some View {
         let laps = model.overlayLaps
-        if laps.count < 2 {
+        if model.overlayChannel.isEmpty {
+            ContentUnavailableHint(text: "Select a channel to overlay")
+        } else if laps.count < 2 {
             ContentUnavailableHint(text: "Select at least two laps to overlay")
         } else {
             let overlay = LapOverlayViewModel(selection: model.selection.laps,
@@ -210,11 +212,20 @@ private struct LapOverlayPanel: View {
             VStack(spacing: 4) {
                 legend(overlay)
                 TimeDistancePlotView(traces: overlay.traces(for: model.overlayChannel),
-                                     mode: .distance, renderer: .swiftCharts)
+                                     mode: .distance, renderer: .swiftCharts,
+                                     seriesColors: seriesColors(overlay))
                 deltaStrip(overlay)
             }
             .padding(8)
         }
+    }
+
+    /// The lap → line colour map (keyed by lap label = trace name) so the plotted
+    /// lines match the legend swatches instead of Swift Charts' default palette.
+    private func seriesColors(_ overlay: LapOverlayViewModel) -> [String: Color] {
+        var colors: [String: Color] = [:]
+        for lap in model.overlayLaps { colors[lap.label] = Color(overlay.colorForLap(lap.id)) }
+        return colors
     }
 
     /// The lap legend: a colour swatch + label per overlaid lap; tapping one makes
@@ -246,12 +257,16 @@ private struct LapOverlayPanel: View {
     private func deltaStrip(_ overlay: LapOverlayViewModel) -> some View {
         if let reference = model.selection.laps.reference, let target = model.selection.laps.comparisonTarget {
             let strip = overlay.deltaStrip(reference: reference, target: target)
-            DeltaStripView(
-                strip: strip,
-                readout: cursorDistance.flatMap {
-                    overlay.readout(in: strip, at: $0, reference: reference, target: target)
-                },
-                cursorDistance: $cursorDistance)
+            // A pair the core couldn't compute yields an empty strip — omit it
+            // rather than render an empty band.
+            if !strip.isEmpty {
+                DeltaStripView(
+                    strip: strip,
+                    readout: cursorDistance.flatMap {
+                        overlay.readout(in: strip, at: $0, reference: reference, target: target)
+                    },
+                    cursorDistance: $cursorDistance)
+            }
         }
     }
 }

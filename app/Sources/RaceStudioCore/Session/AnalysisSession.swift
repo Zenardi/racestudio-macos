@@ -241,9 +241,23 @@ public final class AnalysisSession {
     /// axis. Reads the channel once; an unknown channel or a lap with no samples in
     /// range contributes nothing.
     public func overlayLaps(channel: String, laps: [Lap]) -> [OverlayLap] {
+        overlayLaps(from: distanceSamples(channelNamed: channel), channel: channel, laps: laps)
+    }
+
+    /// The whole distance-paired channel `channel` (issue 8.7) — the read the
+    /// overlay caches once per channel so re-slicing per lap (a lap toggle / a
+    /// reference change) does not re-marshal it across the FFI. `[]` for an unknown
+    /// channel.
+    public func distanceSamples(channelNamed channel: String) -> [DistanceSample] {
         guard let index = session.channels.firstIndex(where: { $0.name == channel }) else { return [] }
-        let samples = read(distanceChannelIndex: index, sampleCount: session.channels[index].sampleCount)
-        return laps.compactMap { lap in
+        return read(distanceChannelIndex: index, sampleCount: session.channels[index].sampleCount)
+    }
+
+    /// The overlay laps sliced from already-read `samples` (issue 8.7) — the pure
+    /// half of ``overlayLaps(channel:laps:)``, so a cached read can be re-sliced
+    /// without another FFI round trip.
+    public func overlayLaps(from samples: [DistanceSample], channel: String, laps: [Lap]) -> [OverlayLap] {
+        laps.compactMap { lap in
             let inLap = samples.filter { $0.time >= lap.startTimeS && $0.time <= lap.endTimeS }
             guard let first = inLap.first else { return nil }
             return OverlayLap(id: LapID(Int(lap.index)), label: Self.lapLabel(lap),

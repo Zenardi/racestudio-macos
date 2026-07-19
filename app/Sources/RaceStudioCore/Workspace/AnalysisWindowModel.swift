@@ -5,16 +5,11 @@ import Combine
 /// rail's panel set + active layout, the channel/lap selection, and the window's
 /// shared ``LinkedCursor`` — everything the thin `AnalysisWindowView` binds to.
 ///
-/// It reads traces and measures for the selected channels through the 8.1
+/// It reads traces/measures for the selected channels through the 8.1
 /// ``AnalysisSession`` (behind the ``SessionDataSource`` seam, so it is covered
-/// FFI-free). Selecting a layout only swaps ``activeLayout``; the selection and
-/// the cursor live here, so they survive the swap. Reads happen once per
-/// selection change and are cached, so scrubbing the cursor re-interpolates the
-/// cached samples rather than re-reading the channel each move.
-///
-/// `@MainActor` because it owns the (main-actor) ``AnalysisSession`` and cursor
-/// and is observed by the UI on the main actor; macOS 13 has no `@Observable`,
-/// so it is an `ObservableObject`.
+/// FFI-free), caching per selection change so scrubbing re-interpolates rather
+/// than re-reading. Layout switches preserve the selection/cursor. `@MainActor`
+/// (owns the main-actor pump/cursor; macOS 13 has no `@Observable`).
 @MainActor
 public final class AnalysisWindowModel: ObservableObject {
 
@@ -83,10 +78,12 @@ public final class AnalysisWindowModel: ObservableObject {
     /// colour channel onto the fixes.
     private var trackMapCache = TrackMapModel(track: [])
 
-    /// The distance-aligned overlay laps and the delta-t strips keyed by
-    /// `(reference, other lap)`, rebuilt on a lap/channel selection change (8.7).
+    /// The distance-aligned overlay laps + delta-t strips keyed by `(reference,
+    /// other lap)` (8.7). The overlay channel's whole distance read is cached (by
+    /// channel) so a lap/reference change re-slices rather than re-reading the FFI.
     private var overlayLapsCache: [OverlayLap] = []
     private var overlayDeltasCache: [DeltaPair: [DeltaSample]] = [:]
+    private var overlayDistanceCache: (channel: String, samples: [DistanceSample]) = ("", [])
 
     /// The channel explicitly chosen to colour the line, or `nil` to follow the
     /// first selected channel (issue 8.6). `@Published` so a colour-picker change
@@ -133,10 +130,9 @@ public final class AnalysisWindowModel: ObservableObject {
         }
         self.selection = selection
 
-        // The cursor's basis is the session's time extent — the lap span, or the
-        // selected channel's sample extent when the session has no laps. The
-        // distance basis is a placeholder until real distances are wired in a
-        // later issue, so the window scrubs on the time axis.
+        // The cursor's basis is the session's time extent (lap span, or the first
+        // channel's sample extent when lapless); the distance basis is a
+        // placeholder pending real distances, so the window scrubs on time.
         let basis = analysisCursorTimeBasis(session: session, analysis: analysis,
                                             channelIndexByID: index, selection: selection)
         self.linkedCursor = LinkedCursor(times: basis.times, distances: basis.distances,
@@ -308,8 +304,7 @@ public final class AnalysisWindowModel: ObservableObject {
 
     // MARK: - Lap overlay (issue 8.7)
 
-    /// The distance-aligned overlay laps for the selected laps, carrying the
-    /// ``overlayChannel`` — the input to the reused `LapOverlayViewModel`.
+    /// The distance-aligned overlay laps for the selected laps, on ``overlayChannel``.
     public var overlayLaps: [OverlayLap] { overlayLapsCache }
 
     /// The reference lap's delta-t versus each other selected lap, keyed by
@@ -322,8 +317,7 @@ public final class AnalysisWindowModel: ObservableObject {
     // MARK: - Internals
 
     /// Re-read the selected channels once (trace + series + formatter), so cursor
-    /// moves re-interpolate the cache rather than re-reading across the seam. Also
-    /// refreshes the readout grid, whose per-lap slices derive from these series.
+    /// moves re-interpolate the cache rather than re-reading across the seam.
     private func rebuildSelectionData() {
         defer {
             rebuildReadoutTable()
@@ -382,10 +376,16 @@ public final class AnalysisWindowModel: ObservableObject {
         guard let analysis, !channel.isEmpty else {
             overlayLapsCache = []
             overlayDeltasCache = [:]
+            overlayDistanceCache = ("", [])
             return
         }
+        // Re-read the whole distance channel only when the channel itself changes.
+        if overlayDistanceCache.channel != channel {
+            overlayDistanceCache = (channel, analysis.distanceSamples(channelNamed: channel))
+        }
         let selectedLaps = selection.laps.selected.compactMap { lapByID[$0] }
-        overlayLapsCache = analysis.overlayLaps(channel: channel, laps: selectedLaps)
+        overlayLapsCache = analysis.overlayLaps(from: overlayDistanceCache.samples, channel: channel,
+                                                laps: selectedLaps)
 
         var deltas: [DeltaPair: [DeltaSample]] = [:]
         if let referenceID = selection.laps.reference, let reference = lapByID[referenceID] {
