@@ -36,10 +36,15 @@ public struct LapSelection: Codable, Equatable, Sendable {
     public var sessionID: String
     /// The selected lap indices.
     public var lapIndices: [Int]
+    /// The reference lap index the panels compare against, if any (issue 8.13).
+    /// Optional so a pre-8.13 project (no reference key) decodes to `nil` and the
+    /// window promotes the first selected lap on restore.
+    public var reference: Int?
 
-    public init(sessionID: String, lapIndices: [Int]) {
+    public init(sessionID: String, lapIndices: [Int], reference: Int? = nil) {
         self.sessionID = sessionID
         self.lapIndices = lapIndices
+        self.reference = reference
     }
 }
 

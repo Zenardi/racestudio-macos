@@ -35,19 +35,23 @@ struct AnalysisWindowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
+        VStack(spacing: 0) {
+            WorkspaceBar(model: model, mathManager: mathManager)
             Divider()
-            ChannelsLapsPanelView(model: model)
-                .frame(width: 240)
-            Divider()
-            VStack(spacing: 0) {
-                PanelHost(model: model, mathManager: mathManager, stats: stats,
-                          report: report, splitReport: splitReport, analysis: analysis)
+            HStack(spacing: 0) {
+                LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
                 Divider()
-                MeasuresBar(model: model, cursor: model.linkedCursor)
+                ChannelsLapsPanelView(model: model)
+                    .frame(width: 240)
+                Divider()
+                VStack(spacing: 0) {
+                    PanelHost(model: model, mathManager: mathManager, stats: stats,
+                              report: report, splitReport: splitReport, analysis: analysis)
+                    Divider()
+                    MeasuresBar(model: model, cursor: model.linkedCursor)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .accessibilityLabel("Analysis window")
     }

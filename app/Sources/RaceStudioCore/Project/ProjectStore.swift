@@ -100,6 +100,11 @@ public final class ProjectStore {
                 throw ProjectError.corruptDocument
             }
             decoded = document
+        case 2:
+            guard let raw = try? JSONDecoder().decode(ProjectDocumentV2.self, from: data) else {
+                throw ProjectError.corruptDocument
+            }
+            decoded = Self.migrate(raw)
         case 1:
             guard let raw = try? JSONDecoder().decode(ProjectDocumentV1.self, from: data) else {
                 throw ProjectError.corruptDocument
@@ -117,7 +122,8 @@ public final class ProjectStore {
     }
 
     /// Upgrade a decoded v1 document to the current shape: v1 math channels had
-    /// no `unit`, so it defaults to empty; everything else is unchanged.
+    /// no `unit`, so it defaults to empty, and v1 predates the persisted
+    /// `activeLayout`, so it opens on Time/Distance; everything else is unchanged.
     static func migrate(_ raw: ProjectDocumentV1) -> ProjectDocument {
         ProjectDocument(
             schemaVersion: ProjectDocument.currentSchemaVersion,
@@ -126,7 +132,22 @@ public final class ProjectStore {
             selectedLaps: raw.selectedLaps,
             mathChannels: raw.mathChannels.map {
                 MathChannelDef(name: $0.name, unit: "", expression: $0.expression)
-            })
+            },
+            activeLayout: .timeDistance)
+    }
+
+    /// Upgrade a decoded v2 document to the current shape: v2 predates the
+    /// persisted `activeLayout` (issue 8.13), so it opens on Time/Distance;
+    /// everything else — including the per-channel `unit` added in v2 — is
+    /// carried over unchanged.
+    static func migrate(_ raw: ProjectDocumentV2) -> ProjectDocument {
+        ProjectDocument(
+            schemaVersion: ProjectDocument.currentSchemaVersion,
+            sessionRefs: raw.sessionRefs,
+            layout: raw.layout,
+            selectedLaps: raw.selectedLaps,
+            mathChannels: raw.mathChannels,
+            activeLayout: .timeDistance)
     }
 
     // MARK: - Resolution / validation
@@ -195,4 +216,13 @@ struct ProjectDocumentV1: Decodable {
         let name: String
         let expression: String
     }
+}
+
+/// The v2 on-disk shape — identical to the current document except it predates the
+/// persisted `activeLayout` (issue 8.13). Used only by ``ProjectStore/migrate(_:)``.
+struct ProjectDocumentV2: Decodable {
+    let sessionRefs: [SessionRef]
+    let layout: AnalysisLayout
+    let selectedLaps: [LapSelection]
+    let mathChannels: [MathChannelDef]
 }

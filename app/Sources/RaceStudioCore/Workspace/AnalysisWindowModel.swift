@@ -22,8 +22,8 @@ public final class AnalysisWindowModel: ObservableObject {
     /// The active layout the central host renders.
     @Published public private(set) var activeLayout: WindowLayout
 
-    /// The channel + lap selection, preserved across layout switches.
-    @Published public private(set) var selection: AnalysisSelection
+    /// The channel + lap selection, preserved across layout switches; `internal(set)` for 8.13 restore.
+    @Published public internal(set) var selection: AnalysisSelection
 
     /// The channel search text for the side panel (issue 8.4); empty lists every
     /// channel.
@@ -34,7 +34,7 @@ public final class AnalysisWindowModel: ObservableObject {
 
     /// The channels pinned as large digital readouts in the measures panel, in the
     /// order they were pinned (issue 8.5).
-    @Published public private(set) var pinnedChannels: [ChannelID] = []
+    @Published public internal(set) var pinnedChannels: [ChannelID] = []
 
     /// How many sectors the track map splits the lap into (issue 8.6); `3` by
     /// default (the common motorsport count). `0` hides the split markers.
@@ -49,11 +49,11 @@ public final class AnalysisWindowModel: ObservableObject {
 
     /// Channel name → channel index, so a `ChannelID` selection maps back onto the
     /// index-addressed ``AnalysisSession`` reads (first occurrence wins).
-    private let channelIndexByID: [ChannelID: Int]
+    let channelIndexByID: [ChannelID: Int]
 
     /// Lap id → lap, so a selected `LapID` maps back onto its time window when the
     /// readout grid slices each channel per lap (first occurrence wins).
-    private let lapByID: [LapID: Lap]
+    let lapByID: [LapID: Lap]
 
     /// Cached read of the selected channels — rebuilt only when the selection
     /// changes — so a cursor move re-interpolates without re-reading the channels.
@@ -89,7 +89,7 @@ public final class AnalysisWindowModel: ObservableObject {
     /// first selected channel (issue 8.6). `@Published` so a colour-picker change
     /// (via ``setColorChannel(_:)``) notifies observers even though the resulting
     /// ``trackMap`` is a plain cache.
-    @Published private var colorChannelOverride: ChannelID?
+    @Published var colorChannelOverride: ChannelID?
 
     private struct SelectionEntry {
         let channel: ChannelID
@@ -318,7 +318,7 @@ public final class AnalysisWindowModel: ObservableObject {
 
     /// Re-read the selected channels once (trace + series + formatter), so cursor
     /// moves re-interpolate the cache rather than re-reading across the seam.
-    private func rebuildSelectionData() {
+    func rebuildSelectionData() {
         defer {
             rebuildReadoutTable()
             rebuildTrackMap()
@@ -342,8 +342,8 @@ public final class AnalysisWindowModel: ObservableObject {
     /// column per selected lap, and each cell the channel's series sliced to that
     /// lap's `[startTimeS, endTimeS]` window — so a cursor outside a lap's range
     /// reads as extrapolated. A slice with no samples is omitted, leaving a
-    /// no-data cell.
-    private func rebuildReadoutTable() {
+    /// no-data cell. `internal` so the 8.13 lap reorder can refresh the columns.
+    func rebuildReadoutTable() {
         let rows = selectionData.map(\.channel)
         let columns = selection.laps.selected
         var series: [CellKey: ChannelSeries] = [:]
@@ -371,7 +371,7 @@ public final class AnalysisWindowModel: ObservableObject {
 
     /// Rebuild the lap overlay (issue 8.7): a distance-aligned ``OverlayLap`` per
     /// selected lap, plus the reference lap's delta-t versus each other lap.
-    private func rebuildOverlay() {
+    func rebuildOverlay() {
         let channel = overlayChannel
         guard let analysis, !channel.isEmpty else {
             overlayLapsCache = []
