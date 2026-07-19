@@ -109,4 +109,36 @@ import Foundation
         #expect(model.time(atIndex: 99) == nil, "an out-of-range index has no time")
         #expect(model.time(atIndex: -1) == nil)
     }
+
+    @Test func test_index_at_time_is_nan_safe_for_a_dropped_fix() {
+        // A dropped fix (non-finite time), even at index 0, must not crash the
+        // nearest scan; it is skipped and a finite fix is returned.
+        let track = [
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 0, longitude: 0), distance: 0, time: .nan),
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 1, longitude: 2), distance: 10, time: 10),
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 2, longitude: 4), distance: 20, time: 20)
+        ]
+        let model = TrackMapModel(track: track)
+        #expect(model.index(atTime: 12) == 1, "nearest finite fix, skipping the dropped one")
+        #expect(model.index(atTime: .nan) == nil, "a non-finite cursor time has no fix")
+    }
+
+    @Test func test_index_at_time_is_nil_when_every_fix_is_dropped() {
+        let model = TrackMapModel(track: [
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 0, longitude: 0), distance: 0, time: .nan)
+        ])
+        #expect(model.index(atTime: 5) == nil)
+    }
+
+    // MARK: - Custom gradient endpoints
+
+    @Test func test_custom_gradient_endpoints_pass_through_to_the_colour_scale() {
+        let red = PlotColor(red: 1, green: 0, blue: 0)
+        let green = PlotColor(red: 0, green: 1, blue: 0)
+        let model = TrackMapModel(track: track(4),
+                                  colorSeries: ChannelSeries(xs: [0, 3], values: [0, 30]),
+                                  low: red, high: green)
+        #expect(model.colorScale.color(for: model.colorScale.domain.lowerBound) == red)
+        #expect(model.colorScale.color(for: model.colorScale.domain.upperBound) == green)
+    }
 }

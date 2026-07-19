@@ -32,8 +32,15 @@ public struct TrackMapModel: Sendable {
     /// range over the track.
     public let colorScale: ChannelColorScale
 
-    /// The total track length (metres): the last fix's cumulative distance, `0`
-    /// for an empty track.
+    /// The total length (metres) of the rendered track — the last fix's cumulative
+    /// distance, `0` for an empty track. Named for the `SectorModel`/`TrackMapView`
+    /// parameter it feeds; the sector marks partition this whole extent.
+    ///
+    /// The window's model renders the whole GPS track (every lap), so on a
+    /// multi-lap session this is the session distance, not a single lap's — the
+    /// sectors then partition the full trace. Per-lap scoping (and the GPS↔channel
+    /// clock alignment it needs) is deferred to a later issue, consistent with
+    /// 8.3's whole-session time-axis scrubbing.
     public var lapDistance: Double { distances.last ?? 0 }
 
     /// - Parameters:
@@ -55,8 +62,9 @@ public struct TrackMapModel: Sendable {
             return
         }
         // Interpolate the colour channel onto each fix's time (a fix falls between
-        // the channel's own samples). A fix with no readable value (only an empty
-        // track reaches here) maps to NaN, which `ChannelColorScale` pins neutrally.
+        // the channel's own samples). A dropped fix (a non-finite time) can't be
+        // read off the channel, so it maps to NaN — which `ChannelColorScale` pins
+        // neutrally — while staying index-aligned with `coordinates`.
         let values = times.map { ValueAtCursor.value(at: $0, in: colorSeries).value ?? .nan }
         self.channelValues = values
         let finite = values.filter(\.isFinite)
@@ -68,9 +76,23 @@ public struct TrackMapModel: Sendable {
     }
 
     /// The fix index nearest cursor time `time` (the marker position), or `nil` for
-    /// an empty track. Reuses the shared 4.1 nearest-neighbour search.
+    /// an empty track (or a non-finite `time`). A linear nearest scan — like
+    /// ``TrackPath/nearestIndex(to:in:)`` — rather than the binary ``hitTest``,
+    /// because GPS fix times carry no monotonicity guarantee across the FFI (a
+    /// dropped fix can leave a non-finite time); the scan skips those and never
+    /// mis-indexes or traps. Ties resolve to the lower index.
     public func index(atTime time: Double) -> Int? {
-        hitTest(x: time, in: times)
+        guard time.isFinite else { return nil }
+        var bestIndex: Int?
+        var bestDelta = Double.infinity
+        for (offset, fixTime) in times.enumerated() where fixTime.isFinite {
+            let delta = abs(fixTime - time)
+            if delta < bestDelta {
+                bestDelta = delta
+                bestIndex = offset
+            }
+        }
+        return bestIndex
     }
 
     /// The cursor time at fix `index` (a map hover / click drives the cursor), or

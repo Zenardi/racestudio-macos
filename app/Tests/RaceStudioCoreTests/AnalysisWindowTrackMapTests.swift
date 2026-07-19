@@ -58,7 +58,9 @@ import Foundation
     }
 
     @Test func test_track_map_is_empty_without_an_analysis_pump() {
-        #expect(makeModel(analysisPresent: false).trackMap.coordinates.isEmpty)
+        let model = makeModel(analysisPresent: false)
+        #expect(model.trackMap.coordinates.isEmpty)
+        #expect(model.gpsCursorIndex == nil, "no GPS track → no marker index")
     }
 
     // MARK: - Colour-by-channel
@@ -90,6 +92,25 @@ import Foundation
         model.setColorChannel(ChannelID("RPM"))
         model.toggleChannel(ChannelID("RPM")) // deselect the colour channel
         #expect(model.colorChannel == ChannelID("Speed"), "falls back to the first selected channel")
+    }
+
+    @Test func test_re_selecting_a_dropped_colour_channel_does_not_resurrect_it() {
+        let model = makeModel()
+        model.toggleChannel(ChannelID("RPM"))
+        model.setColorChannel(ChannelID("RPM")) // colour by RPM
+        model.toggleChannel(ChannelID("RPM"))   // deselect → override is dropped
+        #expect(model.colorChannel == ChannelID("Speed"))
+        model.toggleChannel(ChannelID("RPM"))   // re-add RPM for some other reason
+        #expect(model.colorChannel == ChannelID("Speed"),
+                "re-adding the channel must not silently restore it as the colour channel")
+    }
+
+    @Test func test_colour_channel_is_nil_when_no_channel_is_selected() {
+        let model = makeModel()                  // Speed selected by default
+        model.toggleChannel(ChannelID("Speed"))  // deselect the only channel
+        #expect(model.selection.channels.isEmpty)
+        #expect(model.colorChannel == nil)
+        #expect(model.trackMap.channelValues.isEmpty, "no colour channel → a neutral line")
     }
 
     // MARK: - Cursor ↔ fix binding (both ways)

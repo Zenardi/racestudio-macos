@@ -193,6 +193,12 @@ public final class AnalysisSession {
     /// default reads the whole track; the data source bounds the window to the real
     /// fix count (the session snapshot carries no fix count to clamp against). A
     /// zero-width window issues no read.
+    ///
+    /// The fix `time` is treated as the same seconds basis as the laps / cursor so
+    /// the map marker can sync to the shared cursor by nearest fix. Precise GPS↔CHS
+    /// clock alignment (the two logger clocks can drift) is deferred to a later
+    /// issue; until then the marker is nearest-fix accurate on that shared-basis
+    /// assumption.
     public func gpsTrack(window: SampleWindow = .all) -> [GPSTrackPoint] {
         let requested = window.count
         guard requested > 0 else { return [] }

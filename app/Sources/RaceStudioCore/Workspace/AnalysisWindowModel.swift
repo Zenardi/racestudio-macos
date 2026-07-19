@@ -84,8 +84,10 @@ public final class AnalysisWindowModel: ObservableObject {
     private var trackMapCache = TrackMapModel(track: [])
 
     /// The channel explicitly chosen to colour the line, or `nil` to follow the
-    /// first selected channel (issue 8.6).
-    private var colorChannelOverride: ChannelID?
+    /// first selected channel (issue 8.6). `@Published` so a colour-picker change
+    /// (via ``setColorChannel(_:)``) notifies observers even though the resulting
+    /// ``trackMap`` is a plain cache.
+    @Published private var colorChannelOverride: ChannelID?
 
     private struct SelectionEntry {
         let channel: ChannelID
@@ -164,10 +166,12 @@ public final class AnalysisWindowModel: ObservableObject {
     /// Toggle `channel` in the selection and refresh the cached traces/measures.
     public func toggleChannel(_ channel: ChannelID) {
         selection.toggleChannel(channel)
-        // A deselected channel is no longer a grid row, so drop any stale pin —
-        // otherwise it would silently linger and resurrect on re-selection.
+        // A deselected channel is no longer a grid row nor a colourable channel, so
+        // drop any stale pin / colour override — otherwise it would silently linger
+        // and resurrect on re-selection.
         if !selection.channels.contains(channel) {
             pinnedChannels.removeAll { $0 == channel }
+            if colorChannelOverride == channel { colorChannelOverride = nil }
         }
         rebuildSelectionData()
     }
@@ -289,9 +293,10 @@ public final class AnalysisWindowModel: ObservableObject {
     }
 
     /// Move the shared cursor to GPS fix `index` — a hover / click on the map
-    /// drives the window's cursor (issue 8.6). A no-op for an out-of-range index.
+    /// drives the window's cursor (issue 8.6). A no-op for an out-of-range index or
+    /// a dropped fix with no finite time.
     public func moveTrackCursor(toFix index: Int) {
-        guard let time = trackMapCache.time(atIndex: index) else { return }
+        guard let time = trackMapCache.time(atIndex: index), time.isFinite else { return }
         linkedCursor.moveTime(time)
     }
 
