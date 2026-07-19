@@ -15,6 +15,9 @@ struct AnalysisWindowView: View {
     // The histogram + scatter panel knobs (issue 8.9), held at the window level so
     // they survive layout switches.
     @StateObject private var stats = StatsPanelsModel()
+    // The Channels Report knobs (issue 8.10) — statistic, mode, selected row —
+    // likewise held at the window level so they survive layout switches.
+    @StateObject private var report = ChannelsReportModel()
 
     init(viewModel: SessionViewModel) {
         _model = StateObject(wrappedValue: AnalysisWindowModel(viewModel: viewModel))
@@ -32,7 +35,7 @@ struct AnalysisWindowView: View {
                 .frame(width: 240)
             Divider()
             VStack(spacing: 0) {
-                PanelHost(model: model, mathManager: mathManager, stats: stats)
+                PanelHost(model: model, mathManager: mathManager, stats: stats, report: report)
                 Divider()
                 MeasuresBar(model: model, cursor: model.linkedCursor)
             }
@@ -80,6 +83,7 @@ private struct PanelHost: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
     @ObservedObject var stats: StatsPanelsModel
+    @ObservedObject var report: ChannelsReportModel
 
     var body: some View {
         Group {
@@ -100,6 +104,8 @@ private struct PanelHost: View {
                 HistogramPanel(model: model, stats: stats)
             case .scatter:
                 ScatterPanel(model: model, stats: stats)
+            case .channelsReport:
+                ChannelsReportPanel(model: model, report: report)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:

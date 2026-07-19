@@ -153,6 +153,15 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   and `StatsPanelsModel` — the `@MainActor` panel state (bin count, trend-line
   toggle, scatter axes) that assembles both from the analysis window's channel
   traces, so the reused `HistogramView`/`ScatterView` render live under the M8 rail.
+  8.10 adds the `Report/` model — the RS3 **Channels Report**: `ChannelStatistics`
+  (non-finite-safe min/max/average/median plus interpolated 25/75/90/95th
+  percentiles, with a `ReportStatistic` selector), `ReportPreset` (the "magic wand"
+  vehicle-health / racer / vehicle-performance presets — a default statistic plus a
+  case-insensitive channel-name match), and `ChannelsReportModel` — the `@MainActor`
+  state + assembly that slices each selected channel per lap (or per equal-time
+  segment) into a min/max/avg/median table and maps the chosen statistic across the
+  laps into a graph hot-tracked to the selected table row, all from the window's
+  channel traces so it renders live under the M8 rail.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

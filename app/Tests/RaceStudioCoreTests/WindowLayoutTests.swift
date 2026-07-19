@@ -13,6 +13,7 @@ import Testing
         #expect(WindowLayout.lapOverlay.title == "Lap Overlay")
         #expect(WindowLayout.histogram.title == "Histogram")
         #expect(WindowLayout.scatter.title == "Scatter")
+        #expect(WindowLayout.channelsReport.title == "Report")
         #expect(WindowLayout.mathChannels.title == "Math")
         #expect(WindowLayout.summary.title == "Summary")
     }
@@ -24,6 +25,7 @@ import Testing
         #expect(WindowLayout.lapOverlay.systemImageName == "point.3.connected.trianglepath.dotted")
         #expect(WindowLayout.histogram.systemImageName == "chart.bar.xaxis")
         #expect(WindowLayout.scatter.systemImageName == "chart.dots.scatter")
+        #expect(WindowLayout.channelsReport.systemImageName == "chart.bar.doc.horizontal")
         #expect(WindowLayout.mathChannels.systemImageName == "function")
         #expect(WindowLayout.summary.systemImageName == "list.bullet.rectangle")
     }
@@ -35,6 +37,7 @@ import Testing
         #expect(WindowLayout.lapOverlay.id == "lapOverlay")
         #expect(WindowLayout.histogram.id == "histogram")
         #expect(WindowLayout.scatter.id == "scatter")
+        #expect(WindowLayout.channelsReport.id == "channelsReport")
         #expect(WindowLayout.mathChannels.id == "mathChannels")
         #expect(WindowLayout.summary.id == "summary")
     }
