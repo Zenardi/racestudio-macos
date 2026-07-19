@@ -16,9 +16,16 @@ public struct SessionViewModel: Equatable, Sendable {
     /// source (the non-FFI test loaders); the production path always sets it.
     public let analysis: AnalysisSession?
 
-    public init(session: Session, analysis: AnalysisSession? = nil) {
+    /// The math-channel evaluator over the retained handle (issue 8.8), so the Math
+    /// Channels editor validates/previews expressions against the live session.
+    /// `nil` when the loader vends none (the non-FFI test loaders).
+    public let evaluator: (any ExpressionEvaluating)?
+
+    public init(session: Session, analysis: AnalysisSession? = nil,
+                evaluator: (any ExpressionEvaluating)? = nil) {
         self.session = session
         self.analysis = analysis
+        self.evaluator = evaluator
     }
 
     /// Session-level metadata.

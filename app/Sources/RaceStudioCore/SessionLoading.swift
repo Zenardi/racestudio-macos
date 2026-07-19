@@ -13,10 +13,16 @@ public struct LoadedSession: Sendable {
     public let session: Session
     /// The live source for windowed reads, or `nil` when the loader models none.
     public let dataSource: SessionDataSource?
+    /// The math-channel evaluator built over the retained handle (issue 8.8), so
+    /// the Math Channels editor can validate/preview expressions against the live
+    /// session. `nil` when the loader vends none (the non-FFI test loaders).
+    public let evaluator: (any ExpressionEvaluating)?
 
-    public init(session: Session, dataSource: SessionDataSource? = nil) {
+    public init(session: Session, dataSource: SessionDataSource? = nil,
+                evaluator: (any ExpressionEvaluating)? = nil) {
         self.session = session
         self.dataSource = dataSource
+        self.evaluator = evaluator
     }
 }
 
@@ -68,8 +74,10 @@ public struct FFISessionLoader: SessionLoading {
             metadata: handle.metadata(), channels: handle.channels(), laps: handle.laps())
         await onProgress(DecodeProgress(fraction: 1, phase: .complete))
         // Retain the live handle behind the data-source seam so the loaded
-        // session can read sample windows for the analysis UI (issue 8.1).
-        return LoadedSession(session: session, dataSource: FFISessionDataSource(handle: handle))
+        // session can read sample windows for the analysis UI (issue 8.1), and back
+        // the Math Channels editor with an evaluator over the same handle (8.8).
+        return LoadedSession(session: session, dataSource: FFISessionDataSource(handle: handle),
+                             evaluator: FFIExpressionEvaluator(session: handle))
     }
 
     /// Pure map from the FFI handle's readouts into Core's ``Session``. Split out
