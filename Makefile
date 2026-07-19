@@ -20,9 +20,8 @@ setup: ## Install toolchains + fetch test fixtures
 	command -v trivy >/dev/null 2>&1 || brew install trivy
 	bash scripts/fetch_fixtures.sh
 
-run: ## Build and launch the RaceStudio macOS app
-	@[ -d app/RaceStudioFFI.xcframework ] || bash scripts/build_xcframework.sh
-	cd app && swift run RaceStudio
+run: ## Build and launch the RaceStudio macOS app (as a .app bundle so it shows a window)
+	bash scripts/run_app.sh
 
 test: test-rust test-swift ## Run the Rust + Swift test suites
 
