@@ -102,7 +102,8 @@ private struct PanelHost: View {
                 if model.selection.isEmpty {
                     ContentUnavailableHint(text: "Select a channel to plot")
                 } else {
-                    TimeDistancePlotView(traces: model.traces, mode: .time)
+                    TimeDistancePlotView(traces: model.traces, mode: .time,
+                                         lapBoundaries: lapTimeBoundaries(model.session.laps))
                 }
             case .channelTable:
                 ChannelTablePanel(model: model, cursor: model.linkedCursor)
@@ -233,6 +234,10 @@ private struct TrackMapPanel: View {
 private struct LapOverlayPanel: View {
     @ObservedObject var model: AnalysisWindowModel
     @State private var cursorDistance: Double?
+    /// Local-time alignment (issue 8.12): when on, laps overlay on the time axis
+    /// aligned to a common start so identical track sections line up; when off,
+    /// they overlay on the shared distance basis (the 8.7 default).
+    @State private var localTime = false
 
     var body: some View {
         let laps = model.overlayLaps
@@ -243,10 +248,12 @@ private struct LapOverlayPanel: View {
         } else {
             let overlay = LapOverlayViewModel(selection: model.selection.laps,
                                               laps: laps, deltas: model.overlayDeltas)
+            let traces = localTime ? overlay.localTimeTraces(for: model.overlayChannel)
+                                   : overlay.traces(for: model.overlayChannel)
             VStack(spacing: 4) {
                 legend(overlay)
-                TimeDistancePlotView(traces: overlay.traces(for: model.overlayChannel),
-                                     mode: .distance, renderer: .swiftCharts,
+                TimeDistancePlotView(traces: traces,
+                                     mode: localTime ? .time : .distance, renderer: .swiftCharts,
                                      seriesColors: seriesColors(overlay))
                 deltaStrip(overlay)
             }
@@ -282,6 +289,10 @@ private struct LapOverlayPanel: View {
                 .help(model.selection.laps.reference == lap.id ? "Reference lap" : "Set as reference lap")
             }
             Spacer()
+            Toggle("Local time", isOn: $localTime)
+                .toggleStyle(.switch)
+                .fixedSize()
+                .help("Align laps to a common start so identical track sections line up")
         }
     }
 

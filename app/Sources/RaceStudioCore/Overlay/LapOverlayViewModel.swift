@@ -83,6 +83,17 @@ public struct LapOverlayViewModel: Sendable {
         }
     }
 
+    /// The ``traces(for:)`` shifted to a common local-time origin (issue 8.12):
+    /// every lap starts at the same time, so identical track sections — the same
+    /// elapsed time into the lap — line up when overlaid on the time axis. Each
+    /// lap's own first sample time is its start; a lap with no samples is left
+    /// unshifted. Same selection order and channel-skipping as ``traces(for:)``.
+    public func localTimeTraces(for channel: String) -> [ChannelTrace] {
+        let raw = traces(for: channel)
+        let starts = raw.map { $0.samples.first?.time ?? 0 }
+        return zip(raw, localTimeOffsets(lapStartTimes: starts)).map { $0.timeShifted(by: $1) }
+    }
+
     /// The distinct, stable color for `lap`, assigned by its position in the
     /// selection (``PlotColor/unselected`` when not selected).
     public func colorForLap(_ lap: LapID) -> PlotColor {

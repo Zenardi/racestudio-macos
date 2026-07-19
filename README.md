@@ -174,6 +174,19 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   the **best rolling** lap (fastest one-lap-length window over the concatenated
   grid), and `SplitReportModel` is the `@MainActor` state driving it — so editing a
   split re-groups the base grid and recomputes without re-reading the session.
+  8.12 adds the `Plot/PlotArrangementModel` — the RS3 **plot display modes**.
+  `PlotArrangement.arrange(mode:channels:)` maps N channels onto graphs for each
+  mode: **overlapped** (one shared-Y graph), **tiled** (one channel per graph),
+  **mixed** (channels distributed across up to six graphs), **smart** (corner-bound
+  families — dampers / wheel speeds / brakes / tyres, matched by name via
+  `PlotChannelFamily` — auto-grouped, leftovers overlaid together), and
+  **smart-tiled** (families grouped, each leftover tiled). `PlotLineStyle` clamps the
+  line-width / dot-size knobs; `snapToLapBoundaries` constrains zoom/pan to whole
+  laps (fed by `lapTimeBoundaries`); and `localTimeOffsets` / `ChannelTrace.timeShifted`
+  / `LapOverlayViewModel.localTimeTraces` align overlaid laps to a common start so
+  identical track sections line up. `TimeDistancePlotView` binds all of it (the
+  layout picker, line/dot sliders, snap toggle, and the lap-overlay local-time
+  toggle), stacking one band per arranged graph.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →
