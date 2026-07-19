@@ -87,12 +87,21 @@ final class AppModel: ObservableObject {
     func importToLibrary(_ urls: [URL]) {
         objectWillChange.send()
         Task {
+            var failed: [URL] = []
             for url in coordinator.accept(urls: urls) {
                 try? recents.add(url)
-                guard let loaded = try? await loader.load(url, onProgress: { _ in }) else { continue }
-                library.add(loaded.session, sourceURL: url)
-                try? library.save(to: libraryURL)
+                do {
+                    let loaded = try await loader.load(url, onProgress: { _ in })
+                    library.add(loaded.session, sourceURL: url)
+                    // A save failure is non-fatal — the session is already in the
+                    // in-memory library and re-imports next launch — so it stays
+                    // best-effort, unlike a decode failure which is surfaced below.
+                    try? library.save(to: libraryURL)
+                } catch {
+                    failed.append(url)
+                }
             }
+            if !failed.isEmpty { presentImportFailure(failed) }
         }
     }
 
@@ -100,5 +109,20 @@ final class AppModel: ObservableObject {
     /// main window from the browser to the analysis view.
     func openFromLibrary(_ summary: SessionSummary) {
         Task { await store.load(url: summary.sourceURL) }
+    }
+
+    /// Surface files that couldn't be decoded during import rather than dropping
+    /// them silently (an unsupported/corrupt `.xrk` otherwise vanishes with no
+    /// feedback). Matches the Open-workspace failure alert in `WorkspaceBar`.
+    private func presentImportFailure(_ urls: [URL]) {
+        let names = urls.map(\.lastPathComponent).joined(separator: "\n")
+        let alert = NSAlert()
+        alert.messageText = urls.count == 1
+            ? "Couldn’t import “\(urls[0].lastPathComponent)”"
+            : "Couldn’t import \(urls.count) files"
+        alert.informativeText = "The file couldn’t be decoded — it may be corrupt or "
+            + "an unsupported format.\n\n\(names)"
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 }
