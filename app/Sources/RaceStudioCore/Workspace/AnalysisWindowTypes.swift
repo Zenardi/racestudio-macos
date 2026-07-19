@@ -7,7 +7,7 @@ import Foundation
 /// Named `WindowLayout` to avoid colliding with the 5.4 `AnalysisLayout`
 /// project-file struct — this is the *kind* of live panel shown, not the
 /// persisted pane configuration.
-public enum WindowLayout: String, CaseIterable, Sendable, Identifiable {
+public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable {
     /// The live multi-channel Time/Distance plot (issue 4.1).
     case timeDistance
     /// The 4.4 channel table / measures panel — value-at-cursor per channel × lap
@@ -112,6 +112,13 @@ public struct AnalysisSelection: Equatable, Sendable {
     /// selecting it first if needed (delegating to the 4.2 invariant).
     public mutating func setReferenceLap(_ lap: LapID) {
         laps.setReference(lap)
+    }
+
+    /// Reorder the selected laps — the StoryBoard drag (issue 8.13): move the lap at
+    /// `source` to `destination` (delegating to ``LapSelectionModel/move(from:to:)``),
+    /// leaving the reference lap unchanged.
+    public mutating func moveLap(from source: Int, to destination: Int) {
+        laps.move(from: source, to: destination)
     }
 }
 

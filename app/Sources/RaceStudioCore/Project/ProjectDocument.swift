@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -23,6 +23,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     public var selectedLaps: [LapSelection]
     /// User-defined math channels (expression source + metadata).
     public var mathChannels: [MathChannelDef]
+    /// The analysis window's active panel/layout, so a reopened project restores
+    /// the layout it was saved in (issue 8.13). Added in schema v3; a migrated
+    /// pre-8.13 project defaults to ``WindowLayout/timeDistance``.
+    public var activeLayout: WindowLayout
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -36,19 +40,21 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         sessionRefs: [SessionRef] = [],
         layout: AnalysisLayout,
         selectedLaps: [LapSelection] = [],
-        mathChannels: [MathChannelDef] = []
+        mathChannels: [MathChannelDef] = [],
+        activeLayout: WindowLayout = .timeDistance
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
         self.layout = layout
         self.selectedLaps = selectedLaps
         self.mathChannels = mathChannels
+        self.activeLayout = activeLayout
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels
+        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -60,5 +66,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.layout == rhs.layout
             && lhs.selectedLaps == rhs.selectedLaps
             && lhs.mathChannels == rhs.mathChannels
+            && lhs.activeLayout == rhs.activeLayout
     }
 }

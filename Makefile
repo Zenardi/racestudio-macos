@@ -10,7 +10,7 @@ export COVERAGE_THRESHOLD
 # active developer dir; omitted otherwise (e.g. the CI runner, which has Xcode).
 SWIFTLINT_ENV := $(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/usr/lib,)
 
-.PHONY: setup test test-rust test-swift coverage e2e lint security fixtures xcframework ci clean
+.PHONY: setup run test test-rust test-swift coverage e2e lint security fixtures xcframework ci clean
 
 setup: ## Install toolchains + fetch test fixtures
 	rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -19,6 +19,10 @@ setup: ## Install toolchains + fetch test fixtures
 	command -v swiftlint >/dev/null 2>&1 || brew install swiftlint
 	command -v trivy >/dev/null 2>&1 || brew install trivy
 	bash scripts/fetch_fixtures.sh
+
+run: ## Build and launch the RaceStudio macOS app
+	@[ -d app/RaceStudioFFI.xcframework ] || bash scripts/build_xcframework.sh
+	cd app && swift run RaceStudio
 
 test: test-rust test-swift ## Run the Rust + Swift test suites
 

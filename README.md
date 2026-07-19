@@ -187,6 +187,19 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   identical track sections line up. `TimeDistancePlotView` binds all of it (the
   layout picker, line/dot sliders, snap toggle, and the lap-overlay local-time
   toggle), stacking one band per arranged graph.
+  8.13 wires the 5.4 `Project/` persistence into the analysis window — **profiles /
+  workspace**. `AnalysisWindowModel` gains a `ProjectDocument` mapping
+  (`Workspace/AnalysisWindowProject`): `projectDocument(mathChannels:)` captures the
+  selected channels (as a pane), selected laps + reference (under the session's
+  content id), the active layout, and the math channels; `restore(from:)` re-applies
+  them (skipping channels/laps absent from the session). The `.rsproj` schema bumps
+  to **v3** — `ProjectDocument.activeLayout` + `LapSelection.reference` persist and
+  round-trip, and a pre-8.13 v2 project migrates forward defaulting to Time/Distance.
+  A `Workspace/StoryBoardModel` derives the lap strip (shown laps in order, reference
+  marked); `LapSelectionModel.move(from:to:)` reorders it and every panel follows via
+  `AnalysisWindowModel.reorderSelectedLap`. The thin `WorkspaceBar` / `StoryBoardView`
+  surface File-style Open/Save `.rsproj` commands and the reorderable strip; `make run`
+  builds + launches the app.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

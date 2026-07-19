@@ -60,4 +60,15 @@ public struct LapSelectionModel: Equatable, Sendable {
         if let reference, selected.contains(reference) { return }
         reference = selected.first
     }
+
+    /// Move the selected lap at `source` to `destination`, reordering the strip
+    /// (issue 8.13's StoryBoard). `destination` is clamped into range; a `source`
+    /// outside the selection is a no-op. The ``reference`` lap is unaffected — it is
+    /// still one of the (reordered) selected laps.
+    public mutating func move(from source: Int, to destination: Int) {
+        guard selected.indices.contains(source) else { return }
+        let clampedDestination = min(max(destination, 0), selected.count - 1)
+        let lap = selected.remove(at: source)
+        selected.insert(lap, at: clampedDestination)
+    }
 }
