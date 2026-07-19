@@ -92,7 +92,8 @@ public final class SessionStore: ObservableObject {
             let analysis = loaded.dataSource.map {
                 AnalysisSession(session: loaded.session, dataSource: $0)
             }
-            setState(.loaded(SessionViewModel(session: loaded.session, analysis: analysis)), token: token)
+            setState(.loaded(SessionViewModel(session: loaded.session, analysis: analysis,
+                                              evaluator: loaded.evaluator)), token: token)
         } catch is CancellationError {
             setState(.idle, token: token)
         } catch {

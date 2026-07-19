@@ -61,6 +61,15 @@ public enum ExpressionEngineError: Error, Equatable, Sendable {
 }
 
 extension ExpressionDiagnostic {
+    /// Map any evaluation failure to a diagnostic: an ``ExpressionEngineError`` via
+    /// ``map(engineError:)`` (keeping its caret span), any other error by its
+    /// description (no span). Shared by the editor and the Math Channels manager so
+    /// the evaluate → diagnostic mapping has one definition.
+    public static func map(evaluationError error: Error) -> ExpressionDiagnostic {
+        if let engineError = error as? ExpressionEngineError { return .map(engineError: engineError) }
+        return ExpressionDiagnostic(message: "\(error)")
+    }
+
     /// Maps an engine error to a diagnostic: the message verbatim, plus a
     /// single-character `span` parsed from a trailing `at line:col` position.
     /// Only ``ExpressionEngineError/invalidExpression`` carries a position (the

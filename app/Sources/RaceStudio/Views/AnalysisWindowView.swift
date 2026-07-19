@@ -11,9 +11,14 @@ import RaceStudioCore
 /// ``TimeDistancePlotView``; the summary layout reuses ``SessionSummaryView``.
 struct AnalysisWindowView: View {
     @StateObject private var model: AnalysisWindowModel
+    @StateObject private var mathManager: MathChannelsManagerModel
 
     init(viewModel: SessionViewModel) {
         _model = StateObject(wrappedValue: AnalysisWindowModel(viewModel: viewModel))
+        // Back the Math Channels editor with the evaluator over the retained handle
+        // (issue 8.8); a non-FFI build/preview falls back to a rejecting evaluator.
+        _mathManager = StateObject(wrappedValue: MathChannelsManagerModel(
+            evaluator: viewModel.evaluator ?? NoSessionEvaluator()))
     }
 
     var body: some View {
@@ -24,7 +29,7 @@ struct AnalysisWindowView: View {
                 .frame(width: 240)
             Divider()
             VStack(spacing: 0) {
-                PanelHost(model: model)
+                PanelHost(model: model, mathManager: mathManager)
                 Divider()
                 MeasuresBar(model: model, cursor: model.linkedCursor)
             }
@@ -70,6 +75,7 @@ private struct LayoutRail: View {
 /// selection/cursor state (owned by the model).
 private struct PanelHost: View {
     @ObservedObject var model: AnalysisWindowModel
+    @ObservedObject var mathManager: MathChannelsManagerModel
 
     var body: some View {
         Group {
@@ -86,6 +92,8 @@ private struct PanelHost: View {
                 TrackMapPanel(model: model, cursor: model.linkedCursor)
             case .lapOverlay:
                 LapOverlayPanel(model: model)
+            case .mathChannels:
+                MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
                 SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
             }
