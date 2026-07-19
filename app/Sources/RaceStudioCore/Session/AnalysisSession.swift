@@ -50,6 +50,28 @@ public struct DataSample: Equatable, Sendable {
     }
 }
 
+/// One point of the GPS racing line (issue 8.6): a fix's WGS84 position, the
+/// cumulative track distance (metres) at it, and its logger time. Core's own
+/// mirror of the FFI `GpsTrackPoint`, so the seam and its consumers never depend
+/// on the generated bindings; the production adapter converts the FFI timecode
+/// (milliseconds) into ``time`` seconds, matching ``DataSample/time``.
+public struct GPSTrackPoint: Equatable, Sendable {
+    /// The WGS84 latitude/longitude of the fix.
+    public let coordinate: GPSCoord
+    /// Cumulative track distance (metres) at this fix; `0` when the session has no
+    /// distance channel to integrate.
+    public let distance: Double
+    /// Logger time (seconds, session-relative) of the fix — the same time basis as
+    /// the laps and the shared cursor.
+    public let time: Double
+
+    public init(coordinate: GPSCoord, distance: Double, time: Double) {
+        self.coordinate = coordinate
+        self.distance = distance
+        self.time = time
+    }
+}
+
 /// Windowed descriptive statistics for a channel (issue 8.1) — Core's mirror of
 /// the FFI `StatsDto`.
 public struct ChannelStats: Equatable, Sendable {
@@ -98,6 +120,12 @@ public protocol SessionDataSource: Sendable {
     /// Descriptive statistics for the named channel over `[start, end)` seconds.
     /// Throws when the channel is unknown or the window is invalid.
     func statistics(channel: String, start: Double, end: Double) throws -> ChannelStats
+
+    /// Read `count` GPS fixes starting at fix index `start` (issue 8.6), for the
+    /// track map's racing line and distance axis. Implementations bound the window
+    /// to the real fix count and never trap — a session with no GPS track returns
+    /// `[]`.
+    func gpsTrack(start: UInt32, count: UInt32) -> [GPSTrackPoint]
 }
 
 /// The live analysis pump for a loaded session (issue 8.1) — the linchpin of the
@@ -158,6 +186,23 @@ public final class AnalysisSession {
     /// Descriptive statistics for the named channel over `window`.
     public func stats(channel: String, window: TimeWindow = .all) throws -> ChannelStats {
         try dataSource.statistics(channel: channel, start: window.start, end: window.end)
+    }
+
+    /// The GPS racing-line track over `window` (issue 8.6): each fix's position,
+    /// cumulative distance, and time, read through 8.2's `gps_track` accessor. The
+    /// default reads the whole track; the data source bounds the window to the real
+    /// fix count (the session snapshot carries no fix count to clamp against). A
+    /// zero-width window issues no read.
+    ///
+    /// The fix `time` is treated as the same seconds basis as the laps / cursor so
+    /// the map marker can sync to the shared cursor by nearest fix. Precise GPS↔CHS
+    /// clock alignment (the two logger clocks can drift) is deferred to a later
+    /// issue; until then the marker is nearest-fix accurate on that shared-basis
+    /// assumption.
+    public func gpsTrack(window: SampleWindow = .all) -> [GPSTrackPoint] {
+        let requested = window.count
+        guard requested > 0 else { return [] }
+        return dataSource.gpsTrack(start: window.start, count: requested)
     }
 
     // MARK: - Internals

@@ -132,6 +132,16 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
             count: dto.count, min: dto.min, max: dto.max, mean: dto.mean,
             stdPop: dto.stdPop, stdSample: dto.stdSample, rms: dto.rms, range: dto.range)
     }
+
+    public func gpsTrack(start: UInt32, count: UInt32) -> [GPSTrackPoint] {
+        // 8.2's `gps_track` bounds the window to the real fix count itself, so the
+        // adapter only maps each FFI row into Core's ``GPSTrackPoint`` — timecode
+        // ms → seconds, as `samples` does, so the track shares the cursor's basis.
+        handle.gpsTrack(start: start, count: count).map {
+            GPSTrackPoint(coordinate: GPSCoord(latitude: $0.latitude, longitude: $0.longitude),
+                          distance: $0.distance, time: $0.timecode / 1000)
+        }
+    }
 }
 
 extension DecodeError {

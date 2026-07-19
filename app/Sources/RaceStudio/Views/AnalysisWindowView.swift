@@ -82,6 +82,8 @@ private struct PanelHost: View {
                 }
             case .channelTable:
                 ChannelTablePanel(model: model, cursor: model.linkedCursor)
+            case .trackMap:
+                TrackMapPanel(model: model, cursor: model.linkedCursor)
             case .summary:
                 SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
             }
@@ -116,6 +118,69 @@ private struct ChannelTablePanel: View {
                                  onSetReference: { model.setReferenceLap($0) })
             }
         }
+    }
+}
+
+// MARK: - Track map panel (issue 8.6)
+
+/// Hosts the reused ``TrackMapView`` bound to the shared cursor both ways: it
+/// observes ``LinkedCursor`` so the position marker follows every cursor move
+/// (``AnalysisWindowModel/gpsCursorIndex``), and a hover / click on the map drives
+/// the window's cursor (``AnalysisWindowModel/moveTrackCursor(toFix:)``). A colour
+/// picker chooses which selected channel colours the line, and a stepper sets the
+/// sector count; the racing line, its colour-by-channel, the colour scale, and the
+/// nearest-fix mapping are all derived in `RaceStudioCore`.
+private struct TrackMapPanel: View {
+    @ObservedObject var model: AnalysisWindowModel
+    // Observed so the position marker (`gpsCursorIndex`, read in the binding below)
+    // re-renders on every cursor move — do not remove even though `body` reads it
+    // only through the model.
+    @ObservedObject var cursor: LinkedCursor
+
+    var body: some View {
+        let map = model.trackMap
+        if map.coordinates.isEmpty {
+            ContentUnavailableHint(text: "No GPS data for this session")
+        } else {
+            VStack(spacing: 0) {
+                controls
+                Divider()
+                TrackMapView(coords: map.coordinates,
+                             distances: map.distances,
+                             channelValues: map.channelValues,
+                             colorScale: map.colorScale,
+                             lapDistance: map.lapDistance,
+                             sectorSplits: model.sectorSplits,
+                             cursorIndex: Binding(
+                                get: { model.gpsCursorIndex },
+                                set: { if let index = $0 { model.moveTrackCursor(toFix: index) } }))
+                    .padding(8)
+            }
+        }
+    }
+
+    /// Colour-by-channel picker (over the selected channels) + sector-count stepper.
+    private var controls: some View {
+        HStack(spacing: 16) {
+            if !model.selection.channels.isEmpty {
+                Picker("Colour", selection: Binding(
+                    get: { model.colorChannel },
+                    set: { if let channel = $0 { model.setColorChannel(channel) } })) {
+                    ForEach(model.selection.channels, id: \.self) { channel in
+                        Text(channel.name).tag(Optional(channel))
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            Stepper("Sectors: \(model.sectorSplits)", value: Binding(
+                get: { model.sectorSplits },
+                set: { model.setSectorSplits($0) }), in: 0...12)
+                .fixedSize()
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
 }
 

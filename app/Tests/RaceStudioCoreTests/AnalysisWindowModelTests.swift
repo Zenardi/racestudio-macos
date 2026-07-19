@@ -50,7 +50,7 @@ import Foundation
     // MARK: - Layout rail (panel set + active layout)
 
     @Test func test_layouts_expose_the_rail_panel_set_in_order() {
-        #expect(makeModel().layouts == [.timeDistance, .channelTable, .summary])
+        #expect(makeModel().layouts == [.timeDistance, .channelTable, .trackMap, .summary])
     }
 
     @Test func test_initial_active_layout_is_time_distance_not_the_summary() {
@@ -73,12 +73,14 @@ import Foundation
     @Test func test_layout_titles_label_the_rail() {
         #expect(WindowLayout.timeDistance.title == "Time / Distance")
         #expect(WindowLayout.channelTable.title == "Channels")
+        #expect(WindowLayout.trackMap.title == "Track Map")
         #expect(WindowLayout.summary.title == "Summary")
     }
 
     @Test func test_layout_system_image_names_are_stable() {
         #expect(WindowLayout.timeDistance.systemImageName == "chart.xyaxis.line")
         #expect(WindowLayout.channelTable.systemImageName == "tablecells")
+        #expect(WindowLayout.trackMap.systemImageName == "map")
         #expect(WindowLayout.summary.systemImageName == "list.bullet.rectangle")
     }
 
@@ -256,6 +258,7 @@ import Foundation
     @Test func test_window_layout_id_is_the_raw_value() {
         #expect(WindowLayout.timeDistance.id == "timeDistance")
         #expect(WindowLayout.channelTable.id == "channelTable")
+        #expect(WindowLayout.trackMap.id == "trackMap")
         #expect(WindowLayout.summary.id == "summary")
     }
 
