@@ -294,6 +294,30 @@ import Foundation
         #expect(summary.logger.isEmpty)
     }
 
+    @Test func test_malformed_collection_is_skipped_not_fatal() throws {
+        // A single bad collection must NOT discard the whole library index — the
+        // summaries and the *valid* collections still load; only the bad one drops.
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("library.json")
+
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ"), sourceURL: dir.appendingPathComponent("s.xrk"))
+        index.upsertCollection(.manual(id: "ok", name: "Good", members: ["x"]))
+        try LibraryStore().save(index, to: url)
+
+        // Inject a malformed smart collection (kind but no rule) alongside the good one.
+        var json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var collections = try #require(json["collections"] as? [[String: Any]])
+        collections.append(["id": "bad", "name": "Broken", "kind": "smart"])  // missing "rule"
+        json["collections"] = collections
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let loaded = LibraryStore().load(from: url)
+        #expect(loaded.summaries.count == 1)                 // library index survives
+        #expect(loaded.collections.map(\.name) == ["Good"])  // only the valid collection
+    }
+
     // MARK: - default location
 
     @Test func test_default_url_points_at_application_support() {

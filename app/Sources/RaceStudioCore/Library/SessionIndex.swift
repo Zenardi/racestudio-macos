@@ -79,7 +79,12 @@ public final class SessionIndex: Codable, Equatable {
     /// case-insensitively — the choices offered by the browser's facet controls.
     public func facetValues(_ facet: SessionFacet) -> [String] {
         let values = storage.values.map { facet.value(in: $0) }.filter { !$0.isEmpty }
-        return Array(Set(values)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return Array(Set(values)).sorted { lhs, rhs in
+            // Deterministic across runs: break case-insensitive ties (e.g. "BMW"
+            // vs "bmw") on the raw value, since Set iteration order is randomized.
+            let order = lhs.localizedCaseInsensitiveCompare(rhs)
+            return order == .orderedSame ? lhs < rhs : order == .orderedAscending
+        }
     }
 
     // MARK: - Collections (issue 8.15)
@@ -214,9 +219,14 @@ public final class SessionIndex: Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let list = try container.decode([SessionSummary].self, forKey: .summaries)
         storage = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
-        // `collections` is optional on disk so a 5.3/8.14-era library (no such key)
-        // still loads, with no collections.
-        let savedCollections = try container.decodeIfPresent([SessionCollection].self, forKey: .collections) ?? []
+        // `collections` is optional AND lenient. A 5.3/8.14-era library (no such
+        // key) loads with none; and because a collection's rule/kind is a
+        // hand-editable, schema-evolving document, a single malformed entry is
+        // *skipped* rather than throwing — which would otherwise discard the whole
+        // library index (every summary too) via LibraryStore's corrupt-index path.
+        let wrapped = (try? container.decodeIfPresent(
+            [FailableDecodable<SessionCollection>].self, forKey: .collections)) ?? nil
+        let savedCollections = wrapped?.compactMap(\.value) ?? []
         collectionStorage = Dictionary(
             savedCollections.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
     }
@@ -230,5 +240,15 @@ public final class SessionIndex: Codable, Equatable {
 
     public static func == (lhs: SessionIndex, rhs: SessionIndex) -> Bool {
         lhs.storage == rhs.storage && lhs.collectionStorage == rhs.collectionStorage
+    }
+}
+
+/// Decodes `T`, swallowing a per-element failure to `nil` instead of throwing.
+/// Used to decode `collections` leniently: one malformed collection is skipped
+/// rather than aborting the whole index decode (see ``SessionIndex/init(from:)``).
+private struct FailableDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
     }
 }

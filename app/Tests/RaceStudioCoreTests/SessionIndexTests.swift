@@ -188,6 +188,16 @@ import Foundation
         #expect(index.facetValues(.logger).isEmpty)
     }
 
+    @Test func test_facet_values_break_case_insensitive_ties_deterministically() {
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "bmw", track: "A", datetimeUtc: 300), sourceURL: url("a.xrk"))
+        _ = index.add(SessionFixture.make(vehicle: "BMW", track: "B", datetimeUtc: 200), sourceURL: url("b.xrk"))
+
+        // Case-variant duplicates tie under localized comparison; the raw-value
+        // secondary key keeps the order stable across runs ("BMW" < "bmw" by scalar).
+        #expect(index.facetValues(.vehicle) == ["BMW", "bmw"])
+    }
+
     // MARK: - recent (issue 8.15)
 
     @Test func test_recent_ranks_by_import_time_not_session_date() {

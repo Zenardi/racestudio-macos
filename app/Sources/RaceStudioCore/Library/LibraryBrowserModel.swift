@@ -65,10 +65,10 @@ public final class LibraryBrowserModel: ObservableObject {
         self.init(index: store.load(from: url), loader: loader)
     }
 
-    /// The distinct vehicles present, sorted — the filtering column's facets.
-    public var vehicles: [String] {
-        Set(index.summaries.map(\.vehicle)).sorted()
-    }
+    /// The distinct vehicles present, sorted — the 8.14 vehicle facet's choices.
+    /// Defined in terms of ``facetValues(_:)`` so it cannot drift from the generic
+    /// facet path (same distinct/empty-filter/ordering semantics).
+    public var vehicles: [String] { facetValues(.vehicle) }
 
     /// The active vehicle facet, or `nil` for "all" (back-compat with 8.14).
     public var vehicleFilter: String? { facets.vehicle }
