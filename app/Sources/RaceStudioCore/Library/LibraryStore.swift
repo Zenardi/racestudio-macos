@@ -9,27 +9,66 @@ public enum LibraryError: Error, Equatable {
     case ioFailure
 }
 
-/// A structured filter over indexed sessions (issue 5.3). Each property is an
-/// optional predicate; `nil` means "don't constrain on this". An all-`nil` spec
-/// matches every session.
-public struct FilterSpec: Equatable, Sendable {
+/// A structured filter over indexed sessions (issue 5.3, extended in 8.15). Each
+/// property is an optional predicate; `nil` means "don't constrain on this". An
+/// all-`nil` spec matches every session.
+///
+/// The facet predicates (vehicle, racer, track, championship, comment, logger)
+/// are **exact** case-insensitive matches — a facet is a chosen value, not free
+/// text. `FilterSpec` is `Codable` so it can be the persisted rule of a smart
+/// ``SessionCollection``.
+public struct FilterSpec: Equatable, Sendable, Codable {
 
     /// Exact vehicle match (case-insensitive).
     public var vehicle: String?
+    /// Exact racer/driver match (case-insensitive).
+    public var racer: String?
+    /// Exact track/venue match (case-insensitive).
+    public var track: String?
+    /// Exact championship/series match (case-insensitive).
+    public var championship: String?
+    /// Exact comment match (case-insensitive).
+    public var comment: String?
+    /// Exact logger match (case-insensitive).
+    public var logger: String?
     /// Inclusive session-date range.
     public var dateRange: ClosedRange<Date>?
     /// Minimum lap count (inclusive).
     public var minLaps: Int?
 
-    public init(vehicle: String? = nil, dateRange: ClosedRange<Date>? = nil, minLaps: Int? = nil) {
+    public init(
+        vehicle: String? = nil, racer: String? = nil, track: String? = nil,
+        championship: String? = nil, comment: String? = nil, logger: String? = nil,
+        dateRange: ClosedRange<Date>? = nil, minLaps: Int? = nil
+    ) {
         self.vehicle = vehicle
+        self.racer = racer
+        self.track = track
+        self.championship = championship
+        self.comment = comment
+        self.logger = logger
         self.dateRange = dateRange
         self.minLaps = minLaps
     }
 
+    /// Whether no predicate is set (the spec matches every session).
+    public var isEmpty: Bool {
+        vehicle == nil && racer == nil && track == nil && championship == nil
+            && comment == nil && logger == nil && dateRange == nil && minLaps == nil
+    }
+
     /// Whether `summary` satisfies every set predicate.
     func matches(_ summary: SessionSummary) -> Bool {
-        if let vehicle, vehicle.caseInsensitiveCompare(summary.vehicle) != .orderedSame { return false }
+        func facet(_ value: String?, _ field: String) -> Bool {
+            guard let value else { return true }
+            return value.caseInsensitiveCompare(field) == .orderedSame
+        }
+        guard facet(vehicle, summary.vehicle),
+              facet(racer, summary.driver),
+              facet(track, summary.venue),
+              facet(championship, summary.championship),
+              facet(comment, summary.comment),
+              facet(logger, summary.logger) else { return false }
         if let dateRange, !dateRange.contains(summary.date) { return false }
         if let minLaps, summary.lapCount < minLaps { return false }
         return true

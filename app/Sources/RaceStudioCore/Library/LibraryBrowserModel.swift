@@ -1,5 +1,17 @@
 import Foundation
 
+/// What the browser is currently showing (issue 8.15): the whole library, the
+/// Recent collection, or a saved ``SessionCollection`` — narrowed further by the
+/// free-text search and facet constraints.
+public enum LibraryScope: Equatable, Sendable {
+    /// Every indexed session.
+    case all
+    /// The `limit` most-recently imported sessions.
+    case recent(Int)
+    /// The saved collection with this id.
+    case collection(String)
+}
+
 /// The session library browser (issue 8.14) — the RaceStudio 3 "choose what to
 /// analyze" window's model, over the 5.3 ``SessionIndex`` / ``LibraryStore``.
 ///
@@ -21,8 +33,10 @@ public final class LibraryBrowserModel: ObservableObject {
 
     /// The visible (filtered) sessions, date-descending.
     @Published public private(set) var sessions: [SessionSummary]
-    /// The active vehicle facet in the filtering column, or `nil` for "all".
-    @Published public private(set) var vehicleFilter: String?
+    /// The facet constraints applied on top of the current scope + search.
+    @Published public private(set) var facets = FilterSpec()
+    /// What the list is scoped to (all / recent / a collection).
+    @Published public private(set) var scope: LibraryScope = .all
     /// The free-text query matched across venue/vehicle/driver.
     @Published public private(set) var searchText: String = ""
     /// The selected session's content id, or `nil` when nothing is selected.
@@ -51,10 +65,19 @@ public final class LibraryBrowserModel: ObservableObject {
         self.init(index: store.load(from: url), loader: loader)
     }
 
-    /// The distinct vehicles present, sorted — the filtering column's facets.
-    public var vehicles: [String] {
-        Set(index.summaries.map(\.vehicle)).sorted()
-    }
+    /// The distinct vehicles present, sorted — the 8.14 vehicle facet's choices.
+    /// Defined in terms of ``facetValues(_:)`` so it cannot drift from the generic
+    /// facet path (same distinct/empty-filter/ordering semantics).
+    public var vehicles: [String] { facetValues(.vehicle) }
+
+    /// The active vehicle facet, or `nil` for "all" (back-compat with 8.14).
+    public var vehicleFilter: String? { facets.vehicle }
+
+    /// The saved collections, ordered for the sidebar.
+    public var collections: [SessionCollection] { index.collections }
+
+    /// The distinct values offered for `facet` (its facet-control choices).
+    public func facetValues(_ facet: SessionFacet) -> [String] { index.facetValues(facet) }
 
     /// The selected summary, resolved from ``selectedID`` (or `nil`).
     public var selectedSummary: SessionSummary? {
@@ -78,15 +101,64 @@ public final class LibraryBrowserModel: ObservableObject {
         try store.save(index, to: url)
     }
 
-    /// Set the vehicle facet (or `nil` to clear it) and refresh the list.
+    /// Set the vehicle facet (or `nil` to clear it) and refresh the list — a thin
+    /// adapter over ``setFacet(_:to:)`` for the 8.14 vehicle column.
     public func setVehicleFilter(_ vehicle: String?) {
-        vehicleFilter = vehicle
+        setFacet(.vehicle, to: vehicle)
+    }
+
+    /// Set (or clear, with `nil`) a facet constraint and refresh the list.
+    public func setFacet(_ facet: SessionFacet, to value: String?) {
+        facet.apply(value, to: &facets)
         refresh()
     }
 
     /// Set the free-text query and refresh the list.
     public func search(_ text: String) {
         searchText = text
+        refresh()
+    }
+
+    // MARK: - Scope (issue 8.15)
+
+    /// Show every indexed session.
+    public func showAll() {
+        scope = .all
+        refresh()
+    }
+
+    /// Show the `limit` most-recently imported sessions (RS3 "Recent").
+    public func showRecent(limit: Int = 20) {
+        scope = .recent(limit)
+        refresh()
+    }
+
+    /// Show the sessions in the saved collection with `id`.
+    public func showCollection(id: String) {
+        scope = .collection(id)
+        refresh()
+    }
+
+    // MARK: - Collections (issue 8.15)
+
+    /// Add (or replace by id) a collection, then refresh the visible list.
+    public func addCollection(_ collection: SessionCollection) {
+        index.upsertCollection(collection)
+        refresh()
+    }
+
+    /// Remove a collection; if it was the active scope, fall back to "all".
+    public func removeCollection(id: String) {
+        index.removeCollection(id: id)
+        if scope == .collection(id) { scope = .all }
+        refresh()
+    }
+
+    /// Drag a session into a manual collection (idempotent), persisting the
+    /// curated membership in the index. Call ``save(to:using:)`` to write to disk.
+    public func addSession(_ sessionID: String, toCollection collectionID: String) {
+        guard let collection = index.collection(id: collectionID) else { return }
+        index.upsertCollection(collection.adding(sessionID))
         refresh()
     }
 
@@ -119,13 +191,25 @@ public final class LibraryBrowserModel: ObservableObject {
         }
     }
 
-    /// Recompute the visible list: the 5.3 text search first (empty → all,
-    /// date-descending), then the vehicle facet, preserving the ordering.
+    /// Recompute the visible list: the active scope first, then the free-text
+    /// search, then the facet constraints — each step preserving the base ordering.
     private func refresh() {
-        var result = index.search(searchText)
-        if let vehicleFilter {
-            result = result.filter { $0.vehicle.caseInsensitiveCompare(vehicleFilter) == .orderedSame }
-        }
+        var result = scopedSessions()
+        if !searchText.isEmpty { result = result.filter { $0.matchesText(searchText) } }
+        result = result.filter(facets.matches)
         sessions = result
+    }
+
+    /// The base list for the active scope, before search/facets are applied.
+    private func scopedSessions() -> [SessionSummary] {
+        switch scope {
+        case .all:
+            return index.summaries
+        case .recent(let limit):
+            return index.recent(limit: limit)
+        case .collection(let id):
+            guard let collection = index.collection(id: id) else { return [] }
+            return index.sessions(in: collection)
+        }
     }
 }

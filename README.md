@@ -215,6 +215,21 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `scripts/run_app.sh`) so it launches with a real window — a bare `swift run`
   executable gets non-GUI activation and never shows one — and `make help` lists every
   target.
+  8.15 extends the browser with RS3 **collections** and **faceted search**. Core:
+  `FilterSpec` grows the six facet predicates (vehicle, racer, track, championship,
+  comment, logger — exact, case-insensitive) and becomes `Codable`; `SessionFacet`
+  centralises how each facet reads a `SessionSummary` and applies to a `FilterSpec`;
+  `SessionCollection` is a **smart** (rule-based, backed by a `FilterSpec`) or **manual**
+  (curated, ordered content ids) collection. `SessionIndex` gains `recent(limit:)`
+  (RS3 "Recent", ranked by import time), `facetValues(_:)`, and collection CRUD +
+  `sessions(in:)` resolution — all persisted in `library.json` alongside the summaries
+  (older libraries without a `collections` key, or summaries without the new facet
+  fields, still load). `LibraryBrowserModel` adds a `LibraryScope` (all / recent /
+  collection) narrowed by search + facets, plus `setFacet`, `showRecent`/`showCollection`,
+  and drag-a-session-into-a-manual-collection persistence. The shell adds a collections
+  sidebar and per-facet pickers, with session rows draggable onto manual collections.
+  Championship comes from the session's series; comment/logger are modelled but not yet
+  surfaced by the decoder. Out of scope: cloud collections.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

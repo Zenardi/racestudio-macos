@@ -227,6 +227,97 @@ import Foundation
         #expect(loaded.summaries.count == 2)               // retained, not silently dropped
     }
 
+    // MARK: - collections persistence (issue 8.15)
+
+    @Test func test_collections_roundtrip_through_save_and_load() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("library.json")
+        let src = dir.appendingPathComponent("a.xrk"); try touch(src)
+
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ"), sourceURL: src)
+        index.upsertCollection(.smart(id: "s", name: "Fast SFJ", rule: FilterSpec(vehicle: "SFJ", minLaps: 2)))
+        index.upsertCollection(.manual(id: "m", name: "Favourites", members: ["x", "y"]))
+
+        try LibraryStore().save(index, to: url)
+        let loaded = LibraryStore().load(from: url)
+
+        #expect(loaded == index)  // whole index equal, including collections
+        #expect(loaded.collections.map(\.name) == ["Fast SFJ", "Favourites"])
+    }
+
+    @Test func test_library_without_collections_key_loads_as_empty_collections() throws {
+        // A 5.3/8.14-era library.json (summaries only, no "collections" key) must
+        // still load — collections default to empty rather than failing to decode.
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("library.json")
+
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(), sourceURL: dir.appendingPathComponent("s.xrk"))
+        try LibraryStore().save(index, to: url)
+
+        // Strip the collections key to simulate an older file.
+        var json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        json["collections"] = nil
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let loaded = LibraryStore().load(from: url)
+        #expect(loaded.summaries.count == 1)
+        #expect(loaded.collections.isEmpty)
+    }
+
+    @Test func test_summary_without_new_facet_fields_loads_with_empty_defaults() throws {
+        // An older summary lacking championship/comment/logger must decode (the
+        // facet fields default to empty), so 8.15 does not break an 8.14 library.
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("library.json")
+
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(series: "GT Cup"), sourceURL: dir.appendingPathComponent("s.xrk"))
+        try LibraryStore().save(index, to: url)
+
+        var json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var summaries = try #require(json["summaries"] as? [[String: Any]])
+        summaries[0]["championship"] = nil
+        summaries[0]["comment"] = nil
+        summaries[0]["logger"] = nil
+        json["summaries"] = summaries
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let loaded = LibraryStore().load(from: url)
+        let summary = try #require(loaded.summaries.first)
+        #expect(summary.championship.isEmpty)
+        #expect(summary.comment.isEmpty)
+        #expect(summary.logger.isEmpty)
+    }
+
+    @Test func test_malformed_collection_is_skipped_not_fatal() throws {
+        // A single bad collection must NOT discard the whole library index — the
+        // summaries and the *valid* collections still load; only the bad one drops.
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("library.json")
+
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ"), sourceURL: dir.appendingPathComponent("s.xrk"))
+        index.upsertCollection(.manual(id: "ok", name: "Good", members: ["x"]))
+        try LibraryStore().save(index, to: url)
+
+        // Inject a malformed smart collection (kind but no rule) alongside the good one.
+        var json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var collections = try #require(json["collections"] as? [[String: Any]])
+        collections.append(["id": "bad", "name": "Broken", "kind": "smart"])  // missing "rule"
+        json["collections"] = collections
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let loaded = LibraryStore().load(from: url)
+        #expect(loaded.summaries.count == 1)                 // library index survives
+        #expect(loaded.collections.map(\.name) == ["Good"])  // only the valid collection
+    }
+
     // MARK: - default location
 
     @Test func test_default_url_points_at_application_support() {

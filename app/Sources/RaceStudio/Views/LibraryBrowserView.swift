@@ -27,6 +27,18 @@ struct LibraryBrowserView: View {
         }
         .navigationTitle("RaceStudio")
         .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    Button("New Smart Collection from Filters") {
+                        library.addCollection(.smart(
+                            id: UUID().uuidString, name: "Smart Collection", rule: library.facets))
+                    }
+                    Button("New Manual Collection") {
+                        library.addCollection(.manual(id: UUID().uuidString, name: "Manual Collection"))
+                    }
+                } label: { Label("New Collection", systemImage: "folder.badge.plus") }
+                .help("Create a smart (rule-based) or manual (drag-and-drop) collection")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: onImport) { Label("Import…", systemImage: "plus") }
                     .help("Import a .xrk / .xrz telemetry file into the library")
@@ -35,29 +47,99 @@ struct LibraryBrowserView: View {
         .task(id: library.selectedID) { await library.loadPreview() }
     }
 
-    // MARK: - Left filtering column (search + vehicle facets)
+    // MARK: - Left column (collections sidebar + faceted search)
 
     private var filterColumn: some View {
-        List(selection: vehicleSelection) {
+        List {
+            Section("Library") {
+                scopeRow("All Sessions", systemImage: "square.grid.2x2", active: library.scope == .all) {
+                    library.showAll()
+                }
+                scopeRow("Recent", systemImage: "clock", active: isRecentScope) {
+                    library.showRecent()
+                }
+            }
+
+            if !library.collections.isEmpty {
+                Section("Collections") {
+                    ForEach(library.collections) { collection in
+                        collectionRow(collection)
+                    }
+                }
+            }
+
             Section("Search") {
                 TextField("Venue, vehicle, driver", text: searchBinding)
                     .textFieldStyle(.roundedBorder)
             }
-            Section("Vehicle") {
-                Text("All vehicles").tag(String?.none)
-                ForEach(library.vehicles, id: \.self) { vehicle in
-                    Text(vehicle).tag(String?.some(vehicle))
+
+            Section("Facets") {
+                ForEach(SessionFacet.allCases) { facet in
+                    let values = library.facetValues(facet)
+                    if !values.isEmpty { facetPicker(facet, values: values) }
                 }
             }
         }
+    }
+
+    /// A selectable scope row (All / Recent), highlighted when active.
+    private func scopeRow(
+        _ title: String, systemImage: String, active: Bool, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .fontWeight(active ? .semibold : .regular)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// A collection row — selecting it scopes the list; a **manual** collection is
+    /// a drop target so sessions dragged from the list persist as a curated set.
+    @ViewBuilder
+    private func collectionRow(_ collection: SessionCollection) -> some View {
+        let active = library.scope == .collection(collection.id)
+        let row = Button {
+            library.showCollection(id: collection.id)
+        } label: {
+            Label(collection.name, systemImage: collection.isSmart ? "gearshape" : "folder")
+                .fontWeight(active ? .semibold : .regular)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Delete", role: .destructive) { library.removeCollection(id: collection.id) }
+        }
+
+        if collection.isSmart {
+            row
+        } else {
+            row.dropDestination(for: String.self) { ids, _ in
+                for id in ids { library.addSession(id, toCollection: collection.id) }
+                return !ids.isEmpty
+            }
+        }
+    }
+
+    /// A single-value picker for one facet ("All" clears it).
+    private func facetPicker(_ facet: SessionFacet, values: [String]) -> some View {
+        Picker(facet.title, selection: facetBinding(facet)) {
+            Text("All").tag(String?.none)
+            ForEach(values, id: \.self) { value in
+                Text(value).tag(String?.some(value))
+            }
+        }
+    }
+
+    private var isRecentScope: Bool {
+        if case .recent = library.scope { return true }
+        return false
     }
 
     private var searchBinding: Binding<String> {
         Binding(get: { library.searchText }, set: { library.search($0) })
     }
 
-    private var vehicleSelection: Binding<String?> {
-        Binding(get: { library.vehicleFilter }, set: { library.setVehicleFilter($0) })
+    private func facetBinding(_ facet: SessionFacet) -> Binding<String?> {
+        Binding(get: { facet.value(in: library.facets) }, set: { library.setFacet(facet, to: $0) })
     }
 
     // MARK: - Sessions list (date-descending)
@@ -65,7 +147,9 @@ struct LibraryBrowserView: View {
     private var sessionList: some View {
         List(selection: idSelection) {
             ForEach(library.sessions) { summary in
-                sessionRow(summary).tag(summary.id)
+                sessionRow(summary)
+                    .tag(summary.id)
+                    .draggable(summary.id)  // drag into a manual collection to curate it
             }
         }
         .overlay { if library.sessions.isEmpty { emptyState } }

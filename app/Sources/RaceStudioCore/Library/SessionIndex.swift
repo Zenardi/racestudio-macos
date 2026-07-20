@@ -13,6 +13,7 @@ import Foundation
 public final class SessionIndex: Codable, Equatable {
 
     private var storage: [String: SessionSummary]
+    private var collectionStorage: [String: SessionCollection] = [:]
     private let now: () -> Date
 
     /// - Parameter now: clock used to stamp ``SessionSummary/importedAt``
@@ -46,19 +47,83 @@ public final class SessionIndex: Codable, Equatable {
     /// Case-insensitive substring search across venue, vehicle, and driver.
     /// An empty query returns every summary. Results are date-descending.
     public func search(_ query: String) -> [SessionSummary] {
-        let needle = query.lowercased()
-        guard !needle.isEmpty else { return summaries }
-        return Self.byDateDescending(storage.values.filter { summary in
-            summary.venue.lowercased().contains(needle)
-                || summary.vehicle.lowercased().contains(needle)
-                || summary.driver.lowercased().contains(needle)
-        })
+        Self.byDateDescending(storage.values.filter { $0.matchesText(query) })
     }
 
     /// Return the summaries matching every set predicate in `spec`. An empty
     /// spec returns every summary. Results are date-descending.
     public func filter(_ spec: FilterSpec) -> [SessionSummary] {
         Self.byDateDescending(storage.values.filter(spec.matches))
+    }
+
+    // MARK: - Recent (issue 8.15)
+
+    /// The `limit` most-recently *imported* sessions, newest first — RS3's
+    /// "Recent" collection. Ranked by ``SessionSummary/importedAt`` (not session
+    /// date), tie-broken by date-descending then content id so the order is
+    /// deterministic. A non-positive `limit` returns none; a `limit` beyond the
+    /// library size returns all.
+    public func recent(limit: Int) -> [SessionSummary] {
+        guard limit > 0 else { return [] }
+        let ordered = storage.values.sorted { lhs, rhs in
+            if lhs.importedAt != rhs.importedAt { return lhs.importedAt > rhs.importedAt }
+            if lhs.date != rhs.date { return lhs.date > rhs.date }
+            return lhs.id < rhs.id
+        }
+        return Array(ordered.prefix(limit))
+    }
+
+    // MARK: - Facets (issue 8.15)
+
+    /// The distinct, non-empty values of `facet` across the library, sorted
+    /// case-insensitively — the choices offered by the browser's facet controls.
+    public func facetValues(_ facet: SessionFacet) -> [String] {
+        let values = storage.values.map { facet.value(in: $0) }.filter { !$0.isEmpty }
+        return Array(Set(values)).sorted { lhs, rhs in
+            // Deterministic across runs: break case-insensitive ties (e.g. "BMW"
+            // vs "bmw") on the raw value, since Set iteration order is randomized.
+            let order = lhs.localizedCaseInsensitiveCompare(rhs)
+            return order == .orderedSame ? lhs < rhs : order == .orderedAscending
+        }
+    }
+
+    // MARK: - Collections (issue 8.15)
+
+    /// All collections, ordered by name (case-insensitive), tie-broken by id so
+    /// the sidebar order is deterministic.
+    public var collections: [SessionCollection] {
+        collectionStorage.values.sorted { lhs, rhs in
+            let byName = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            return byName == .orderedSame ? lhs.id < rhs.id : byName == .orderedAscending
+        }
+    }
+
+    /// The collection with the given id, or `nil`.
+    public func collection(id: String) -> SessionCollection? {
+        collectionStorage[id]
+    }
+
+    /// Add `collection`, replacing any existing one with the same id.
+    public func upsertCollection(_ collection: SessionCollection) {
+        collectionStorage[collection.id] = collection
+    }
+
+    /// Remove the collection with the given id, if present.
+    public func removeCollection(id: String) {
+        collectionStorage[id] = nil
+    }
+
+    /// The sessions belonging to `collection`:
+    /// - a **smart** collection resolves through its rule (date-descending);
+    /// - a **manual** collection resolves its curated member ids in order,
+    ///   skipping any that are no longer in the index.
+    public func sessions(in collection: SessionCollection) -> [SessionSummary] {
+        switch collection.kind {
+        case .smart(let rule):
+            return filter(rule)
+        case .manual(let memberIDs):
+            return memberIDs.compactMap { storage[$0] }
+        }
     }
 
     // MARK: - Derivation
@@ -85,7 +150,10 @@ public final class SessionIndex: Codable, Equatable {
             bestLap: fastest.map { .seconds($0) },
             sourceURL: sourceURL,
             importedAt: importedAt,
-            isAvailable: true)
+            isAvailable: true,
+            // RS3's "championship" facet is the session's series.
+            // comment/logger are not surfaced by the decoder yet (empty).
+            championship: metadata.series)
     }
 
     /// A stable, deterministic content id for `session` — a SHA-256 over its
@@ -144,22 +212,43 @@ public final class SessionIndex: Codable, Equatable {
 
     // MARK: - Codable (summaries only; the clock is not persisted)
 
-    private enum CodingKeys: String, CodingKey { case summaries }
+    private enum CodingKeys: String, CodingKey { case summaries, collections }
 
     public convenience init(from decoder: Decoder) throws {
         self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let list = try container.decode([SessionSummary].self, forKey: .summaries)
         storage = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        // `collections` is optional AND lenient. A 5.3/8.14-era library (no such
+        // key) loads with none; and because a collection's rule/kind is a
+        // hand-editable, schema-evolving document, a single malformed entry is
+        // *skipped* rather than throwing — which would otherwise discard the whole
+        // library index (every summary too) via LibraryStore's corrupt-index path.
+        let wrapped = (try? container.decodeIfPresent(
+            [FailableDecodable<SessionCollection>].self, forKey: .collections)) ?? nil
+        let savedCollections = wrapped?.compactMap(\.value) ?? []
+        collectionStorage = Dictionary(
+            savedCollections.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         // Encode id-sorted for stable, diff-friendly on-disk output.
         try container.encode(storage.values.sorted { $0.id < $1.id }, forKey: .summaries)
+        try container.encode(collectionStorage.values.sorted { $0.id < $1.id }, forKey: .collections)
     }
 
     public static func == (lhs: SessionIndex, rhs: SessionIndex) -> Bool {
-        lhs.storage == rhs.storage
+        lhs.storage == rhs.storage && lhs.collectionStorage == rhs.collectionStorage
+    }
+}
+
+/// Decodes `T`, swallowing a per-element failure to `nil` instead of throwing.
+/// Used to decode `collections` leniently: one malformed collection is skipped
+/// rather than aborting the whole index decode (see ``SessionIndex/init(from:)``).
+private struct FailableDecodable<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws {
+        value = try? T(from: decoder)
     }
 }

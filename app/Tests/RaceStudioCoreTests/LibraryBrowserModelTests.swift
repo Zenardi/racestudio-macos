@@ -192,6 +192,129 @@ import Testing
 
         #expect(model.sessions.isEmpty)
     }
+
+    // MARK: - Faceted search (issue 8.15)
+
+    @Test func test_setting_a_facet_narrows_the_list() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(vehicle: "SFJ", track: "A", series: "GT Cup"), sourceURL: url("a"))
+        model.add(SessionFixture.make(vehicle: "GT3", track: "B", series: "Trophy"), sourceURL: url("b"))
+
+        model.setFacet(.championship, to: "GT Cup")
+
+        #expect(model.sessions.map(\.vehicle) == ["SFJ"])
+    }
+
+    @Test func test_clearing_a_facet_restores_the_list() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(vehicle: "SFJ", series: "GT Cup"), sourceURL: url("a"))
+        model.add(SessionFixture.make(vehicle: "GT3", series: "Trophy"), sourceURL: url("b"))
+        model.setFacet(.championship, to: "GT Cup")
+
+        model.setFacet(.championship, to: nil)
+
+        #expect(model.sessions.count == 2)
+    }
+
+    @Test func test_vehicle_filter_delegates_to_the_vehicle_facet() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(vehicle: "SFJ"), sourceURL: url("a"))
+        model.add(SessionFixture.make(vehicle: "GT3"), sourceURL: url("b"))
+
+        model.setVehicleFilter("GT3")
+
+        #expect(model.vehicleFilter == "GT3")
+        #expect(model.sessions.map(\.vehicle) == ["GT3"])
+    }
+
+    @Test func test_facet_values_lists_choices_for_a_facet() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(series: "GT Cup"), sourceURL: url("a"))
+        model.add(SessionFixture.make(series: "Trophy"), sourceURL: url("b"))
+
+        #expect(model.facetValues(.championship) == ["GT Cup", "Trophy"])
+    }
+
+    // MARK: - Scope: Recent (issue 8.15)
+
+    @Test func test_show_recent_scopes_to_the_last_imported() {
+        var tick = 1_000
+        let index = SessionIndex(now: { tick += 1; return Date(timeIntervalSince1970: TimeInterval(tick)) })
+        let model = LibraryBrowserModel(index: index)
+        model.add(SessionFixture.make(track: "First", datetimeUtc: 9_000), sourceURL: url("first"))
+        model.add(SessionFixture.make(track: "Second", datetimeUtc: 1_000), sourceURL: url("second"))
+        model.add(SessionFixture.make(track: "Third", datetimeUtc: 5_000), sourceURL: url("third"))
+
+        model.showRecent(limit: 2)
+
+        #expect(model.sessions.map(\.venue) == ["Third", "Second"])
+    }
+
+    @Test func test_show_all_restores_the_full_list_after_recent() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(track: "A", datetimeUtc: 100), sourceURL: url("a"))
+        model.add(SessionFixture.make(track: "B", datetimeUtc: 200), sourceURL: url("b"))
+        model.add(SessionFixture.make(track: "C", datetimeUtc: 300), sourceURL: url("c"))
+        model.showRecent(limit: 1)
+        #expect(model.sessions.count == 1)
+
+        model.showAll()
+
+        #expect(model.sessions.count == 3)
+    }
+
+    // MARK: - Collections (issue 8.15)
+
+    @Test func test_add_and_list_collections() {
+        let model = LibraryBrowserModel()
+
+        model.addCollection(.smart(id: "s", name: "Fast SFJ", rule: FilterSpec(vehicle: "SFJ")))
+
+        #expect(model.collections.map(\.name) == ["Fast SFJ"])
+    }
+
+    @Test func test_show_collection_scopes_to_its_sessions() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(vehicle: "SFJ", track: "A"), sourceURL: url("a"))
+        model.add(SessionFixture.make(vehicle: "GT3", track: "B"), sourceURL: url("b"))
+        model.addCollection(.smart(id: "s", name: "SFJ", rule: FilterSpec(vehicle: "SFJ")))
+
+        model.showCollection(id: "s")
+
+        #expect(model.sessions.map(\.venue) == ["A"])
+    }
+
+    @Test func test_dragging_a_session_into_a_manual_collection_persists() throws {
+        let libURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("manual-collection-8-15.json")
+        try? FileManager.default.removeItem(at: libURL)
+        defer { try? FileManager.default.removeItem(at: libURL) }
+        let model = LibraryBrowserModel()
+        let summary = model.add(SessionFixture.make(track: "Fuji"), sourceURL: url("a"))
+        model.addCollection(.manual(id: "m", name: "Favourites"))
+
+        model.addSession(summary.id, toCollection: "m")
+        try model.save(to: libURL)
+
+        // Reopen: the curated membership survived the round-trip.
+        let reopened = LibraryBrowserModel(loadingFrom: libURL)
+        reopened.showCollection(id: "m")
+        #expect(reopened.sessions.map(\.venue) == ["Fuji"])
+    }
+
+    @Test func test_removing_the_active_collection_falls_back_to_all() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(vehicle: "SFJ", track: "A"), sourceURL: url("a"))
+        model.add(SessionFixture.make(vehicle: "GT3", track: "B"), sourceURL: url("b"))
+        model.addCollection(.smart(id: "s", name: "SFJ", rule: FilterSpec(vehicle: "SFJ")))
+        model.showCollection(id: "s")
+        #expect(model.sessions.count == 1)  // scoped to the collection
+
+        model.removeCollection(id: "s")
+
+        #expect(model.collections.isEmpty)
+        #expect(model.sessions.count == 2)  // scope fell back to All
+    }
 }
 
 /// A scripted ``SessionLoading`` for the browser tests: it returns a canned
