@@ -70,6 +70,15 @@ public final class SessionStore: ObservableObject {
         state = .idle
     }
 
+    /// Discard any loaded/failed session (cancelling an in-flight load too) and
+    /// return to `.idle` (issue 8.14). Unlike ``cancel()``, this also closes a
+    /// completed `.loaded` session — the library browser's "back to library" path,
+    /// so the main window can leave analysis and show the browser again.
+    public func reset() {
+        _ = beginNewOperation()
+        state = .idle
+    }
+
     // MARK: - Internals
 
     private func beginNewOperation() -> Int {

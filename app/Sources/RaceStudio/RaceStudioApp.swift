@@ -8,21 +8,23 @@ import RaceStudioCore
 /// coverage metric by target. All testable behaviour belongs in
 /// `RaceStudioCore`.
 ///
-/// The scene is a `DocumentGroup` over `XRKDocument`, making RaceStudio a
-/// document-based app that opens `.xrk`/`.xrz` telemetry files (issue 2.1). As of
-/// 2.3 it also wires an Open panel, drag-and-drop, and an "Open Recent" menu
-/// (backed by security-scoped bookmarks) through the shared `AppModel` →
-/// `ImportCoordinator`. The summary screen (2.4) and error surfacing (2.5) build
-/// on the resulting `SessionStore` state.
+/// The **primary** scene is a `Window` showing the session library browser
+/// (issue 8.14) — the RaceStudio 3 "choose what to analyze" landing window — so
+/// launching the app shows a real UI, not a bare file-open panel. It shows the
+/// analysis view once a session is opened (``LibraryRootView``). A secondary
+/// `DocumentGroup` over `XRKDocument` keeps `.xrk`/`.xrz` files openable from
+/// Finder (issue 2.1); because a `Window` scene comes first, macOS opens that at
+/// launch instead of presenting the document open panel.
 @main
 struct RaceStudioApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        DocumentGroup(viewing: XRKDocument.self) { _ in
-            ContentView()
+        Window("RaceStudio", id: "library") {
+            LibraryRootView()
                 .environmentObject(model)
                 .environmentObject(model.store)
+                .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
             CommandGroup(after: .newItem) {
@@ -38,6 +40,12 @@ struct RaceStudioApp: App {
                     }
                 }
             }
+        }
+
+        DocumentGroup(viewing: XRKDocument.self) { _ in
+            ContentView()
+                .environmentObject(model)
+                .environmentObject(model.store)
         }
     }
 }
