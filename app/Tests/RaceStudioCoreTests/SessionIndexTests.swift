@@ -152,4 +152,135 @@ import Foundation
 
         #expect(SessionIndex.contentID(for: a) != SessionIndex.contentID(for: b))
     }
+
+    // MARK: - facet-backing summary fields (issue 8.15)
+
+    @Test func test_add_populates_championship_from_series() {
+        let index = makeIndex()
+
+        let summary = index.add(SessionFixture.make(series: "GT Cup"), sourceURL: url("a.xrk"))
+
+        #expect(summary.championship == "GT Cup")
+        // comment/logger are not surfaced by the decoder yet -> empty.
+        #expect(summary.comment.isEmpty)
+        #expect(summary.logger.isEmpty)
+    }
+
+    @Test func test_facet_values_are_distinct_and_sorted() {
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ", track: "A", series: "GT Cup", datetimeUtc: 300),
+                      sourceURL: url("a.xrk"))
+        _ = index.add(SessionFixture.make(vehicle: "GT3", track: "B", series: "Trophy", datetimeUtc: 200),
+                      sourceURL: url("b.xrk"))
+        _ = index.add(SessionFixture.make(vehicle: "SFJ", track: "C", series: "GT Cup", datetimeUtc: 100),
+                      sourceURL: url("c.xrk"))
+
+        #expect(index.facetValues(.vehicle) == ["GT3", "SFJ"])
+        #expect(index.facetValues(.championship) == ["GT Cup", "Trophy"])
+    }
+
+    @Test func test_facet_values_omit_empty_values() {
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ"), sourceURL: url("a.xrk"))
+
+        // comment/logger have no decoder source yet -> empty -> excluded from the facet list.
+        #expect(index.facetValues(.comment).isEmpty)
+        #expect(index.facetValues(.logger).isEmpty)
+    }
+
+    // MARK: - recent (issue 8.15)
+
+    @Test func test_recent_ranks_by_import_time_not_session_date() {
+        var tick = 1_000
+        let advancingClock: () -> Date = {
+            tick += 1
+            return Date(timeIntervalSince1970: TimeInterval(tick))
+        }
+        let index = SessionIndex(now: advancingClock)
+        // Session dates are deliberately NON-monotonic so the result proves that
+        // "recent" ranks by *import* time, not by session date.
+        _ = index.add(SessionFixture.make(track: "First", datetimeUtc: 9_000), sourceURL: url("first.xrk"))
+        _ = index.add(SessionFixture.make(track: "Second", datetimeUtc: 1_000), sourceURL: url("second.xrk"))
+        _ = index.add(SessionFixture.make(track: "Third", datetimeUtc: 5_000), sourceURL: url("third.xrk"))
+
+        #expect(index.recent(limit: 2).map(\.venue) == ["Third", "Second"])
+    }
+
+    @Test func test_recent_limit_is_clamped() {
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(track: "A", datetimeUtc: 100), sourceURL: url("a.xrk"))
+        _ = index.add(SessionFixture.make(track: "B", datetimeUtc: 200), sourceURL: url("b.xrk"))
+
+        #expect(index.recent(limit: 0).isEmpty)      // non-positive -> empty
+        #expect(index.recent(limit: 10).count == 2)  // beyond count -> all
+    }
+
+    // MARK: - collections (issue 8.15)
+
+    @Test func test_upsert_and_fetch_a_collection() {
+        let index = makeIndex()
+        let smart = SessionCollection.smart(id: "c1", name: "Fast SFJ", rule: FilterSpec(vehicle: "SFJ"))
+
+        index.upsertCollection(smart)
+
+        #expect(index.collection(id: "c1") == smart)
+        #expect(index.collections == [smart])
+    }
+
+    @Test func test_upsert_replaces_a_collection_by_id() {
+        let index = makeIndex()
+        index.upsertCollection(.manual(id: "c", name: "Old", members: ["a"]))
+
+        index.upsertCollection(.manual(id: "c", name: "New", members: ["a", "b"]))
+
+        #expect(index.collections.count == 1)
+        #expect(index.collection(id: "c")?.name == "New")
+        #expect(index.collection(id: "c")?.memberIDs == ["a", "b"])
+    }
+
+    @Test func test_remove_collection() {
+        let index = makeIndex()
+        index.upsertCollection(.manual(id: "c", name: "X"))
+
+        index.removeCollection(id: "c")
+
+        #expect(index.collections.isEmpty)
+        #expect(index.collection(id: "c") == nil)
+    }
+
+    @Test func test_collections_are_sorted_by_name_case_insensitively() {
+        let index = makeIndex()
+        index.upsertCollection(.manual(id: "b", name: "Zeta"))
+        index.upsertCollection(.manual(id: "a", name: "alpha"))
+        index.upsertCollection(.manual(id: "c", name: "Mid"))
+
+        #expect(index.collections.map(\.name) == ["alpha", "Mid", "Zeta"])
+    }
+
+    @Test func test_smart_collection_resolves_via_its_rule() {
+        let index = makeIndex()
+        _ = index.add(SessionFixture.make(vehicle: "SFJ", track: "A", datetimeUtc: 300), sourceURL: url("a.xrk"))
+        _ = index.add(SessionFixture.make(vehicle: "GT3", track: "B", datetimeUtc: 200), sourceURL: url("b.xrk"))
+        let smart = SessionCollection.smart(id: "c", name: "SFJ only", rule: FilterSpec(vehicle: "SFJ"))
+
+        #expect(index.sessions(in: smart).map(\.venue) == ["A"])
+    }
+
+    @Test func test_manual_collection_resolves_members_in_curated_order() {
+        let index = makeIndex()
+        let a = index.add(SessionFixture.make(track: "A", datetimeUtc: 100), sourceURL: url("a.xrk"))
+        let b = index.add(SessionFixture.make(track: "B", datetimeUtc: 300), sourceURL: url("b.xrk"))
+        // Curated order (b, then a) is preserved — NOT re-sorted by date.
+        let manual = SessionCollection.manual(id: "c", name: "Curated", members: [b.id, a.id])
+
+        #expect(index.sessions(in: manual).map(\.venue) == ["B", "A"])
+    }
+
+    @Test func test_manual_collection_skips_missing_members() {
+        let index = makeIndex()
+        let a = index.add(SessionFixture.make(track: "A"), sourceURL: url("a.xrk"))
+        let manual = SessionCollection.manual(id: "c", name: "Curated", members: ["gone", a.id])
+
+        #expect(index.sessions(in: manual).map(\.venue) == ["A"])  // dangling member dropped
+    }
 }

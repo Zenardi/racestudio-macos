@@ -13,6 +13,7 @@ enum SessionFixture {
         vehicle: String = "SFJ",
         track: String = "Fuji GP Sh",
         driver: String = "CMD",
+        series: String = "Practice",
         datetimeUtc: Int64 = 1_762_271_407,
         lapDurations: [Double] = [120, 100, 110]
     ) -> Session {
@@ -26,7 +27,7 @@ enum SessionFixture {
         return Session(
             metadata: SessionMetadata(
                 vehicle: vehicle, track: track, driver: driver,
-                session: "Generic testing", series: "Practice",
+                session: "Generic testing", series: series,
                 logDate: "11/04/2025", logTime: "15:50:07", datetimeUtc: datetimeUtc),
             channels: [Channel(name: "RPM", unit: "rpm", sampleRateHz: 100, decimals: 0, sampleCount: 1000)],
             laps: laps)
