@@ -1,0 +1,19 @@
+[package]
+name = "racestudio-device"
+description = "Clean-room observation of the MyChron5/6 WiFi download protocol (issue 6.2): STCP framing, checksum, discovery, and transfer chunking. No networking client lands here — that is 6.3–6.6."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dev-dependencies]
+# Used only by the protocol-notes test harness to read fixtures/device/manifest.json
+# and verify recorded checksums/hashes; not shipped.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[lints.clippy]
+all = "warn"

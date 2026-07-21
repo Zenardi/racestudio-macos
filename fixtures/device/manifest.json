@@ -1,0 +1,112 @@
+{
+  "protocol": "MyChron5/6 WiFi download protocol (clean-room observation, issue 6.2)",
+  "source": "AiM iOS app <-> MyChron6 (fw 02.46.16), captured via pymobiledevice3 pcapd; raw .pcapng kept local only",
+  "transport": {
+    "discovery": "udp/36002 (multicast 224.4.161.221)",
+    "control_and_transfer": "tcp/2000"
+  },
+  "checksum": {
+    "name": "stcp_u16_le_sum",
+    "algorithm": "16-bit little-endian additive sum of the frame payload bytes, mod 65536"
+  },
+  "frame": {
+    "header": "'<hSTCP' + length(u32 LE) + flag(u8) + '>'",
+    "payload": "length bytes",
+    "trailer": "'<STCP' + checksum(u16 LE) + '>'"
+  },
+  "fixtures": [
+    {
+      "file": "discovery/probe.bin",
+      "phase": "discovery",
+      "kind": "udp_payload",
+      "bytes": 6,
+      "sha256": "87d169d1fc95ebd8799176035af1bd3607585e9c8801b942f47d5e777816f450",
+      "deidentified": false,
+      "expect": {
+        "ascii": "aim-ka"
+      }
+    },
+    {
+      "file": "discovery/response.bin",
+      "phase": "discovery",
+      "kind": "udp_payload",
+      "bytes": 236,
+      "sha256": "2ab11685941528443ca9e1b5ff1e44a32f061535ad04961fdd3a41adb51e94fd",
+      "deidentified": true,
+      "scrubbed": [
+        "\u001c\u0019\u0016\u0002"
+      ],
+      "expect": {
+        "length_field": 236,
+        "type": 2,
+        "device_ip": "10.0.0.1"
+      }
+    },
+    {
+      "file": "control/hello.bin",
+      "phase": "control",
+      "kind": "stcp_frame",
+      "bytes": 28,
+      "sha256": "67bb1d4ce63108792d4eee1844a7992b8f160c95d14eb353ac6ad06287b9a2dc",
+      "deidentified": false,
+      "checksum": 15,
+      "checksum_observed": true,
+      "frame_length": 8,
+      "note": "handshake hello/ack"
+    },
+    {
+      "file": "control/command_info.bin",
+      "phase": "control",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "a12343115b83c968c83d59f0d69f56f0dc645ac68c68ddded822d1dd7a9908a9",
+      "deidentified": false,
+      "checksum": 94,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "command_code_le": "10000100",
+      "note": "get-catalog command (cmd 0x0110)"
+    },
+    {
+      "file": "sessions/list_response.bin",
+      "phase": "session-list",
+      "kind": "stcp_frame",
+      "bytes": 4292,
+      "sha256": "b83bf73b276766d425af57169fe74f01ab0c21d9e40e97fa8255f67e89fb0ed8",
+      "deidentified": true,
+      "scrubbed": [
+        "\u001c\u0019\u0016\u0002"
+      ],
+      "checksum": 11216,
+      "checksum_observed": false,
+      "frame_length": 4272,
+      "record_magic": "idn",
+      "nested_frames": [
+        "<hiMST>",
+        "<hiHW>"
+      ],
+      "note": "catalog/list response (cmd 0x0110); enumerated config/identity records because the recorded-session store was empty at capture time"
+    },
+    {
+      "file": "transfer/chunk.bin",
+      "phase": "transfer",
+      "kind": "stcp_frame",
+      "bytes": 65496,
+      "sha256": "2d59c83526830d9c95cddcd9ca33f68db53fe7d43bf90479f36e5f8e62f6ff2a",
+      "deidentified": false,
+      "checksum": 57932,
+      "checksum_observed": true,
+      "frame_length": 65476,
+      "chunk_offset_field": "payload[0..4] u32 LE",
+      "chunk_offset": 65472,
+      "chunk_data_len": 65472,
+      "note": "one download data chunk; opaque telemetry, no embedded identifiers"
+    }
+  ],
+  "pending": [
+    {
+      "phase": "delete",
+      "reason": "MyChron6 held 0 on-device sessions at capture time (all imported to local), so a device delete could not be observed; delete reuses the STCP framing + a delete command opcode and is to be captured when implementing issue 6.6"
+    }
+  ]
+}
