@@ -44,10 +44,15 @@ let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().pat
 let infoPlistPath = packageDir + "/Sources/RaceStudio/Info.plist"
 
 var coreDependencies: [Target.Dependency] = []
+// The @main shell depends on RaceStudioCore always, and on the generated FFI
+// bindings when present so its device panel (issue 6.7) can name the FFI record
+// types (`Device`/`SessionInfo`) behind `#if canImport(RaceStudioFFIBindings)`.
+var shellDependencies: [Target.Dependency] = ["RaceStudioCore"]
 var ffiTargets: [Target] = []
 var testExcludes: [String] = []
 if ffiEnabled {
     coreDependencies.append("RaceStudioFFIBindings")
+    shellDependencies.append("RaceStudioFFIBindings")
     ffiTargets = [
         .binaryTarget(name: "RaceStudioFFI", path: ffiXcframework),
         // The uniffi-generated high-level Swift bindings. Kept out of the
@@ -75,6 +80,7 @@ if ffiEnabled {
     testExcludes.append("SessionEnumerationTests.swift")
     testExcludes.append("SessionDownloadTests.swift")
     testExcludes.append("SessionDeleteTests.swift")
+    testExcludes.append("DevicePanelModelTests.swift")
 }
 
 let package = Package(
@@ -96,7 +102,7 @@ let package = Package(
         // coverage metric by target (wired in issue 0.3).
         .executableTarget(
             name: "RaceStudio",
-            dependencies: ["RaceStudioCore"],
+            dependencies: shellDependencies,
             exclude: [
                 "Info.plist",
                 "RaceStudio.entitlements"
