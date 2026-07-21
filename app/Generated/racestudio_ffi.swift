@@ -447,6 +447,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
+    typealias FfiType = UInt64
+    typealias SwiftType = UInt64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
     typealias FfiType = Int64
     typealias SwiftType = Int64
@@ -1437,6 +1453,107 @@ public func FfiConverterTypeDistanceSample_lift(_ buf: RustBuffer) throws -> Dis
 #endif
 public func FfiConverterTypeDistanceSample_lower(_ value: DistanceSample) -> RustBuffer {
     return FfiConverterTypeDistanceSample.lower(value)
+}
+
+
+/**
+ * What to download, carried across the FFI boundary (issue 6.5).
+ *
+ * Mirrors the device crate's [`DownloadPlan`](racestudio_device::DownloadPlan):
+ * the `session_id` and `total_len` come from the 6.4 catalog
+ * ([`SessionInfo`]), and `whole_file_checksum` is verified after reassembly.
+ */
+public struct DownloadPlan {
+    /**
+     * The device-local id of the session to download.
+     */
+    public var sessionId: UInt32
+    /**
+     * The session's total size in bytes; the reassembled output must cover
+     * exactly this many bytes.
+     */
+    public var totalLen: UInt64
+    /**
+     * The expected whole-file STCP checksum, verified after reassembly.
+     */
+    public var wholeFileChecksum: UInt16
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The device-local id of the session to download.
+         */sessionId: UInt32, 
+        /**
+         * The session's total size in bytes; the reassembled output must cover
+         * exactly this many bytes.
+         */totalLen: UInt64, 
+        /**
+         * The expected whole-file STCP checksum, verified after reassembly.
+         */wholeFileChecksum: UInt16) {
+        self.sessionId = sessionId
+        self.totalLen = totalLen
+        self.wholeFileChecksum = wholeFileChecksum
+    }
+}
+
+
+
+extension DownloadPlan: Equatable, Hashable {
+    public static func ==(lhs: DownloadPlan, rhs: DownloadPlan) -> Bool {
+        if lhs.sessionId != rhs.sessionId {
+            return false
+        }
+        if lhs.totalLen != rhs.totalLen {
+            return false
+        }
+        if lhs.wholeFileChecksum != rhs.wholeFileChecksum {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sessionId)
+        hasher.combine(totalLen)
+        hasher.combine(wholeFileChecksum)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDownloadPlan: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DownloadPlan {
+        return
+            try DownloadPlan(
+                sessionId: FfiConverterUInt32.read(from: &buf), 
+                totalLen: FfiConverterUInt64.read(from: &buf), 
+                wholeFileChecksum: FfiConverterUInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DownloadPlan, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.sessionId, into: &buf)
+        FfiConverterUInt64.write(value.totalLen, into: &buf)
+        FfiConverterUInt16.write(value.wholeFileChecksum, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDownloadPlan_lift(_ buf: RustBuffer) throws -> DownloadPlan {
+    return try FfiConverterTypeDownloadPlan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDownloadPlan_lower(_ value: DownloadPlan) -> RustBuffer {
+    return FfiConverterTypeDownloadPlan.lower(value)
 }
 
 
@@ -2866,6 +2983,19 @@ public enum DiscoveryError {
      */
     case TruncatedList(message: String)
     
+    /**
+     * A session download failed integrity verification — a chunk stayed corrupt
+     * past the retry budget, or the reassembled file failed its whole-file
+     * checksum. No partial file is surfaced as success (issue 6.5).
+     */
+    case ChecksumMismatch(message: String)
+    
+    /**
+     * A session download ended with a gap: the transport signalled end-of-stream
+     * before every byte of the declared size was covered (issue 6.5).
+     */
+    case MissingChunk(message: String)
+    
 }
 
 
@@ -2898,6 +3028,14 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 5: return .ChecksumMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .MissingChunk(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2917,6 +3055,10 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(3))
         case .TruncatedList(_ /* message is ignored*/):
             writeInt(&buf, Int32(4))
+        case .ChecksumMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+        case .MissingChunk(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
 
         
         }
@@ -3177,6 +3319,255 @@ public func FfiConverterTypeSpectrumWindow_lower(_ value: SpectrumWindow) -> Rus
 extension SpectrumWindow: Equatable, Hashable {}
 
 
+
+
+
+
+/**
+ * A foreign-implemented source of download chunk frames (issue 6.5).
+ *
+ * Swift's live TCP transport (`NWConnection`) implements this: it sends the read
+ * commands and returns each raw STCP chunk frame the device replies with, or
+ * `nil` at end-of-stream. A recorded implementation replays fixture bytes so a
+ * download can be driven with no live device.
+ */
+public protocol ChunkSource : AnyObject {
+    
+    /**
+     * Return the next raw STCP chunk frame, or `None` at end-of-stream.
+     */
+    func nextChunk()  -> Data?
+    
+}
+
+// Magic number for the Rust proxy to call using the same mechanism as every other method,
+// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceChunkSource {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceChunkSource = UniffiVTableCallbackInterfaceChunkSource(
+        nextChunk: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceChunkSource.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.nextChunk(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceChunkSource.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface ChunkSource: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitChunkSource() {
+    uniffi_racestudio_ffi_fn_init_callback_vtable_chunksource(&UniffiCallbackInterfaceChunkSource.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceChunkSource {
+    fileprivate static var handleMap = UniffiHandleMap<ChunkSource>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceChunkSource : FfiConverter {
+    typealias SwiftType = ChunkSource
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+
+
+/**
+ * A foreign-implemented sink for download progress (issue 6.5).
+ *
+ * The 6.7 device panel implements this to drive a progress bar: it is called
+ * with a leading `(0, total)` sample and then after each chunk that covers new
+ * bytes, with `bytes_done` monotonically reaching `total` on completion.
+ */
+public protocol DownloadProgress : AnyObject {
+    
+    /**
+     * Report that `bytes_done` of `total` bytes have been reassembled.
+     */
+    func onProgress(bytesDone: UInt64, total: UInt64) 
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceDownloadProgress {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceDownloadProgress = UniffiVTableCallbackInterfaceDownloadProgress(
+        onProgress: { (
+            uniffiHandle: UInt64,
+            bytesDone: UInt64,
+            total: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceDownloadProgress.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onProgress(
+                     bytesDone: try FfiConverterUInt64.lift(bytesDone),
+                     total: try FfiConverterUInt64.lift(total)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceDownloadProgress.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface DownloadProgress: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitDownloadProgress() {
+    uniffi_racestudio_ffi_fn_init_callback_vtable_downloadprogress(&UniffiCallbackInterfaceDownloadProgress.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceDownloadProgress {
+    fileprivate static var handleMap = UniffiHandleMap<DownloadProgress>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceDownloadProgress : FfiConverter {
+    typealias SwiftType = DownloadProgress
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
@@ -3488,6 +3879,30 @@ public func coreVersion() -> String {
 })
 }
 /**
+ * Download a session by reassembling its chunk stream, verifying integrity
+ * (issue 6.5).
+ *
+ * Pulls raw chunk frames from `source` (the injected transport), verifies each
+ * chunk's checksum (retrying a corrupt chunk), reassembles by offset, and gates
+ * the result on the whole-file checksum before returning it — so a corrupt or
+ * incomplete transfer never masquerades as a good file. Progress is reported to
+ * `progress` so a UI can render a progress bar.
+ *
+ * # Errors
+ * A thrown [`DiscoveryError`] — `ChecksumMismatch` (unrecoverable corruption),
+ * `MissingChunk` (the stream ended with a gap), or `MalformedRecord` (a chunk
+ * overran the declared size). Never traps.
+ */
+public func downloadSession(plan: DownloadPlan, source: ChunkSource, progress: DownloadProgress)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_func_download_session(
+        FfiConverterTypeDownloadPlan.lower(plan),
+        FfiConverterCallbackInterfaceChunkSource.lower(source),
+        FfiConverterCallbackInterfaceDownloadProgress.lower(progress),$0
+    )
+})
+}
+/**
  * Open and decode the `.xrk` file at `path` into an opaque [`SessionHandle`].
  *
  * The whole session (metadata + channels + GPS + laps) is decoded up front via
@@ -3583,6 +3998,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_core_version() != 5309) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_func_download_session() != 62888) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3634,7 +4052,15 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times() != 29882) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_method_chunksource_next_chunk() != 52970) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_downloadprogress_on_progress() != 39444) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitChunkSource()
+    uniffiCallbackInitDownloadProgress()
     return InitializationResult.ok
 }()
 

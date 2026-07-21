@@ -251,6 +251,36 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureStr
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CHUNK_SOURCE_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CHUNK_SOURCE_METHOD0
+typedef void (*UniffiCallbackInterfaceChunkSourceMethod0)(uint64_t, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS_METHOD0
+typedef void (*UniffiCallbackInterfaceDownloadProgressMethod0)(uint64_t, uint64_t, uint64_t, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CHUNK_SOURCE
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CHUNK_SOURCE
+typedef struct UniffiVTableCallbackInterfaceChunkSource {
+    UniffiCallbackInterfaceChunkSourceMethod0 _Nonnull nextChunk;
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+} UniffiVTableCallbackInterfaceChunkSource;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS
+typedef struct UniffiVTableCallbackInterfaceDownloadProgress {
+    UniffiCallbackInterfaceDownloadProgressMethod0 _Nonnull onProgress;
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+} UniffiVTableCallbackInterfaceDownloadProgress;
+
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_CLONE_SESSIONHANDLE
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_CLONE_SESSIONHANDLE
 void*_Nonnull uniffi_racestudio_ffi_fn_clone_sessionhandle(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
@@ -326,6 +356,16 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples_with_distance(v
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_segment_times(void*_Nonnull ptr, uint32_t splits, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_CHUNKSOURCE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_CHUNKSOURCE
+void uniffi_racestudio_ffi_fn_init_callback_vtable_chunksource(UniffiVTableCallbackInterfaceChunkSource* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DOWNLOADPROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DOWNLOADPROGRESS
+void uniffi_racestudio_ffi_fn_init_callback_vtable_downloadprogress(UniffiVTableCallbackInterfaceDownloadProgress* _Nonnull vtable
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_AP_MODE_FALLBACK_DEVICE
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_AP_MODE_FALLBACK_DEVICE
 RustBuffer uniffi_racestudio_ffi_fn_func_ap_mode_fallback_device(RustCallStatus *_Nonnull out_status
@@ -342,6 +382,11 @@ RustBuffer uniffi_racestudio_ffi_fn_func_build_session_list_request(RustCallStat
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_DOWNLOAD_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_DOWNLOAD_SESSION
+RustBuffer uniffi_racestudio_ffi_fn_func_download_session(RustBuffer plan, uint64_t source, uint64_t progress, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_OPEN_SESSION
@@ -662,6 +707,12 @@ uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DOWNLOAD_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DOWNLOAD_SESSION
+uint16_t uniffi_racestudio_ffi_checksum_func_download_session(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 uint16_t uniffi_racestudio_ffi_checksum_func_open_session(void
@@ -761,6 +812,18 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_samples_with_distan
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SEGMENT_TIMES
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_SEGMENT_TIMES
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_CHUNKSOURCE_NEXT_CHUNK
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_CHUNKSOURCE_NEXT_CHUNK
+uint16_t uniffi_racestudio_ffi_checksum_method_chunksource_next_chunk(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DOWNLOADPROGRESS_ON_PROGRESS
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DOWNLOADPROGRESS_ON_PROGRESS
+uint16_t uniffi_racestudio_ffi_checksum_method_downloadprogress_on_progress(void
     
 );
 #endif

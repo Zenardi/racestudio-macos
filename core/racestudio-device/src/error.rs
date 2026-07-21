@@ -27,6 +27,13 @@ pub enum DeviceError {
     /// carries no trailer, or declares more session records than its payload
     /// holds (issue 6.4).
     TruncatedList,
+    /// A session download failed integrity verification: a chunk's checksum kept
+    /// failing past the retry budget, or the reassembled whole file did not match
+    /// its expected checksum. No partial file is ever surfaced as success (6.5).
+    ChecksumMismatch,
+    /// A session download ended with a gap: the transport signalled end-of-stream
+    /// before every byte of the declared size was covered (issue 6.5).
+    MissingChunk,
 }
 
 impl fmt::Display for DeviceError {
@@ -36,6 +43,13 @@ impl fmt::Display for DeviceError {
             DeviceError::NoService => write!(f, "no discovery responder found"),
             DeviceError::BadChecksum => write!(f, "response frame failed checksum verification"),
             DeviceError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DeviceError::ChecksumMismatch => write!(
+                f,
+                "download failed whole-file or unrecoverable chunk checksum verification"
+            ),
+            DeviceError::MissingChunk => {
+                write!(f, "the session download is missing one or more chunks")
+            }
         }
     }
 }
