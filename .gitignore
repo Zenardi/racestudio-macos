@@ -36,3 +36,11 @@ __pycache__/
 *.fw
 *.dll
 *.ipa
+
+# Raw packet captures (6.2 capture harness) stay LOCAL and are never committed:
+# they still carry identifying data (IPs, MACs, SSIDs, device serials). Only the
+# de-identified protocol-byte fixtures under fixtures/device/**.bin (extracted per
+# docs/device/CAPTURE.md) are checked in. `captures/` is the scratch intake dir.
+*.pcap
+*.pcapng
+/captures/

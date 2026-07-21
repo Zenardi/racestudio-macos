@@ -17,7 +17,7 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 | **M3 — Analysis Engine** | Lap segmentation & alignment, delta-t, resampling, Welford statistics, a math-channel **expression engine**, derived channels (heading / yaw-rate / accel / gear), and a windowed **FFT** — panic-free with typed errors, exposed to Swift over UniFFI (3.8). | 3.1–3.8 | ✅ Complete |
 | **M4 — Analysis UI** | Time/distance line plot, lap overlay + delta-t strip, GPS track map, channel table & digital readouts, histogram / XY-scatter, a live-validated math editor, and a **linked workspace cursor** shared across tiles. | 4.1–4.7 | ✅ Complete |
 | **M5 — Import/Export & Session Management** | RaceChrono **AiM-CSV export** (5.1) and **CSV import** (5.2) in Rust `racestudio-io`; the **session library index** — content-id-keyed summaries with search / filter and atomic, crash-safe on-disk persistence (5.3); and versioned, atomic **project / workspace files** (`.rsproj`) with forward migration and FFI-parsed math channels (5.4) — both in `RaceStudioCore`. | 5.1–5.4 ✅ | ✅ Complete |
-| **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. Gated by a clean-room, interoperability-only reverse-engineering decision ([ADR 0006](docs/adr/0006-device-wifi-reverse-engineering.md)) + [legal gate](docs/device/LEGAL_GATE.md) — DMCA §1201(f) / EU 2009/24/EC Art.6, a `needs-legal-review` sign-off, and a do-not-redistribute guard enforced in CI (6.1). | 6.1 ✅ · 6.2–6.7 ⏳ | 🚧 In progress |
+| **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. Gated by a clean-room, interoperability-only reverse-engineering decision ([ADR 0006](docs/adr/0006-device-wifi-reverse-engineering.md)) + [legal gate](docs/device/LEGAL_GATE.md) — DMCA §1201(f) / EU 2009/24/EC Art.6, a `needs-legal-review` sign-off, and a do-not-redistribute guard enforced in CI (6.1). The macOS capture harness + clean-room **protocol dissection** ([CAPTURE.md](docs/device/CAPTURE.md), [PROTOCOL.md](docs/device/PROTOCOL.md)) — STCP framing, the additive checksum, discovery + transfer chunking — landed as `racestudio-device` with replay fixtures (6.2). | 6.1 ✅ · 6.2 ✅ · 6.3–6.7 ⏳ | 🚧 In progress |
 | **M7 — Parity, Performance & Release** | Feature parity with RaceStudio 3, performance tuning, and a packaged release. | 7.x | ⏳ Planned |
 
 Per-feature detail lives in **[Architecture](#architecture)**, which documents
@@ -42,6 +42,7 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
 │   racestudio-decode    clean-room .xrk decode │  ← 95% Rust coverage target
 │   racestudio-analysis  channels / math        │  ← 95% Rust coverage target
 │   racestudio-io        CSV export + import    │  ← 95% Rust coverage target
+│   racestudio-device    MyChron WiFi protocol  │  ← 95% Rust coverage target
 │   racestudio-ffi       UniFFI boundary        │
 └───────────────────────────────────────────────┘
 ```
@@ -323,6 +324,7 @@ core/
   racestudio-analysis/         # analysis engine — laps, alignment, delta-t, resample, stats
   racestudio-io/               # import/export — AiM CSV writer (5.1) + reader (5.2)
   racestudio-ffi/              # UniFFI boundary — open_session, windowed samples (+distance), gps_track, validate_math_expression
+  racestudio-device/           # MyChron WiFi protocol (6.2) — STCP framing + additive checksum, discovery/transfer notes
 app/
   Package.swift                # RaceStudioCore/RaceStudio/tests + FFI targets
   Sources/RaceStudioCore/      # logic library — session store, analysis/plot models, session library, project files, FFI bindings
@@ -333,6 +335,7 @@ app/
   RaceStudioFFI.xcframework/   # built artifact (git-ignored, ~34 MB)
 fixtures/                      # decode goldens (0.5): golden/*.json + sample.v1.rsproj committed,
                                #   .xrk/.csv samples git-ignored (make fixtures)
+  device/                      # de-identified MyChron protocol replay fixtures + manifest.json (6.2)
 scripts/
   coverage.sh                  # Rust + Swift quality + coverage gate
   swift_test.sh                # `swift test` wrapper (CLT framework paths)
@@ -354,6 +357,8 @@ docs/DEFINITION_OF_DONE.md     # shared DoD checklist
 docs/DECODE_TOLERANCES.md      # decode conformance tolerance table (1.8)
 docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render, 0006 device-wifi RE)
 docs/device/LEGAL_GATE.md      # M6 legal gate: AiM first-contact, clean-room roles, do-not-redistribute list
+docs/device/CAPTURE.md         # M6 capture runbook (6.2): macOS pymobiledevice3 capture + de-identification
+docs/device/PROTOCOL.md        # M6 clean-room protocol notes (6.2): STCP framing, checksum, discovery/transfer
 docs/spike/                    # spike evidence (xdrk linkage finding)
 Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
 ```
