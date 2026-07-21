@@ -28,6 +28,9 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
     /// The RS3 Frequency Analysis — the selected channel's amplitude spectrum over
     /// `fft_spectrum`, tapered by a chosen window function (issue 8.16).
     case spectrum
+    /// The RS3 Suspension Analysis composite — shock time/distance + travel
+    /// histogram + damper FFT + a settings readout, composed in one view (issue 8.17).
+    case suspension
     /// The RS3 Channels Report — a per-lap/segment min/max/avg/median table with a
     /// chosen-statistic-vs-lap graph and magic-wand presets (issue 8.10).
     case channelsReport
@@ -39,6 +42,9 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
     case mathChannels
     /// The 2.4 session summary (metadata + channel/lap listings).
     case summary
+    /// The RS3 Log Sheet — the user-authored session/setup ledger (weather, engine,
+    /// dimensions, weights, fuel, gearing) persisted with the project (issue 8.17).
+    case logSheet
 
     public var id: String { rawValue }
 
@@ -52,10 +58,12 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
         case .histogram: return "Histogram"
         case .scatter: return "Scatter"
         case .spectrum: return "Spectrum"
+        case .suspension: return "Suspension"
         case .channelsReport: return "Report"
         case .splitTimes: return "Splits"
         case .mathChannels: return "Math"
         case .summary: return "Summary"
+        case .logSheet: return "Log Sheet"
         }
     }
 
@@ -70,10 +78,12 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
         case .histogram: return "chart.bar.xaxis"
         case .scatter: return "chart.dots.scatter"
         case .spectrum: return "waveform"
+        case .suspension: return "arrow.up.and.down"
         case .channelsReport: return "chart.bar.doc.horizontal"
         case .splitTimes: return "stopwatch"
         case .mathChannels: return "function"
         case .summary: return "list.bullet.rectangle"
+        case .logSheet: return "doc.text"
         }
     }
 }

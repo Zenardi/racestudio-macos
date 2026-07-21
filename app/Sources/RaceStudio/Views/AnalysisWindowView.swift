@@ -24,6 +24,10 @@ struct AnalysisWindowView: View {
     // The Spectrum panel knob (issue 8.16) — the window function — likewise held at
     // the window level so the taper choice survives layout switches.
     @StateObject private var spectrum = SpectrumPanelModel()
+    // The Log Sheet (issue 8.17) — user-authored session/setup metadata — owned at
+    // the window level like the math-channels manager, so an edited sheet survives
+    // layout switches and is captured into / restored from the project.
+    @StateObject private var logSheet = LogSheetModel()
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -39,7 +43,7 @@ struct AnalysisWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WorkspaceBar(model: model, mathManager: mathManager)
+            WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet)
             Divider()
             HStack(spacing: 0) {
                 LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
@@ -50,7 +54,7 @@ struct AnalysisWindowView: View {
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
-                              analysis: analysis)
+                              logSheet: logSheet, analysis: analysis)
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -102,6 +106,7 @@ private struct PanelHost: View {
     @ObservedObject var report: ChannelsReportModel
     @ObservedObject var splitReport: SplitReportModel
     @ObservedObject var spectrum: SpectrumPanelModel
+    @ObservedObject var logSheet: LogSheetModel
     let analysis: AnalysisSession?
 
     var body: some View {
@@ -126,6 +131,9 @@ private struct PanelHost: View {
                 ScatterPanel(model: model, stats: stats)
             case .spectrum:
                 SpectrumPanel(model: model, spectrum: spectrum, analysis: analysis)
+            case .suspension:
+                SuspensionPanel(model: model, stats: stats, spectrum: spectrum,
+                                logSheet: logSheet, analysis: analysis)
             case .channelsReport:
                 ChannelsReportPanel(model: model, report: report)
             case .splitTimes:
@@ -134,6 +142,8 @@ private struct PanelHost: View {
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
                 SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
+            case .logSheet:
+                LogSheetPanel(model: logSheet)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

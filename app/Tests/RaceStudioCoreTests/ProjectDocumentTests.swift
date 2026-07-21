@@ -65,7 +65,7 @@ import Foundation
         let object = try #require(
             try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         #expect(object["schemaVersion"] as? Int == ProjectDocument.currentSchemaVersion)
-        for key in ["sessionRefs", "layout", "selectedLaps", "mathChannels"] {
+        for key in ["sessionRefs", "layout", "selectedLaps", "mathChannels", "activeLayout", "logSheet"] {
             #expect(object[key] != nil)
         }
     }
