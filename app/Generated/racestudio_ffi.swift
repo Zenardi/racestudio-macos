@@ -415,6 +415,22 @@ fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -498,6 +514,24 @@ fileprivate struct FfiConverterString: FfiConverter {
         let len = Int32(value.utf8.count)
         writeInt(&buf, len)
         writeBytes(&buf, value.utf8)
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
     }
 }
 
@@ -1189,6 +1223,119 @@ public func FfiConverterTypeDeltaPoint_lift(_ buf: RustBuffer) throws -> DeltaPo
 #endif
 public func FfiConverterTypeDeltaPoint_lower(_ value: DeltaPoint) -> RustBuffer {
     return FfiConverterTypeDeltaPoint.lower(value)
+}
+
+
+/**
+ * A discovered MyChron device carried across the FFI boundary (issue 6.3).
+ *
+ * Mirrors the device crate's [`Device`](racestudio_device::Device); `address` is
+ * a string because UniFFI has no `IpAddr` type. Swift receives it as a `struct
+ * Device` value.
+ */
+public struct Device {
+    /**
+     * Human-readable display name.
+     */
+    public var name: String
+    /**
+     * The device's IP address (e.g. `10.0.0.1`).
+     */
+    public var address: String
+    /**
+     * The TCP port to connect to for control + transfer.
+     */
+    public var port: UInt16
+    /**
+     * The device family/model (e.g. `MyChron`).
+     */
+    public var model: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Human-readable display name.
+         */name: String, 
+        /**
+         * The device's IP address (e.g. `10.0.0.1`).
+         */address: String, 
+        /**
+         * The TCP port to connect to for control + transfer.
+         */port: UInt16, 
+        /**
+         * The device family/model (e.g. `MyChron`).
+         */model: String) {
+        self.name = name
+        self.address = address
+        self.port = port
+        self.model = model
+    }
+}
+
+
+
+extension Device: Equatable, Hashable {
+    public static func ==(lhs: Device, rhs: Device) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.port != rhs.port {
+            return false
+        }
+        if lhs.model != rhs.model {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(address)
+        hasher.combine(port)
+        hasher.combine(model)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Device {
+        return
+            try Device(
+                name: FfiConverterString.read(from: &buf), 
+                address: FfiConverterString.read(from: &buf), 
+                port: FfiConverterUInt16.read(from: &buf), 
+                model: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Device, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.address, into: &buf)
+        FfiConverterUInt16.write(value.port, into: &buf)
+        FfiConverterString.write(value.model, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDevice_lift(_ buf: RustBuffer) throws -> Device {
+    return try FfiConverterTypeDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDevice_lower(_ value: Device) -> RustBuffer {
+    return FfiConverterTypeDevice.lower(value)
 }
 
 
@@ -2422,6 +2569,82 @@ extension AnalysisError: Foundation.LocalizedError {
 
 
 /**
+ * The device-discovery failure surface across the FFI boundary — the device
+ * crate's [`DeviceError`](racestudio_device::DeviceError).
+ *
+ * Declared `#[uniffi(flat_error)]`: Swift receives a plain `enum DiscoveryError:
+ * Error`, so a malformed announcement is a **thrown** typed error, never a trap.
+ */
+public enum DiscoveryError {
+
+    
+    
+    /**
+     * A discovery record was malformed or truncated.
+     */
+    case MalformedRecord(message: String)
+    
+    /**
+     * No discovery responder was found on the network.
+     */
+    case NoService(message: String)
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
+    typealias SwiftType = DiscoveryError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DiscoveryError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .MalformedRecord(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .NoService(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DiscoveryError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .MalformedRecord(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .NoService(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+
+        
+        }
+    }
+}
+
+
+extension DiscoveryError: Equatable, Hashable {}
+
+extension DiscoveryError: Foundation.LocalizedError {
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+}
+
+
+/**
  * The decode failure surface across the FFI boundary, mapped from the decode
  * crate's [`DecodeError`], plus the FFI-specific out-of-range channel index.
  */
@@ -2768,6 +2991,31 @@ fileprivate struct FfiConverterSequenceTypeDeltaPoint: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeDevice: FfiConverterRustBuffer {
+    typealias SwiftType = [Device]
+
+    public static func write(_ value: [Device], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDevice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Device] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Device]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDistanceSample: FfiConverterRustBuffer {
     typealias SwiftType = [DistanceSample]
 
@@ -2890,6 +3138,17 @@ fileprivate struct FfiConverterSequenceTypeSample: FfiConverterRustBuffer {
     }
 }
 /**
+ * The AP-mode fallback device: the well-known gateway the MyChron serves on when
+ * the Mac has joined its own access point and no mDNS responder is present
+ * (issue 6.3).
+ */
+public func apModeFallbackDevice() -> Device {
+    return try!  FfiConverterTypeDevice.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_func_ap_mode_fallback_device($0
+    )
+})
+}
+/**
  * The RaceStudio Rust core version, exported across the UniFFI boundary.
  *
  * Returns the `racestudio-ffi` crate version (`CARGO_PKG_VERSION`). Swift calls
@@ -2916,6 +3175,25 @@ public func openSession(path: String)throws  -> SessionHandle {
     return try  FfiConverterTypeSessionHandle.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
     uniffi_racestudio_ffi_fn_func_open_session(
         FfiConverterString.lower(path),$0
+    )
+})
+}
+/**
+ * Parse recorded/observed AiM discovery-response bytes into typed devices
+ * (issue 6.3).
+ *
+ * The AP-mode/replayed discovery path hands the observed response bytes here;
+ * the live mDNS/Bonjour browser (Swift `NWBrowser`) maps its results into
+ * [`Device`] directly. Returns the de-duplicated devices, or a thrown
+ * [`DiscoveryError`] for a malformed announcement — never a trap.
+ *
+ * # Errors
+ * [`DiscoveryError::MalformedRecord`] when a record is malformed or truncated.
+ */
+public func parseDeviceDiscovery(bytes: Data)throws  -> [Device] {
+    return try  FfiConverterSequenceTypeDevice.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_func_parse_device_discovery(
+        FfiConverterData.lower(bytes),$0
     )
 })
 }
@@ -2951,10 +3229,16 @@ private var initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_func_ap_mode_fallback_device() != 12400) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_func_core_version() != 5309) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_func_parse_device_discovery() != 62004) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_validate_math_expression() != 44744) {

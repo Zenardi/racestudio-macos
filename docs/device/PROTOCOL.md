@@ -56,6 +56,37 @@ Parsed by `parse_discovery_response` (asserts `length=236`, `type=2`,
 `device_ip=[10,0,0,1]`). Fields past `0x0C` other than the `idn`/serial block are
 **not yet decoded**.
 
+### Typed discovery (issue 6.3)
+
+`parse_discovery(bytes) -> Result<Vec<Device>, DeviceError>` builds one typed
+`Device { name, address, port, model }` per announcement (self-delimited by the
+`length` prefix, so a repeated announcement de-duplicates to a single entry):
+
+| `Device` field | Source | Notes |
+| --- | --- | --- |
+| `address` | response `device_ip` (`0x08`) | the decoded on-wire field (`10.0.0.1`) |
+| `port` | `CONTROL_PORT` (`2000`) | the TCP port we connect to next; the response's own port field (`0x0C`) is **uncertain**, so it is not used |
+| `model` | response `type` (`0x04`) | `type == 2` → the `MyChron` family; the specific MYC5/MYC6 + serial are in the SSID, **de-identified** out of the committed fixture (and, on the live path, come from the Bonjour service name) |
+| `name` | derived | deterministic `"{model} @ {address}"`; the live mDNS path uses the Bonjour service instance name |
+
+A malformed/truncated record (too short, a `length` that overruns the buffer, or
+`type != 2`) returns `DeviceError::MalformedRecord` — never a panic. When no
+responder is present, `ap_mode_fallback()` returns the well-known gateway
+`Device` (`10.0.0.1:2000`). The live **mDNS/Bonjour** browser (Swift `NWBrowser`)
+is injected behind the `DeviceBrowser` trait, so discovery is fixture-replayable
+with no live device; the golden oracle is
+[`../../fixtures/device/golden/discovery.json`](../../fixtures/device/golden/discovery.json).
+**No networking client** lands here — enumeration/download/delete are 6.4–6.6.
+
+> **Caveat — Bonjour service type is unverified.** The only discovery mechanism
+> proven by the 6.2 capture is the UDP-36002 `aim-ka` exchange above; **no capture
+> yet confirms the MyChron advertises an mDNS/Bonjour service**. The Swift
+> `BonjourBrowser` browses `_aim-stcp._tcp` as a *placeholder* (issue 6.3 mandates
+> the `NWBrowser` primary path), surfacing its terminal state via `os.Logger` and
+> falling back to AP mode; the type must be confirmed against a live LAN capture
+> (or the live path rewired to the verified UDP-36002 exchange). The
+> fixture-tested `parse_discovery`/`ap_mode_fallback` path is the verified one.
+
 ---
 
 ## 3. STCP frame format (TCP 2000)

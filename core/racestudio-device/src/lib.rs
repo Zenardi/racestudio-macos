@@ -28,6 +28,12 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod discovery;
+pub mod error;
+
+pub use discovery::{ap_mode_fallback, discover, parse_discovery, Device, DeviceBrowser};
+pub use error::DeviceError;
+
 /// UDP port used for device discovery (multicast probe/response).
 pub const DISCOVERY_PORT: u16 = 36002;
 /// TCP port carrying the control + transfer (STCP) frames.
