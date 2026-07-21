@@ -17,7 +17,7 @@ successor and sibling to [XRKConverter](https://github.com/Zenardi/XRKConverter)
 | **M3 — Analysis Engine** | Lap segmentation & alignment, delta-t, resampling, Welford statistics, a math-channel **expression engine**, derived channels (heading / yaw-rate / accel / gear), and a windowed **FFT** — panic-free with typed errors, exposed to Swift over UniFFI (3.8). | 3.1–3.8 | ✅ Complete |
 | **M4 — Analysis UI** | Time/distance line plot, lap overlay + delta-t strip, GPS track map, channel table & digital readouts, histogram / XY-scatter, a live-validated math editor, and a **linked workspace cursor** shared across tiles. | 4.1–4.7 | ✅ Complete |
 | **M5 — Import/Export & Session Management** | RaceChrono **AiM-CSV export** (5.1) and **CSV import** (5.2) in Rust `racestudio-io`; the **session library index** — content-id-keyed summaries with search / filter and atomic, crash-safe on-disk persistence (5.3); and versioned, atomic **project / workspace files** (`.rsproj`) with forward migration and FFI-parsed math channels (5.4) — both in `RaceStudioCore`. | 5.1–5.4 ✅ | ✅ Complete |
-| **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. | 6.x | ⏳ Planned |
+| **M6 — Device Connectivity (WiFi)** | Direct session import from AiM loggers over WiFi. Gated by a clean-room, interoperability-only reverse-engineering decision ([ADR 0006](docs/adr/0006-device-wifi-reverse-engineering.md)) + [legal gate](docs/device/LEGAL_GATE.md) — DMCA §1201(f) / EU 2009/24/EC Art.6, a `needs-legal-review` sign-off, and a do-not-redistribute guard enforced in CI (6.1). | 6.1 ✅ · 6.2–6.7 ⏳ | 🚧 In progress |
 | **M7 — Parity, Performance & Release** | Feature parity with RaceStudio 3, performance tuning, and a packaged release. | 7.x | ⏳ Planned |
 
 Per-feature detail lives in **[Architecture](#architecture)**, which documents
@@ -348,10 +348,12 @@ tests/
   swift_gate_test.sh           # Swift gate self-tests
   ffi_test.sh                  # FFI pipeline tests
   fixtures_test.sh             # fetch-fixtures self-tests
+  legal_gate_test.sh           # M6 device legal-gate guard self-tests (6.1)
 .github/workflows/ci.yml       # macos-15 CI: Rust + Swift gates
 docs/DEFINITION_OF_DONE.md     # shared DoD checklist
 docs/DECODE_TOLERANCES.md      # decode conformance tolerance table (1.8)
-docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render)
+docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render, 0006 device-wifi RE)
+docs/device/LEGAL_GATE.md      # M6 legal gate: AiM first-contact, clean-room roles, do-not-redistribute list
 docs/spike/                    # spike evidence (xdrk linkage finding)
 Makefile                       # `make coverage`, `make xcframework`, `make fixtures`
 ```

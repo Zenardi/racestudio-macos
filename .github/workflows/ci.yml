@@ -54,6 +54,19 @@ jobs:
           bash tests/make_test.sh
           bash tests/branch_protection_test.sh
           bash tests/security_test.sh
+          bash tests/legal_gate_test.sh
+
+      # Legal gate (issue 6.1): a device-area PR (M6, 6.2–6.7) cannot merge
+      # without a recorded `needs-legal-review` sign-off + a link to ADR 0006 in
+      # its body, and no forbidden AiM artifact (*.fw/*.dll/*.ipa) may be
+      # committed. Non-device PRs are detected as out-of-scope and pass.
+      - name: Legal gate (device-area PRs)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/check_legal_gate.sh --ci
 
       # Scan the source tree for known-vulnerable deps, secrets, and IaC
       # misconfigurations before the long build. Same command as `make security`

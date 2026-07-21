@@ -1,0 +1,4 @@
+core/racestudio-device/src/discovery.rs
+core/racestudio-device/src/lib.rs
+docs/device/CAPTURE_NOTES.md
+app/Sources/RaceStudioCore/Device/DeviceBrowser.swift
