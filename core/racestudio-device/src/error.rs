@@ -51,7 +51,9 @@ impl fmt::Display for DeviceError {
             DeviceError::MalformedRecord => write!(f, "malformed discovery record"),
             DeviceError::NoService => write!(f, "no discovery responder found"),
             DeviceError::BadChecksum => write!(f, "response frame failed checksum verification"),
-            DeviceError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DeviceError::TruncatedList => {
+                write!(f, "truncated or incomplete response frame")
+            }
             DeviceError::ChecksumMismatch => write!(
                 f,
                 "download failed whole-file or unrecoverable chunk checksum verification"

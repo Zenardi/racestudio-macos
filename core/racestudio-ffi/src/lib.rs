@@ -1040,7 +1040,7 @@ impl std::fmt::Display for DiscoveryError {
             DiscoveryError::MalformedRecord => write!(f, "malformed discovery record"),
             DiscoveryError::NoService => write!(f, "no discovery responder found"),
             DiscoveryError::BadChecksum => write!(f, "response frame failed checksum verification"),
-            DiscoveryError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DiscoveryError::TruncatedList => write!(f, "truncated or incomplete response frame"),
             DiscoveryError::ChecksumMismatch => write!(
                 f,
                 "download failed whole-file or unrecoverable chunk checksum verification"
@@ -1319,6 +1319,12 @@ impl CoreDeleteTransport for DeleteChannelAdapter {
     }
 
     fn recv(&mut self) -> Result<Vec<u8>, CoreDeviceError> {
+        // The foreign channel's `recv` is infallible by design: a live transport
+        // failure (dropped connection/timeout) surfaces as bytes that fail frame
+        // verification — an empty/garbage response is `TruncatedList`/`BadChecksum`,
+        // never [`DeviceError::DeleteRejected`] and never a silent ack. So a failed
+        // receive fails **safe** (the delete is not reported as succeeded); the id
+        // echo check in `interpret_delete_response` closes the remaining gap.
         Ok(self.0.recv())
     }
 }
@@ -2186,6 +2192,24 @@ mod tests {
 
         assert!(matches!(err, DiscoveryError::ConfirmationMismatch));
         assert_eq!(channel.bytes_sent(), 0, "NO destructive bytes were sent");
+    }
+
+    #[test]
+    fn test_ffi_delete_ack_for_wrong_id_is_rejected() {
+        // An ack that echoes a different session id must not be a success across
+        // the boundary either.
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(0, 999)));
+
+        let err = delete_session(
+            ffi_target(), // id 7
+            Some(ffi_confirmation()),
+            true,
+            Box::new(std::sync::Arc::clone(&channel)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::DeleteRejected));
+        assert_eq!(channel.frames_sent(), 1, "one attempt, no blind retry");
     }
 
     #[test]

@@ -13,9 +13,11 @@ import RaceStudioFFIBindings
 @Suite struct SessionDeleteTests {
 
     /// A `DeleteChannel` spy: records every framed request handed to `send`, and
-    /// replays a queued response from `recv`.
+    /// replays a queued response from `recv`. Every access to the recorded frames
+    /// goes through `lock` — the `DeleteChannel` protocol is `Send + Sync`, so the
+    /// accessors must not read `sent` unsynchronized.
     final class SpyChannel: DeleteChannel {
-        private(set) var sent: [Data] = []
+        private var sent: [Data] = []
         private var responses: [Data]
         private let lock = NSLock()
         init(response: Data) { responses = [response] }
@@ -28,9 +30,27 @@ import RaceStudioFFIBindings
             lock.lock(); defer { lock.unlock() }
             return responses.isEmpty ? Data() : responses.removeFirst()
         }
+        /// Number of frames handed to `send` — `0` proves nothing was sent.
+        var frameCount: Int {
+            lock.lock(); defer { lock.unlock() }
+            return sent.count
+        }
         var bytesSent: Int {
             lock.lock(); defer { lock.unlock() }
             return sent.reduce(0) { $0 + $1.count }
+        }
+        /// The first framed request, if any (lock-protected snapshot).
+        var firstFrame: Data? {
+            lock.lock(); defer { lock.unlock() }
+            return sent.first
+        }
+    }
+
+    /// Read a little-endian `UInt32` from `data` at absolute byte `offset`.
+    private static func readUInt32LE(_ data: Data, at offset: Int) -> UInt32? {
+        guard offset >= 0, offset + 4 <= data.count else { return nil }
+        return data.subdata(in: offset..<offset + 4).reduce(UInt32(0)) { acc, byte in
+            (acc >> 8) | (UInt32(byte) << 24)
         }
     }
 
@@ -84,8 +104,14 @@ import RaceStudioFFIBindings
             channel: channel
         )
 
-        #expect(channel.sent.count == 1)      // exactly one delete frame
-        #expect(channel.bytesSent > 0)
+        #expect(channel.frameCount == 1)      // exactly one delete frame
+        // The frame that crossed the boundary must actually target our id — proves
+        // SessionInfo.id marshals through to build_delete_request(target.id). The
+        // request is 84 bytes (12-byte header + 64-byte payload + 8-byte trailer);
+        // the id sits at payload[12..16] = absolute offset 24 (docs/device §7).
+        let frame = try #require(channel.firstFrame)
+        #expect(frame.count == 84)
+        #expect(Self.readUInt32LE(frame, at: 24) == Self.target().id)
     }
 
     @Test func test_delete_reject_throws() throws {
@@ -100,12 +126,13 @@ import RaceStudioFFIBindings
             )
             Issue.record("expected deleteSession to throw on a device reject")
         } catch let error as DiscoveryError {
-            guard case .DeleteRejected = error else {
+            // `if case`, not `guard...return`, so the byte-safety assertion below
+            // still runs when the wrong case is thrown (better diagnostics).
+            if case .DeleteRejected = error {} else {
                 Issue.record("expected DiscoveryError.DeleteRejected, got \(error)")
-                return
             }
         }
-        #expect(channel.sent.count == 1, "one attempt, no blind retry")
+        #expect(channel.frameCount == 1, "one attempt, no blind retry")
     }
 
     @Test func test_delete_not_armed_sends_zero_bytes() throws {
@@ -120,11 +147,33 @@ import RaceStudioFFIBindings
             )
             Issue.record("expected an unarmed delete to throw")
         } catch let error as DiscoveryError {
-            guard case .NotArmed = error else {
+            if case .NotArmed = error {} else {
                 Issue.record("expected DiscoveryError.NotArmed, got \(error)")
-                return
             }
         }
+        #expect(channel.frameCount == 0, "no frame was sent")
+        #expect(channel.bytesSent == 0, "NO destructive bytes were sent")
+    }
+
+    @Test func test_delete_missing_confirmation_sends_zero_bytes() throws {
+        // The `confirmation: nil` branch across the boundary (Optional<Record>
+        // marshaling) — armed, but no confirmation → refuse, zero bytes.
+        let channel = SpyChannel(response: Self.deleteResponseFrame(status: 0, id: 7))
+
+        do {
+            try deleteSessionFile(
+                target: Self.target(),
+                confirmation: nil,
+                armed: true,
+                channel: channel
+            )
+            Issue.record("expected a missing confirmation to throw")
+        } catch let error as DiscoveryError {
+            if case .ConfirmationMismatch = error {} else {
+                Issue.record("expected DiscoveryError.ConfirmationMismatch, got \(error)")
+            }
+        }
+        #expect(channel.frameCount == 0, "no frame was sent")
         #expect(channel.bytesSent == 0, "NO destructive bytes were sent")
     }
 
@@ -141,11 +190,11 @@ import RaceStudioFFIBindings
             )
             Issue.record("expected a mismatched confirmation to throw")
         } catch let error as DiscoveryError {
-            guard case .ConfirmationMismatch = error else {
+            if case .ConfirmationMismatch = error {} else {
                 Issue.record("expected DiscoveryError.ConfirmationMismatch, got \(error)")
-                return
             }
         }
+        #expect(channel.frameCount == 0, "no frame was sent")
         #expect(channel.bytesSent == 0, "NO destructive bytes were sent")
     }
 }

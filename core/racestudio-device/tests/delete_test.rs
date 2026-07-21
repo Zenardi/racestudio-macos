@@ -112,6 +112,24 @@ fn reject_frame() -> Vec<u8> {
     std::fs::read(device_fixture("delete/reject.bin")).expect("read reject fixture")
 }
 
+/// Frame a delete response: payload = `status(u16 LE) || id(u32 LE)`, wrapped in a
+/// checksum-valid STCP frame (the hypothesized 6.6 ack/reject shape).
+fn response_frame(status: u16, id: u32) -> Vec<u8> {
+    let mut payload = Vec::new();
+    payload.extend_from_slice(&status.to_le_bytes());
+    payload.extend_from_slice(&id.to_le_bytes());
+    let mut frame = Vec::new();
+    frame.extend_from_slice(b"<hSTCP");
+    frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    frame.push(0);
+    frame.push(b'>');
+    frame.extend_from_slice(&payload);
+    frame.extend_from_slice(b"<STCP");
+    frame.extend_from_slice(&racestudio_device::stcp_checksum(&payload).to_le_bytes());
+    frame.push(b'>');
+    frame
+}
+
 // ---- the eight named acceptance behaviours ---------------------------------
 
 #[test]
@@ -249,6 +267,39 @@ fn test_request_bytes_match_captured_fixture() {
 }
 
 // ---- edge / negative cases -------------------------------------------------
+
+#[test]
+fn test_ack_for_a_different_session_is_rejected() {
+    // A checksum-valid, status-OK ack that echoes a DIFFERENT session id must NOT
+    // be treated as success — a stale/cross-talk ack can never confirm OUR delete.
+    let wrong_id_ack = response_frame(0, FIXTURE_SESSION_ID + 1);
+    let mut transport = SpyTransport::answering(Ok(wrong_id_ack));
+
+    let err = delete_session(
+        &target(),
+        Some(&matching_confirmation()),
+        true,
+        &mut transport,
+    )
+    .expect_err("an ack for another session is not our success");
+
+    assert_eq!(err, DeviceError::DeleteRejected);
+    assert_eq!(transport.sent.len(), 1, "one attempt, then a typed error");
+}
+
+#[test]
+fn test_not_armed_takes_precedence_over_mismatch() {
+    // When BOTH guards would fail (not armed AND no confirmation), arming is checked
+    // first — the outermost safety gate — so the error is NotArmed. Pins the guard
+    // order against a refactor that swaps the two checks.
+    let mut transport = SpyTransport::answering(Ok(ack_frame()));
+
+    let err = delete_session(&target(), None, false, &mut transport)
+        .expect_err("both guards fail; arming is checked first");
+
+    assert_eq!(err, DeviceError::NotArmed);
+    assert_eq!(transport.bytes_sent(), 0, "NO destructive bytes were sent");
+}
 
 #[test]
 fn test_bad_checksum_response_is_error() {

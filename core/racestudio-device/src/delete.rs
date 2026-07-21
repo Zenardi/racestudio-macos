@@ -136,25 +136,33 @@ pub fn delete_session(
     transport.send(&request)?;
 
     // Interpret the response. A non-ack is a typed error and is NEVER retried.
-    interpret_delete_response(&transport.recv()?)
+    interpret_delete_response(&transport.recv()?, target.id)
 }
 
-/// Interpret a delete response: `Ok(())` only on a checksum-verified ack.
+/// Interpret a delete response: `Ok(())` only on a checksum-verified ack **that
+/// names the target session**.
 ///
 /// The response frame's trailer checksum is verified first (a mismatch is
 /// [`DeviceError::BadChecksum`], an unframed/untrailered response
-/// [`DeviceError::TruncatedList`]). A verified frame whose leading `u16` LE status
-/// is [`DELETE_STATUS_OK`] is an ack; any other value — or a payload too short to
-/// carry the status — is [`DeviceError::DeleteRejected`], never a silent success.
-fn interpret_delete_response(bytes: &[u8]) -> Result<(), DeviceError> {
+/// [`DeviceError::TruncatedList`]). Success requires *both* the leading `u16` LE
+/// status to be [`DELETE_STATUS_OK`] *and* the echoed `u32` LE session id to equal
+/// `expected_id` — so a stale or cross-talk ack for a *different* session (or a
+/// payload too short to carry either field) is [`DeviceError::DeleteRejected`],
+/// never a silent success. A delete is destructive: an ack must name OUR session.
+fn interpret_delete_response(bytes: &[u8], expected_id: u32) -> Result<(), DeviceError> {
     let frame = verified_frame(bytes)?;
     let status = frame
         .payload
         .get(0..STATUS_LEN)
         .and_then(|b| <[u8; 2]>::try_from(b).ok())
         .map(u16::from_le_bytes);
-    match status {
-        Some(DELETE_STATUS_OK) => Ok(()),
+    let echoed_id = frame
+        .payload
+        .get(STATUS_LEN..STATUS_LEN + 4)
+        .and_then(|b| <[u8; 4]>::try_from(b).ok())
+        .map(u32::from_le_bytes);
+    match (status, echoed_id) {
+        (Some(DELETE_STATUS_OK), Some(id)) if id == expected_id => Ok(()),
         _ => Err(DeviceError::DeleteRejected),
     }
 }
