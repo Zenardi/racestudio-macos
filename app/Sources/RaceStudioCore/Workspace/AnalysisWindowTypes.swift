@@ -25,6 +25,9 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
     /// The 4.5 channel-vs-channel scatter — the friction-circle G-G cloud of two
     /// channels with an optional least-squares trend line (issue 8.9).
     case scatter
+    /// The RS3 Frequency Analysis — the selected channel's amplitude spectrum over
+    /// `fft_spectrum`, tapered by a chosen window function (issue 8.16).
+    case spectrum
     /// The RS3 Channels Report — a per-lap/segment min/max/avg/median table with a
     /// chosen-statistic-vs-lap graph and magic-wand presets (issue 8.10).
     case channelsReport
@@ -48,6 +51,7 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
         case .lapOverlay: return "Lap Overlay"
         case .histogram: return "Histogram"
         case .scatter: return "Scatter"
+        case .spectrum: return "Spectrum"
         case .channelsReport: return "Report"
         case .splitTimes: return "Splits"
         case .mathChannels: return "Math"
@@ -65,6 +69,7 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
         case .lapOverlay: return "point.3.connected.trianglepath.dotted"
         case .histogram: return "chart.bar.xaxis"
         case .scatter: return "chart.dots.scatter"
+        case .spectrum: return "waveform"
         case .channelsReport: return "chart.bar.doc.horizontal"
         case .splitTimes: return "stopwatch"
         case .mathChannels: return "function"

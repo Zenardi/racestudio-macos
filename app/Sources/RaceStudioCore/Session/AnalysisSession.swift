@@ -120,6 +120,51 @@ public struct ChannelStats: Equatable, Sendable {
     }
 }
 
+/// The window function tapered onto a channel before its FFT (issue 8.16) —
+/// Core's mirror of the FFI `SpectrumWindow`, so the seam and ``SpectrumModel``
+/// never depend on the generated bindings. The cases match the engine's tapers.
+public enum SpectrumWindowKind: String, CaseIterable, Sendable, Identifiable {
+    /// No taper — the raw window (maximal frequency resolution, most leakage).
+    case rectangular
+    /// Hann — the general-purpose default (good leakage/resolution balance).
+    case hann
+    /// Hamming — slightly lower first side lobe than Hann.
+    case hamming
+    /// Blackman — strong side-lobe suppression (widest main lobe).
+    case blackman
+
+    public var id: String { rawValue }
+
+    /// The picker's human-readable label.
+    public var title: String {
+        switch self {
+        case .rectangular: return "Rectangular"
+        case .hann: return "Hann"
+        case .hamming: return "Hamming"
+        case .blackman: return "Blackman"
+        }
+    }
+}
+
+/// A single-sided amplitude spectrum of a channel window (issue 8.16) — Core's
+/// mirror of the FFI `SpectrumDto`: the frequency axis (Hz) and the amplitudes
+/// aligned index-for-index with it, so the seam and ``SpectrumModel`` never touch
+/// the generated bindings.
+public struct ChannelSpectrum: Equatable, Sendable {
+    /// Frequencies (Hz), `k·fs/N` — ascending from 0.
+    public let freqs: [Double]
+    /// Single-sided amplitudes, aligned index-for-index with ``freqs``.
+    public let amps: [Double]
+
+    public init(freqs: [Double], amps: [Double]) {
+        self.freqs = freqs
+        self.amps = amps
+    }
+
+    /// The empty spectrum — the degraded result when a window cannot transform.
+    public static let empty = ChannelSpectrum(freqs: [], amps: [])
+}
+
 /// The seam through which ``AnalysisSession`` reads sample data (issue 8.1).
 ///
 /// Production is `FFISessionDataSource`, which retains the live `SessionHandle`
@@ -158,6 +203,14 @@ public protocol SessionDataSource: Sendable {
     /// the seconds spent in each (issue 8.11). Never traps — a session with no laps
     /// returns `[]`.
     func segmentTimes(splits: UInt32) -> [LapSegments]
+
+    /// The single-sided amplitude spectrum of `channel` over `[start, end)` seconds,
+    /// tapered by `windowFunction` before the transform (issue 8.16). The engine
+    /// resamples the in-window samples to a uniform rate first, so a non-uniform
+    /// channel needs no caller resampling. Throws when the channel is unknown or the
+    /// window holds too few samples to transform.
+    func spectrum(channel: String, windowFunction: SpectrumWindowKind,
+                  start: Double, end: Double) throws -> ChannelSpectrum
 }
 
 /// The live analysis pump for a loaded session (issue 8.1) — the linchpin of the
@@ -218,6 +271,18 @@ public final class AnalysisSession {
     /// Descriptive statistics for the named channel over `window`.
     public func stats(channel: String, window: TimeWindow = .all) throws -> ChannelStats {
         try dataSource.statistics(channel: channel, start: window.start, end: window.end)
+    }
+
+    /// The single-sided amplitude spectrum of the named `channel` over `window`,
+    /// tapered by `windowFunction` (issue 8.16) — the frequency-analysis feed for the
+    /// spectrum panel (damper / vibration analysis). The engine resamples the
+    /// in-window samples to a uniform rate before the FFT, so a non-uniformly-sampled
+    /// channel transforms without the caller resampling. Throws when the channel is
+    /// unknown or the window holds fewer than two samples.
+    public func spectrum(channel: String, windowFunction: SpectrumWindowKind,
+                         window: TimeWindow = .all) throws -> ChannelSpectrum {
+        try dataSource.spectrum(channel: channel, windowFunction: windowFunction,
+                                start: window.start, end: window.end)
     }
 
     /// The GPS racing-line track over `window` (issue 8.6): each fix's position,

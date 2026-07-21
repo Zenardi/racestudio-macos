@@ -230,6 +230,18 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   sidebar and per-facet pickers, with session rows draggable onto manual collections.
   Championship comes from the session's series; comment/logger are modelled but not yet
   surfaced by the decoder. Out of scope: cloud collections.
+  8.16 adds the RS3 **Frequency Analysis** spectrum panel over the existing
+  `fft_spectrum` FFI export (damper / vibration analysis). Core: `AnalysisSession.spectrum`
+  reads a channel's single-sided amplitude spectrum through a new `SessionDataSource` seam
+  method (Core's `SpectrumWindowKind` / `ChannelSpectrum` mirror the FFI `SpectrumWindow` /
+  `SpectrumDto`, seconds→ms window like `stats`), and `Stats/SpectrumModel` pairs the
+  aligned `freqs`/`amps` into frequency-vs-amplitude `points` + the dominant-frequency
+  `peak`, degrading to an empty panel on any engine error. The engine resamples a
+  non-uniformly-sampled channel to a uniform rate before the FFT, so a non-uniform channel
+  transforms with no caller work and no crash. The shell adds a `.spectrum` window layout →
+  `SpectrumView` (a thin amplitude-vs-frequency area plot reusing the 4.1 plot primitives,
+  peak marked) with a window-function picker that recomputes the spectrum when changed. Out
+  of scope: waterfall / spectrogram.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

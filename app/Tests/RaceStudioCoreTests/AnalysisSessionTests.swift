@@ -252,4 +252,41 @@ import Foundation
 
         #expect(a != b)
     }
+
+    // MARK: - spectrum: forwards to the seam (issue 8.16)
+
+    @MainActor @Test func test_spectrum_forwards_channel_window_function_and_bounds_to_the_seam() throws {
+        let spectrum = ChannelSpectrum(freqs: [0, 5, 10], amps: [2, 8, 3])
+        let source = FakeSessionDataSource(
+            banks: [[]], spectra: [.init(channel: "RPM", windowFunction: .hann): spectrum])
+        let sut = AnalysisSession(session: session([channel("RPM", count: 8)]), dataSource: source)
+
+        let got = try sut.spectrum(channel: "RPM", windowFunction: .hann,
+                                   window: TimeWindow(start: 1, end: 4))
+
+        #expect(got == spectrum)
+        #expect(source.lastSpectrumRequest == .init(channel: "RPM", windowFunction: .hann, start: 1, end: 4))
+    }
+
+    @MainActor @Test func test_spectrum_over_the_all_window_forwards_infinite_bounds() throws {
+        let source = FakeSessionDataSource(
+            banks: [[]],
+            spectra: [.init(channel: "RPM", windowFunction: .hann): ChannelSpectrum(freqs: [0], amps: [1])])
+        let sut = AnalysisSession(session: session([channel("RPM", count: 8)]), dataSource: source)
+
+        _ = try sut.spectrum(channel: "RPM", windowFunction: .hann)
+
+        let request = try #require(source.lastSpectrumRequest)
+        #expect(request.start == -.infinity)
+        #expect(request.end == .infinity)
+    }
+
+    @MainActor @Test func test_spectrum_throws_for_an_unknown_channel() {
+        let source = FakeSessionDataSource(banks: [[]]) // no spectra seeded
+        let sut = AnalysisSession(session: session([channel("RPM", count: 8)]), dataSource: source)
+
+        #expect(throws: (any Error).self) {
+            _ = try sut.spectrum(channel: "NoSuchChannel", windowFunction: .hann)
+        }
+    }
 }
