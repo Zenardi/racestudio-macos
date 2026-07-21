@@ -91,9 +91,11 @@ fi
 # Check 1 — forbidden artifacts (applies to every PR, before area detection).
 # ---------------------------------------------------------------------------
 forbidden=''
-while IFS= read -r f; do
+# `|| [ -n "$f" ]` so a final path with no trailing newline is still checked; the
+# extension match is case-folded so `.FW`/`.DLL`/`.IPA` cannot slip through.
+while IFS= read -r f || [ -n "$f" ]; do
   [ -z "$f" ] && continue
-  case "$f" in
+  case "$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')" in
     *.fw|*.dll|*.ipa) forbidden="$forbidden $f" ;;
   esac
 done < "$FILES"
@@ -117,7 +119,7 @@ case ",${PR_LABELS:-}," in
   *,area:device,*) device=1 ;;
 esac
 if [ "$device" -eq 0 ]; then
-  while IFS= read -r f; do
+  while IFS= read -r f || [ -n "$f" ]; do
     [ -z "$f" ] && continue
     if printf '%s' "$f" | grep -qiE "$DEVICE_PATH_RE"; then device=1; break; fi
   done < "$FILES"
