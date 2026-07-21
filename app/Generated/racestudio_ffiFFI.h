@@ -326,6 +326,12 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_samples_with_distance(v
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_segment_times(void*_Nonnull ptr, uint32_t splits, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_AP_MODE_FALLBACK_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_AP_MODE_FALLBACK_DEVICE
+RustBuffer uniffi_racestudio_ffi_fn_func_ap_mode_fallback_device(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull out_status
@@ -335,6 +341,11 @@ RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull o
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_OPEN_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_OPEN_SESSION
 void*_Nonnull uniffi_racestudio_ffi_fn_func_open_session(RustBuffer path, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_PARSE_DEVICE_DISCOVERY
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_PARSE_DEVICE_DISCOVERY
+RustBuffer uniffi_racestudio_ffi_fn_func_parse_device_discovery(RustBuffer bytes, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_VALIDATE_MATH_EXPRESSION
@@ -622,6 +633,12 @@ void ffi_racestudio_ffi_rust_future_free_void(uint64_t handle
 void ffi_racestudio_ffi_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_AP_MODE_FALLBACK_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_AP_MODE_FALLBACK_DEVICE
+uint16_t uniffi_racestudio_ffi_checksum_func_ap_mode_fallback_device(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_CORE_VERSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_CORE_VERSION
 uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
@@ -631,6 +648,12 @@ uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_OPEN_SESSION
 uint16_t uniffi_racestudio_ffi_checksum_func_open_session(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_PARSE_DEVICE_DISCOVERY
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_PARSE_DEVICE_DISCOVERY
+uint16_t uniffi_racestudio_ffi_checksum_func_parse_device_discovery(void
     
 );
 #endif

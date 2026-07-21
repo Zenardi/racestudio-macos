@@ -27,6 +27,8 @@ uniffi = { version = "0.28" }
 racestudio-decode = { path = "../racestudio-decode" }
 # Analysis engine (M3): laps, delta-t, statistics, math channels, FFT (issue 3.8).
 racestudio-analysis = { path = "../racestudio-analysis" }
+# Device discovery (M6, issue 6.3): typed Device + mDNS/AP-mode parsing.
+racestudio-device = { path = "../racestudio-device" }
 
 # No [dev-dependencies]: the crate has `staticlib`/`cdylib` crate-types, and
 # adding any dev-dep makes cargo-llvm-cov instrument an extra, uncovered copy of

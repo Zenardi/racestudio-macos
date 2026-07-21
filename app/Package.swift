@@ -71,6 +71,7 @@ if ffiEnabled {
     testExcludes.append("DecodeFFITests.swift")
     testExcludes.append("AnalysisFFITests.swift")
     testExcludes.append("ProjectFFIValidatorTests.swift")
+    testExcludes.append("BonjourBrowserTests.swift")
 }
 
 let package = Package(

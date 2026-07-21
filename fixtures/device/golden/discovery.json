@@ -1,0 +1,12 @@
+{
+  "source": "fixtures/device/discovery/response.bin",
+  "description": "Golden oracle for issue 6.3 (device discovery). The expected typed Device parsed from the recorded, de-identified AiM MyChron discovery response (see docs/device/PROTOCOL.md §2). address is decoded from the response body (offset 0x08); port is the control/transfer port we connect to next (CONTROL_PORT 2000 — the response's own port field at 0x0C is uncertain); model is the MyChron family selected by the response type tag (2); name is a deterministic display name derived from model + address (the unit's advertised name/serial are de-identified out of the committed fixture, and on the live mDNS path come from the Bonjour service metadata).",
+  "devices": [
+    {
+      "name": "MyChron @ 10.0.0.1",
+      "address": "10.0.0.1",
+      "port": 2000,
+      "model": "MyChron"
+    }
+  ]
+}

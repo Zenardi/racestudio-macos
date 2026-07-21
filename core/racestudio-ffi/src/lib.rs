@@ -27,6 +27,10 @@ use racestudio_analysis::{
     AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
+use racestudio_device::{
+    ap_mode_fallback as core_ap_mode_fallback, parse_discovery as core_parse_discovery,
+    Device as CoreDevice, DeviceError as CoreDeviceError,
+};
 
 uniffi::setup_scaffolding!();
 
@@ -962,6 +966,93 @@ pub fn validate_math_expression(expr: String) -> Result<(), AnalysisError> {
         })
 }
 
+/// A discovered MyChron device carried across the FFI boundary (issue 6.3).
+///
+/// Mirrors the device crate's [`Device`](racestudio_device::Device); `address` is
+/// a string because UniFFI has no `IpAddr` type. Swift receives it as a `struct
+/// Device` value.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Device {
+    /// Human-readable display name.
+    pub name: String,
+    /// The device's IP address (e.g. `10.0.0.1`).
+    pub address: String,
+    /// The TCP port to connect to for control + transfer.
+    pub port: u16,
+    /// The device family/model (e.g. `MyChron`).
+    pub model: String,
+}
+
+impl From<CoreDevice> for Device {
+    fn from(d: CoreDevice) -> Self {
+        Device {
+            name: d.name,
+            address: d.address.to_string(),
+            port: d.port,
+            model: d.model,
+        }
+    }
+}
+
+/// The device-discovery failure surface across the FFI boundary — the device
+/// crate's [`DeviceError`](racestudio_device::DeviceError).
+///
+/// Declared `#[uniffi(flat_error)]`: Swift receives a plain `enum DiscoveryError:
+/// Error`, so a malformed announcement is a **thrown** typed error, never a trap.
+#[derive(Debug, uniffi::Error)]
+#[uniffi(flat_error)]
+pub enum DiscoveryError {
+    /// A discovery record was malformed or truncated.
+    MalformedRecord,
+    /// No discovery responder was found on the network.
+    NoService,
+}
+
+impl std::fmt::Display for DiscoveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DiscoveryError::MalformedRecord => write!(f, "malformed discovery record"),
+            DiscoveryError::NoService => write!(f, "no discovery responder found"),
+        }
+    }
+}
+
+impl std::error::Error for DiscoveryError {}
+
+impl From<CoreDeviceError> for DiscoveryError {
+    fn from(err: CoreDeviceError) -> Self {
+        match err {
+            CoreDeviceError::MalformedRecord => DiscoveryError::MalformedRecord,
+            CoreDeviceError::NoService => DiscoveryError::NoService,
+        }
+    }
+}
+
+/// Parse recorded/observed AiM discovery-response bytes into typed devices
+/// (issue 6.3).
+///
+/// The AP-mode/replayed discovery path hands the observed response bytes here;
+/// the live mDNS/Bonjour browser (Swift `NWBrowser`) maps its results into
+/// [`Device`] directly. Returns the de-duplicated devices, or a thrown
+/// [`DiscoveryError`] for a malformed announcement — never a trap.
+///
+/// # Errors
+/// [`DiscoveryError::MalformedRecord`] when a record is malformed or truncated.
+#[uniffi::export]
+pub fn parse_device_discovery(bytes: Vec<u8>) -> Result<Vec<Device>, DiscoveryError> {
+    let devices = core_parse_discovery(&bytes)?;
+    Ok(devices.into_iter().map(Device::from).collect())
+}
+
+/// The AP-mode fallback device: the well-known gateway the MyChron serves on when
+/// the Mac has joined its own access point and no mDNS responder is present
+/// (issue 6.3).
+#[uniffi::export]
+#[must_use]
+pub fn ap_mode_fallback_device() -> Device {
+    core_ap_mode_fallback().into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1335,5 +1426,59 @@ mod tests {
             mapped.to_string().contains("unit"),
             "Other renders its message"
         );
+    }
+
+    /// The recorded, de-identified discovery response fixture (issue 6.2/6.3).
+    fn recorded_discovery_response() -> Vec<u8> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/device/discovery/response.bin");
+        std::fs::read(path).expect("discovery response fixture must exist")
+    }
+
+    #[test]
+    fn test_parse_device_discovery_maps_core_device_across_boundary() {
+        // The recorded response crosses the boundary as a typed Device with the
+        // IpAddr rendered to a string.
+        let devices =
+            parse_device_discovery(recorded_discovery_response()).expect("fixture parses");
+        assert_eq!(devices.len(), 1);
+        let device = &devices[0];
+        assert_eq!(device.address, "10.0.0.1");
+        assert_eq!(device.port, 2000);
+        assert_eq!(device.model, "MyChron");
+        assert!(!device.name.is_empty());
+    }
+
+    #[test]
+    fn test_parse_device_discovery_throws_on_malformed() {
+        // A truncated buffer is a thrown DiscoveryError, never a trap.
+        let err = parse_device_discovery(vec![0x01, 0x02, 0x03]).unwrap_err();
+        assert!(matches!(err, DiscoveryError::MalformedRecord));
+    }
+
+    #[test]
+    fn test_ap_mode_fallback_device_is_the_gateway() {
+        let device = ap_mode_fallback_device();
+        assert_eq!(device.address, "10.0.0.1");
+        assert_eq!(device.port, 2000);
+        assert_eq!(device.model, "MyChron");
+    }
+
+    #[test]
+    fn test_discovery_error_maps_and_renders() {
+        // Both core variants map to the FFI enum and render a distinct message.
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::MalformedRecord),
+            DiscoveryError::MalformedRecord
+        ));
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::NoService),
+            DiscoveryError::NoService
+        ));
+        assert_ne!(
+            DiscoveryError::MalformedRecord.to_string(),
+            DiscoveryError::NoService.to_string()
+        );
+        assert!(!DiscoveryError::NoService.to_string().is_empty());
     }
 }
