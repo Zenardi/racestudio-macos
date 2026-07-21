@@ -34,6 +34,15 @@ pub enum DeviceError {
     /// A session download ended with a gap: the transport signalled end-of-stream
     /// before every byte of the declared size was covered (issue 6.5).
     MissingChunk,
+    /// A guarded delete's confirmation did not match its target session (wrong id,
+    /// wrong name, or no confirmation at all), so nothing was sent (issue 6.6).
+    ConfirmationMismatch,
+    /// A guarded delete was attempted without the required "armed" flag; it is
+    /// refused and no bytes are transmitted (default-safe, issue 6.6).
+    NotArmed,
+    /// The device answered a delete request with a non-ack/error response; it is a
+    /// typed failure and is never blindly retried (no double-delete) (issue 6.6).
+    DeleteRejected,
 }
 
 impl fmt::Display for DeviceError {
@@ -42,7 +51,9 @@ impl fmt::Display for DeviceError {
             DeviceError::MalformedRecord => write!(f, "malformed discovery record"),
             DeviceError::NoService => write!(f, "no discovery responder found"),
             DeviceError::BadChecksum => write!(f, "response frame failed checksum verification"),
-            DeviceError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DeviceError::TruncatedList => {
+                write!(f, "truncated or incomplete response frame")
+            }
             DeviceError::ChecksumMismatch => write!(
                 f,
                 "download failed whole-file or unrecoverable chunk checksum verification"
@@ -50,6 +61,14 @@ impl fmt::Display for DeviceError {
             DeviceError::MissingChunk => {
                 write!(f, "the session download is missing one or more chunks")
             }
+            DeviceError::ConfirmationMismatch => {
+                write!(
+                    f,
+                    "the delete confirmation does not match the target session"
+                )
+            }
+            DeviceError::NotArmed => write!(f, "the delete was not armed; nothing was sent"),
+            DeviceError::DeleteRejected => write!(f, "the device rejected the delete request"),
         }
     }
 }

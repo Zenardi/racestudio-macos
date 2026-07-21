@@ -99,3 +99,22 @@ pub fn verified_frame(data: &[u8]) -> Result<Frame<'_>, DeviceError> {
         Some(_) => Ok(frame),
     }
 }
+
+/// Assemble a complete STCP frame around `payload`: header + payload + checksum
+/// trailer (`docs/device/PROTOCOL.md` §3), the inverse of [`parse_frame`]. Shared
+/// by every request builder (6.4 session-list, 6.6 delete) so one implementation
+/// produces the wire bytes and the same [`stcp_checksum`] trailer everywhere.
+#[must_use]
+pub(crate) fn encode_frame(payload: &[u8]) -> Vec<u8> {
+    let mut buf =
+        Vec::with_capacity(HEADER_MAGIC.len() + 6 + payload.len() + TRAILER_MAGIC.len() + 3);
+    buf.extend_from_slice(HEADER_MAGIC);
+    buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    buf.push(0); // flag (observed 0)
+    buf.push(b'>');
+    buf.extend_from_slice(payload);
+    buf.extend_from_slice(TRAILER_MAGIC);
+    buf.extend_from_slice(&stcp_checksum(payload).to_le_bytes());
+    buf.push(b'>');
+    buf
+}

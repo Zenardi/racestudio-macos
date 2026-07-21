@@ -18,8 +18,7 @@
 //!   (DMCA §1201(f); EU 2009/24/EC Art. 6).
 
 use crate::error::DeviceError;
-use crate::framing::{verified_frame, HEADER_MAGIC, TRAILER_MAGIC};
-use crate::stcp_checksum;
+use crate::framing::{encode_frame, verified_frame};
 
 /// The catalog/get-list command code, at `payload[8..12]` of the request
 /// (`docs/device/PROTOCOL.md` §5, `command_info.bin`; command `0x0110`).
@@ -202,20 +201,4 @@ fn read_u32(b: &[u8], at: usize) -> Result<u32, DeviceError> {
 /// Read a single byte at `at`, or [`DeviceError::MalformedRecord`].
 fn read_u8(b: &[u8], at: usize) -> Result<u8, DeviceError> {
     b.get(at).copied().ok_or(DeviceError::MalformedRecord)
-}
-
-/// Assemble a full STCP frame around `payload`: header + payload + checksum
-/// trailer (`docs/device/PROTOCOL.md` §3).
-fn encode_frame(payload: &[u8]) -> Vec<u8> {
-    let mut buf =
-        Vec::with_capacity(HEADER_MAGIC.len() + 6 + payload.len() + TRAILER_MAGIC.len() + 3);
-    buf.extend_from_slice(HEADER_MAGIC);
-    buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    buf.push(0); // flag (observed 0)
-    buf.push(b'>');
-    buf.extend_from_slice(payload);
-    buf.extend_from_slice(TRAILER_MAGIC);
-    buf.extend_from_slice(&stcp_checksum(payload).to_le_bytes());
-    buf.push(b'>');
-    buf
 }

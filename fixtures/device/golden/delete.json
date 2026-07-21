@@ -1,0 +1,14 @@
+{
+  "description": "Golden for issue 6.6 guarded session delete. SYNTHETIC: the MyChron6 held 0 on-board sessions at 6.2 capture time, so no real delete traffic was observed. The delete opcode and ack/reject response shape are HYPOTHESIZED; these values freeze build_delete_request byte-for-byte (delete/request.bin) and the ack/reject contract (delete/ack.bin, delete/reject.bin) so a real capture can be diffed against them. See docs/device/PROTOCOL.md §7. Real-capture tracking: issue #130.",
+  "synthetic": true,
+  "tracking_issue": 130,
+  "session_id": 7,
+  "request_bytes": 84,
+  "request_frame_length": 64,
+  "request_checksum": 13,
+  "command_code_le": "04000200",
+  "id_offset": 12,
+  "ack_status": 0,
+  "reject_status": 1,
+  "name_is_sent_on_wire": false
+}

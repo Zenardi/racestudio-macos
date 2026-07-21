@@ -30,9 +30,10 @@ use racestudio_decode::{decode_session, DecodeError, Session};
 use racestudio_device::{
     ap_mode_fallback as core_ap_mode_fallback,
     build_session_list_request as core_build_session_list_request,
-    download_session as core_download_session, parse_discovery as core_parse_discovery,
-    parse_session_list as core_parse_session_list, Device as CoreDevice,
-    DeviceError as CoreDeviceError, DownloadPlan as CoreDownloadPlan,
+    delete_session as core_delete_session, download_session as core_download_session,
+    parse_discovery as core_parse_discovery, parse_session_list as core_parse_session_list,
+    DeleteConfirmation as CoreDeleteConfirmation, DeleteTransport as CoreDeleteTransport,
+    Device as CoreDevice, DeviceError as CoreDeviceError, DownloadPlan as CoreDownloadPlan,
     ProgressSink as CoreProgressSink, SessionDate as CoreSessionDate,
     SessionInfo as CoreSessionInfo, Transport as CoreTransport,
 };
@@ -1022,6 +1023,15 @@ pub enum DiscoveryError {
     /// A session download ended with a gap: the transport signalled end-of-stream
     /// before every byte of the declared size was covered (issue 6.5).
     MissingChunk,
+    /// A guarded delete's confirmation did not match its target (wrong id, wrong
+    /// name, or no confirmation); nothing was sent (issue 6.6).
+    ConfirmationMismatch,
+    /// A guarded delete was attempted without the required "armed" flag; refused,
+    /// nothing sent (issue 6.6).
+    NotArmed,
+    /// The device rejected a delete request (non-ack response); a typed failure,
+    /// never blindly retried (issue 6.6).
+    DeleteRejected,
 }
 
 impl std::fmt::Display for DiscoveryError {
@@ -1030,7 +1040,7 @@ impl std::fmt::Display for DiscoveryError {
             DiscoveryError::MalformedRecord => write!(f, "malformed discovery record"),
             DiscoveryError::NoService => write!(f, "no discovery responder found"),
             DiscoveryError::BadChecksum => write!(f, "response frame failed checksum verification"),
-            DiscoveryError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DiscoveryError::TruncatedList => write!(f, "truncated or incomplete response frame"),
             DiscoveryError::ChecksumMismatch => write!(
                 f,
                 "download failed whole-file or unrecoverable chunk checksum verification"
@@ -1038,6 +1048,12 @@ impl std::fmt::Display for DiscoveryError {
             DiscoveryError::MissingChunk => {
                 write!(f, "the session download is missing one or more chunks")
             }
+            DiscoveryError::ConfirmationMismatch => write!(
+                f,
+                "the delete confirmation does not match the target session"
+            ),
+            DiscoveryError::NotArmed => write!(f, "the delete was not armed; nothing was sent"),
+            DiscoveryError::DeleteRejected => write!(f, "the device rejected the delete request"),
         }
     }
 }
@@ -1053,6 +1069,9 @@ impl From<CoreDeviceError> for DiscoveryError {
             CoreDeviceError::TruncatedList => DiscoveryError::TruncatedList,
             CoreDeviceError::ChecksumMismatch => DiscoveryError::ChecksumMismatch,
             CoreDeviceError::MissingChunk => DiscoveryError::MissingChunk,
+            CoreDeviceError::ConfirmationMismatch => DiscoveryError::ConfirmationMismatch,
+            CoreDeviceError::NotArmed => DiscoveryError::NotArmed,
+            CoreDeviceError::DeleteRejected => DiscoveryError::DeleteRejected,
         }
     }
 }
@@ -1259,6 +1278,96 @@ pub fn download_session(
     let mut adapted_source = ChunkSourceAdapter(source);
     let mut adapted_progress = ProgressAdapter(progress);
     core_download_session(&core_plan, &mut adapted_source, &mut adapted_progress)
+        .map_err(DiscoveryError::from)
+}
+
+/// An explicit, typed delete confirmation carried across the FFI boundary (6.6).
+///
+/// Mirrors the device crate's
+/// [`DeleteConfirmation`](racestudio_device::DeleteConfirmation): both fields must
+/// match the target [`SessionInfo`] exactly. The name is a **client-side** guard
+/// and is never transmitted — only the id goes on the wire.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DeleteConfirmation {
+    /// The device-local id the caller intends to delete.
+    pub session_id: u32,
+    /// The display name the caller expects that id to have.
+    pub expected_name: String,
+}
+
+/// A foreign-implemented request/response channel for a guarded delete (6.6).
+///
+/// Swift's live TCP transport (`NWConnection`) implements this: `send` writes the
+/// framed delete request, `recv` returns the device's response frame. A recorded
+/// implementation replays fixture bytes so a delete can be driven with no live
+/// device (and a spy asserts a refusal transmits **zero** bytes).
+#[uniffi::export(callback_interface)]
+pub trait DeleteChannel: Send + Sync {
+    /// Transmit one framed delete request to the device.
+    fn send(&self, frame: Vec<u8>);
+    /// Receive the device's response frame.
+    fn recv(&self) -> Vec<u8>;
+}
+
+/// Bridges a foreign [`DeleteChannel`] to the device crate's [`CoreDeleteTransport`].
+struct DeleteChannelAdapter(Box<dyn DeleteChannel>);
+
+impl CoreDeleteTransport for DeleteChannelAdapter {
+    fn send(&mut self, frame: &[u8]) -> Result<(), CoreDeviceError> {
+        self.0.send(frame.to_vec());
+        Ok(())
+    }
+
+    fn recv(&mut self) -> Result<Vec<u8>, CoreDeviceError> {
+        // The foreign channel's `recv` is infallible by design: a live transport
+        // failure (dropped connection/timeout) surfaces as bytes that fail frame
+        // verification — an empty/garbage response is `TruncatedList`/`BadChecksum`,
+        // never [`DeviceError::DeleteRejected`] and never a silent ack. So a failed
+        // receive fails **safe** (the delete is not reported as succeeded); the id
+        // echo check in `interpret_delete_response` closes the remaining gap.
+        Ok(self.0.recv())
+    }
+}
+
+/// Delete a session from the device behind every safety guard (issue 6.6).
+///
+/// Only the **guarded** API crosses this boundary — there is no un-guarded delete.
+/// The call refuses, sending **zero** bytes, unless `armed` is `true` **and**
+/// `confirmation` matches `target` (both id and name). Only then is exactly one
+/// delete frame sent via `channel`, and the device's ack/reject interpreted; a
+/// non-ack is a thrown error and is **never** blindly retried (no double-delete).
+///
+/// # Errors
+/// A thrown [`DiscoveryError`] — `NotArmed` or `ConfirmationMismatch` (nothing was
+/// sent), `DeleteRejected` (the device refused), `BadChecksum` / `TruncatedList`
+/// (the response frame did not verify), or any transport error. Never traps.
+#[uniffi::export]
+pub fn delete_session(
+    target: SessionInfo,
+    confirmation: Option<DeleteConfirmation>,
+    armed: bool,
+    channel: Box<dyn DeleteChannel>,
+) -> Result<(), DiscoveryError> {
+    let core_target = CoreSessionInfo {
+        id: target.id,
+        name: target.name,
+        date: CoreSessionDate {
+            year: target.date.year,
+            month: target.date.month,
+            day: target.date.day,
+            hour: target.date.hour,
+            minute: target.date.minute,
+            second: target.date.second,
+        },
+        lap_count: target.lap_count,
+        size_bytes: target.size_bytes,
+    };
+    let core_confirm = confirmation.map(|c| CoreDeleteConfirmation {
+        session_id: c.session_id,
+        expected_name: c.expected_name,
+    });
+    let mut adapted = DeleteChannelAdapter(channel);
+    core_delete_session(&core_target, core_confirm.as_ref(), armed, &mut adapted)
         .map_err(DiscoveryError::from)
 }
 
@@ -1933,5 +2042,196 @@ mod tests {
             DiscoveryError::MissingChunk.to_string()
         );
         assert!(!DiscoveryError::MissingChunk.to_string().is_empty());
+    }
+
+    // ---- 6.6 guarded delete over the FFI boundary --------------------------
+
+    /// Frame a delete response: payload = `status(u16 LE) || id(u32 LE)`, wrapped
+    /// in a checksum-valid STCP frame (the hypothesized 6.6 ack/reject shape).
+    fn delete_response_frame(status: u16, id: u32) -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&status.to_le_bytes());
+        payload.extend_from_slice(&id.to_le_bytes());
+        let mut frame = Vec::new();
+        frame.extend_from_slice(b"<hSTCP");
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.push(0);
+        frame.push(b'>');
+        frame.extend_from_slice(&payload);
+        frame.extend_from_slice(b"<STCP");
+        frame.extend_from_slice(&racestudio_device::stcp_checksum(&payload).to_le_bytes());
+        frame.push(b'>');
+        frame
+    }
+
+    /// A `DeleteChannel` spy: records every framed request, replays one response.
+    #[derive(Default)]
+    struct FakeChannel {
+        sent: std::sync::Mutex<Vec<Vec<u8>>>,
+        responses: std::sync::Mutex<std::collections::VecDeque<Vec<u8>>>,
+    }
+    impl FakeChannel {
+        fn answering(response: Vec<u8>) -> Self {
+            let mut q = std::collections::VecDeque::new();
+            q.push_back(response);
+            Self {
+                sent: std::sync::Mutex::new(Vec::new()),
+                responses: std::sync::Mutex::new(q),
+            }
+        }
+        fn bytes_sent(&self) -> usize {
+            self.sent
+                .lock()
+                .expect("sent lock")
+                .iter()
+                .map(Vec::len)
+                .sum()
+        }
+        fn frames_sent(&self) -> usize {
+            self.sent.lock().expect("sent lock").len()
+        }
+    }
+    impl DeleteChannel for std::sync::Arc<FakeChannel> {
+        fn send(&self, frame: Vec<u8>) {
+            self.sent.lock().expect("sent lock").push(frame);
+        }
+        fn recv(&self) -> Vec<u8> {
+            self.responses
+                .lock()
+                .expect("resp lock")
+                .pop_front()
+                .unwrap_or_default()
+        }
+    }
+
+    fn ffi_target() -> SessionInfo {
+        SessionInfo {
+            id: 7,
+            name: "FIXTURE_SESSION".to_string(),
+            date: SessionDate {
+                year: 2026,
+                month: 7,
+                day: 21,
+                hour: 10,
+                minute: 30,
+                second: 0,
+            },
+            lap_count: 12,
+            size_bytes: 4_096,
+        }
+    }
+    fn ffi_confirmation() -> DeleteConfirmation {
+        DeleteConfirmation {
+            session_id: 7,
+            expected_name: "FIXTURE_SESSION".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_ffi_delete_acked_sends_one_frame() {
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(0, 7)));
+
+        let result = delete_session(
+            ffi_target(),
+            Some(ffi_confirmation()),
+            true,
+            Box::new(std::sync::Arc::clone(&channel)),
+        );
+
+        assert!(result.is_ok(), "an armed, matching, acked delete succeeds");
+        assert_eq!(channel.frames_sent(), 1, "exactly one delete frame is sent");
+    }
+
+    #[test]
+    fn test_ffi_delete_reject_maps() {
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(1, 7)));
+
+        let err = delete_session(
+            ffi_target(),
+            Some(ffi_confirmation()),
+            true,
+            Box::new(std::sync::Arc::clone(&channel)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::DeleteRejected));
+        assert_eq!(channel.frames_sent(), 1, "one attempt, no blind retry");
+    }
+
+    #[test]
+    fn test_ffi_delete_not_armed_sends_zero_bytes() {
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(0, 7)));
+
+        let err = delete_session(
+            ffi_target(),
+            Some(ffi_confirmation()),
+            false, // not armed
+            Box::new(std::sync::Arc::clone(&channel)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::NotArmed));
+        assert_eq!(channel.bytes_sent(), 0, "NO destructive bytes were sent");
+    }
+
+    #[test]
+    fn test_ffi_delete_mismatch_sends_zero_bytes() {
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(0, 7)));
+        let wrong = DeleteConfirmation {
+            session_id: 999, // wrong id
+            expected_name: "FIXTURE_SESSION".to_string(),
+        };
+
+        let err = delete_session(
+            ffi_target(),
+            Some(wrong),
+            true,
+            Box::new(std::sync::Arc::clone(&channel)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::ConfirmationMismatch));
+        assert_eq!(channel.bytes_sent(), 0, "NO destructive bytes were sent");
+    }
+
+    #[test]
+    fn test_ffi_delete_ack_for_wrong_id_is_rejected() {
+        // An ack that echoes a different session id must not be a success across
+        // the boundary either.
+        let channel = std::sync::Arc::new(FakeChannel::answering(delete_response_frame(0, 999)));
+
+        let err = delete_session(
+            ffi_target(), // id 7
+            Some(ffi_confirmation()),
+            true,
+            Box::new(std::sync::Arc::clone(&channel)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::DeleteRejected));
+        assert_eq!(channel.frames_sent(), 1, "one attempt, no blind retry");
+    }
+
+    #[test]
+    fn test_delete_error_variants_map_and_render() {
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::ConfirmationMismatch),
+            DiscoveryError::ConfirmationMismatch
+        ));
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::NotArmed),
+            DiscoveryError::NotArmed
+        ));
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::DeleteRejected),
+            DiscoveryError::DeleteRejected
+        ));
+        for e in [
+            DiscoveryError::ConfirmationMismatch,
+            DiscoveryError::NotArmed,
+            DiscoveryError::DeleteRejected,
+        ] {
+            assert!(!e.to_string().is_empty());
+        }
     }
 }

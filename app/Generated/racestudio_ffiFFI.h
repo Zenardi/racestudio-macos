@@ -258,6 +258,20 @@ typedef void (*UniffiCallbackInterfaceChunkSourceMethod0)(uint64_t, RustBuffer* 
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DELETE_CHANNEL_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DELETE_CHANNEL_METHOD0
+typedef void (*UniffiCallbackInterfaceDeleteChannelMethod0)(uint64_t, RustBuffer, void* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DELETE_CHANNEL_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DELETE_CHANNEL_METHOD1
+typedef void (*UniffiCallbackInterfaceDeleteChannelMethod1)(uint64_t, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS_METHOD0
 typedef void (*UniffiCallbackInterfaceDownloadProgressMethod0)(uint64_t, uint64_t, uint64_t, void* _Nonnull, 
@@ -271,6 +285,15 @@ typedef struct UniffiVTableCallbackInterfaceChunkSource {
     UniffiCallbackInterfaceChunkSourceMethod0 _Nonnull nextChunk;
     UniffiCallbackInterfaceFree _Nonnull uniffiFree;
 } UniffiVTableCallbackInterfaceChunkSource;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DELETE_CHANNEL
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DELETE_CHANNEL
+typedef struct UniffiVTableCallbackInterfaceDeleteChannel {
+    UniffiCallbackInterfaceDeleteChannelMethod0 _Nonnull send;
+    UniffiCallbackInterfaceDeleteChannelMethod1 _Nonnull recv;
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+} UniffiVTableCallbackInterfaceDeleteChannel;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_DOWNLOAD_PROGRESS
@@ -361,6 +384,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_segment_times(void*_Non
 void uniffi_racestudio_ffi_fn_init_callback_vtable_chunksource(UniffiVTableCallbackInterfaceChunkSource* _Nonnull vtable
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DELETECHANNEL
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DELETECHANNEL
+void uniffi_racestudio_ffi_fn_init_callback_vtable_deletechannel(UniffiVTableCallbackInterfaceDeleteChannel* _Nonnull vtable
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DOWNLOADPROGRESS
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_INIT_CALLBACK_VTABLE_DOWNLOADPROGRESS
 void uniffi_racestudio_ffi_fn_init_callback_vtable_downloadprogress(UniffiVTableCallbackInterfaceDownloadProgress* _Nonnull vtable
@@ -382,6 +410,11 @@ RustBuffer uniffi_racestudio_ffi_fn_func_build_session_list_request(RustCallStat
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_CORE_VERSION
 RustBuffer uniffi_racestudio_ffi_fn_func_core_version(RustCallStatus *_Nonnull out_status
     
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_DELETE_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_DELETE_SESSION
+void uniffi_racestudio_ffi_fn_func_delete_session(RustBuffer target, RustBuffer confirmation, int8_t armed, uint64_t channel, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_FUNC_DOWNLOAD_SESSION
@@ -707,6 +740,12 @@ uint16_t uniffi_racestudio_ffi_checksum_func_core_version(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DELETE_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DELETE_SESSION
+uint16_t uniffi_racestudio_ffi_checksum_func_delete_session(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DOWNLOAD_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_FUNC_DOWNLOAD_SESSION
 uint16_t uniffi_racestudio_ffi_checksum_func_download_session(void
@@ -818,6 +857,18 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_CHUNKSOURCE_NEXT_CHUNK
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_CHUNKSOURCE_NEXT_CHUNK
 uint16_t uniffi_racestudio_ffi_checksum_method_chunksource_next_chunk(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DELETECHANNEL_SEND
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DELETECHANNEL_SEND
+uint16_t uniffi_racestudio_ffi_checksum_method_deletechannel_send(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DELETECHANNEL_RECV
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_DELETECHANNEL_RECV
+uint16_t uniffi_racestudio_ffi_checksum_method_deletechannel_recv(void
     
 );
 #endif
