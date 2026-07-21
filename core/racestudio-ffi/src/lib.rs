@@ -28,8 +28,11 @@ use racestudio_analysis::{
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 use racestudio_device::{
-    ap_mode_fallback as core_ap_mode_fallback, parse_discovery as core_parse_discovery,
-    Device as CoreDevice, DeviceError as CoreDeviceError,
+    ap_mode_fallback as core_ap_mode_fallback,
+    build_session_list_request as core_build_session_list_request,
+    parse_discovery as core_parse_discovery, parse_session_list as core_parse_session_list,
+    Device as CoreDevice, DeviceError as CoreDeviceError, SessionDate as CoreSessionDate,
+    SessionInfo as CoreSessionInfo,
 };
 
 uniffi::setup_scaffolding!();
@@ -1006,6 +1009,10 @@ pub enum DiscoveryError {
     MalformedRecord,
     /// No discovery responder was found on the network.
     NoService,
+    /// A response frame failed checksum verification (issue 6.4).
+    BadChecksum,
+    /// A session-list response was truncated or incomplete (issue 6.4).
+    TruncatedList,
 }
 
 impl std::fmt::Display for DiscoveryError {
@@ -1013,6 +1020,8 @@ impl std::fmt::Display for DiscoveryError {
         match self {
             DiscoveryError::MalformedRecord => write!(f, "malformed discovery record"),
             DiscoveryError::NoService => write!(f, "no discovery responder found"),
+            DiscoveryError::BadChecksum => write!(f, "response frame failed checksum verification"),
+            DiscoveryError::TruncatedList => write!(f, "truncated or incomplete session list"),
         }
     }
 }
@@ -1024,6 +1033,8 @@ impl From<CoreDeviceError> for DiscoveryError {
         match err {
             CoreDeviceError::MalformedRecord => DiscoveryError::MalformedRecord,
             CoreDeviceError::NoService => DiscoveryError::NoService,
+            CoreDeviceError::BadChecksum => DiscoveryError::BadChecksum,
+            CoreDeviceError::TruncatedList => DiscoveryError::TruncatedList,
         }
     }
 }
@@ -1051,6 +1062,96 @@ pub fn parse_device_discovery(bytes: Vec<u8>) -> Result<Vec<Device>, DiscoveryEr
 #[must_use]
 pub fn ap_mode_fallback_device() -> Device {
     core_ap_mode_fallback().into()
+}
+
+/// A device-local session timestamp carried across the FFI boundary (issue 6.4).
+///
+/// A **typed** date (mirrors the device crate's
+/// [`SessionDate`](racestudio_device::SessionDate)), not a raw string — Swift
+/// receives a `struct SessionDate` value.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct SessionDate {
+    /// Four-digit year (e.g. 2026).
+    pub year: u16,
+    /// Month, 1–12.
+    pub month: u8,
+    /// Day of month, 1–31.
+    pub day: u8,
+    /// Hour, 0–23.
+    pub hour: u8,
+    /// Minute, 0–59.
+    pub minute: u8,
+    /// Second, 0–59.
+    pub second: u8,
+}
+
+impl From<CoreSessionDate> for SessionDate {
+    fn from(d: CoreSessionDate) -> Self {
+        SessionDate {
+            year: d.year,
+            month: d.month,
+            day: d.day,
+            hour: d.hour,
+            minute: d.minute,
+            second: d.second,
+        }
+    }
+}
+
+/// One enumerated on-device session carried across the FFI boundary (issue 6.4).
+///
+/// Mirrors the device crate's [`SessionInfo`](racestudio_device::SessionInfo);
+/// `date` is a typed [`SessionDate`]. Swift receives it as a `struct SessionInfo`.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SessionInfo {
+    /// The device-local session id / index.
+    pub id: u32,
+    /// The session's display name.
+    pub name: String,
+    /// The session start timestamp (device-local).
+    pub date: SessionDate,
+    /// Number of recorded laps.
+    pub lap_count: u16,
+    /// On-device size of the session's data, in bytes.
+    pub size_bytes: u32,
+}
+
+impl From<CoreSessionInfo> for SessionInfo {
+    fn from(s: CoreSessionInfo) -> Self {
+        SessionInfo {
+            id: s.id,
+            name: s.name,
+            date: s.date.into(),
+            lap_count: s.lap_count,
+            size_bytes: s.size_bytes,
+        }
+    }
+}
+
+/// Build the catalog/session-list request bytes the MyChron answers with its
+/// session catalog (issue 6.4) — the observed request frame (`command_info.bin`).
+///
+/// Swift receives it as `Data` and writes it to the control connection (6.5).
+#[uniffi::export]
+#[must_use]
+pub fn build_session_list_request() -> Vec<u8> {
+    core_build_session_list_request()
+}
+
+/// Parse a recorded/observed catalog/session-list response into typed sessions
+/// (issue 6.4).
+///
+/// The response frame's checksum is verified before parsing; an empty on-device
+/// store yields an empty list. Returns a thrown [`DiscoveryError`] for a bad
+/// checksum, a truncated list, or a malformed record — never a trap.
+///
+/// # Errors
+/// [`DiscoveryError::BadChecksum`], [`DiscoveryError::TruncatedList`], or
+/// [`DiscoveryError::MalformedRecord`] mapped from the device crate.
+#[uniffi::export]
+pub fn parse_session_list(bytes: Vec<u8>) -> Result<Vec<SessionInfo>, DiscoveryError> {
+    let sessions = core_parse_session_list(&bytes)?;
+    Ok(sessions.into_iter().map(SessionInfo::from).collect())
 }
 
 #[cfg(test)]
@@ -1480,5 +1581,101 @@ mod tests {
             DiscoveryError::NoService.to_string()
         );
         assert!(!DiscoveryError::NoService.to_string().is_empty());
+    }
+
+    /// The recorded, de-identified catalog/session-list response (issue 6.2/6.4).
+    fn recorded_session_list() -> Vec<u8> {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/device/sessions/list_response.bin");
+        std::fs::read(path).expect("session-list fixture must exist")
+    }
+
+    #[test]
+    fn test_build_session_list_request_matches_captured_request() {
+        // The FFI-built request equals the captured catalog request byte-for-byte.
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/device/control/command_info.bin");
+        let captured = std::fs::read(path).expect("command fixture must exist");
+        assert_eq!(build_session_list_request(), captured);
+    }
+
+    #[test]
+    fn test_parse_session_list_over_recorded_fixture_is_empty() {
+        // The recorded store was empty at capture time → an empty list, not an error.
+        let sessions = parse_session_list(recorded_session_list()).expect("fixture parses");
+        assert!(sessions.is_empty());
+    }
+
+    #[test]
+    fn test_parse_session_list_maps_dated_sessions_across_boundary() {
+        // A synthetic dated session frame crosses the boundary as a typed
+        // SessionInfo with a typed SessionDate (see racestudio-device session_test
+        // for the layout). Built here so the FFI mapping is exercised end-to-end.
+        let mut record = [0u8; 56];
+        record[0..3].copy_from_slice(b"ses");
+        record[3] = 0x01;
+        record[4..8].copy_from_slice(&42u32.to_le_bytes());
+        record[8..10].copy_from_slice(&2026u16.to_le_bytes());
+        record[10] = 7; // month
+        record[11] = 21; // day
+        record[12] = 8; // hour
+        record[13] = 15; // minute
+        record[14] = 30; // second
+        record[16..18].copy_from_slice(&9u16.to_le_bytes()); // laps
+        record[18..22].copy_from_slice(&1_234_567u32.to_le_bytes()); // size
+        record[24..29].copy_from_slice(b"Karts");
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&1u32.to_le_bytes()); // count
+        payload.extend_from_slice(&record);
+        let mut frame = Vec::new();
+        frame.extend_from_slice(b"<hSTCP");
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.push(0);
+        frame.push(b'>');
+        frame.extend_from_slice(&payload);
+        frame.extend_from_slice(b"<STCP");
+        frame.extend_from_slice(&racestudio_device::stcp_checksum(&payload).to_le_bytes());
+        frame.push(b'>');
+
+        let sessions = parse_session_list(frame).expect("synthetic frame parses");
+        assert_eq!(sessions.len(), 1);
+        let s = &sessions[0];
+        assert_eq!(s.id, 42);
+        assert_eq!(s.name, "Karts");
+        assert_eq!(s.lap_count, 9);
+        assert_eq!(s.size_bytes, 1_234_567);
+        assert_eq!(s.date.year, 2026);
+        assert_eq!(s.date.month, 7);
+        assert_eq!(s.date.day, 21);
+        assert_eq!(s.date.second, 30);
+    }
+
+    #[test]
+    fn test_parse_session_list_throws_on_bad_checksum() {
+        // A corrupt frame is a thrown DiscoveryError, never a trap.
+        let mut frame = recorded_session_list();
+        let payload_start = b"<hSTCP".len() + 6;
+        frame[payload_start + 8] ^= 0xFF;
+        let err = parse_session_list(frame).unwrap_err();
+        assert!(matches!(err, DiscoveryError::BadChecksum));
+    }
+
+    #[test]
+    fn test_session_error_variants_map_and_render() {
+        // The two 6.4 variants map from the core error and render distinct messages.
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::BadChecksum),
+            DiscoveryError::BadChecksum
+        ));
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::TruncatedList),
+            DiscoveryError::TruncatedList
+        ));
+        assert_ne!(
+            DiscoveryError::BadChecksum.to_string(),
+            DiscoveryError::TruncatedList.to_string()
+        );
+        assert!(!DiscoveryError::TruncatedList.to_string().is_empty());
     }
 }

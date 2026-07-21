@@ -1,0 +1,6 @@
+{
+  "source": "fixtures/device/sessions/list_response.bin (recorded 6.2 catalog/session-list response)",
+  "description": "The recorded MyChron6 held 0 on-board sessions at capture time (all had been imported to the app), so its catalog/session-list response enumerates device identity/config records (idn / <hiHW> / <iPRL>), NOT dated sessions. parse_session_list() therefore yields an empty list over this fixture. The per-session record layout (id/date/laps/size/name) is not present in any recorded capture and must be re-captured with sessions on-device — tracked in issue #130; the dated-session decode path is exercised in session_test.rs against a synthetic, clearly-labeled frame. See docs/device/PROTOCOL.md §5.",
+  "session_count": 0,
+  "sessions": []
+}

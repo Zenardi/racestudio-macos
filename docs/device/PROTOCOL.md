@@ -161,6 +161,43 @@ a container of records:
 `test_session_list_offsets_parse_from_fixture` asserts the `<hiMST` header at
 payload `0x04` and the presence of `idn` records.
 
+### Typed session enumeration (issue 6.4)
+
+`build_session_list_request()` reproduces the captured catalog request
+(`control/command_info.bin`, command `0x0110`) **byte-for-byte** — a 64-byte
+payload wrapped in a checksum-valid STCP frame (checksum 94). It is the request
+6.5 writes to start enumeration.
+
+`parse_session_list(bytes) -> Result<Vec<SessionInfo>, DeviceError>` verifies the
+response frame's trailer checksum **before** parsing (a mismatch is
+`DeviceError::BadChecksum`, with no partial list surfaced), then reads a leading
+`u32` LE session **count** at `payload[0..4]`:
+
+| `SessionInfo` field | Source (per record) | Notes |
+| --- | --- | --- |
+| *(count)* | response `payload[0..4]` (u32 LE) | number of session records; **0 in the sole capture** |
+| `id` | `+4` (u32 LE) | device-local session id |
+| `date` | `+8` (year u16, then month/day/hour/min/sec u8) | a **typed** `SessionDate`, reusing the observed device-time encoding (§4) |
+| `lap_count` | `+16` (u16 LE) | recorded laps |
+| `size_bytes` | `+18` (u32 LE) | on-device data size |
+| `name` | `+24` (32 B, NUL-padded ASCII) | display name |
+
+An empty store (count 0) is `Ok(vec![])`, never an error; a truncated frame or a
+count that overruns the payload is `DeviceError::TruncatedList`; a record lacking
+the session magic is `DeviceError::MalformedRecord`. The parser never panics.
+
+> **Caveat — the per-session record layout is unverified.** The recorded
+> `list_response.bin` was captured with **0 on-board sessions** (see the §5 caveat
+> above), so it carries only `idn`/`<hiHW>`/`<iPRL>` identity/config records, and
+> `parse_session_list` returns an **empty** list over it — the verified behaviour
+> (`session_test.rs::test_session_list_matches_golden`, golden
+> `fixtures/device/golden/sessions.json`). The dated-record layout in the table
+> (id/date/laps/size/name offsets) is a **hypothesis**, exercised only against a
+> synthetic frame in `session_test.rs`; it must be confirmed against a
+> session-present capture (**issue #130**) before the download step (6.5) relies
+> on it. The **verified** anchors are the byte-exact request and the
+> checksum-gated framing.
+
 ---
 
 ## 6. Transfer (download)
@@ -218,7 +255,7 @@ fixture. Raw `.pcap`/`.pcapng` are never committed (git-ignored).
 | Issue | Needs from this protocol |
 | --- | --- |
 | **6.3 discovery** | UDP 36002 probe `aim-ka` + 236-B response parsing (device IP) |
-| **6.4 enumeration** | catalog framing (`<hiMST>`/`idn` records); **per-session date/size/name fields still to be captured** |
+| **6.4 enumeration** | ✅ byte-exact request + checksum-gated framing → typed `SessionInfo`; **per-session date/size/name layout hypothesized, to be confirmed with a session-present capture (#130)** |
 | **6.5 download** | STCP frame + checksum; transfer chunk offset/stride + ACK flow-control |
 | **6.6 delete** | STCP command framing; **delete opcode still to be captured** (§7) |
 | **6.7 UI** | device identity (name/serial/firmware) from discovery + catalog |
