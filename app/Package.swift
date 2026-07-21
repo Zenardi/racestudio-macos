@@ -74,6 +74,7 @@ if ffiEnabled {
     testExcludes.append("BonjourBrowserTests.swift")
     testExcludes.append("SessionEnumerationTests.swift")
     testExcludes.append("SessionDownloadTests.swift")
+    testExcludes.append("SessionDeleteTests.swift")
 }
 
 let package = Package(

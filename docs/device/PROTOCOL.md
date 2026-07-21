@@ -251,14 +251,41 @@ progress is reported via a [`ProgressSink`] for the 6.7 progress bar.
 
 ---
 
-## 7. Delete (NOT yet observed)
+## 7. Delete (guarded write — opcode NOT yet observed)
 
-The delete operation (issue **6.6**) is **not** in these fixtures: the device held
-0 on-board sessions at capture time, so no on-device delete could be issued (see
-`manifest.json` → `pending`). Delete is expected to reuse the STCP framing (§3)
-with a delete command opcode (§5); its exact opcode + payload must be captured
-when a session is present on the device, at which point a `delete/*.bin` fixture
-and this section will be completed.
+The real delete opcode is **not** in any capture: the device held 0 on-board
+sessions at 6.2 capture time, so no on-device delete could be issued (see
+`manifest.json` → `pending`). Delete reuses the STCP framing (§3) with a delete
+command opcode (§5); the exact opcode + response must still be captured on the
+wire — tracked in **issue #130**.
+
+### Guarded session delete (issue 6.6)
+
+`racestudio_device::delete_session(target, confirm, armed, transport)` is a
+**destructive WRITE** behind layered safety guards. It refuses — transmitting
+**zero bytes** — unless *both* an `armed` flag is set *and* a `DeleteConfirmation`
+matches the target's id **and** display name. Only then is exactly one delete
+frame sent; a non-ack response is a typed error that is **never** blindly retried
+(no accidental double-delete). The name is a client-side guard and is **never**
+sent — only the id crosses the wire. The transport is injected, so CI replays
+fixtures with no live device; only the guarded API is exposed over FFI (there is
+no un-guarded delete).
+
+| Field | Source | Verified? |
+| --- | --- | --- |
+| STCP request framing + trailer checksum | shared `framing::encode_frame` (§3) | ✅ verified |
+| Guard logic (arm + id/name match ⇒ 0 bytes on refusal) | `delete_session` | ✅ verified |
+| Delete **opcode** `payload[8..12]` | — (hypothesized `04 00 02 00`) | ⚠️ hypothesized |
+| Target id at `payload[12..16]` (u32 LE) | `build_delete_request` | ⚠️ hypothesized |
+| Ack/reject **response** shape (`status(u16 LE) ‖ id`) | — | ⚠️ hypothesized |
+
+> **Caveat — the delete opcode + response are synthetic.** No delete traffic was
+> ever captured (0 on-board sessions), so `fixtures/device/delete/{request,ack,
+> reject}.bin` are **synthetic**, frozen so `build_delete_request` is pinned
+> byte-for-byte and a real capture (**issue #130**) can be diffed against them.
+> The **verified** anchors are the STCP framing and the guard logic; the opcode,
+> id offset, and response shape must be confirmed against a session-present
+> capture before a live delete relies on them. Clean-room, interoperability-only.
 
 ---
 
@@ -290,5 +317,5 @@ fixture. Raw `.pcap`/`.pcapng` are never committed (git-ignored).
 | **6.3 discovery** | UDP 36002 probe `aim-ka` + 236-B response parsing (device IP) |
 | **6.4 enumeration** | ✅ byte-exact request + checksum-gated framing → typed `SessionInfo`; **per-session date/size/name layout hypothesized, to be confirmed with a session-present capture (#130)** |
 | **6.5 download** | ✅ checksum-gated chunk reassembly by offset → decodable `.xrk` (validated via M1 decode); **multi-chunk stream / whole-file-checksum source / retry handshake hypothesized, to be confirmed with a session-present capture (#133)** |
-| **6.6 delete** | STCP command framing; **delete opcode still to be captured** (§7) |
+| **6.6 delete** | ✅ guarded delete: arm + typed confirmation ⇒ 0 bytes on refusal, one frame, no blind retry, over verified STCP framing; **delete opcode + ack/reject response synthetic, to be confirmed with a real capture (#130)** (§7) |
 | **6.7 UI** | device identity (name/serial/firmware) from discovery + catalog |

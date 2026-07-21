@@ -495,6 +495,30 @@ fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -1157,6 +1181,92 @@ public func FfiConverterTypeChannelInfo_lift(_ buf: RustBuffer) throws -> Channe
 #endif
 public func FfiConverterTypeChannelInfo_lower(_ value: ChannelInfo) -> RustBuffer {
     return FfiConverterTypeChannelInfo.lower(value)
+}
+
+
+/**
+ * An explicit, typed delete confirmation carried across the FFI boundary (6.6).
+ *
+ * Mirrors the device crate's
+ * [`DeleteConfirmation`](racestudio_device::DeleteConfirmation): both fields must
+ * match the target [`SessionInfo`] exactly. The name is a **client-side** guard
+ * and is never transmitted — only the id goes on the wire.
+ */
+public struct DeleteConfirmation {
+    /**
+     * The device-local id the caller intends to delete.
+     */
+    public var sessionId: UInt32
+    /**
+     * The display name the caller expects that id to have.
+     */
+    public var expectedName: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The device-local id the caller intends to delete.
+         */sessionId: UInt32, 
+        /**
+         * The display name the caller expects that id to have.
+         */expectedName: String) {
+        self.sessionId = sessionId
+        self.expectedName = expectedName
+    }
+}
+
+
+
+extension DeleteConfirmation: Equatable, Hashable {
+    public static func ==(lhs: DeleteConfirmation, rhs: DeleteConfirmation) -> Bool {
+        if lhs.sessionId != rhs.sessionId {
+            return false
+        }
+        if lhs.expectedName != rhs.expectedName {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sessionId)
+        hasher.combine(expectedName)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeleteConfirmation: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeleteConfirmation {
+        return
+            try DeleteConfirmation(
+                sessionId: FfiConverterUInt32.read(from: &buf), 
+                expectedName: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeleteConfirmation, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.sessionId, into: &buf)
+        FfiConverterString.write(value.expectedName, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeleteConfirmation_lift(_ buf: RustBuffer) throws -> DeleteConfirmation {
+    return try FfiConverterTypeDeleteConfirmation.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeleteConfirmation_lower(_ value: DeleteConfirmation) -> RustBuffer {
+    return FfiConverterTypeDeleteConfirmation.lower(value)
 }
 
 
@@ -2996,6 +3106,24 @@ public enum DiscoveryError {
      */
     case MissingChunk(message: String)
     
+    /**
+     * A guarded delete's confirmation did not match its target (wrong id, wrong
+     * name, or no confirmation); nothing was sent (issue 6.6).
+     */
+    case ConfirmationMismatch(message: String)
+    
+    /**
+     * A guarded delete was attempted without the required "armed" flag; refused,
+     * nothing sent (issue 6.6).
+     */
+    case NotArmed(message: String)
+    
+    /**
+     * The device rejected a delete request (non-ack response); a typed failure,
+     * never blindly retried (issue 6.6).
+     */
+    case DeleteRejected(message: String)
+    
 }
 
 
@@ -3036,6 +3164,18 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 7: return .ConfirmationMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 8: return .NotArmed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .DeleteRejected(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3059,6 +3199,12 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(5))
         case .MissingChunk(_ /* message is ignored*/):
             writeInt(&buf, Int32(6))
+        case .ConfirmationMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
+        case .NotArmed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(8))
+        case .DeleteRejected(_ /* message is ignored*/):
+            writeInt(&buf, Int32(9))
 
         
         }
@@ -3438,6 +3584,143 @@ extension FfiConverterCallbackInterfaceChunkSource : FfiConverter {
 
 
 /**
+ * A foreign-implemented request/response channel for a guarded delete (6.6).
+ *
+ * Swift's live TCP transport (`NWConnection`) implements this: `send` writes the
+ * framed delete request, `recv` returns the device's response frame. A recorded
+ * implementation replays fixture bytes so a delete can be driven with no live
+ * device (and a spy asserts a refusal transmits **zero** bytes).
+ */
+public protocol DeleteChannel : AnyObject {
+    
+    /**
+     * Transmit one framed delete request to the device.
+     */
+    func send(frame: Data) 
+    
+    /**
+     * Receive the device's response frame.
+     */
+    func recv()  -> Data
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceDeleteChannel {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceDeleteChannel = UniffiVTableCallbackInterfaceDeleteChannel(
+        send: { (
+            uniffiHandle: UInt64,
+            frame: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceDeleteChannel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.send(
+                     frame: try FfiConverterData.lift(frame)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        recv: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceDeleteChannel.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.recv(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            let result = try? FfiConverterCallbackInterfaceDeleteChannel.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface DeleteChannel: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitDeleteChannel() {
+    uniffi_racestudio_ffi_fn_init_callback_vtable_deletechannel(&UniffiCallbackInterfaceDeleteChannel.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceDeleteChannel {
+    fileprivate static var handleMap = UniffiHandleMap<DeleteChannel>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceDeleteChannel : FfiConverter {
+    typealias SwiftType = DeleteChannel
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+
+
+/**
  * A foreign-implemented sink for download progress (issue 6.5).
  *
  * The 6.7 device panel implements this to drive a progress bar: it is called
@@ -3564,6 +3847,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeDeleteConfirmation: FfiConverterRustBuffer {
+    typealias SwiftType = DeleteConfirmation?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeDeleteConfirmation.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeDeleteConfirmation.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3879,6 +4186,29 @@ public func coreVersion() -> String {
 })
 }
 /**
+ * Delete a session from the device behind every safety guard (issue 6.6).
+ *
+ * Only the **guarded** API crosses this boundary — there is no un-guarded delete.
+ * The call refuses, sending **zero** bytes, unless `armed` is `true` **and**
+ * `confirmation` matches `target` (both id and name). Only then is exactly one
+ * delete frame sent via `channel`, and the device's ack/reject interpreted; a
+ * non-ack is a thrown error and is **never** blindly retried (no double-delete).
+ *
+ * # Errors
+ * A thrown [`DiscoveryError`] — `NotArmed` or `ConfirmationMismatch` (nothing was
+ * sent), `DeleteRejected` (the device refused), `BadChecksum` / `TruncatedList`
+ * (the response frame did not verify), or any transport error. Never traps.
+ */
+public func deleteSession(target: SessionInfo, confirmation: DeleteConfirmation?, armed: Bool, channel: DeleteChannel)throws  {try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_func_delete_session(
+        FfiConverterTypeSessionInfo.lower(target),
+        FfiConverterOptionTypeDeleteConfirmation.lower(confirmation),
+        FfiConverterBool.lower(armed),
+        FfiConverterCallbackInterfaceDeleteChannel.lower(channel),$0
+    )
+}
+}
+/**
  * Download a session by reassembling its chunk stream, verifying integrity
  * (issue 6.5).
  *
@@ -3890,8 +4220,9 @@ public func coreVersion() -> String {
  *
  * # Errors
  * A thrown [`DiscoveryError`] — `ChecksumMismatch` (unrecoverable corruption),
- * `MissingChunk` (the stream ended with a gap), or `MalformedRecord` (a chunk
- * overran the declared size). Never traps.
+ * `MissingChunk` (the stream ended with a gap, or only non-progressing chunks
+ * arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable), or
+ * `MalformedRecord` (a chunk overran the declared size). Never traps.
  */
 public func downloadSession(plan: DownloadPlan, source: ChunkSource, progress: DownloadProgress)throws  -> Data {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
@@ -3998,7 +4329,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_core_version() != 5309) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_func_download_session() != 62888) {
+    if (uniffi_racestudio_ffi_checksum_func_delete_session() != 3178) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_func_download_session() != 41158) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
@@ -4055,11 +4389,18 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_method_chunksource_next_chunk() != 52970) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_method_deletechannel_send() != 38471) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_deletechannel_recv() != 43869) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_method_downloadprogress_on_progress() != 39444) {
         return InitializationResult.apiChecksumMismatch
     }
 
     uniffiCallbackInitChunkSource()
+    uniffiCallbackInitDeleteChannel()
     uniffiCallbackInitDownloadProgress()
     return InitializationResult.ok
 }()

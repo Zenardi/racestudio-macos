@@ -101,12 +101,52 @@
       "chunk_offset": 65472,
       "chunk_data_len": 65472,
       "note": "one download data chunk; opaque telemetry, no embedded identifiers"
+    },
+    {
+      "file": "delete/request.bin",
+      "phase": "delete",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "dbc3ea164f00a12cdfd6f9b42edf187e2bc4054ddf99029ab9023c4a7e48f5cc",
+      "deidentified": false,
+      "synthetic": true,
+      "checksum": 13,
+      "checksum_observed": false,
+      "frame_length": 64,
+      "command_code_le": "04000200",
+      "note": "SYNTHETIC (issue 6.6): the delete opcode was never captured (device held 0 sessions); frozen so build_delete_request is pinned byte-for-byte. Real capture tracked in issue #130 (PROTOCOL.md §7)."
+    },
+    {
+      "file": "delete/ack.bin",
+      "phase": "delete",
+      "kind": "stcp_frame",
+      "bytes": 26,
+      "sha256": "304cdabd30654595683a1db231dad02a3850acaaafaff95be87a4eb9fbc4be08",
+      "deidentified": false,
+      "synthetic": true,
+      "checksum": 7,
+      "checksum_observed": false,
+      "frame_length": 6,
+      "note": "SYNTHETIC (issue 6.6): hypothesized delete-ack response — payload = status(u16 LE)=0 || session_id(u32 LE). Real capture tracked in issue #130."
+    },
+    {
+      "file": "delete/reject.bin",
+      "phase": "delete",
+      "kind": "stcp_frame",
+      "bytes": 26,
+      "sha256": "cc760daa035a497a409b74beea712dec15b9586d7cf249d50589dbb0ee9baebd",
+      "deidentified": false,
+      "synthetic": true,
+      "checksum": 8,
+      "checksum_observed": false,
+      "frame_length": 6,
+      "note": "SYNTHETIC (issue 6.6): hypothesized delete-reject response — payload = status(u16 LE)=1 || session_id(u32 LE). Real capture tracked in issue #130."
     }
   ],
   "pending": [
     {
       "phase": "delete",
-      "reason": "MyChron6 held 0 on-device sessions at capture time (all imported to local), so a device delete could not be observed; delete reuses the STCP framing + a delete command opcode and is to be captured when implementing issue 6.6"
+      "reason": "The real delete opcode + response are still uncaptured: the MyChron6 held 0 on-device sessions at 6.2 capture time (all imported to local), so no delete traffic could be observed. Issue 6.6 lands a guarded delete client over SYNTHETIC delete/*.bin fixtures (opcode + response shape hypothesized); a real on-the-wire delete must be captured to confirm them — tracked in issue #130."
     }
   ]
 }

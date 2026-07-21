@@ -29,6 +29,7 @@
 )]
 
 pub mod checksum;
+pub mod delete;
 pub mod discovery;
 pub mod error;
 pub mod framing;
@@ -36,6 +37,7 @@ pub mod session;
 pub mod transfer;
 
 pub use checksum::stcp_checksum;
+pub use delete::{build_delete_request, delete_session, DeleteConfirmation, DeleteTransport};
 pub use discovery::{ap_mode_fallback, discover, parse_discovery, Device, DeviceBrowser};
 pub use error::DeviceError;
 pub use framing::{parse_frame, verified_frame, Frame, HEADER_MAGIC, TRAILER_MAGIC};
