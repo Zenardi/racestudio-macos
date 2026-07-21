@@ -28,6 +28,11 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     private let deltaError: Error?
     /// The canned per-lap split times this fake serves (issue 8.11).
     private let segments: [LapSegments]
+    /// Spectra keyed by `(channel, window function)` (issue 8.16); an absent key
+    /// throws ``UnknownChannel``, so a test can seed a different spectrum per taper.
+    private let spectra: [SpectrumKey: ChannelSpectrum]
+    /// When set, every `spectrum(...)` call throws it (the error path).
+    private let spectrumError: Error?
 
     /// One recorded `samples(...)` request, so a test can assert the window
     /// `AnalysisSession` actually issued across the seam.
@@ -84,12 +89,31 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     /// was never invoked (issue 8.11).
     private(set) var lastSegmentSplits: UInt32?
 
+    /// A `(channel, window function)` key for a canned spectrum (issue 8.16).
+    struct SpectrumKey: Hashable {
+        let channel: String
+        let windowFunction: SpectrumWindowKind
+    }
+
+    /// One recorded `spectrum(...)` call, so a test can assert the channel, taper,
+    /// and window bounds `AnalysisSession` forwarded across the seam (issue 8.16).
+    struct SpectrumRequest: Equatable {
+        let channel: String
+        let windowFunction: SpectrumWindowKind
+        let start: Double
+        let end: Double
+    }
+
+    /// The most recent `spectrum(...)` call, or `nil` when it was never invoked.
+    private(set) var lastSpectrumRequest: SpectrumRequest?
+
     struct UnknownChannel: Error {}
 
     init(banks: [[DataSample]], stats: [String: ChannelStats] = [:], statsError: Error? = nil,
          gps: [GPSTrackPoint] = [], distanceBanks: [[DistanceSample]] = [],
          deltas: [DeltaKey: [DeltaSample]] = [:], deltaError: Error? = nil,
-         segments: [LapSegments] = []) {
+         segments: [LapSegments] = [],
+         spectra: [SpectrumKey: ChannelSpectrum] = [:], spectrumError: Error? = nil) {
         self.banks = banks
         self.stats = stats
         self.statsError = statsError
@@ -98,6 +122,8 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         self.deltas = deltas
         self.deltaError = deltaError
         self.segments = segments
+        self.spectra = spectra
+        self.spectrumError = spectrumError
     }
 
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
@@ -142,5 +168,16 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     func segmentTimes(splits: UInt32) -> [LapSegments] {
         lastSegmentSplits = splits
         return segments
+    }
+
+    func spectrum(channel: String, windowFunction: SpectrumWindowKind,
+                  start: Double, end: Double) throws -> ChannelSpectrum {
+        lastSpectrumRequest = SpectrumRequest(
+            channel: channel, windowFunction: windowFunction, start: start, end: end)
+        if let spectrumError { throw spectrumError }
+        guard let value = spectra[SpectrumKey(channel: channel, windowFunction: windowFunction)] else {
+            throw UnknownChannel()
+        }
+        return value
     }
 }

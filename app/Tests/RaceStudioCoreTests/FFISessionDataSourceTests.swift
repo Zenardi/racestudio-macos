@@ -179,5 +179,57 @@ import RaceStudioFFIBindings
             #expect(got.baseTimes == base.segmentTimes, "the segment times map 1:1 (already seconds)")
         }
     }
+
+    // MARK: - spectrum: FFI SpectrumDto → ChannelSpectrum (seconds → ms window) (issue 8.16)
+
+    @Test func test_spectrum_maps_ffi_dto_over_the_whole_channel() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        let mapped = try source.spectrum(channel: "RPM", windowFunction: .hann, start: -.infinity, end: .infinity)
+        let dto = try session.fftSpectrum(
+            channel: "RPM", windowFn: .hann, window: FfiWindow(start: -.infinity, end: .infinity))
+
+        #expect(mapped.freqs == dto.freqs, "the frequency axis maps 1:1")
+        #expect(mapped.amps == dto.amps, "the amplitudes map 1:1")
+        #expect(!mapped.freqs.isEmpty, "a real channel transforms — the engine resampled it first")
+    }
+
+    @Test func test_spectrum_scales_a_seconds_window_to_the_ffi_millisecond_window() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        // A 0–5 s window (Core seconds) must match the FFI's 0–5000 ms window.
+        let sub = try source.spectrum(channel: "RPM", windowFunction: .hann, start: 0, end: 5)
+        let ffi = try session.fftSpectrum(
+            channel: "RPM", windowFn: .hann, window: FfiWindow(start: 0, end: 5000))
+
+        #expect(sub.freqs == ffi.freqs)
+        #expect(sub.amps == ffi.amps)
+    }
+
+    @Test func test_spectrum_maps_each_core_window_function_to_its_ffi_taper() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+        let pairs: [(SpectrumWindowKind, SpectrumWindow)] = [
+            (.rectangular, .rectangular), (.hann, .hann), (.hamming, .hamming), (.blackman, .blackman)
+        ]
+
+        for (core, ffi) in pairs {
+            let mapped = try source.spectrum(channel: "RPM", windowFunction: core, start: -.infinity, end: .infinity)
+            let dto = try session.fftSpectrum(
+                channel: "RPM", windowFn: ffi, window: FfiWindow(start: -.infinity, end: .infinity))
+            #expect(mapped.amps == dto.amps, "\(core) maps to the \(ffi) taper")
+        }
+    }
+
+    @Test func test_spectrum_throws_for_an_unknown_channel() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        #expect(throws: (any Error).self) {
+            _ = try source.spectrum(channel: "NoSuchChannel", windowFunction: .hann, start: -.infinity, end: .infinity)
+        }
+    }
 }
 #endif

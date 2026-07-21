@@ -176,6 +176,30 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
             LapSegments(lap: LapID(Int($0.lapIndex)), baseTimes: $0.segmentTimes)
         }
     }
+
+    public func spectrum(channel: String, windowFunction: SpectrumWindowKind,
+                         start: Double, end: Double) throws -> ChannelSpectrum {
+        // The FFI spectrum window is the same timecode unit as stats (ms); Core
+        // speaks seconds, so scale the bounds (±∞ preserved), as `statistics` does.
+        // The engine resamples the in-window samples to a uniform rate before the
+        // FFT (3.3), so a non-uniform channel needs no work here.
+        let dto = try handle.fftSpectrum(
+            channel: channel, windowFn: windowFunction.ffiWindow,
+            window: FfiWindow(start: start * 1000, end: end * 1000))
+        return ChannelSpectrum(freqs: dto.freqs, amps: dto.amps)
+    }
+}
+
+private extension SpectrumWindowKind {
+    /// The generated-binding window function this Core taper maps to (issue 8.16).
+    var ffiWindow: SpectrumWindow {
+        switch self {
+        case .rectangular: return .rectangular
+        case .hann: return .hann
+        case .hamming: return .hamming
+        case .blackman: return .blackman
+        }
+    }
 }
 
 extension DecodeError {

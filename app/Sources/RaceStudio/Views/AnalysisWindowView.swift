@@ -21,6 +21,9 @@ struct AnalysisWindowView: View {
     // The Split Times knobs (issue 8.11) — split count, editable layout, focus —
     // likewise held at the window level so they survive layout switches.
     @StateObject private var splitReport = SplitReportModel()
+    // The Spectrum panel knob (issue 8.16) — the window function — likewise held at
+    // the window level so the taper choice survives layout switches.
+    @StateObject private var spectrum = SpectrumPanelModel()
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -46,7 +49,8 @@ struct AnalysisWindowView: View {
                 Divider()
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
-                              report: report, splitReport: splitReport, analysis: analysis)
+                              report: report, splitReport: splitReport, spectrum: spectrum,
+                              analysis: analysis)
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -97,6 +101,7 @@ private struct PanelHost: View {
     @ObservedObject var stats: StatsPanelsModel
     @ObservedObject var report: ChannelsReportModel
     @ObservedObject var splitReport: SplitReportModel
+    @ObservedObject var spectrum: SpectrumPanelModel
     let analysis: AnalysisSession?
 
     var body: some View {
@@ -119,6 +124,8 @@ private struct PanelHost: View {
                 HistogramPanel(model: model, stats: stats)
             case .scatter:
                 ScatterPanel(model: model, stats: stats)
+            case .spectrum:
+                SpectrumPanel(model: model, spectrum: spectrum, analysis: analysis)
             case .channelsReport:
                 ChannelsReportPanel(model: model, report: report)
             case .splitTimes:
