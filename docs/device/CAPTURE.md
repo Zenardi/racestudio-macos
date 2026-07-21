@@ -33,89 +33,88 @@ capture topology is:
   iPhone/iPad (AiM app)  ──WiFi──►  MyChron6   (the exchange we want)
         │ USB
         ▼
-      Mac  ── rvictl mirror ──►  rvi0  ──►  Wireshark / tcpdump   (the capture)
+      Mac  ── pymobiledevice3 (pcapd) ──►  captures/*.pcapng   (the capture)
 ```
 
-We capture the **iPhone ↔ MyChron** traffic by mirroring the iPhone's packets to
-the Mac over USB with a **Remote Virtual Interface (RVI)**. RVI presents the
-device's traffic at the **IP layer already decrypted**, so we read TCP/UDP/mDNS
-payloads directly — no WPA2 key handling.
+We capture the **iPhone ↔ MyChron** traffic by streaming the iPhone's packets to
+the Mac over USB from its on-device `pcapd` service (via `pymobiledevice3`). It
+presents the device's traffic at the **IP layer already decrypted**, so we read
+TCP/UDP/mDNS payloads directly — no WPA2 key handling.
 
 ---
 
 ## 1. One-time setup
 
-1. **Wireshark** (provides `dumpcap`/`tshark`; the GUI is optional):
+**Primary tool — `pymobiledevice3`.** Apple's `rvictl` is broken on recent macOS
+(it fails with `bootstrap_look_up(): 1102` because its backing daemon is no longer
+registered — see §5.1). `pymobiledevice3` captures the same IP-layer traffic
+straight from the iPhone's on-device `pcapd` service over USB and needs **no
+Xcode** — verified working on iOS 26 / macOS 26 here.
+
+1. **Wireshark** (for `tshark`, used to extract fixtures from the captures):
 
    ```sh
-   brew install --cask wireshark      # installs the ChmodBPF helper for capture
+   brew install --cask wireshark
    ```
 
-2. **Full Xcode** — `rvictl` ships with Xcode, **not** the Command Line Tools.
-   Install Xcode from the App Store, then:
+2. **pymobiledevice3**:
 
    ```sh
-   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-   xcodebuild -runFirstLaunch
-   rvictl -h            # confirm rvictl is now on PATH
+   python3 -m pip install --user -U pymobiledevice3
+   export PATH="$(python3 -m site --user-base)/bin:$PATH"   # its console script lives here
+   pymobiledevice3 usbmux list                              # must list the iPhone (USB)
    ```
 
 3. **The AiM iOS app** on the iPhone/iPad, paired with the MyChron6 (confirm you
    can already connect + list sessions in the app before capturing).
 
-4. A `captures/` scratch dir at the repo root for the raw `.pcapng` files — it is
-   **git-ignored** (raw captures are never committed; see §4):
+4. Connect the iPhone by USB, **unlock it, and tap "Trust"**. A `captures/`
+   scratch dir at the repo root holds the raw `.pcapng` — it is **git-ignored**
+   (raw captures are never committed; see §4):
 
    ```sh
    mkdir -p captures
    ```
 
+> **iOS 17+ tunnel note.** Some device services sit behind a root "tunnel"
+> (`sudo pymobiledevice3 remote tunneld`), but `pcap` was verified to work
+> **without** a tunnel on iOS 26 here. If a capture ever errors that it needs an
+> RSD/tunnel, run `sudo pymobiledevice3 remote tunneld` in another terminal and
+> retry.
+
 ---
 
-## 2. Start the mirror + capture
+## 2. Capture, one phase per file
 
-1. Connect the iPhone to the Mac by USB and **tap "Trust"** on the phone.
-2. Get the device UDID (40-char / dashed identifier):
+With the iPhone unlocked, trusted, joined to the **MyChron's WiFi**, and
+USB-connected, capture each phase to its own file and stop with `Ctrl-C` after
+performing **only** that action in the AiM app. Each file isolates one fixture:
 
-   ```sh
-   xcrun xctrace list devices        # UDID is shown next to the device name
-   ```
+```sh
+export PATH="$(python3 -m site --user-base)/bin:$PATH"
+pymobiledevice3 pcap --out captures/discovery.pcapng   # app finds the MyChron6 → Ctrl-C
+pymobiledevice3 pcap --out captures/sessions.pcapng    # open the session list → Ctrl-C
+pymobiledevice3 pcap --out captures/transfer.pcapng    # download ONE small session → Ctrl-C
+pymobiledevice3 pcap --out captures/delete.pcapng      # delete ONE disposable session → Ctrl-C
+```
 
-3. Create the mirror interface (creates `rvi0`; `-x` later removes it):
+| File | Action to perform in the AiM app while capturing |
+| --- | --- |
+| `captures/discovery.pcapng` | Open the app so it finds/announces the MyChron6 (Bonjour/mDNS). |
+| `captures/sessions.pcapng` | Open the device's **session list** (do not download yet). |
+| `captures/transfer.pcapng` | **Download one** (ideally small) session start-to-finish — yields the chunk framing + checksums. |
+| `captures/delete.pcapng` | **Delete one** disposable test session. |
 
-   ```sh
-   rvictl -s <UDID>
-   rvictl -l                          # verify: "Active" with rvi0
-   ```
+Optional flags: `--process <name>` filters to just the AiM app's traffic;
+`-c <n>` stops automatically after N packets (omit to sniff until `Ctrl-C`).
+`pymobiledevice3 pcap` writes Ethernet-framed IPv4/IPv6 packets that Wireshark and
+`tshark` read directly.
 
-4. Capture **one protocol phase per file** so each fixture is isolated. Use
-   `dumpcap` (or Wireshark GUI → interface `rvi0`). Example, discovery:
-
-   ```sh
-   dumpcap -i rvi0 -w captures/discovery.pcapng
-   ```
-
-5. On the iPhone, perform **only that phase** in the AiM app, then stop the
-   capture (`Ctrl-C`). Repeat for each phase into its own file:
-
-   | File | Action to perform in the AiM app while capturing |
-   | --- | --- |
-   | `captures/discovery.pcapng` | Open the app so it finds/announces the MyChron6 (Bonjour/mDNS or the AP-mode handshake). |
-   | `captures/sessions.pcapng` | Open the device's **session list** (do not download yet). |
-   | `captures/transfer.pcapng` | **Download one** (ideally small) session start-to-finish — this yields the chunk framing + checksums. |
-   | `captures/delete.pcapng` | **Delete one** session (a disposable test session). |
-
-6. Tear down the mirror when done:
-
-   ```sh
-   rvictl -x <UDID>
-   ```
-
-**What RVI does and does not see.** RVI mirrors at L3, so you get the TCP/UDP
-payloads and mDNS — the protocol itself. It does **not** carry raw 802.11
-management frames, so the AP-mode *association* handshake is out of scope here; if
-`PROTOCOL.md` needs those link-layer details, add a short monitor-mode capture
-(§5) as a supplement. For discovery via Bonjour/mDNS (UDP), RVI is sufficient.
+**What this sees.** `pcapd` mirrors at L3 (IP), so you get the TCP/UDP payloads and
+mDNS — the protocol itself. It does **not** carry raw 802.11 management frames, so
+the AP-mode *association* handshake is out of scope here; if `PROTOCOL.md` needs
+those link-layer details, add a short monitor-mode capture (§5.2) as a supplement.
+For discovery via Bonjour/mDNS (UDP), `pcapd` is sufficient.
 
 ---
 
@@ -174,10 +173,22 @@ mechanically.
 
 ---
 
-## 5. Fallback: WiFi monitor-mode capture (no Xcode)
+## 5. Fallbacks
 
-If RVI is unavailable, sniff the MyChron's AP channel over the air. This needs no
-Xcode/tether but is fiddlier and must still use the iOS app as the client:
+### 5.1 `rvictl` (legacy — usually broken on recent macOS)
+
+Apple's Remote Virtual Interface tool (`rvictl`, bundled with full Xcode) also
+mirrors an iOS device's traffic to an `rvi0` interface. On recent macOS it fails
+with `bootstrap_look_up(): 1102` (its `rpmuxd` service is no longer registered),
+so prefer `pymobiledevice3` (§1–§2). If it does work on your machine: install
+Xcode, `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`, then
+`rvictl -s <UDID>` and capture interface `rvi0` — same IP-layer result.
+
+### 5.2 WiFi monitor-mode capture (no Xcode, no USB)
+
+If the on-device capture is unavailable, sniff the MyChron's AP channel over the
+air. This needs no Xcode/tether but is fiddlier and must still use the iOS app as
+the client:
 
 1. Put the Mac WiFi into monitor mode on the MyChron's channel (Wireshark →
    *Capture Options* → enable monitor mode on the Wi-Fi interface, or the bundled
