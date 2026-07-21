@@ -318,4 +318,4 @@ fixture. Raw `.pcap`/`.pcapng` are never committed (git-ignored).
 | **6.4 enumeration** | ✅ byte-exact request + checksum-gated framing → typed `SessionInfo`; **per-session date/size/name layout hypothesized, to be confirmed with a session-present capture (#130)** |
 | **6.5 download** | ✅ checksum-gated chunk reassembly by offset → decodable `.xrk` (validated via M1 decode); **multi-chunk stream / whole-file-checksum source / retry handshake hypothesized, to be confirmed with a session-present capture (#133)** |
 | **6.6 delete** | ✅ guarded delete: arm + typed confirmation ⇒ 0 bytes on refusal, one frame, no blind retry, over verified STCP framing; **delete opcode + ack/reject response synthetic, to be confirmed with a real capture (#130)** (§7) |
-| **6.7 UI** | device identity (name/serial/firmware) from discovery + catalog |
+| **6.7 UI** | ✅ device panel: a tested `DevicePanelModel` state machine over an injected `DeviceService` (discovery → session table → 0→100% download progress → guarded, name-confirmed delete); logic in `RaceStudioCore`, SwiftUI shell excluded from coverage; fixture-driven, no live device |

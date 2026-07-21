@@ -18,6 +18,7 @@ import RaceStudioCore
 @main
 struct RaceStudioApp: App {
     @StateObject private var model = AppModel()
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         Window("RaceStudio", id: "library") {
@@ -39,6 +40,12 @@ struct RaceStudioApp: App {
                         Text("No Recent Files")
                     }
                 }
+
+                #if canImport(RaceStudioFFIBindings)
+                Divider()
+                // Open the MyChron device panel (issue 6.7).
+                Button("MyChron Device…") { openWindow(id: "device") }
+                #endif
             }
         }
 
@@ -47,5 +54,14 @@ struct RaceStudioApp: App {
                 .environmentObject(model)
                 .environmentObject(model.store)
         }
+
+        #if canImport(RaceStudioFFIBindings)
+        // The device panel (issue 6.7) — a secondary single window, opened from
+        // the File menu, driving the tested `DevicePanelModel` in RaceStudioCore.
+        Window("MyChron Device", id: "device") {
+            DevicePanelView()
+                .frame(minWidth: 520, minHeight: 400)
+        }
+        #endif
     }
 }
