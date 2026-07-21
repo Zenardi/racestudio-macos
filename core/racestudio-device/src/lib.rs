@@ -33,12 +33,14 @@ pub mod discovery;
 pub mod error;
 pub mod framing;
 pub mod session;
+pub mod transfer;
 
 pub use checksum::stcp_checksum;
 pub use discovery::{ap_mode_fallback, discover, parse_discovery, Device, DeviceBrowser};
 pub use error::DeviceError;
 pub use framing::{parse_frame, verified_frame, Frame, HEADER_MAGIC, TRAILER_MAGIC};
 pub use session::{build_session_list_request, parse_session_list, SessionDate, SessionInfo};
+pub use transfer::{download_session, DownloadPlan, ProgressSink, Transport, MAX_CHUNK_RETRIES};
 
 /// UDP port used for device discovery (multicast probe/response).
 pub const DISCOVERY_PORT: u16 = 36002;

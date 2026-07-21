@@ -216,6 +216,39 @@ within the session bundle). The final chunk is short (observed `23850` B).
   65472 chunk stride, the ACK-with-next-offset flow-control, and the STCP checksum
   to validate each chunk.
 
+### Typed chunked download (issue 6.5)
+
+`racestudio_device::download_session(plan, transport, progress)` reassembles the
+chunk stream into the original file. Each chunk frame's checksum is **verified
+before use** (a corrupt chunk is retried up to `MAX_CHUNK_RETRIES`; unrecoverable
+corruption is `DeviceError::ChecksumMismatch`); chunks are placed by their
+declared offset, so out-of-order and duplicate deliveries reassemble correctly
+and idempotently; a stream that ends before full coverage is
+`DeviceError::MissingChunk`; and the reassembled whole file is checksum-gated
+before it is surfaced — **no partial file is ever returned as success**. The byte
+source is injected as a [`Transport`], so CI replays fixtures with no live device;
+progress is reported via a [`ProgressSink`] for the 6.7 progress bar.
+
+| Field | Source | Verified? |
+| --- | --- | --- |
+| Chunk frame + trailer checksum | `transfer/chunk.bin` (`checksum_observed`) | ✅ observed |
+| Chunk offset `payload[0..4]` u32 LE = 65472 | `transfer/chunk.bin` | ✅ observed |
+| Multi-chunk stream shape / end-of-stream | — | ⚠️ hypothesized |
+| Whole-file checksum source | — (passed via `DownloadPlan`) | ⚠️ hypothesized |
+| Retry / re-request handshake | — | ⚠️ hypothesized |
+
+> **Caveat — the multi-chunk *stream* is unverified.** Only one real chunk was
+> captured (the device held 0 on-board sessions), so the reassembly, whole-file
+> checksum, and retry handshake are exercised only against synthetic multi-chunk
+> streams **and a real M1 `.xrk` streamed as chunks** — the reassembled bytes must
+> equal the file byte-for-byte and decode via `racestudio-decode` to the M1
+> golden, proving the reassemble→decode pipeline end-to-end. The stream protocol
+> itself must be confirmed against a session-present capture (**issue #133**)
+> before it is trusted against a live device.
+
+[`Transport`]: the byte-source seam (recorded replay in CI; live TCP in 6.7).
+[`ProgressSink`]: the progress callback (bytes done / total).
+
 ---
 
 ## 7. Delete (NOT yet observed)
@@ -256,6 +289,6 @@ fixture. Raw `.pcap`/`.pcapng` are never committed (git-ignored).
 | --- | --- |
 | **6.3 discovery** | UDP 36002 probe `aim-ka` + 236-B response parsing (device IP) |
 | **6.4 enumeration** | ✅ byte-exact request + checksum-gated framing → typed `SessionInfo`; **per-session date/size/name layout hypothesized, to be confirmed with a session-present capture (#130)** |
-| **6.5 download** | STCP frame + checksum; transfer chunk offset/stride + ACK flow-control |
+| **6.5 download** | ✅ checksum-gated chunk reassembly by offset → decodable `.xrk` (validated via M1 decode); **multi-chunk stream / whole-file-checksum source / retry handshake hypothesized, to be confirmed with a session-present capture (#133)** |
 | **6.6 delete** | STCP command framing; **delete opcode still to be captured** (§7) |
 | **6.7 UI** | device identity (name/serial/firmware) from discovery + catalog |

@@ -30,9 +30,11 @@ use racestudio_decode::{decode_session, DecodeError, Session};
 use racestudio_device::{
     ap_mode_fallback as core_ap_mode_fallback,
     build_session_list_request as core_build_session_list_request,
-    parse_discovery as core_parse_discovery, parse_session_list as core_parse_session_list,
-    Device as CoreDevice, DeviceError as CoreDeviceError, SessionDate as CoreSessionDate,
-    SessionInfo as CoreSessionInfo,
+    download_session as core_download_session, parse_discovery as core_parse_discovery,
+    parse_session_list as core_parse_session_list, Device as CoreDevice,
+    DeviceError as CoreDeviceError, DownloadPlan as CoreDownloadPlan,
+    ProgressSink as CoreProgressSink, SessionDate as CoreSessionDate,
+    SessionInfo as CoreSessionInfo, Transport as CoreTransport,
 };
 
 uniffi::setup_scaffolding!();
@@ -1013,6 +1015,13 @@ pub enum DiscoveryError {
     BadChecksum,
     /// A session-list response was truncated or incomplete (issue 6.4).
     TruncatedList,
+    /// A session download failed integrity verification — a chunk stayed corrupt
+    /// past the retry budget, or the reassembled file failed its whole-file
+    /// checksum. No partial file is surfaced as success (issue 6.5).
+    ChecksumMismatch,
+    /// A session download ended with a gap: the transport signalled end-of-stream
+    /// before every byte of the declared size was covered (issue 6.5).
+    MissingChunk,
 }
 
 impl std::fmt::Display for DiscoveryError {
@@ -1022,6 +1031,13 @@ impl std::fmt::Display for DiscoveryError {
             DiscoveryError::NoService => write!(f, "no discovery responder found"),
             DiscoveryError::BadChecksum => write!(f, "response frame failed checksum verification"),
             DiscoveryError::TruncatedList => write!(f, "truncated or incomplete session list"),
+            DiscoveryError::ChecksumMismatch => write!(
+                f,
+                "download failed whole-file or unrecoverable chunk checksum verification"
+            ),
+            DiscoveryError::MissingChunk => {
+                write!(f, "the session download is missing one or more chunks")
+            }
         }
     }
 }
@@ -1035,6 +1051,8 @@ impl From<CoreDeviceError> for DiscoveryError {
             CoreDeviceError::NoService => DiscoveryError::NoService,
             CoreDeviceError::BadChecksum => DiscoveryError::BadChecksum,
             CoreDeviceError::TruncatedList => DiscoveryError::TruncatedList,
+            CoreDeviceError::ChecksumMismatch => DiscoveryError::ChecksumMismatch,
+            CoreDeviceError::MissingChunk => DiscoveryError::MissingChunk,
         }
     }
 }
@@ -1152,6 +1170,96 @@ pub fn build_session_list_request() -> Vec<u8> {
 pub fn parse_session_list(bytes: Vec<u8>) -> Result<Vec<SessionInfo>, DiscoveryError> {
     let sessions = core_parse_session_list(&bytes)?;
     Ok(sessions.into_iter().map(SessionInfo::from).collect())
+}
+
+/// What to download, carried across the FFI boundary (issue 6.5).
+///
+/// Mirrors the device crate's [`DownloadPlan`](racestudio_device::DownloadPlan):
+/// the `session_id` and `total_len` come from the 6.4 catalog
+/// ([`SessionInfo`]), and `whole_file_checksum` is verified after reassembly.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct DownloadPlan {
+    /// The device-local id of the session to download.
+    pub session_id: u32,
+    /// The session's total size in bytes; the reassembled output must cover
+    /// exactly this many bytes.
+    pub total_len: u64,
+    /// The expected whole-file STCP checksum, verified after reassembly.
+    pub whole_file_checksum: u16,
+}
+
+/// A foreign-implemented source of download chunk frames (issue 6.5).
+///
+/// Swift's live TCP transport (`NWConnection`) implements this: it sends the read
+/// commands and returns each raw STCP chunk frame the device replies with, or
+/// `nil` at end-of-stream. A recorded implementation replays fixture bytes so a
+/// download can be driven with no live device.
+#[uniffi::export(callback_interface)]
+pub trait ChunkSource: Send + Sync {
+    /// Return the next raw STCP chunk frame, or `None` at end-of-stream.
+    fn next_chunk(&self) -> Option<Vec<u8>>;
+}
+
+/// A foreign-implemented sink for download progress (issue 6.5).
+///
+/// The 6.7 device panel implements this to drive a progress bar: it is called
+/// with a leading `(0, total)` sample and then after each chunk that covers new
+/// bytes, with `bytes_done` monotonically reaching `total` on completion.
+#[uniffi::export(callback_interface)]
+pub trait DownloadProgress: Send + Sync {
+    /// Report that `bytes_done` of `total` bytes have been reassembled.
+    fn on_progress(&self, bytes_done: u64, total: u64);
+}
+
+/// Bridges a foreign [`ChunkSource`] to the device crate's [`CoreTransport`].
+struct ChunkSourceAdapter(Box<dyn ChunkSource>);
+
+impl CoreTransport for ChunkSourceAdapter {
+    fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, CoreDeviceError> {
+        // A foreign source signals both "no more data" and transport failure as
+        // `None`; an incomplete transfer then surfaces as `MissingChunk`.
+        Ok(self.0.next_chunk())
+    }
+}
+
+/// Bridges a foreign [`DownloadProgress`] to the device crate's [`CoreProgressSink`].
+struct ProgressAdapter(Box<dyn DownloadProgress>);
+
+impl CoreProgressSink for ProgressAdapter {
+    fn on_progress(&mut self, bytes_done: u64, total: u64) {
+        self.0.on_progress(bytes_done, total);
+    }
+}
+
+/// Download a session by reassembling its chunk stream, verifying integrity
+/// (issue 6.5).
+///
+/// Pulls raw chunk frames from `source` (the injected transport), verifies each
+/// chunk's checksum (retrying a corrupt chunk), reassembles by offset, and gates
+/// the result on the whole-file checksum before returning it — so a corrupt or
+/// incomplete transfer never masquerades as a good file. Progress is reported to
+/// `progress` so a UI can render a progress bar.
+///
+/// # Errors
+/// A thrown [`DiscoveryError`] — `ChecksumMismatch` (unrecoverable corruption),
+/// `MissingChunk` (the stream ended with a gap, or only non-progressing chunks
+/// arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable), or
+/// `MalformedRecord` (a chunk overran the declared size). Never traps.
+#[uniffi::export]
+pub fn download_session(
+    plan: DownloadPlan,
+    source: Box<dyn ChunkSource>,
+    progress: Box<dyn DownloadProgress>,
+) -> Result<Vec<u8>, DiscoveryError> {
+    let core_plan = CoreDownloadPlan {
+        session_id: plan.session_id,
+        total_len: plan.total_len,
+        whole_file_checksum: plan.whole_file_checksum,
+    };
+    let mut adapted_source = ChunkSourceAdapter(source);
+    let mut adapted_progress = ProgressAdapter(progress);
+    core_download_session(&core_plan, &mut adapted_source, &mut adapted_progress)
+        .map_err(DiscoveryError::from)
 }
 
 #[cfg(test)]
@@ -1677,5 +1785,153 @@ mod tests {
             DiscoveryError::TruncatedList.to_string()
         );
         assert!(!DiscoveryError::TruncatedList.to_string().is_empty());
+    }
+
+    // ---- 6.5 chunked download over the FFI boundary ------------------------
+
+    /// Frame one download chunk: payload = `offset(u32 LE) || data`, wrapped in a
+    /// checksum-valid STCP frame (mirrors the device crate's chunk framing).
+    fn download_chunk_frame(offset: u32, data: &[u8]) -> Vec<u8> {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&offset.to_le_bytes());
+        payload.extend_from_slice(data);
+        let mut frame = Vec::new();
+        frame.extend_from_slice(b"<hSTCP");
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.push(0);
+        frame.push(b'>');
+        frame.extend_from_slice(&payload);
+        frame.extend_from_slice(b"<STCP");
+        frame.extend_from_slice(&racestudio_device::stcp_checksum(&payload).to_le_bytes());
+        frame.push(b'>');
+        frame
+    }
+
+    /// A `ChunkSource` that replays a queue of pre-framed chunks.
+    struct FakeSource {
+        queue: std::sync::Mutex<std::collections::VecDeque<Vec<u8>>>,
+    }
+    impl FakeSource {
+        fn new(frames: Vec<Vec<u8>>) -> Self {
+            Self {
+                queue: std::sync::Mutex::new(frames.into()),
+            }
+        }
+    }
+    impl ChunkSource for FakeSource {
+        fn next_chunk(&self) -> Option<Vec<u8>> {
+            self.queue.lock().expect("queue lock").pop_front()
+        }
+    }
+
+    /// A `DownloadProgress` that records every `(bytes_done, total)` sample.
+    #[derive(Default)]
+    struct FakeProgress {
+        events: std::sync::Mutex<Vec<(u64, u64)>>,
+    }
+    impl DownloadProgress for std::sync::Arc<FakeProgress> {
+        fn on_progress(&self, bytes_done: u64, total: u64) {
+            self.events
+                .lock()
+                .expect("events lock")
+                .push((bytes_done, total));
+        }
+    }
+
+    #[test]
+    fn test_ffi_download_reassembles_and_reports_progress() {
+        // A three-chunk transfer reassembles through the real core and the
+        // foreign progress sink sees monotonic bytes reaching 100%.
+        let payload: Vec<u8> = (0..250u32).map(|i| i as u8).collect();
+        let frames = vec![
+            download_chunk_frame(0, &payload[0..100]),
+            download_chunk_frame(100, &payload[100..200]),
+            download_chunk_frame(200, &payload[200..]),
+        ];
+        let progress = std::sync::Arc::new(FakeProgress::default());
+        let plan = DownloadPlan {
+            session_id: 5,
+            total_len: payload.len() as u64,
+            whole_file_checksum: racestudio_device::stcp_checksum(&payload),
+        };
+
+        let out = download_session(
+            plan,
+            Box::new(FakeSource::new(frames)),
+            Box::new(std::sync::Arc::clone(&progress)),
+        )
+        .expect("download reassembles across the boundary");
+
+        assert_eq!(out, payload);
+        let events = progress.events.lock().expect("events");
+        assert_eq!(
+            events.last().copied(),
+            Some((payload.len() as u64, payload.len() as u64)),
+            "progress reaches 100%"
+        );
+    }
+
+    #[test]
+    fn test_ffi_download_unrecoverable_checksum_maps() {
+        // A chunk that stays corrupt past the retry budget maps to ChecksumMismatch.
+        let payload: Vec<u8> = (0..64u8).collect();
+        let mut corrupt = download_chunk_frame(0, &payload);
+        let n = corrupt.len();
+        corrupt[n - 2] ^= 0xFF;
+        let frames = vec![corrupt.clone(); 5]; // > MAX_CHUNK_RETRIES deliveries
+        let progress = std::sync::Arc::new(FakeProgress::default());
+        let plan = DownloadPlan {
+            session_id: 1,
+            total_len: 64,
+            whole_file_checksum: 0,
+        };
+
+        let err = download_session(
+            plan,
+            Box::new(FakeSource::new(frames)),
+            Box::new(std::sync::Arc::clone(&progress)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::ChecksumMismatch));
+    }
+
+    #[test]
+    fn test_ffi_download_missing_chunk_maps() {
+        // A stream that ends before full coverage maps to MissingChunk.
+        let payload: Vec<u8> = (0..200u8).collect();
+        let frames = vec![download_chunk_frame(0, &payload[0..100])]; // only the first half
+        let progress = std::sync::Arc::new(FakeProgress::default());
+        let plan = DownloadPlan {
+            session_id: 1,
+            total_len: 200,
+            whole_file_checksum: 0,
+        };
+
+        let err = download_session(
+            plan,
+            Box::new(FakeSource::new(frames)),
+            Box::new(std::sync::Arc::clone(&progress)),
+        )
+        .unwrap_err();
+
+        assert!(matches!(err, DiscoveryError::MissingChunk));
+    }
+
+    #[test]
+    fn test_download_error_variants_map_and_render() {
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::ChecksumMismatch),
+            DiscoveryError::ChecksumMismatch
+        ));
+        assert!(matches!(
+            DiscoveryError::from(CoreDeviceError::MissingChunk),
+            DiscoveryError::MissingChunk
+        ));
+        assert_ne!(
+            DiscoveryError::ChecksumMismatch.to_string(),
+            DiscoveryError::MissingChunk.to_string()
+        );
+        assert!(!DiscoveryError::MissingChunk.to_string().is_empty());
     }
 }
