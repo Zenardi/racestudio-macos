@@ -2023,6 +2023,273 @@ public func FfiConverterTypeSample_lower(_ value: Sample) -> RustBuffer {
 
 
 /**
+ * A device-local session timestamp carried across the FFI boundary (issue 6.4).
+ *
+ * A **typed** date (mirrors the device crate's
+ * [`SessionDate`](racestudio_device::SessionDate)), not a raw string — Swift
+ * receives a `struct SessionDate` value.
+ */
+public struct SessionDate {
+    /**
+     * Four-digit year (e.g. 2026).
+     */
+    public var year: UInt16
+    /**
+     * Month, 1–12.
+     */
+    public var month: UInt8
+    /**
+     * Day of month, 1–31.
+     */
+    public var day: UInt8
+    /**
+     * Hour, 0–23.
+     */
+    public var hour: UInt8
+    /**
+     * Minute, 0–59.
+     */
+    public var minute: UInt8
+    /**
+     * Second, 0–59.
+     */
+    public var second: UInt8
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Four-digit year (e.g. 2026).
+         */year: UInt16, 
+        /**
+         * Month, 1–12.
+         */month: UInt8, 
+        /**
+         * Day of month, 1–31.
+         */day: UInt8, 
+        /**
+         * Hour, 0–23.
+         */hour: UInt8, 
+        /**
+         * Minute, 0–59.
+         */minute: UInt8, 
+        /**
+         * Second, 0–59.
+         */second: UInt8) {
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+    }
+}
+
+
+
+extension SessionDate: Equatable, Hashable {
+    public static func ==(lhs: SessionDate, rhs: SessionDate) -> Bool {
+        if lhs.year != rhs.year {
+            return false
+        }
+        if lhs.month != rhs.month {
+            return false
+        }
+        if lhs.day != rhs.day {
+            return false
+        }
+        if lhs.hour != rhs.hour {
+            return false
+        }
+        if lhs.minute != rhs.minute {
+            return false
+        }
+        if lhs.second != rhs.second {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(year)
+        hasher.combine(month)
+        hasher.combine(day)
+        hasher.combine(hour)
+        hasher.combine(minute)
+        hasher.combine(second)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionDate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionDate {
+        return
+            try SessionDate(
+                year: FfiConverterUInt16.read(from: &buf), 
+                month: FfiConverterUInt8.read(from: &buf), 
+                day: FfiConverterUInt8.read(from: &buf), 
+                hour: FfiConverterUInt8.read(from: &buf), 
+                minute: FfiConverterUInt8.read(from: &buf), 
+                second: FfiConverterUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SessionDate, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.year, into: &buf)
+        FfiConverterUInt8.write(value.month, into: &buf)
+        FfiConverterUInt8.write(value.day, into: &buf)
+        FfiConverterUInt8.write(value.hour, into: &buf)
+        FfiConverterUInt8.write(value.minute, into: &buf)
+        FfiConverterUInt8.write(value.second, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionDate_lift(_ buf: RustBuffer) throws -> SessionDate {
+    return try FfiConverterTypeSessionDate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionDate_lower(_ value: SessionDate) -> RustBuffer {
+    return FfiConverterTypeSessionDate.lower(value)
+}
+
+
+/**
+ * One enumerated on-device session carried across the FFI boundary (issue 6.4).
+ *
+ * Mirrors the device crate's [`SessionInfo`](racestudio_device::SessionInfo);
+ * `date` is a typed [`SessionDate`]. Swift receives it as a `struct SessionInfo`.
+ */
+public struct SessionInfo {
+    /**
+     * The device-local session id / index.
+     */
+    public var id: UInt32
+    /**
+     * The session's display name.
+     */
+    public var name: String
+    /**
+     * The session start timestamp (device-local).
+     */
+    public var date: SessionDate
+    /**
+     * Number of recorded laps.
+     */
+    public var lapCount: UInt16
+    /**
+     * On-device size of the session's data, in bytes.
+     */
+    public var sizeBytes: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The device-local session id / index.
+         */id: UInt32, 
+        /**
+         * The session's display name.
+         */name: String, 
+        /**
+         * The session start timestamp (device-local).
+         */date: SessionDate, 
+        /**
+         * Number of recorded laps.
+         */lapCount: UInt16, 
+        /**
+         * On-device size of the session's data, in bytes.
+         */sizeBytes: UInt32) {
+        self.id = id
+        self.name = name
+        self.date = date
+        self.lapCount = lapCount
+        self.sizeBytes = sizeBytes
+    }
+}
+
+
+
+extension SessionInfo: Equatable, Hashable {
+    public static func ==(lhs: SessionInfo, rhs: SessionInfo) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.date != rhs.date {
+            return false
+        }
+        if lhs.lapCount != rhs.lapCount {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(date)
+        hasher.combine(lapCount)
+        hasher.combine(sizeBytes)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionInfo {
+        return
+            try SessionInfo(
+                id: FfiConverterUInt32.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                date: FfiConverterTypeSessionDate.read(from: &buf), 
+                lapCount: FfiConverterUInt16.read(from: &buf), 
+                sizeBytes: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SessionInfo, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterTypeSessionDate.write(value.date, into: &buf)
+        FfiConverterUInt16.write(value.lapCount, into: &buf)
+        FfiConverterUInt32.write(value.sizeBytes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionInfo_lift(_ buf: RustBuffer) throws -> SessionInfo {
+    return try FfiConverterTypeSessionInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionInfo_lower(_ value: SessionInfo) -> RustBuffer {
+    return FfiConverterTypeSessionInfo.lower(value)
+}
+
+
+/**
  * Session metadata carried across the boundary (mirrors the decode
  * [`Metadata`](racestudio_decode::Metadata)).
  */
@@ -2589,6 +2856,16 @@ public enum DiscoveryError {
      */
     case NoService(message: String)
     
+    /**
+     * A response frame failed checksum verification (issue 6.4).
+     */
+    case BadChecksum(message: String)
+    
+    /**
+     * A session-list response was truncated or incomplete (issue 6.4).
+     */
+    case TruncatedList(message: String)
+    
 }
 
 
@@ -2613,6 +2890,14 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 3: return .BadChecksum(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .TruncatedList(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -2628,6 +2913,10 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         case .NoService(_ /* message is ignored*/):
             writeInt(&buf, Int32(2))
+        case .BadChecksum(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .TruncatedList(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
 
         
         }
@@ -3137,6 +3426,31 @@ fileprivate struct FfiConverterSequenceTypeSample: FfiConverterRustBuffer {
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeSessionInfo: FfiConverterRustBuffer {
+    typealias SwiftType = [SessionInfo]
+
+    public static func write(_ value: [SessionInfo], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeSessionInfo.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [SessionInfo] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [SessionInfo]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeSessionInfo.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * The AP-mode fallback device: the well-known gateway the MyChron serves on when
  * the Mac has joined its own access point and no mDNS responder is present
@@ -3145,6 +3459,18 @@ fileprivate struct FfiConverterSequenceTypeSample: FfiConverterRustBuffer {
 public func apModeFallbackDevice() -> Device {
     return try!  FfiConverterTypeDevice.lift(try! rustCall() {
     uniffi_racestudio_ffi_fn_func_ap_mode_fallback_device($0
+    )
+})
+}
+/**
+ * Build the catalog/session-list request bytes the MyChron answers with its
+ * session catalog (issue 6.4) — the observed request frame (`command_info.bin`).
+ *
+ * Swift receives it as `Data` and writes it to the control connection (6.5).
+ */
+public func buildSessionListRequest() -> Data {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_func_build_session_list_request($0
     )
 })
 }
@@ -3198,6 +3524,25 @@ public func parseDeviceDiscovery(bytes: Data)throws  -> [Device] {
 })
 }
 /**
+ * Parse a recorded/observed catalog/session-list response into typed sessions
+ * (issue 6.4).
+ *
+ * The response frame's checksum is verified before parsing; an empty on-device
+ * store yields an empty list. Returns a thrown [`DiscoveryError`] for a bad
+ * checksum, a truncated list, or a malformed record — never a trap.
+ *
+ * # Errors
+ * [`DiscoveryError::BadChecksum`], [`DiscoveryError::TruncatedList`], or
+ * [`DiscoveryError::MalformedRecord`] mapped from the device crate.
+ */
+public func parseSessionList(bytes: Data)throws  -> [SessionInfo] {
+    return try  FfiConverterSequenceTypeSessionInfo.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_func_parse_session_list(
+        FfiConverterData.lower(bytes),$0
+    )
+})
+}
+/**
  * Parse-validate a math-channel expression against the M2 grammar (issue 5.4).
  *
  * Runs `expr` through the same lexer/parser [`SessionHandle::eval_math_channel`]
@@ -3232,6 +3577,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_ap_mode_fallback_device() != 12400) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_func_build_session_list_request() != 28619) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_func_core_version() != 5309) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3239,6 +3587,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_parse_device_discovery() != 62004) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_func_parse_session_list() != 35300) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_validate_math_expression() != 44744) {
