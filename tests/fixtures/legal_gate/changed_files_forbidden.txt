@@ -1,0 +1,3 @@
+core/racestudio-device/src/discovery.rs
+fixtures/device/mychron5_v1.fw
+vendor/aim/RaceStudio3.dll

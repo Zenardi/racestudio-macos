@@ -28,3 +28,11 @@ dist/
 # macOS
 .DS_Store
 __pycache__/
+
+# Device reverse-engineering (M6) — forbidden AiM artifacts. Per ADR 0006 and
+# docs/device/LEGAL_GATE.md we MUST NOT commit AiM firmware, RaceStudio DLLs, or
+# the decompiled iOS app binary; only our own clean-room notes/fixtures of the
+# on-the-wire bytes are kept. scripts/check_legal_gate.sh also rejects these in CI.
+*.fw
+*.dll
+*.ipa
