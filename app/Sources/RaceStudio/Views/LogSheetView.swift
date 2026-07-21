@@ -14,29 +14,29 @@ struct LogSheetPanel: View {
     var body: some View {
         Form {
             Section("Weather") {
-                TextField("Air temp (°C)", text: number(\.weather.airTempC))
-                TextField("Track temp (°C)", text: number(\.weather.trackTempC))
-                TextField("Humidity (%)", text: number(\.weather.humidityPercent))
+                OptionalNumberField("Air temp (°C)", value: number(\.weather.airTempC))
+                OptionalNumberField("Track temp (°C)", value: number(\.weather.trackTempC))
+                OptionalNumberField("Humidity (%)", value: number(\.weather.humidityPercent))
                 TextField("Conditions", text: text(\.weather.conditions))
             }
             Section("Engine") {
                 TextField("Make", text: text(\.engine.make))
-                TextField("Displacement (cc)", text: number(\.engine.displacementCC))
+                OptionalNumberField("Displacement (cc)", value: number(\.engine.displacementCC))
                 TextField("Notes", text: text(\.engine.notes))
             }
             Section("Dimensions") {
-                TextField("Wheelbase (mm)", text: number(\.dimensions.wheelbaseMM))
-                TextField("Front track (mm)", text: number(\.dimensions.frontTrackMM))
-                TextField("Rear track (mm)", text: number(\.dimensions.rearTrackMM))
+                OptionalNumberField("Wheelbase (mm)", value: number(\.dimensions.wheelbaseMM))
+                OptionalNumberField("Front track (mm)", value: number(\.dimensions.frontTrackMM))
+                OptionalNumberField("Rear track (mm)", value: number(\.dimensions.rearTrackMM))
             }
             Section("Weights") {
-                TextField("Total (kg)", text: number(\.weights.totalKg))
-                TextField("Front (kg)", text: number(\.weights.frontKg))
-                TextField("Rear (kg)", text: number(\.weights.rearKg))
+                OptionalNumberField("Total (kg)", value: number(\.weights.totalKg))
+                OptionalNumberField("Front (kg)", value: number(\.weights.frontKg))
+                OptionalNumberField("Rear (kg)", value: number(\.weights.rearKg))
             }
             Section("Fuel") {
-                TextField("Capacity (L)", text: number(\.fuel.capacityL))
-                TextField("Start level (L)", text: number(\.fuel.startLevelL))
+                OptionalNumberField("Capacity (L)", value: number(\.fuel.capacityL))
+                OptionalNumberField("Start level (L)", value: number(\.fuel.startLevelL))
                 TextField("Type", text: text(\.fuel.type))
             }
             Section("Gearing") {
@@ -59,10 +59,9 @@ struct LogSheetPanel: View {
                 set: { model.sheet[keyPath: keyPath] = $0 })
     }
 
-    private func number(_ keyPath: WritableKeyPath<LogSheet, Double?>) -> Binding<String> {
-        Binding(
-            get: { model.sheet[keyPath: keyPath].map { $0.formatted(.number.grouping(.never)) } ?? "" },
-            set: { model.sheet[keyPath: keyPath] = Double($0) })
+    private func number(_ keyPath: WritableKeyPath<LogSheet, Double?>) -> Binding<Double?> {
+        Binding(get: { model.sheet[keyPath: keyPath] },
+                set: { model.sheet[keyPath: keyPath] = $0 })
     }
 
     private var ratios: Binding<String> {
@@ -74,5 +73,49 @@ struct LogSheetPanel: View {
                     .map { $0.trimmingCharacters(in: .whitespaces) }
                     .filter { !$0.isEmpty }
             })
+    }
+}
+
+/// A text field over an optional `Double`. It holds its own editing buffer so
+/// intermediate input (a lone `-`, a trailing `.`) is preserved instead of being
+/// erased the instant it fails to parse, and it seeds/parses **locale-invariantly**
+/// (period decimal, matching `Double(_:)`), so a value shown as `21.5` reparses
+/// rather than silently nil-ing on a comma-decimal locale. Empty text means "not
+/// entered" (`nil`); an external change to `value` (e.g. loading a project) re-seeds.
+private struct OptionalNumberField: View {
+    let title: String
+    @Binding var value: Double?
+    @State private var text: String
+
+    init(_ title: String, value: Binding<Double?>) {
+        self.title = title
+        self._value = value
+        self._text = State(initialValue: Self.format(value.wrappedValue))
+    }
+
+    var body: some View {
+        TextField(title, text: $text)
+            .onChange(of: text) { newText in
+                let trimmed = newText.trimmingCharacters(in: .whitespaces)
+                if trimmed.isEmpty {
+                    value = nil
+                } else if let parsed = Double(trimmed) {
+                    value = parsed
+                }
+                // Otherwise the user is mid-edit ("-", "1.") — keep the last value.
+            }
+            .onChange(of: value) { newValue in
+                // Re-seed only when `value` changed underneath us (a project load),
+                // not for edits we just wrote — else the two onChanges would loop.
+                if Double(text.trimmingCharacters(in: .whitespaces)) != newValue {
+                    text = Self.format(newValue)
+                }
+            }
+    }
+
+    /// Period-decimal, no grouping — the exact form `Double(_:)` parses.
+    private static func format(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value.formatted(.number.grouping(.never).locale(Locale(identifier: "en_US_POSIX")))
     }
 }

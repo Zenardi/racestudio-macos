@@ -43,4 +43,13 @@ public enum ShockVelocity {
         return .mathChannel(named: "\(channel) Velocity",
                             samples: velocity.map { MathSample(time: $0.time, value: $0.value) })
     }
+
+    /// A plottable shock-velocity trace derived from an existing position
+    /// ``ChannelTrace`` — the convenience the suspension composite uses to overlay
+    /// the velocity of a selected shock channel. The trace is time-keyed, so the
+    /// derivative uses each sample's `time` (its distance basis is discarded).
+    public static func trace(from position: ChannelTrace) -> ChannelTrace {
+        let samples = position.samples.map { DataSample(time: $0.time, value: $0.value) }
+        return trace(channel: position.name, position: samples)
+    }
 }

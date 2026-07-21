@@ -131,7 +131,12 @@ public struct LogSheet: Codable, Equatable, Sendable {
 /// unavailable, so this uses `ObservableObject`).
 @MainActor
 public final class LogSheetModel: ObservableObject {
-    /// The current sheet; the Log Sheet form edits it in place.
+    /// The current sheet. Unlike the other window knob-models (`SpectrumPanelModel`,
+    /// `MathChannelsManagerModel`), whose state is `private(set)` behind named
+    /// mutators, this is a settable `@Published var` on purpose: the ~20-field Log
+    /// Sheet form binds two-way to individual key paths (`sheet.weather.airTempC`, …),
+    /// which per-field setters would only obscure. There is no validation or
+    /// persist-on-change hook — the sheet is captured wholesale at save time.
     @Published public var sheet: LogSheet
 
     public init(sheet: LogSheet = LogSheet()) {

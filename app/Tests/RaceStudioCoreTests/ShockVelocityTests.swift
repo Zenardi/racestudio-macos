@@ -87,4 +87,17 @@ import Foundation
         let expected = ShockVelocity.derivative(of: position).map(\.value)
         #expect(trace.samples.map(\.value) == expected)
     }
+
+    @Test func test_trace_from_a_channel_trace_differentiates_its_time_samples() {
+        // The suspension composite overlays velocity from an existing position trace.
+        let position = ChannelTrace(name: "Shock_FR",
+                                    times: [0, 0.01, 0.02], distances: [0, 5, 10], values: [0, 1, 2])
+        let velocity = ShockVelocity.trace(from: position)
+
+        #expect(velocity.name == "Shock_FR Velocity")
+        #expect(velocity.samples.map(\.time) == [0, 0.01, 0.02], "the derivative keeps the source's time base")
+        #expect(velocity.samples.first?.value == 0)
+        // (1 - 0) / (0.01 - 0) = 100 units/s.
+        #expect(abs((velocity.samples[1].value) - 100) < 1e-6)
+    }
 }

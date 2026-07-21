@@ -80,6 +80,22 @@ import Foundation
         #expect(document(logSheet: populatedSheet()) != document(logSheet: LogSheet()))
     }
 
+    @Test func test_a_partially_filled_sheet_roundtrips_leaving_nil_fields_nil() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("p.rsproj")
+        // Only free-text notes set; every measurement stays nil (its JSON key omitted).
+        let sparse = LogSheet(notes: "just a note")
+
+        try store().save(document(logSheet: sparse), to: url)
+        let loaded = try store().load(from: url)
+
+        #expect(loaded.logSheet == sparse)
+        #expect(loaded.logSheet.notes == "just a note")
+        #expect(loaded.logSheet.weather.airTempC == nil, "an unset measurement decodes back to nil, not 0")
+        #expect(loaded.logSheet.weights.totalKg == nil)
+    }
+
     @Test func test_the_rsproj_json_carries_a_log_sheet_object() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }

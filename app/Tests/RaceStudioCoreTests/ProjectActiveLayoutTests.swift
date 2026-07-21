@@ -66,6 +66,7 @@ import Foundation
 
         #expect(loaded.schemaVersion == ProjectDocument.currentSchemaVersion)
         #expect(loaded.activeLayout == .timeDistance, "a migrated v2 project opens on Time/Distance")
+        #expect(loaded.logSheet == LogSheet(), "a migrated v2 project also defaults to an empty log sheet")
         #expect(loaded.layout.panes == [Pane(channelNames: ["Speed", "RPM"])], "the rest migrates unchanged")
         #expect(loaded.selectedLaps == [LapSelection(sessionID: "s1", lapIndices: [3, 4])])
     }

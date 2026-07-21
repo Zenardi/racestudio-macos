@@ -254,9 +254,10 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   **v4** `logSheet` field — a pre-8.17 v3 project migrates forward with an empty sheet — and
   carried through the `AnalysisWindowModel` ↔ `ProjectDocument` mapping so an edited sheet
   persists with the `.rsproj`. The shell adds `.suspension` (a `SuspensionPanel` stacking
-  the composed panels for the shared channel selection) and `.logSheet` (a `LogSheetPanel`
-  form editing the sheet through `updateLogSheet`) window layouts. Out of scope:
-  cross-session setup-database sharing.
+  the composed panels for the shared channel selection, with a shock-velocity overlay
+  toggle) and `.logSheet` (a `LogSheetPanel` form binding two-way onto the window-owned
+  `LogSheetModel.sheet`) window layouts. Out of scope: cross-session setup-database
+  sharing.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

@@ -14,6 +14,10 @@ struct SuspensionPanel: View {
     @ObservedObject var logSheet: LogSheetModel
     let analysis: AnalysisSession?
 
+    /// Overlay each selected shock channel's derived velocity (issue 8.17) on the
+    /// time/distance trace.
+    @State private var showVelocity = false
+
     private let composition = SuspensionComposition.standard
 
     var body: some View {
@@ -49,8 +53,15 @@ struct SuspensionPanel: View {
     private func panel(_ kind: SuspensionPanelKind) -> some View {
         switch kind {
         case .timeDistance:
-            TimeDistancePlotView(traces: model.traces, mode: .time,
-                                 lapBoundaries: lapTimeBoundaries(model.session.laps))
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Overlay shock velocity", isOn: $showVelocity)
+                    .toggleStyle(.switch)
+                    .fixedSize()
+                    .padding(.horizontal, 8)
+                    .help("Overlay each selected channel's derived shock (damper) velocity")
+                TimeDistancePlotView(traces: timeDistanceTraces, mode: .time,
+                                     lapBoundaries: lapTimeBoundaries(model.session.laps))
+            }
         case .histogram:
             HistogramPanel(model: model, stats: stats)
         case .spectrum:
@@ -58,6 +69,14 @@ struct SuspensionPanel: View {
         case .settings:
             SuspensionSettingsReadout(logSheet: logSheet.sheet)
         }
+    }
+
+    /// The time/distance traces, optionally augmented with each selected channel's
+    /// derived shock velocity (issue 8.17) — the "shock velocity is derived and
+    /// plottable" acceptance criterion.
+    private var timeDistanceTraces: [ChannelTrace] {
+        guard showVelocity else { return model.traces }
+        return model.traces + model.traces.map(ShockVelocity.trace(from:))
     }
 }
 

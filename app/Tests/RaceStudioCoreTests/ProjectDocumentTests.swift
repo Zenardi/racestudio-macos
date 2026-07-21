@@ -142,12 +142,33 @@ import Foundation
         #expect(throws: ProjectError.ioFailure) { try self.store().load(from: url) }
     }
 
-    @Test func test_current_version_with_malformed_body_is_corrupt() throws {
+    @Test func test_current_version_malformed_body_is_corrupt() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("project.rsproj")
-        // Valid schemaVersion, but the body is the wrong shape.
+        // The current schemaVersion, but the body is the wrong shape.
+        let json = #"{"schemaVersion": \#(ProjectDocument.currentSchemaVersion), "sessionRefs": "not-an-array"}"#
+        try Data(json.utf8).write(to: url)
+
+        #expect(throws: ProjectError.corruptDocument) { try self.store().load(from: url) }
+    }
+
+    @Test func test_v2_body_malformed_is_corrupt() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("project.rsproj")
+        // Declares v2 but the payload can't decode as a v2 document.
         try Data(#"{"schemaVersion": 2, "sessionRefs": "not-an-array"}"#.utf8).write(to: url)
+
+        #expect(throws: ProjectError.corruptDocument) { try self.store().load(from: url) }
+    }
+
+    @Test func test_v3_body_malformed_is_corrupt() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("project.rsproj")
+        // Declares v3 (issue 8.17's migration source) but the body is the wrong shape.
+        try Data(#"{"schemaVersion": 3, "activeLayout": 123}"#.utf8).write(to: url)
 
         #expect(throws: ProjectError.corruptDocument) { try self.store().load(from: url) }
     }
