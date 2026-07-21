@@ -92,33 +92,41 @@ public final class ProjectStore {
         else {
             throw ProjectError.corruptDocument
         }
+        // A version below 1 is not a real schema (corrupt); one above this build's is
+        // a newer file (unsupported). In between, `decode` migrates it forward.
+        guard version >= 1 else { throw ProjectError.corruptDocument }
+        guard version <= ProjectDocument.currentSchemaVersion else { throw ProjectError.unsupportedVersion }
 
-        let decoded: ProjectDocument
+        return resolveAndValidate(try Self.decode(data, version: version), library: library)
+    }
+
+    /// Decode `data` at a known-in-range `version` (1…current), migrating an older
+    /// shape forward to the current ``ProjectDocument``. Throws
+    /// ``ProjectError/corruptDocument`` if the payload doesn't match its declared
+    /// version's shape.
+    private static func decode(_ data: Data, version: Int) throws -> ProjectDocument {
         switch version {
         case ProjectDocument.currentSchemaVersion:
             guard let document = try? JSONDecoder().decode(ProjectDocument.self, from: data) else {
                 throw ProjectError.corruptDocument
             }
-            decoded = document
+            return document
+        case 3:
+            guard let raw = try? JSONDecoder().decode(ProjectDocumentV3.self, from: data) else {
+                throw ProjectError.corruptDocument
+            }
+            return migrate(raw)
         case 2:
             guard let raw = try? JSONDecoder().decode(ProjectDocumentV2.self, from: data) else {
                 throw ProjectError.corruptDocument
             }
-            decoded = Self.migrate(raw)
-        case 1:
+            return migrate(raw)
+        default: // version == 1 — the caller has already bounded it to 1…current.
             guard let raw = try? JSONDecoder().decode(ProjectDocumentV1.self, from: data) else {
                 throw ProjectError.corruptDocument
             }
-            decoded = Self.migrate(raw)
-        case let invalid where invalid < 1:
-            // A schema version below 1 is not a real version — treat as corrupt,
-            // not as a "newer build" file.
-            throw ProjectError.corruptDocument
-        default:
-            throw ProjectError.unsupportedVersion
+            return migrate(raw)
         }
-
-        return resolveAndValidate(decoded, library: library)
     }
 
     /// Upgrade a decoded v1 document to the current shape: v1 math channels had
@@ -148,6 +156,20 @@ public final class ProjectStore {
             selectedLaps: raw.selectedLaps,
             mathChannels: raw.mathChannels,
             activeLayout: .timeDistance)
+    }
+
+    /// Upgrade a decoded v3 document to the current shape: v3 predates the persisted
+    /// log sheet (issue 8.17), so it opens with an empty ``LogSheet``; everything
+    /// else — including the v3 `activeLayout` — is carried over unchanged.
+    static func migrate(_ raw: ProjectDocumentV3) -> ProjectDocument {
+        ProjectDocument(
+            schemaVersion: ProjectDocument.currentSchemaVersion,
+            sessionRefs: raw.sessionRefs,
+            layout: raw.layout,
+            selectedLaps: raw.selectedLaps,
+            mathChannels: raw.mathChannels,
+            activeLayout: raw.activeLayout,
+            logSheet: LogSheet())
     }
 
     // MARK: - Resolution / validation
@@ -225,4 +247,14 @@ struct ProjectDocumentV2: Decodable {
     let layout: AnalysisLayout
     let selectedLaps: [LapSelection]
     let mathChannels: [MathChannelDef]
+}
+
+/// The v3 on-disk shape — identical to the current document except it predates the
+/// persisted `logSheet` (issue 8.17). Used only by ``ProjectStore/migrate(_:)``.
+struct ProjectDocumentV3: Decodable {
+    let sessionRefs: [SessionRef]
+    let layout: AnalysisLayout
+    let selectedLaps: [LapSelection]
+    let mathChannels: [MathChannelDef]
+    let activeLayout: WindowLayout
 }

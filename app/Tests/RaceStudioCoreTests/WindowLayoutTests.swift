@@ -14,10 +14,12 @@ import Testing
         #expect(WindowLayout.histogram.title == "Histogram")
         #expect(WindowLayout.scatter.title == "Scatter")
         #expect(WindowLayout.spectrum.title == "Spectrum")
+        #expect(WindowLayout.suspension.title == "Suspension")
         #expect(WindowLayout.channelsReport.title == "Report")
         #expect(WindowLayout.splitTimes.title == "Splits")
         #expect(WindowLayout.mathChannels.title == "Math")
         #expect(WindowLayout.summary.title == "Summary")
+        #expect(WindowLayout.logSheet.title == "Log Sheet")
     }
 
     @Test func test_layout_system_image_names_are_stable() {
@@ -28,10 +30,12 @@ import Testing
         #expect(WindowLayout.histogram.systemImageName == "chart.bar.xaxis")
         #expect(WindowLayout.scatter.systemImageName == "chart.dots.scatter")
         #expect(WindowLayout.spectrum.systemImageName == "waveform")
+        #expect(WindowLayout.suspension.systemImageName == "arrow.up.and.down")
         #expect(WindowLayout.channelsReport.systemImageName == "chart.bar.doc.horizontal")
         #expect(WindowLayout.splitTimes.systemImageName == "stopwatch")
         #expect(WindowLayout.mathChannels.systemImageName == "function")
         #expect(WindowLayout.summary.systemImageName == "list.bullet.rectangle")
+        #expect(WindowLayout.logSheet.systemImageName == "doc.text")
     }
 
     @Test func test_window_layout_id_is_the_raw_value() {
@@ -42,9 +46,11 @@ import Testing
         #expect(WindowLayout.histogram.id == "histogram")
         #expect(WindowLayout.scatter.id == "scatter")
         #expect(WindowLayout.spectrum.id == "spectrum")
+        #expect(WindowLayout.suspension.id == "suspension")
         #expect(WindowLayout.channelsReport.id == "channelsReport")
         #expect(WindowLayout.splitTimes.id == "splitTimes")
         #expect(WindowLayout.mathChannels.id == "mathChannels")
         #expect(WindowLayout.summary.id == "summary")
+        #expect(WindowLayout.logSheet.id == "logSheet")
     }
 }

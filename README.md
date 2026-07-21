@@ -242,6 +242,22 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   `SpectrumView` (a thin amplitude-vs-frequency area plot reusing the 4.1 plot primitives,
   peak marked) with a window-function picker that recomputes the spectrum when changed. Out
   of scope: waterfall / spectrogram.
+  8.17 adds the RS3 **Suspension Analysis** composite and the **Log Sheet** ledger,
+  composed from existing panels. Core: `Suspension/SuspensionComposition` is a pure,
+  view-free description of the composite's ordered sub-panels (shock time/distance +
+  travel histogram + damper FFT + settings), so the arrangement is unit-tested;
+  `Suspension/ShockVelocity` derives shock (damper) velocity as a plottable math channel —
+  the backward-difference time-derivative of a suspension-position channel, first sample 0
+  and a non-positive `dt` guarded to 0 (mirroring the Rust `derived.rs` `guarded_dt`
+  policy). `LogSheet/LogSheetModel` is the user-authored session/setup metadata (weather,
+  engine, dimensions, weights, fuel, gearing, notes) added to `ProjectDocument` as a schema
+  **v4** `logSheet` field — a pre-8.17 v3 project migrates forward with an empty sheet — and
+  carried through the `AnalysisWindowModel` ↔ `ProjectDocument` mapping so an edited sheet
+  persists with the `.rsproj`. The shell adds `.suspension` (a `SuspensionPanel` stacking
+  the composed panels for the shared channel selection, with a shock-velocity overlay
+  toggle) and `.logSheet` (a `LogSheetPanel` form binding two-way onto the window-owned
+  `LogSheetModel.sheet`) window layouts. Out of scope: cross-session setup-database
+  sharing.
   4.6 adds the `MathEditor/` model — `MathChannelEditorModel` (a debounced,
   last-write-wins live validator publishing an `EditorState` + preview
   `ChannelTrace`), `ExpressionDiagnostic`/`ExpressionEngineError` (engine-error →

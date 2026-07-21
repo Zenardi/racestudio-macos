@@ -61,6 +61,16 @@ import Foundation
         #expect(document.mathChannels == mathChannels)
     }
 
+    @Test func test_document_defaults_to_an_empty_log_sheet() {
+        #expect(makeModel().projectDocument().logSheet.isEmpty)
+    }
+
+    @Test func test_document_captures_the_supplied_log_sheet() {
+        // The log sheet is owned outside the window (like math channels) and passed in.
+        let document = makeModel().projectDocument(logSheet: LogSheet(notes: "captured"))
+        #expect(document.logSheet.notes == "captured")
+    }
+
     // MARK: - Restore
 
     @Test func test_restore_reapplies_channels_laps_reference_and_active_layout() {

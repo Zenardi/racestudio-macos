@@ -13,6 +13,7 @@ import RaceStudioCore
 struct WorkspaceBar: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
+    @ObservedObject var logSheet: LogSheetModel
 
     private var store: ProjectStore { ProjectStore(validator: FFIExpressionValidator()) }
     private var projectType: UTType { UTType(filenameExtension: ProjectStore.fileExtension) ?? .json }
@@ -39,7 +40,8 @@ struct WorkspaceBar: View {
         panel.allowedContentTypes = [projectType]
         panel.nameFieldStringValue = "Workspace.\(ProjectStore.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? store.save(model.projectDocument(mathChannels: mathManager.definitions), to: url)
+        try? store.save(
+            model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet), to: url)
     }
 
     private func openWorkspace() {
@@ -57,6 +59,9 @@ struct WorkspaceBar: View {
             return
         }
         model.restore(from: document)
+        // The log sheet (issue 8.17) is owned outside the window like the math
+        // channels, so reapply the loaded document's sheet here.
+        logSheet.apply(document.logSheet)
         // Math channels are owned by the 8.8 manager; re-add each so the restored
         // workspace re-evaluates them against this session (skipping any already there).
         Task {

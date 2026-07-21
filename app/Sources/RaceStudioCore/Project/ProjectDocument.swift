@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 3
+    public static let currentSchemaVersion = 4
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -27,6 +27,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// the layout it was saved in (issue 8.13). Added in schema v3; a migrated
     /// pre-8.13 project defaults to ``WindowLayout/timeDistance``.
     public var activeLayout: WindowLayout
+    /// The session/setup log sheet — user-authored weather/engine/dimensions/
+    /// weights/fuel/gearing metadata (issue 8.17). Added in schema v4; a migrated
+    /// pre-8.17 project defaults to an empty ``LogSheet``.
+    public var logSheet: LogSheet
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -41,7 +45,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         layout: AnalysisLayout,
         selectedLaps: [LapSelection] = [],
         mathChannels: [MathChannelDef] = [],
-        activeLayout: WindowLayout = .timeDistance
+        activeLayout: WindowLayout = .timeDistance,
+        logSheet: LogSheet = LogSheet()
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
@@ -49,12 +54,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.selectedLaps = selectedLaps
         self.mathChannels = mathChannels
         self.activeLayout = activeLayout
+        self.logSheet = logSheet
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout
+        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -67,5 +73,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.selectedLaps == rhs.selectedLaps
             && lhs.mathChannels == rhs.mathChannels
             && lhs.activeLayout == rhs.activeLayout
+            && lhs.logSheet == rhs.logSheet
     }
 }
