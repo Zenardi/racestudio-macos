@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-label="Device download flow: discover the logger over WiFi, list its sessions, download a checksum-verified .xrk, decode it, and it appears in the library.">
+  <style>
+    .box{fill:#eef3fb;stroke:#3b6bd6;stroke-width:2}
+    .t{font:13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .arw{stroke:#3b6bd6;stroke-width:2;fill:none;marker-end:url(#a)}
+    .gate{fill:#fff3e0;stroke:#c77700;stroke-width:1.5}
+  </style>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3b6bd6"/></marker></defs>
+  <text class="lbl" x="20" y="26">Device download over WiFi — 6.3 → 6.5 (schematic)</text>
+  <rect class="box" x="14" y="70" width="130" height="64" rx="8"/><text class="t" x="30" y="98">Discover</text><text class="lbl" x="30" y="118">name / model</text>
+  <rect class="box" x="180" y="70" width="130" height="64" rx="8"/><text class="t" x="196" y="98">Sessions</text><text class="lbl" x="196" y="118">id / date / laps</text>
+  <rect class="box" x="346" y="70" width="150" height="64" rx="8"/><text class="t" x="362" y="98">Download</text><text class="lbl" x="362" y="118">chunks + checksum</text>
+  <rect class="box" x="532" y="70" width="100" height="64" rx="8"/><text class="t" x="548" y="98">Decode</text>
+  <rect class="box" x="668" y="70" width="80" height="64" rx="8"/><text class="t" x="682" y="98">Library</text>
+  <path class="arw" d="M144,102 L180,102"/><path class="arw" d="M310,102 L346,102"/><path class="arw" d="M496,102 L532,102"/><path class="arw" d="M632,102 L668,102"/>
+  <rect class="gate" x="14" y="164" width="734" height="40" rx="6"/><text class="lbl" x="28" y="189">Interoperability-only, clean-room; do not redistribute AiM firmware/protocol artifacts — see the legal gate.</text>
+</svg>

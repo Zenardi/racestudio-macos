@@ -1,0 +1,33 @@
+# Worked math-channel examples for the user handbook (issue 7.5).
+#
+# Format, one example per line:   <expr> || <bindings> || <expected>
+#   - <expr>     a math-channel expression, evaluated through the *real*
+#                racestudio-analysis `expr` engine (parse_str + eval_scalar).
+#   - <bindings> comma-separated `name=value` channel bindings (empty for a
+#                constant expression).
+#   - <expected> the scalar value the engine must produce (compared within 1e-9).
+#
+# Every expression below is ALSO shown verbatim in
+# docs/handbook/03-math-channels.md; `test_worked_examples_evaluate` evaluates
+# each one here AND asserts it appears in that chapter, so a worked example can
+# never silently drift from what the engine actually computes.
+#
+# Blank lines and `#` comment lines are ignored.
+
+# Precedence & grouping
+2 + 3 * 4 || || 14
+(2 + 3) * 4 || || 20
+100 / 5 / 2 || || 10
+
+# Built-in functions
+abs(-9.81) || || 9.81
+sqrt(pow(3, 2) + pow(4, 2)) || || 5
+min(2, 5) || || 2
+max(2, 5) || || 5
+pow(2, 10) || || 1024
+clamp(120, 0, 100) || || 100
+
+# Channel references (bindings resolve the referenced channels)
+sqrt(Ax*Ax + Ay*Ay) || Ax=3, Ay=4 || 5
+2 * v + 1 || v=10 || 21
+GPS_Speed / 3.6 || GPS_Speed=90 || 25

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 240" role="img" aria-label="Troubleshooting decision flow: a symptom leads to a check, which leads to a fix.">
+  <style>
+    .sym{fill:#fdecec;stroke:#d64545;stroke-width:1.5}
+    .chk{fill:#eef3fb;stroke:#3b6bd6;stroke-width:1.5}
+    .fix{fill:#e9f7ee;stroke:#2e7d32;stroke-width:1.5}
+    .t{font:13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .arw{stroke:#5a6b85;stroke-width:1.5;fill:none;marker-end:url(#a)}
+  </style>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#5a6b85"/></marker></defs>
+  <text class="lbl" x="20" y="26">Troubleshooting — symptom → check → fix (schematic)</text>
+  <rect class="sym" x="14" y="52" width="220" height="48" rx="6"/><text class="t" x="28" y="72">Import fails / “can’t open”</text><text class="lbl" x="28" y="90">a .xrk won’t decode</text>
+  <rect class="chk" x="270" y="52" width="220" height="48" rx="6"/><text class="t" x="284" y="72">Check the log sheet</text><text class="lbl" x="284" y="90">typed decode error + code</text>
+  <rect class="fix" x="526" y="52" width="220" height="48" rx="6"/><text class="t" x="540" y="72">Re-export from the logger</text><text class="lbl" x="540" y="90">or file an issue with the log</text>
+  <path class="arw" d="M234,76 L270,76"/><path class="arw" d="M490,76 L526,76"/>
+  <rect class="sym" x="14" y="140" width="220" height="48" rx="6"/><text class="t" x="28" y="160">Device not found</text><text class="lbl" x="28" y="178">discovery times out</text>
+  <rect class="chk" x="270" y="140" width="220" height="48" rx="6"/><text class="t" x="284" y="160">Same WiFi / AP mode?</text><text class="lbl" x="284" y="178">logger holds sessions</text>
+  <rect class="fix" x="526" y="140" width="220" height="48" rx="6"/><text class="t" x="540" y="160">Rejoin network, retry</text><text class="lbl" x="540" y="178">confirm the Data tab</text>
+  <path class="arw" d="M234,164 L270,164"/><path class="arw" d="M490,164 L526,164"/>
+</svg>
