@@ -10,6 +10,10 @@
 # Flags:
 #   --no-goldens   download the samples only; skip the libxrk golden step
 #                  (used by the offline idempotency test).
+#   --synthetic    generate the large-session performance fixture (issue 7.2):
+#                  fixtures/synthetic_5m.xrk (git-ignored) + the committed
+#                  fixtures/golden/synthetic_5m.decimated.json oracle. Pure Python
+#                  stdlib — no network and no libxrk venv — then exit.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +27,13 @@ NO_GOLDENS=0
 [[ "${1:-}" == "--no-goldens" ]] && NO_GOLDENS=1
 
 mkdir -p "$FIX" "$GOLDEN"
+
+if [[ "${1:-}" == "--synthetic" ]]; then
+  echo "==> Generating synthetic 5M .xrk fixture + decimation golden (issue 7.2)"
+  python3 "$SCRIPT_DIR/gen_synthetic.py" "$FIX"
+  echo "Done."
+  exit 0
+fi
 
 dl() {  # remote-path  local-name
   if [ -s "$FIX/$2" ]; then

@@ -12,6 +12,8 @@
 #[path = "analysis/support/mod.rs"]
 mod support;
 
+#[path = "analysis/decimate.rs"]
+mod decimate;
 #[path = "analysis/delta.rs"]
 mod delta;
 #[path = "analysis/derived.rs"]

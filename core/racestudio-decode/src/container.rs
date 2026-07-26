@@ -78,6 +78,29 @@ impl Container {
         &self.bytes
     }
 
+    /// A cheap clone of the shared raw bytes for the lazy channel index (7.2):
+    /// each lazily decoded [`Channel`](crate::Channel) holds one so it can walk the
+    /// stream on first access without re-reading from disk.
+    pub(crate) fn raw_arc(&self) -> Arc<[u8]> {
+        Arc::clone(&self.bytes)
+    }
+
+    /// Lazily index the container's channels (issue 7.2): see
+    /// [`channel_index`](crate::channel_index). Each returned channel carries its
+    /// metadata but decodes (and allocates) its samples only on first access, so
+    /// opening a very large session materializes no sample vectors and only the
+    /// channels actually plotted pay their decode cost. The channel set/order
+    /// matches [`decode_channels`](crate::decode_channels).
+    ///
+    /// # Errors
+    /// Returns the same [`DecodeError`] as
+    /// [`decode_channels`](crate::decode_channels) for a truncated or
+    /// bad-sample-count data stream, so a corrupt/partial session is reported at
+    /// index time rather than silently served as complete.
+    pub fn channel_index(&self) -> Result<Vec<crate::channels::Channel>, DecodeError> {
+        crate::channels::channel_index(self)
+    }
+
     /// Number of distinct channel definitions (`CHS`) in the container. The
     /// channel decoder (1.3) turns these into decoded channels.
     #[must_use]

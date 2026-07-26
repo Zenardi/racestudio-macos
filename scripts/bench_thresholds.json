@@ -1,0 +1,27 @@
+{
+  "description": "Regression thresholds for the issue 7.2 large-session performance benches. `scripts/bench.sh --ci` runs the Criterion benches quickly and fails when a tracked benchmark's mean time exceeds its wall-clock ceiling (max_seconds) — a machine-tolerant guard that catches algorithmic/O(n^2) regressions rather than micro-noise. The percentage margins (max_regression_pct) bound run-to-run drift for the local baseline comparison (`scripts/bench.sh --check`).",
+  "max_regression_pct": 25.0,
+  "benchmarks": {
+    "decode_open": {
+      "crate": "racestudio-decode",
+      "bench": "lazy_open",
+      "criterion_id": "open/channel_index",
+      "max_regression_pct": 25.0,
+      "max_seconds": 2.0
+    },
+    "single_channel_decimation": {
+      "crate": "racestudio-analysis",
+      "bench": "decimation",
+      "criterion_id": "decimate/single_channel",
+      "max_regression_pct": 20.0,
+      "max_seconds": 1.0
+    },
+    "full_session_decimation": {
+      "crate": "racestudio-analysis",
+      "bench": "decimation",
+      "criterion_id": "decimate/full_session",
+      "max_regression_pct": 20.0,
+      "max_seconds": 3.0
+    }
+  }
+}

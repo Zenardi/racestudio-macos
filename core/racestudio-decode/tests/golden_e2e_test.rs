@@ -70,7 +70,15 @@ fn is_genuine_xrk(path: &Path) -> bool {
         && &magic == b"<h"
 }
 
-/// The corpus: sorted stems of every genuine `<name>.xrk` in the fixtures dir.
+/// Fixtures that are NOT part of the libxrk decode-conformance corpus: synthetic
+/// performance fixtures (issue 7.2) are generated locally, carry no libxrk-derived
+/// decode goldens (only a decimation golden, validated in the analysis crate), and
+/// so must be skipped here rather than demanding `channels`/`gps`/`laps`/`metadata`
+/// oracles that do not exist.
+const NON_CORPUS_STEMS: [&str; 1] = ["synthetic_5m"];
+
+/// The corpus: sorted stems of every genuine `<name>.xrk` in the fixtures dir,
+/// excluding the non-conformance performance fixtures.
 fn corpus() -> Vec<String> {
     let mut names = Vec::new();
     let Ok(entries) = std::fs::read_dir(fixtures_dir()) else {
@@ -83,6 +91,9 @@ fn corpus() -> Vec<String> {
         }
         if is_genuine_xrk(&path) {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if NON_CORPUS_STEMS.contains(&stem) {
+                    continue;
+                }
                 names.push(stem.to_string());
             }
         }

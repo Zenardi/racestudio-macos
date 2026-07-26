@@ -90,3 +90,12 @@ jobs:
         run: make ci
         env:
           COVERAGE_THRESHOLD: "95"
+
+      # Large-session performance guard (issue 7.2): run the Criterion benches and
+      # fail if any tracked benchmark blows past its wall-clock ceiling in
+      # scripts/bench_thresholds.json — a machine-tolerant algorithmic-regression
+      # gate (catches O(n^2) blow-ups, not micro-noise). Kept as a step of this job
+      # (not a separate job) so the required status-check contexts still match the
+      # CI job names — see tests/branch_protection_test.sh.
+      - name: Benchmark regression ceilings (issue 7.2)
+        run: bash scripts/bench.sh --ci
