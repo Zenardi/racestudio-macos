@@ -116,6 +116,14 @@ fn table_rows(doc: &str, header: &[&str]) -> Vec<Vec<String>> {
     let mut found = matching.into_iter().next().unwrap_or_default();
     found.remove(0); // drop the header row
     assert!(!found.is_empty(), "table {header:?} has no data rows");
+    for (index, row) in found.iter().enumerate() {
+        assert!(
+            row.len() == header.len(),
+            "table {header:?} row {index} has {} cells (want {}): {row:?}",
+            row.len(),
+            header.len()
+        );
+    }
     found
 }
 
@@ -188,7 +196,12 @@ fn test_every_row_has_valid_status() {
 fn test_non_done_rows_link_a_gap_issue() {
     // Given any non-Done row, it links a gap/tracking issue id so the gap is
     // never recorded without a follow-up.
-    let offending: Vec<String> = feature_rows()
+    let rows = feature_rows();
+    assert!(
+        rows.iter().any(|row| row.status != "Done"),
+        "no non-Done rows found — the check below would pass vacuously"
+    );
+    let offending: Vec<String> = rows
         .into_iter()
         .filter(|row| row.status != "Done" && !contains_issue_id(&row.gap))
         .map(|row| format!("{} ({}) -> gap cell {:?}", row.feature, row.status, row.gap))
@@ -203,7 +216,13 @@ fn test_non_done_rows_link_a_gap_issue() {
 fn test_done_rows_cite_implementing_issue() {
     // Given any Done or Partial row, it cites the concrete milestone issue that
     // provides the behaviour, so the mapping is auditable (issue 7.1 Goal).
-    let offending: Vec<String> = feature_rows()
+    let rows = feature_rows();
+    assert!(
+        rows.iter()
+            .any(|row| matches!(row.status.as_str(), "Done" | "Partial")),
+        "no Done/Partial rows found — the check below would pass vacuously"
+    );
+    let offending: Vec<String> = rows
         .into_iter()
         .filter(|row| matches!(row.status.as_str(), "Done" | "Partial"))
         .filter(|row| !contains_issue_id(&row.implementing))
