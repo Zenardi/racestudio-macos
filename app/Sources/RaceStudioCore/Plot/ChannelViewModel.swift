@@ -77,4 +77,22 @@ public final class ChannelViewModel {
         let request = Request(mode: mode, visible: visible, columns: Self.columns(forWidth: viewportWidth))
         return cached?.request == request
     }
+
+    // MARK: - Accessibility (issue 7.3)
+
+    /// The VoiceOver label naming this channel's plot, localized for `locale`.
+    public func accessibilityLabel(locale: Locale = .current) -> String {
+        L10n.format(.accessibilityChannelLabel, locale: locale, trace.name)
+    }
+
+    /// The VoiceOver value summarizing the plotted channel — its name, `unit`, and
+    /// min → max range over the trace — so a VoiceOver user gets the data without
+    /// sight. An empty trace reads as a localized "no data".
+    public func accessibilityValue(unit: String, locale: Locale = .current) -> String {
+        AccessibilitySummary.channel(
+            name: trace.name,
+            unit: unit,
+            values: trace.samples.map(\.value),
+            locale: locale)
+    }
 }

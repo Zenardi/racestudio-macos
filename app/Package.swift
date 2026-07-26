@@ -96,7 +96,14 @@ let package = Package(
         // The 95%-coverage logic library. All testable behaviour lives here.
         .target(
             name: "RaceStudioCore",
-            dependencies: coreDependencies
+            dependencies: coreDependencies,
+            resources: [
+                // The String Catalog (issue 7.3) is copied verbatim into
+                // Bundle.module so LocalizationCatalog parses the raw .xcstrings
+                // JSON at runtime — no dependency on Xcode's xcstringstool, so the
+                // localization gate runs on a Command-Line-Tools-only CI runner.
+                .copy("Localization/Localizable.xcstrings")
+            ]
         ),
         // Thin @main SwiftUI shell. Holds no logic and is excluded from the
         // coverage metric by target (wired in issue 0.3).

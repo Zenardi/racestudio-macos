@@ -38,7 +38,7 @@ public struct ScatterView: View {
             drawPoints(context, height: height, xScale: xScale, yScale: yScale)
         }
         .padding(8)
-        .accessibilityLabel("Channel-vs-channel scatter plot")
+        .accessibilityLabel(L10n.string(.chartScatter))
     }
 
     private func drawPoints(_ context: GraphicsContext, height: CGFloat,

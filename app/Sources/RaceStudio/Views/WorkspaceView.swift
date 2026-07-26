@@ -61,7 +61,7 @@ public struct WorkspaceView: View {
         .padding(12)
         .environmentObject(cursor)
         .environment(\.linkedViewRegistry, registry)
-        .accessibilityLabel("Analysis workspace")
+        .accessibilityLabel(L10n.string(.chartWorkspace))
     }
 
     /// A compact readout of the shared cursor's time and distance positions.

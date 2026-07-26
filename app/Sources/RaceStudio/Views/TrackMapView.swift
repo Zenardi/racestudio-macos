@@ -49,7 +49,7 @@ public struct TrackMapView: View {
                 }
             )
         }
-        .accessibilityLabel("GPS track map")
+        .accessibilityLabel(L10n.string(.chartTrackMap))
     }
 
     private func projection(for size: CGSize) -> GeoProjection {

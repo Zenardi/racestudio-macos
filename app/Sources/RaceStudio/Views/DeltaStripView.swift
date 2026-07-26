@@ -37,7 +37,7 @@ struct DeltaStripView: View {
         }
         .frame(height: 18)
         .overlay(alignment: .leading) { readoutLabel }
-        .accessibilityLabel("Delta-t gain/loss strip")
+        .accessibilityLabel(L10n.string(.chartDeltaStrip))
     }
 
     /// The distance→pixel scale for the strip, or `nil` when it has no width.

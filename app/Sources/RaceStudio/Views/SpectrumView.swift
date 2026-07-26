@@ -47,7 +47,7 @@ public struct SpectrumView: View {
             drawPeak(context, height: height, xScale: xScale, yScale: yScale)
         }
         .padding(8)
-        .accessibilityLabel("Amplitude spectrum")
+        .accessibilityLabel(L10n.string(.chartSpectrum))
     }
 
     /// Fills the area under the amplitude curve and strokes its outline, so the

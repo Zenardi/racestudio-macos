@@ -30,7 +30,7 @@ public struct MathChannelEditorView: View {
             previewPlot
         }
         .padding(12)
-        .accessibilityLabel("Math-channel editor")
+        .accessibilityLabel(L10n.string(.chartMathEditor))
     }
 
     /// The inline diagnostic for an invalid expression: a monospaced caret line
