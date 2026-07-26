@@ -42,7 +42,7 @@ pub mod gps;
 pub mod laps;
 pub mod model;
 
-pub use channels::{decode_channels, Channel, ChannelMeta};
+pub use channels::{channel_index, decode_channels, Channel, ChannelMeta};
 pub use container::{open_container, parse_datetime_utc, Container, Metadata};
 pub use error::DecodeError;
 pub use gps::{decode_gps, GpsChannel, GpsChannelKind, GpsData, GpsFix};

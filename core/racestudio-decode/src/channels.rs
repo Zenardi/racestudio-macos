@@ -29,6 +29,7 @@
 //! fixtures contain neither.
 
 use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
 
 use crate::container::{le_i32, le_u16, le_u32, nullterm, read_header, tokstr, Container, MAGIC};
 use crate::error::DecodeError;
@@ -103,12 +104,30 @@ impl ChannelMeta {
     }
 }
 
+/// Where a [`Channel`]'s samples come from (issue 7.2): materialized up front, or
+/// decoded lazily from the container on first access.
+#[derive(Debug, Clone)]
+enum Samples {
+    /// Decoded eagerly and already in memory — [`decode_channels`], the unified
+    /// [`Session`](crate::Session), and the CSV importer (5.2) all build these.
+    Ready(Vec<(f64, f64)>),
+    /// Produced by [`Container::channel_index`]: the shared raw container bytes
+    /// plus this channel's index, decoded on the first [`Channel::samples`] call
+    /// and cached in `cell`. Shared (`Arc`) so cloning a `Channel` stays cheap and
+    /// clones observe the same one-time decode.
+    Lazy {
+        bytes: Arc<[u8]>,
+        index: u16,
+        cell: Arc<OnceLock<Vec<(f64, f64)>>>,
+    },
+}
+
 /// A decoded channel: its [`ChannelMeta`] plus `(timecode_ms, value)` samples in
 /// chronological order.
 #[derive(Debug, Clone)]
 pub struct Channel {
     meta: ChannelMeta,
-    samples: Vec<(f64, f64)>,
+    samples: Samples,
 }
 
 impl Channel {
@@ -118,7 +137,10 @@ impl Channel {
     /// (a missing/blank cell); no ordering is enforced here.
     #[must_use]
     pub fn new(meta: ChannelMeta, samples: Vec<(f64, f64)>) -> Self {
-        Channel { meta, samples }
+        Channel {
+            meta,
+            samples: Samples::Ready(samples),
+        }
     }
 
     /// The channel's metadata (name, unit, sample rate, precision).
@@ -159,9 +181,29 @@ impl Channel {
     }
 
     /// The channel's samples as `(timecode_ms, value)` pairs.
+    ///
+    /// For a lazily indexed channel (from [`Container::channel_index`]) the first
+    /// call decodes the samples from the container and caches them; every later
+    /// call returns that same cached slice, so a channel is decoded at most once.
     #[must_use]
     pub fn samples(&self) -> &[(f64, f64)] {
-        &self.samples
+        match &self.samples {
+            Samples::Ready(samples) => samples,
+            Samples::Lazy { bytes, index, cell } => cell.get_or_init(|| decode_one(bytes, *index)),
+        }
+    }
+
+    /// Whether this channel's samples are already in memory — `true` for an
+    /// eagerly decoded channel, and for a lazily indexed one (from
+    /// [`Container::channel_index`]) once [`samples`](Self::samples) has been
+    /// called at least once. Lets a caller distinguish an unforced lazy channel
+    /// from a materialized one without triggering the decode (issue 7.2).
+    #[must_use]
+    pub fn is_materialized(&self) -> bool {
+        match &self.samples {
+            Samples::Ready(_) => true,
+            Samples::Lazy { cell, .. } => cell.get().is_some(),
+        }
     }
 }
 
@@ -181,6 +223,38 @@ pub fn decode_channels(container: &Container) -> Result<Vec<Channel>, DecodeErro
     let mut builder = Builder::default();
     builder.walk(container.raw(), true)?;
     Ok(builder.into_channels())
+}
+
+/// Build a lazy index of a container's channels (issue 7.2).
+///
+/// Returns one [`Channel`] per non-empty channel — the same set and order as
+/// [`decode_channels`] — but each channel's samples are left **undecoded**: the
+/// index walk only tallies each channel's post-dedup sample count (to drop the
+/// empties [`decode_channels`] also drops). It materializes no sample vector and
+/// decodes no values (a `keep` channel's samples are guaranteed decodable, so the
+/// count needs no float/`mV` arithmetic); each channel's values are decoded — and
+/// allocated — only on the first [`Channel::samples`] call, then cached. Opening a
+/// large session therefore stays bounded in memory and defers each channel's
+/// decode + allocation until it is actually read.
+///
+/// This runs the **same** structural walk as [`decode_channels`] and so fails on
+/// exactly the same malformed input (a truncated data message, a zero-count `(M`
+/// burst): a partial/corrupt session is reported here rather than silently served
+/// as complete. Forcing every returned channel then yields byte-identical samples
+/// to [`decode_channels`].
+///
+/// Note: forcing many channels re-walks the byte stream once per channel; a caller
+/// that needs *every* channel's samples should prefer [`decode_channels`] (a single
+/// pass). The lazy index is optimized for opening a very large session and reading
+/// only a few of its channels.
+///
+/// # Errors
+/// Returns the same [`DecodeError`] as [`decode_channels`] for a truncated or
+/// bad-sample-count data stream.
+pub fn channel_index(container: &Container) -> Result<Vec<Channel>, DecodeError> {
+    let mut builder = Builder::new(Mode::Count);
+    builder.walk(container.raw(), true)?;
+    Ok(builder.into_index(container.raw_arc()))
 }
 
 /// A parsed channel definition.
@@ -203,16 +277,84 @@ impl Def {
         let raw = self.decoder?.decode(block)?;
         Some(if self.unit == "V" { raw / 1000.0 } else { raw })
     }
+
+    /// Build the public [`ChannelMeta`] for this definition — shared by the eager
+    /// ([`Builder::into_channels`]) and lazy ([`Builder::into_index`]) channel
+    /// builders so their metadata can never diverge.
+    fn meta(&self) -> ChannelMeta {
+        let sample_rate_hz = if self.period_us > 0 {
+            1e6 / f64::from(self.period_us)
+        } else {
+            0.0
+        };
+        ChannelMeta {
+            name: self.name.clone(),
+            unit: self.unit.clone(),
+            sample_rate_hz,
+            decimals: self.decimals,
+            interpolate: self.decoder.is_some_and(Decoder::interpolates),
+        }
+    }
+}
+
+/// What a channel walk collects (issue 7.2 lazy loading).
+#[derive(Clone, Copy)]
+enum Mode {
+    /// Decode and store every kept channel's samples (eager [`decode_channels`]).
+    All,
+    /// Decode and store only the target channel's samples (lazy [`decode_one`]).
+    One(u16),
+    /// Decode each kept channel's samples only far enough to tally its post-dedup
+    /// count, never storing a sample vector (the cheap [`channel_index`] open).
+    Count,
+}
+
+impl Mode {
+    /// Whether this walk does `index`'s dedup + collect/count work at all. A
+    /// single-channel ([`Mode::One`]) walk ignores every other channel.
+    fn wants(self, index: u16) -> bool {
+        match self {
+            Mode::All | Mode::Count => true,
+            Mode::One(target) => target == index,
+        }
+    }
+
+    /// Whether decoded values are stored (`All`/`One`) rather than only counted
+    /// (`Count`).
+    fn stores(self) -> bool {
+        matches!(self, Mode::All | Mode::One(_))
+    }
 }
 
 /// Accumulates the channel table and per-channel samples across the walk.
-#[derive(Default)]
 struct Builder {
     defs: HashMap<u16, Def>,
     order: Vec<u16>,
     group_sizes: HashMap<u16, usize>,
     samples: HashMap<u16, Vec<(f64, f64)>>,
+    counts: HashMap<u16, usize>,
     last_tc: HashMap<u16, i32>,
+    mode: Mode,
+}
+
+impl Default for Builder {
+    fn default() -> Self {
+        Builder::new(Mode::All)
+    }
+}
+
+impl Builder {
+    fn new(mode: Mode) -> Self {
+        Builder {
+            defs: HashMap::new(),
+            order: Vec::new(),
+            group_sizes: HashMap::new(),
+            samples: HashMap::new(),
+            counts: HashMap::new(),
+            last_tc: HashMap::new(),
+            mode,
+        }
+    }
 }
 
 impl Builder {
@@ -341,15 +483,23 @@ impl Builder {
         if end > bytes.len() {
             return Err(DecodeError::TruncatedChannel);
         }
-        if def.keep {
+        if def.keep && self.mode.wants(index) {
             let tc = le_i32(bytes, off + 2).ok_or(DecodeError::TruncatedChannel)?;
             if tc > self.last_tc.get(&index).copied().unwrap_or(i32::MIN) {
                 self.last_tc.insert(index, tc);
-                if let Some(value) = def.value(&bytes[off + 8..off + 8 + def.data_size]) {
-                    self.samples
-                        .entry(index)
-                        .or_default()
-                        .push((f64::from(tc), value));
+                if self.mode.stores() {
+                    if let Some(value) = def.value(&bytes[off + 8..off + 8 + def.data_size]) {
+                        self.samples
+                            .entry(index)
+                            .or_default()
+                            .push((f64::from(tc), value));
+                    }
+                } else {
+                    // `keep` guarantees `itemsize <= data_size` and the bounds were
+                    // checked above, so a kept sample always decodes — count it
+                    // without paying the float/`mV` decode, keeping `channel_index`
+                    // a cheap structural pass (no values, no allocation).
+                    *self.counts.entry(index).or_default() += 1;
                 }
             }
         }
@@ -377,7 +527,7 @@ impl Builder {
         if end > bytes.len() {
             return Err(DecodeError::TruncatedChannel);
         }
-        if def.keep {
+        if def.keep && self.mode.wants(index) {
             let tc = i64::from(le_i32(bytes, off + 2).ok_or(DecodeError::TruncatedChannel)?);
             let mms = i64::from(def.period_us / 1000);
             let prev = i64::from(self.last_tc.get(&index).copied().unwrap_or(i32::MIN));
@@ -389,13 +539,19 @@ impl Builder {
                 let last = tc + (count as i64 - 1) * mms;
                 self.last_tc.insert(index, last as i32);
                 for j in m_skip..count {
-                    let start = base + j * size;
-                    if let Some(value) = def.value(&bytes[start..start + size]) {
-                        let t = tc + (j as i64) * mms;
-                        self.samples
-                            .entry(index)
-                            .or_default()
-                            .push((t as f64, value));
+                    if self.mode.stores() {
+                        let start = base + j * size;
+                        if let Some(value) = def.value(&bytes[start..start + size]) {
+                            let t = tc + (j as i64) * mms;
+                            self.samples
+                                .entry(index)
+                                .or_default()
+                                .push((t as f64, value));
+                        }
+                    } else {
+                        // See `consume_single`: a kept burst sample always decodes,
+                        // so `channel_index` counts it without the float/`mV` decode.
+                        *self.counts.entry(index).or_default() += 1;
                     }
                 }
             }
@@ -432,41 +588,70 @@ impl Builder {
         let mut channels = Vec::new();
         for index in order {
             // Every index in `order` was inserted alongside its `Def`.
-            let (name, unit, decimals, period_us, interpolate) = {
+            let meta = {
                 let def = &self.defs[&index];
                 if !def.keep {
                     continue;
                 }
-                (
-                    def.name.clone(),
-                    def.unit.clone(),
-                    def.decimals,
-                    def.period_us,
-                    def.decoder.is_some_and(Decoder::interpolates),
-                )
+                def.meta()
             };
             let samples = self.samples.remove(&index).unwrap_or_default();
             if samples.is_empty() {
                 continue;
             }
-            let sample_rate_hz = if period_us > 0 {
-                1e6 / f64::from(period_us)
-            } else {
-                0.0
-            };
             channels.push(Channel {
-                meta: ChannelMeta {
-                    name,
-                    unit,
-                    sample_rate_hz,
-                    decimals,
-                    interpolate,
-                },
-                samples,
+                meta,
+                samples: Samples::Ready(samples),
             });
         }
         channels
     }
+
+    /// Turn a [`Mode::Count`] walk into a lazy channel index: one [`Channel`] per
+    /// kept, non-empty channel (in `CHS`-index order), each carrying its metadata
+    /// but deferring its samples to the first [`Channel::samples`] call (7.2).
+    fn into_index(mut self, bytes: Arc<[u8]>) -> Vec<Channel> {
+        let order = std::mem::take(&mut self.order);
+        let mut channels = Vec::new();
+        for index in order {
+            let meta = {
+                let def = &self.defs[&index];
+                if !def.keep {
+                    continue;
+                }
+                def.meta()
+            };
+            // Drop the channels the eager decode drops (no decodable samples), so
+            // the lazy index and `decode_channels` list exactly the same channels.
+            if self.counts.get(&index).copied().unwrap_or(0) == 0 {
+                continue;
+            }
+            channels.push(Channel {
+                meta,
+                samples: Samples::Lazy {
+                    bytes: Arc::clone(&bytes),
+                    index,
+                    cell: Arc::new(OnceLock::new()),
+                },
+            });
+        }
+        channels
+    }
+}
+
+/// Decode a single channel's samples on demand (issue 7.2 lazy loading): a fresh
+/// walk of the container bytes that collects only `index`'s samples, applying the
+/// same first-wins definition and timecode-dedup rules as [`decode_channels`], so
+/// the result is byte-identical to that channel's eager samples.
+fn decode_one(bytes: &[u8], index: u16) -> Vec<(f64, f64)> {
+    let mut builder = Builder::new(Mode::One(index));
+    // This channel only exists because `channel_index` already walked the whole
+    // stream (in `Mode::Count`) without error, so this identical `Mode::One` walk
+    // over the same bytes cannot hit a truncation that walk did not — the discard
+    // is safe. Should a stop ever occur, returning the samples collected so far is
+    // the graceful, panic-free fallback.
+    let _ = builder.walk(bytes, true);
+    builder.samples.remove(&index).unwrap_or_default()
 }
 
 /// How a channel's raw sample bytes are interpreted, keyed by `CHS` decoder type.
@@ -688,6 +873,10 @@ mod tests {
         assert!(meta.interpolate());
 
         let channel = Channel::new(meta, vec![(0.0, 3000.0), (50.0, f64::NAN)]);
+        assert!(
+            channel.is_materialized(),
+            "an eagerly constructed channel is already materialized"
+        );
         assert_eq!(channel.name(), "RPM");
         assert_eq!(channel.samples().len(), 2);
         assert!(channel.samples()[1].1.is_nan());

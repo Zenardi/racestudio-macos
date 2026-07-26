@@ -50,6 +50,25 @@ pub fn load_golden<T: DeserializeOwned>(name: &str, aspect: &str) -> Result<T, S
         .map_err(|err| format!("golden fixture {} is not valid JSON: {err}", path.display()))
 }
 
+/// `<name>.decimated.json` — the brute-force min/max decimation envelope of one
+/// channel of the synthetic 5M fixture at a fixed bucket count (issue 7.2). The
+/// independent oracle for [`min_max_decimate`](racestudio_analysis::min_max_decimate):
+/// `envelope` holds two `[time_ms, value]` points per bucket in time order,
+/// computed by `scripts/fetch_fixtures.sh --synthetic` straight from the source
+/// samples — so it never re-uses the Rust implementation under test.
+#[derive(Debug, Deserialize)]
+pub struct DecimatedGolden {
+    pub file: String,
+    /// The channel whose envelope was captured.
+    pub channel: String,
+    /// The bucket count the envelope was decimated to.
+    pub buckets: usize,
+    /// The channel's decoded sample count (a lazy-decode cross-check).
+    pub sample_count: usize,
+    /// Two `[time_ms, value]` envelope points per bucket, in time order.
+    pub envelope: Vec<[f64; 2]>,
+}
+
 /// `<name>.laps.json` — beacon lap table (issue 1.5): per-lap cumulative times
 /// decoded from the container's LAP markers, plus the best (fastest) lap index.
 #[derive(Debug, Deserialize)]

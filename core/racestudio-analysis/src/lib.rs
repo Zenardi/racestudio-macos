@@ -44,6 +44,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod decimate;
 pub mod delta;
 pub mod derived;
 pub mod error;
@@ -55,6 +56,7 @@ pub mod resample;
 pub mod splits;
 pub mod stats;
 
+pub use decimate::min_max_decimate;
 pub use delta::delta_t;
 pub use derived::{
     gear_estimate, heading, lateral_accel_g, longitudinal_accel_g, yaw_rate, GearRatios,
