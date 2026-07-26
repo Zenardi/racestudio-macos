@@ -22,8 +22,10 @@ public final class ChannelViewModel {
     public let trace: ChannelTrace
 
     /// Upper bound on the column count, so a pathological viewport width can't ask
-    /// for an unbounded envelope. Far beyond any real display width.
-    public static let maxColumns = 8192
+    /// for an unbounded envelope. Far beyond any real display width. `nonisolated`
+    /// so the `nonisolated` ``columns(forWidth:)`` can read it without tripping
+    /// the Swift 6 actor-isolation check.
+    public nonisolated static let maxColumns = 8192
 
     /// The number of envelope columns to request for a plot `width` in points —
     /// one min/max pair per pixel column. A non-positive (or non-finite) width
@@ -76,5 +78,23 @@ public final class ChannelViewModel {
     public func isCached(mode: XAxisMode, visible: ClosedRange<Double>, viewportWidth: Double) -> Bool {
         let request = Request(mode: mode, visible: visible, columns: Self.columns(forWidth: viewportWidth))
         return cached?.request == request
+    }
+
+    // MARK: - Accessibility (issue 7.3)
+
+    /// The VoiceOver label naming this channel's plot, localized for `locale`.
+    public func accessibilityLabel(locale: Locale = .current) -> String {
+        L10n.format(.accessibilityChannelLabel, locale: locale, trace.name)
+    }
+
+    /// The VoiceOver value summarizing the plotted channel — its name, `unit`, and
+    /// min → max range over the trace — so a VoiceOver user gets the data without
+    /// sight. An empty trace reads as a localized "no data".
+    public func accessibilityValue(unit: String, locale: Locale = .current) -> String {
+        AccessibilitySummary.channel(
+            name: trace.name,
+            unit: unit,
+            values: trace.samples.map(\.value),
+            locale: locale)
     }
 }

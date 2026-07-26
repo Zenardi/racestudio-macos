@@ -61,7 +61,7 @@ struct AnalysisWindowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .accessibilityLabel("Analysis window")
+        .accessibilityLabel(L10n.string(.chartAnalysisWindow))
     }
 }
 

@@ -40,7 +40,7 @@ public struct HistogramView: View {
             drawBars(context, size: size, xScale: xScale, yScale: yScale)
         }
         .padding(8)
-        .accessibilityLabel("Channel distribution histogram")
+        .accessibilityLabel(L10n.string(.chartHistogram))
     }
 
     /// Fills each bin as a bottom-anchored bar spanning `[lower, upper)` in x and

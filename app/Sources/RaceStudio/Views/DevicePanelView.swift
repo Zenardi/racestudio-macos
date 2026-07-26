@@ -12,6 +12,9 @@ struct DevicePanelView: View {
     @StateObject private var model: DevicePanelModel
     /// The name the user re-types to confirm a destructive delete (issue 6.6).
     @State private var typedName = ""
+    /// The active locale (issue 7.3) — drives the localized control labels, and
+    /// honours a SwiftUI `\.locale` override in previews/tests.
+    @Environment(\.locale) private var locale
 
     /// Inject a model (used by previews/tests-of-the-shell).
     init(model: DevicePanelModel) {
@@ -103,11 +106,13 @@ struct DevicePanelView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Download") { Task { await model.download(session) } }
+                        Button(ControlLabel.downloadSession.label(locale: locale)) {
+                            Task { await model.download(session) }
+                        }
                         Button(role: .destructive) {
                             typedName = ""
                             model.requestDeletion(of: session)
-                        } label: { Text("Delete") }
+                        } label: { Text(ControlLabel.deleteSession.label(locale: locale)) }
                     }
                 }
             }
@@ -153,7 +158,7 @@ struct DevicePanelView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { model.cancelDeletion() }
-                    Button("Delete", role: .destructive) {
+                    Button(ControlLabel.deleteSession.label(locale: locale), role: .destructive) {
                         Task { await model.confirmDeletion(typedName: typedName) }
                     }
                     // The guarded API is unreachable until the typed name matches
