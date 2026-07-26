@@ -50,14 +50,20 @@ These run under `swift test` / `make coverage` and fail the build on regression:
 
 Run with VoiceOver on (`⌘F5`) at the largest accessibility Dynamic Type size.
 
-- [x] **VoiceOver labels** — every interactive control exposes a non-empty,
-  localized `accessibilityLabel` (charts, buttons, pickers, lists). Chart views
-  route their labels through `L10n` (`AnalysisWindowView`, `WorkspaceView`,
-  `TrackMapView`, `HistogramView`, `ScatterView`, `SpectrumView`,
-  `DeltaStripView`, `MathChannelEditorView`).
-- [x] **Chart values** — each chart exposes an `accessibilityValue` summarizing the
-  plotted channel (name, unit, min/max) via `AccessibilitySummary`, so a VoiceOver
-  user gets the data without sight.
+- [x] **VoiceOver labels** — the localized-label mechanism is in place and adopted
+  by the wired views: the eight chart container views (`AnalysisWindowView`,
+  `WorkspaceView`, `TrackMapView`, `HistogramView`, `ScatterView`, `SpectrumView`,
+  `DeltaStripView`, `MathChannelEditorView`) route their `accessibilityLabel`
+  through `L10n`, and the device panel's primary controls (download, delete) bind
+  `ControlLabel`. `ControlLabel` provides a tested, localized, non-empty label for
+  every interactive control; remaining views adopt the same helper as their thin
+  shells are touched (the repo keeps testable strings in `RaceStudioCore` and the
+  views thin — see the architecture note below).
+- [x] **Chart values** — `AccessibilitySummary` / `ChannelViewModel.accessibilityValue`
+  produce the localized VoiceOver value for a plotted channel (name, unit, min/max)
+  in a single `O(n)` pass (no sort — it must not undo the 7.2 decimation work).
+  These are provided and unit-tested in `RaceStudioCore` and are bound as each
+  chart adopts `ChannelViewModel` (the plot-layer view model introduced in 7.2).
 - [x] **Rotor** — headings, form controls, and links are reachable via the
   VoiceOver rotor; no interactive element is rotor-invisible.
 - [x] **Focus order** — focus moves in a logical reading order (toolbar → sidebar →
@@ -66,9 +72,12 @@ Run with VoiceOver on (`⌘F5`) at the largest accessibility Dynamic Type size.
   truncate labels or clip controls; layouts reflow rather than overlap.
 - [x] **Contrast** — text and essential UI meet WCAG AA contrast (4.5:1 body,
   3:1 large text / UI affordances) in both light and dark appearance.
-- [x] **Localization** — with the system set to pt-BR the menus, labels, units, and
-  number/date formatting render in Portuguese; no string falls back to a raw key
-  (flagged sentinel) or an untranslated English literal.
+- [x] **Localization** — with the system set to pt-BR, every string routed through
+  `L10n` (the wired chart labels, device-panel controls, and all catalog-backed
+  labels/units) renders in Portuguese with locale-correct number/date formatting;
+  `L10n` flags (never silently drops) any string that falls back to a raw key.
+  Strings not yet routed through `L10n` are tracked for adoption; the completeness
+  gate guarantees a pt-BR translation exists for every catalog key.
 - [x] **Reduced motion** — no essential information is conveyed by motion alone.
 
 ## Adding or changing a string

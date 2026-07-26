@@ -212,6 +212,45 @@ import Foundation
         #expect(catalog.unit(forKey: "stateless.key", language: "en")?.value == "Ready")
     }
 
+    @Test func test_format_placeholders_match_across_languages() throws {
+        // Every translation of a key must reference the SAME set of positional
+        // placeholders (`%1$@`, `%2$@`, …) as the source. A pt-BR value with a stray
+        // extra `%n$@` would crash `String(format:)` for pt-BR users only — and CI
+        // would otherwise stay green. This gate makes that class of regression fail.
+        let catalog = try catalog()
+        for key in catalog.keys {
+            guard let langs = catalog.languages(for: key) else { continue }
+            let reference = Self.positionalIndices(in: langs[catalog.sourceLanguage]?.value ?? "")
+            for (lang, unit) in langs {
+                #expect(Self.positionalIndices(in: unit.value) == reference,
+                        "key '\(key)' [\(lang)] placeholders diverge from \(catalog.sourceLanguage)")
+            }
+        }
+    }
+
+    /// The set of positional argument indices (`%1$@` → 1) referenced by a format
+    /// template. `%%` and a lone `%` are correctly ignored.
+    private static func positionalIndices(in template: String) -> Set<Int> {
+        var indices: Set<Int> = []
+        let characters = Array(template)
+        var index = 0
+        while index < characters.count {
+            if characters[index] == "%" {
+                var cursor = index + 1
+                var digits = ""
+                while cursor < characters.count, characters[cursor].isNumber {
+                    digits.append(characters[cursor])
+                    cursor += 1
+                }
+                if cursor < characters.count, characters[cursor] == "$", let number = Int(digits) {
+                    indices.insert(number)
+                }
+            }
+            index += 1
+        }
+        return indices
+    }
+
     @Test func test_resolve_selects_the_closest_available_language() {
         let available: Set<String> = ["en", "pt-BR"]
         #expect(L10n.resolve(locale: ptBR, available: available, source: "en") == "pt-BR", "exact region tag")

@@ -35,15 +35,31 @@ public enum AccessibilitySummary {
         values: [Double],
         locale: Locale = .current
     ) -> String {
-        guard let statistics = ChannelStatistics.from(values) else {
+        guard let range = finiteRange(values) else {
             return L10n.format(.accessibilityChannelNoData, locale: locale, name)
         }
         return channel(
             name: name,
             unit: unit,
-            minimum: statistics.minimum,
-            maximum: statistics.maximum,
+            minimum: range.minimum,
+            maximum: range.maximum,
             locale: locale)
+    }
+
+    /// The min/max over the finite `values` in a single `O(n)` pass — a chart's
+    /// channel can hold millions of samples, and a VoiceOver value must not sort or
+    /// allocate on the main thread (that would undo issue 7.2's decimation work).
+    /// Returns `nil` when no finite value remains.
+    static func finiteRange(_ values: [Double]) -> (minimum: Double, maximum: Double)? {
+        var minimum = Double.infinity
+        var maximum = -Double.infinity
+        var sawFinite = false
+        for value in values where value.isFinite {
+            sawFinite = true
+            if value < minimum { minimum = value }
+            if value > maximum { maximum = value }
+        }
+        return sawFinite ? (minimum, maximum) : nil
     }
 
     /// Formats a range endpoint for speech: integral values drop the fraction,

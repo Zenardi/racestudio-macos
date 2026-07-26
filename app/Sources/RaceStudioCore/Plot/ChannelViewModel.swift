@@ -22,8 +22,10 @@ public final class ChannelViewModel {
     public let trace: ChannelTrace
 
     /// Upper bound on the column count, so a pathological viewport width can't ask
-    /// for an unbounded envelope. Far beyond any real display width.
-    public static let maxColumns = 8192
+    /// for an unbounded envelope. Far beyond any real display width. `nonisolated`
+    /// so the `nonisolated` ``columns(forWidth:)`` can read it without tripping
+    /// the Swift 6 actor-isolation check.
+    public nonisolated static let maxColumns = 8192
 
     /// The number of envelope columns to request for a plot `width` in points —
     /// one min/max pair per pixel column. A non-positive (or non-finite) width

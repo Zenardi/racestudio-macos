@@ -116,4 +116,38 @@ import Foundation
         #expect(value.contains("Empty"))
         #expect(!value.lowercased().contains("nan"))
     }
+
+    // MARK: - pt-BR template coverage (guards the positional-placeholder crash vector)
+
+    @Test func test_channel_summary_noUnit_localized_ptBR() {
+        // The dimensionless (no-unit) template must format cleanly in pt-BR too —
+        // a mismatched `%n$@` there would crash only for pt-BR users.
+        let ptSummary = AccessibilitySummary.channel(name: "Gear", unit: "", minimum: 1, maximum: 6, locale: ptBR)
+        let enSummary = AccessibilitySummary.channel(name: "Gear", unit: "", minimum: 1, maximum: 6, locale: en)
+        #expect(!L10n.isFlagged(ptSummary))
+        #expect(ptSummary.contains("Gear"))
+        #expect(ptSummary != enSummary)
+    }
+
+    @MainActor
+    @Test func test_channel_view_model_label_localized_ptBR() {
+        let model = ChannelViewModel(trace: ChannelTrace(name: "Speed", samples: []))
+        let ptLabel = model.accessibilityLabel(locale: ptBR)
+        #expect(!L10n.isFlagged(ptLabel))
+        #expect(ptLabel.contains("Speed"))
+        #expect(ptLabel != model.accessibilityLabel(locale: en), "Canal … vs Channel …")
+    }
+
+    // MARK: - finiteRange (O(n), no sort — protects 7.2's perf)
+
+    @Test func test_finite_range_computes_min_max_ignoring_nonfinite() {
+        let range = AccessibilitySummary.finiteRange([3, .nan, -1, .infinity, 7, -Double.infinity])
+        #expect(range?.minimum == -1)
+        #expect(range?.maximum == 7)
+    }
+
+    @Test func test_finite_range_is_nil_without_finite_values() {
+        #expect(AccessibilitySummary.finiteRange([]) == nil)
+        #expect(AccessibilitySummary.finiteRange([.nan, .infinity]) == nil)
+    }
 }
