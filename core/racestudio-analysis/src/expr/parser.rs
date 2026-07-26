@@ -54,6 +54,25 @@ pub enum Func {
 }
 
 impl Func {
+    /// Every built-in function, in declaration order.
+    ///
+    /// Lets callers enumerate the whole function set — a UI palette of available
+    /// functions, or the handbook's completeness check that no shipped built-in
+    /// is left undocumented.
+    pub const ALL: [Self; 11] = [
+        Self::Abs,
+        Self::Sqrt,
+        Self::Sin,
+        Self::Cos,
+        Self::Tan,
+        Self::Log,
+        Self::Exp,
+        Self::Min,
+        Self::Max,
+        Self::Pow,
+        Self::Clamp,
+    ];
+
     /// Resolve a function name, or `None` if it is not built in.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {

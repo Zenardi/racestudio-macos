@@ -10,7 +10,7 @@ export COVERAGE_THRESHOLD
 # active developer dir; omitted otherwise (e.g. the CI runner, which has Xcode).
 SWIFTLINT_ENV := $(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/usr/lib,)
 
-.PHONY: help setup run test test-rust test-swift coverage e2e lint security fixtures xcframework ci clean
+.PHONY: help setup run test test-rust test-swift coverage e2e lint security fixtures xcframework docs ci clean
 
 .DEFAULT_GOAL := help
 
@@ -44,6 +44,9 @@ coverage: ## Enforce the >=95% line-coverage gate (Rust + Swift)
 
 e2e: ## Build the shipping pipeline + validate the decode oracle
 	bash scripts/e2e.sh
+
+docs: ## Render the user handbook to a static site + internal link-check
+	bash scripts/build_docs.sh
 
 lint: ## clippy -D warnings + cargo fmt --check + swiftlint
 	cargo clippy --workspace --all-targets -- -D warnings

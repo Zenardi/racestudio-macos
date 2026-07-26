@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 200" role="img" aria-label="Import flow: choose a file, decode with progress, review the summary, and open from the library.">
+  <style>
+    .box{fill:#eef3fb;stroke:#3b6bd6;stroke-width:2}
+    .t{font:14px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .arw{stroke:#3b6bd6;stroke-width:2;fill:none;marker-end:url(#a)}
+  </style>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3b6bd6"/></marker></defs>
+  <rect class="box" x="10" y="60" width="150" height="70" rx="8"/>
+  <text class="t" x="30" y="90">Choose a .xrk</text><text class="lbl" x="30" y="110">Open / drag-drop / Recent</text>
+  <rect class="box" x="205" y="60" width="140" height="70" rx="8"/>
+  <text class="t" x="225" y="90">Decode</text><text class="lbl" x="225" y="110">async + progress</text>
+  <rect class="box" x="390" y="60" width="150" height="70" rx="8"/>
+  <text class="t" x="410" y="90">Session summary</text><text class="lbl" x="410" y="110">laps, channels, GPS</text>
+  <rect class="box" x="585" y="60" width="160" height="70" rx="8"/>
+  <text class="t" x="605" y="90">Library</text><text class="lbl" x="605" y="110">indexed, searchable</text>
+  <path class="arw" d="M160,95 L205,95"/><path class="arw" d="M345,95 L390,95"/><path class="arw" d="M540,95 L585,95"/>
+  <text class="lbl" x="250" y="30">RaceStudio for macOS — import flow (schematic)</text>
+</svg>

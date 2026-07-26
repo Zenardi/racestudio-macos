@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" role="img" aria-label="Analysis workspace: tiled views (line plot, lap overlay and delta strip, track map, channel table, histogram, scatter, spectrum, math editor) sharing one linked cursor.">
+  <style>
+    .tile{fill:#f4f7fc;stroke:#3b6bd6;stroke-width:1.5}
+    .t{font:13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .cur{stroke:#d64545;stroke-width:2;stroke-dasharray:4 3}
+  </style>
+  <text class="lbl" x="20" y="26">Analysis workspace — linked cursor shared across tiles (schematic)</text>
+  <rect class="tile" x="20" y="44" width="230" height="110" rx="6"/><text class="t" x="34" y="66">Time / distance plot</text>
+  <rect class="tile" x="265" y="44" width="230" height="110" rx="6"/><text class="t" x="279" y="66">Lap overlay + Δt strip</text>
+  <rect class="tile" x="510" y="44" width="230" height="110" rx="6"/><text class="t" x="524" y="66">GPS track map</text>
+  <rect class="tile" x="20" y="170" width="170" height="110" rx="6"/><text class="t" x="34" y="192">Channel table</text>
+  <rect class="tile" x="205" y="170" width="170" height="110" rx="6"/><text class="t" x="219" y="192">Histogram</text>
+  <rect class="tile" x="390" y="170" width="170" height="110" rx="6"/><text class="t" x="404" y="192">XY scatter</text>
+  <rect class="tile" x="575" y="170" width="165" height="110" rx="6"/><text class="t" x="589" y="192">Spectrum / Math</text>
+  <line class="cur" x1="135" y1="44" x2="135" y2="154"/><line class="cur" x1="380" y1="44" x2="380" y2="154"/>
+  <text class="lbl" x="34" y="150">value @ cursor</text>
+</svg>
