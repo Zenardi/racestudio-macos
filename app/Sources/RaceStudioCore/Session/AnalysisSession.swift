@@ -309,12 +309,11 @@ public final class AnalysisSession {
     }
 
     /// The circuit auto-recognized from the session's GPS trace against the bundled
-    /// track database (issue 9.2), or `nil` when no bundled track matches — the
-    /// split/segment UI then falls back to beacon markers. Resolve the split source
-    /// (auto-detected vs. beacons) with ``trackDetection()`` / ``TrackDetectionModel``.
-    public func detectTrack() -> DetectedTrackInfo? {
-        dataSource.detectTrack()
-    }
+    /// track database (issue 9.2), or `nil` when none matches — the split UI then
+    /// falls back to beacons (``trackDetection()`` / ``TrackDetectionModel``).
+    /// Matched **once** and cached (the match is a pure function of the immutable
+    /// session), so it blocks the main actor at most once per session.
+    public private(set) lazy var detectedTrack: DetectedTrackInfo? = dataSource.detectTrack()
 
     // MARK: - Lap overlay + delta-t (issue 8.7)
 

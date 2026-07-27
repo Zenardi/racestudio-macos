@@ -44,6 +44,13 @@ import Testing
         #expect(adria().segmentCount == 3, "two sector gates → three segments")
     }
 
+    @Test func gate_midpoint_wraps_across_the_antimeridian() {
+        // A gate straddling ±180°: the midpoint is on the dateline, not its antipode.
+        let mid = gate(10.0, 179.999, 10.0, -179.999).midpoint
+        #expect(abs(abs(mid.longitude) - 180.0) < 1e-9, "midpoint on the dateline, got \(mid.longitude)")
+        #expect(abs(mid.latitude - 10.0) < 1e-9)
+    }
+
     // MARK: - Auto-detected source
 
     @Test func auto_detected_surfaces_track_name_line_and_markers() throws {
@@ -86,7 +93,7 @@ import Testing
         let source = FakeSessionDataSource(banks: [], detectedTrack: adria())
         let sut = AnalysisSession(session: session(), dataSource: source)
 
-        #expect(sut.detectTrack() == adria())
+        #expect(sut.detectedTrack == adria())
         #expect(sut.trackDetection().isAutoDetected)
         #expect(sut.trackDetection().trackName == "Adria International Raceway")
     }
@@ -97,7 +104,7 @@ import Testing
         let source = FakeSessionDataSource(banks: [])
         let sut = AnalysisSession(session: session(), dataSource: source)
 
-        #expect(sut.detectTrack() == nil)
+        #expect(sut.detectedTrack == nil)
         #expect(sut.trackDetection().source == .beacons)
     }
 }

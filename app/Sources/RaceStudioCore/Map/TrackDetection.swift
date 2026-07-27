@@ -15,11 +15,15 @@ public struct DetectedTrackGate: Equatable, Sendable {
         self.end = end
     }
 
-    /// The gate's midpoint — the marker position a sector split draws at.
+    /// The gate's midpoint — the marker position a sector split draws at. The
+    /// longitude is averaged along the shorter arc, so a gate straddling the ±180°
+    /// antimeridian yields the point on the dateline rather than its antipode.
     public var midpoint: GPSCoord {
-        GPSCoord(
-            latitude: (start.latitude + end.latitude) / 2,
-            longitude: (start.longitude + end.longitude) / 2)
+        var deltaLon = end.longitude - start.longitude
+        if deltaLon > 180 { deltaLon -= 360 } else if deltaLon < -180 { deltaLon += 360 }
+        var lon = start.longitude + deltaLon / 2
+        if lon > 180 { lon -= 360 } else if lon < -180 { lon += 360 }
+        return GPSCoord(latitude: (start.latitude + end.latitude) / 2, longitude: lon)
     }
 }
 
@@ -117,8 +121,8 @@ public extension SessionDataSource {
 public extension AnalysisSession {
     /// The resolved split/segment source for this session (issue 9.2): the
     /// auto-detected track when its GPS trace matched a bundled circuit, else the
-    /// beacon lap markers. A convenience over ``detectTrack()`` for the split UI.
+    /// beacon lap markers. A convenience over ``detectedTrack`` for the split UI.
     func trackDetection() -> TrackDetectionModel {
-        TrackDetectionModel(detected: detectTrack())
+        TrackDetectionModel(detected: detectedTrack)
     }
 }

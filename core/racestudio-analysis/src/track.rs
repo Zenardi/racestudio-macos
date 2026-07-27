@@ -366,9 +366,11 @@ pub fn auto_splits_within(
 ///
 /// - **`adria`** — Adria International Raceway (Italy); gates on the real GPS trace
 ///   of the `aim_official_test` fixture, the golden-tested match.
-/// - **`vallelunga`** — Autodromo Vallelunga (Italy); a second entry ~370 km away,
+/// - **`vallelunga`** — Autodromo Vallelunga (Italy); a second entry ~370 km away
 ///   so the matcher must discriminate between circuits rather than match the only
-///   row present.
+///   row present. Its gate geometry is an approximate seed (pending a surveyed
+///   trace); a session there still falls back to beacons if it lands outside
+///   [`MATCH_TOLERANCE_M`].
 #[must_use]
 pub fn bundled_tracks() -> TrackDb {
     let ll = LatLon::new;
