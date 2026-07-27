@@ -329,6 +329,11 @@ RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_channels(void*_Nonnull 
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_delta_t_series(void*_Nonnull ptr, uint32_t reference, uint32_t comparison, RustBuffer window, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_DETECT_TRACK
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_DETECT_TRACK
+RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_detect_track(void*_Nonnull ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_FN_METHOD_SESSIONHANDLE_EVAL_MATH_CHANNEL
 RustBuffer uniffi_racestudio_ffi_fn_method_sessionhandle_eval_math_channel(void*_Nonnull ptr, RustBuffer expr, RustBuffer window, RustCallStatus *_Nonnull out_status
@@ -791,6 +796,12 @@ uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_channels(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DELTA_T_SERIES
 #define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DELTA_T_SERIES
 uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_delta_t_series(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DETECT_TRACK
+#define UNIFFI_FFIDEF_UNIFFI_RACESTUDIO_FFI_CHECKSUM_METHOD_SESSIONHANDLE_DETECT_TRACK
+uint16_t uniffi_racestudio_ffi_checksum_method_sessionhandle_detect_track(void
     
 );
 #endif

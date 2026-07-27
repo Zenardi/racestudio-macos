@@ -618,6 +618,17 @@ public protocol SessionHandleProtocol : AnyObject {
     func deltaTSeries(reference: UInt32, comparison: UInt32, window: FfiWindow) throws  -> [DeltaPoint]
     
     /**
+     * The circuit auto-recognized from the session's GPS trace against the bundled
+     * track database (issue 9.2), with the start/finish + sector geometry read off
+     * the matched definition — the beacon-free splits the map/split UI surfaces.
+     *
+     * Returns `None` when no track matches within tolerance (a GPS-less session
+     * never matches); the caller then falls back to beacon segmentation
+     * ([`Self::segment_times`]). Never panics.
+     */
+    func detectTrack()  -> DetectedTrack?
+    
+    /**
      * Evaluate the math-channel `expr` over the timecode `window` (ms), one
      * [`Sample`] per point on the first referenced channel's in-window timebase;
      * other referenced channels are linearly resampled onto it (issues 3.3/3.5).
@@ -829,6 +840,22 @@ open func deltaTSeries(reference: UInt32, comparison: UInt32, window: FfiWindow)
         FfiConverterUInt32.lower(reference),
         FfiConverterUInt32.lower(comparison),
         FfiConverterTypeFfiWindow.lower(window),$0
+    )
+})
+}
+    
+    /**
+     * The circuit auto-recognized from the session's GPS trace against the bundled
+     * track database (issue 9.2), with the start/finish + sector geometry read off
+     * the matched definition — the beacon-free splits the map/split UI surfaces.
+     *
+     * Returns `None` when no track matches within tolerance (a GPS-less session
+     * never matches); the caller then falls back to beacon segmentation
+     * ([`Self::segment_times`]). Never panics.
+     */
+open func detectTrack() -> DetectedTrack? {
+    return try!  FfiConverterOptionTypeDetectedTrack.lift(try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_detect_track(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -1349,6 +1376,133 @@ public func FfiConverterTypeDeltaPoint_lift(_ buf: RustBuffer) throws -> DeltaPo
 #endif
 public func FfiConverterTypeDeltaPoint_lower(_ value: DeltaPoint) -> RustBuffer {
     return FfiConverterTypeDeltaPoint.lower(value)
+}
+
+
+/**
+ * The circuit auto-recognized from a session's GPS trace against the bundled
+ * track database (issue 9.2), with the start/finish + sector geometry read off
+ * the matched definition — so the UI places splits from the track, not beacons.
+ */
+public struct DetectedTrack {
+    /**
+     * Stable track id (e.g. `adria`).
+     */
+    public var id: String
+    /**
+     * Human-readable circuit name.
+     */
+    public var name: String
+    /**
+     * Closest-approach tolerance (metres) the match was accepted at.
+     */
+    public var toleranceM: Double
+    /**
+     * The definition's start/finish line.
+     */
+    public var startFinish: TrackGate
+    /**
+     * The definition's ordered sector-boundary gates. `N` gates cut a lap into
+     * `N + 1` segments.
+     */
+    public var sectorGates: [TrackGate]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Stable track id (e.g. `adria`).
+         */id: String, 
+        /**
+         * Human-readable circuit name.
+         */name: String, 
+        /**
+         * Closest-approach tolerance (metres) the match was accepted at.
+         */toleranceM: Double, 
+        /**
+         * The definition's start/finish line.
+         */startFinish: TrackGate, 
+        /**
+         * The definition's ordered sector-boundary gates. `N` gates cut a lap into
+         * `N + 1` segments.
+         */sectorGates: [TrackGate]) {
+        self.id = id
+        self.name = name
+        self.toleranceM = toleranceM
+        self.startFinish = startFinish
+        self.sectorGates = sectorGates
+    }
+}
+
+
+
+extension DetectedTrack: Equatable, Hashable {
+    public static func ==(lhs: DetectedTrack, rhs: DetectedTrack) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.toleranceM != rhs.toleranceM {
+            return false
+        }
+        if lhs.startFinish != rhs.startFinish {
+            return false
+        }
+        if lhs.sectorGates != rhs.sectorGates {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(toleranceM)
+        hasher.combine(startFinish)
+        hasher.combine(sectorGates)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDetectedTrack: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DetectedTrack {
+        return
+            try DetectedTrack(
+                id: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                toleranceM: FfiConverterDouble.read(from: &buf), 
+                startFinish: FfiConverterTypeTrackGate.read(from: &buf), 
+                sectorGates: FfiConverterSequenceTypeTrackGate.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DetectedTrack, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterDouble.write(value.toleranceM, into: &buf)
+        FfiConverterTypeTrackGate.write(value.startFinish, into: &buf)
+        FfiConverterSequenceTypeTrackGate.write(value.sectorGates, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDetectedTrack_lift(_ buf: RustBuffer) throws -> DetectedTrack {
+    return try FfiConverterTypeDetectedTrack.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDetectedTrack_lower(_ value: DetectedTrack) -> RustBuffer {
+    return FfiConverterTypeDetectedTrack.lower(value)
 }
 
 
@@ -2929,6 +3083,118 @@ public func FfiConverterTypeStatsDto_lower(_ value: StatsDto) -> RustBuffer {
 
 
 /**
+ * A gate line from the track definition (issue 9.2): the two `(lat, lon)`
+ * endpoints the car crosses. The start/finish line and each sector boundary of a
+ * [`DetectedTrack`] is one of these — the geometry the map/split UI draws in place
+ * of hand-placed beacons.
+ */
+public struct TrackGate {
+    /**
+     * Latitude of the gate's first endpoint (degrees).
+     */
+    public var aLatitude: Double
+    /**
+     * Longitude of the gate's first endpoint (degrees).
+     */
+    public var aLongitude: Double
+    /**
+     * Latitude of the gate's second endpoint (degrees).
+     */
+    public var bLatitude: Double
+    /**
+     * Longitude of the gate's second endpoint (degrees).
+     */
+    public var bLongitude: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Latitude of the gate's first endpoint (degrees).
+         */aLatitude: Double, 
+        /**
+         * Longitude of the gate's first endpoint (degrees).
+         */aLongitude: Double, 
+        /**
+         * Latitude of the gate's second endpoint (degrees).
+         */bLatitude: Double, 
+        /**
+         * Longitude of the gate's second endpoint (degrees).
+         */bLongitude: Double) {
+        self.aLatitude = aLatitude
+        self.aLongitude = aLongitude
+        self.bLatitude = bLatitude
+        self.bLongitude = bLongitude
+    }
+}
+
+
+
+extension TrackGate: Equatable, Hashable {
+    public static func ==(lhs: TrackGate, rhs: TrackGate) -> Bool {
+        if lhs.aLatitude != rhs.aLatitude {
+            return false
+        }
+        if lhs.aLongitude != rhs.aLongitude {
+            return false
+        }
+        if lhs.bLatitude != rhs.bLatitude {
+            return false
+        }
+        if lhs.bLongitude != rhs.bLongitude {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(aLatitude)
+        hasher.combine(aLongitude)
+        hasher.combine(bLatitude)
+        hasher.combine(bLongitude)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrackGate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrackGate {
+        return
+            try TrackGate(
+                aLatitude: FfiConverterDouble.read(from: &buf), 
+                aLongitude: FfiConverterDouble.read(from: &buf), 
+                bLatitude: FfiConverterDouble.read(from: &buf), 
+                bLongitude: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TrackGate, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.aLatitude, into: &buf)
+        FfiConverterDouble.write(value.aLongitude, into: &buf)
+        FfiConverterDouble.write(value.bLatitude, into: &buf)
+        FfiConverterDouble.write(value.bLongitude, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrackGate_lift(_ buf: RustBuffer) throws -> TrackGate {
+    return try FfiConverterTypeTrackGate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrackGate_lower(_ value: TrackGate) -> RustBuffer {
+    return FfiConverterTypeTrackGate.lower(value)
+}
+
+
+/**
  * The analysis failure surface across the FFI boundary — the analysis crate's
  * [`AnalysisError`](racestudio_analysis::AnalysisError) plus the FFI-specific
  * invalid-expression, out-of-range-lap, and out-of-bounds-window cases.
@@ -3879,6 +4145,30 @@ fileprivate struct FfiConverterOptionTypeDeleteConfirmation: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeDetectedTrack: FfiConverterRustBuffer {
+    typealias SwiftType = DetectedTrack?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeDetectedTrack.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeDetectedTrack.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeGpsSummary: FfiConverterRustBuffer {
     typealias SwiftType = GpsSummary?
 
@@ -4149,6 +4439,31 @@ fileprivate struct FfiConverterSequenceTypeSessionInfo: FfiConverterRustBuffer {
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTrackGate: FfiConverterRustBuffer {
+    typealias SwiftType = [TrackGate]
+
+    public static func write(_ value: [TrackGate], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTrackGate.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TrackGate] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TrackGate]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTrackGate.read(from: &buf))
+        }
+        return seq
+    }
+}
 /**
  * The AP-mode fallback device: the well-known gateway the MyChron serves on when
  * the Mac has joined its own access point and no mDNS responder is present
@@ -4354,6 +4669,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_delta_t_series() != 39180) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_detect_track() != 3532) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel() != 22850) {

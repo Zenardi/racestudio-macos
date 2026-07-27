@@ -52,6 +52,26 @@ import RaceStudioFFIBindings
         }
     }
 
+    // MARK: - detectTrack: FFI DetectedTrack → Core DetectedTrackInfo (issue 9.2)
+
+    @Test func test_detect_track_maps_the_matched_adria_geometry() throws {
+        guard let session = try openReal() else { return }
+        let source = FFISessionDataSource(handle: session)
+
+        // The Adria fixture matches the bundled `adria` track; the adapter maps its
+        // id, name, tolerance, and start/finish + sector gate geometry 1:1.
+        let detected = try #require(source.detectTrack(), "Adria is recognized")
+        let raw = try #require(session.detectTrack())
+        #expect(detected.id == raw.id)
+        #expect(detected.name == raw.name)
+        #expect(detected.toleranceM == raw.toleranceM)
+        #expect(detected.sectorGates.count == raw.sectorGates.count)
+        #expect(detected.startFinish.start.latitude == raw.startFinish.aLatitude)
+        #expect(detected.startFinish.end.longitude == raw.startFinish.bLongitude)
+        // The resolved split source is auto-detected, not the beacon fallback.
+        #expect(TrackDetectionModel(detected: detected).isAutoDetected)
+    }
+
     @Test func test_samples_for_out_of_range_channel_index_returns_empty() throws {
         guard let session = try openReal() else { return }
         let source = FFISessionDataSource(handle: session)

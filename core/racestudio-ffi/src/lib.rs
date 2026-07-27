@@ -22,9 +22,10 @@ use std::sync::{Arc, OnceLock};
 
 use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
-    cumulative_distance, delta_t, resample_uniform, segment_laps,
+    bundled_tracks, cumulative_distance, delta_t, match_track, resample_uniform, segment_laps,
     segment_times as lap_segment_times, spectrum, stats_over_range, to_distance_grid,
-    AnalysisError as CoreAnalysisError, Lap, Stats, Window as FftWindow,
+    AnalysisError as CoreAnalysisError, Gate as CoreGate, Lap, LatLon as CoreLatLon, Stats,
+    Window as FftWindow, MATCH_TOLERANCE_M,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 use racestudio_device::{
@@ -208,6 +209,51 @@ pub struct LapSegmentTimes {
     /// Seconds spent in each of the `N` segments, in track order. Always sums to
     /// the lap duration.
     pub segment_times: Vec<f64>,
+}
+
+/// A gate line from the track definition (issue 9.2): the two `(lat, lon)`
+/// endpoints the car crosses. The start/finish line and each sector boundary of a
+/// [`DetectedTrack`] is one of these — the geometry the map/split UI draws in place
+/// of hand-placed beacons.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct TrackGate {
+    /// Latitude of the gate's first endpoint (degrees).
+    pub a_latitude: f64,
+    /// Longitude of the gate's first endpoint (degrees).
+    pub a_longitude: f64,
+    /// Latitude of the gate's second endpoint (degrees).
+    pub b_latitude: f64,
+    /// Longitude of the gate's second endpoint (degrees).
+    pub b_longitude: f64,
+}
+
+impl From<&CoreGate> for TrackGate {
+    fn from(gate: &CoreGate) -> Self {
+        TrackGate {
+            a_latitude: gate.a().lat,
+            a_longitude: gate.a().lon,
+            b_latitude: gate.b().lat,
+            b_longitude: gate.b().lon,
+        }
+    }
+}
+
+/// The circuit auto-recognized from a session's GPS trace against the bundled
+/// track database (issue 9.2), with the start/finish + sector geometry read off
+/// the matched definition — so the UI places splits from the track, not beacons.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct DetectedTrack {
+    /// Stable track id (e.g. `adria`).
+    pub id: String,
+    /// Human-readable circuit name.
+    pub name: String,
+    /// Closest-approach tolerance (metres) the match was accepted at.
+    pub tolerance_m: f64,
+    /// The definition's start/finish line.
+    pub start_finish: TrackGate,
+    /// The definition's ordered sector-boundary gates. `N` gates cut a lap into
+    /// `N + 1` segments.
+    pub sector_gates: Vec<TrackGate>,
 }
 
 /// Summary statistics for a channel window (issue 3.4).
@@ -551,6 +597,20 @@ impl SessionHandle {
         to_distance_grid(&axis.series, &axis.times, timecodes)
             .unwrap_or_else(|_| vec![0.0; timecodes.len()])
     }
+
+    /// The session's GPS fix positions — the trace the track matcher (9.2) runs
+    /// over. Empty when the session carries no GPS.
+    fn gps_trace(&self) -> Vec<CoreLatLon> {
+        self.session
+            .gps()
+            .map(|gps| {
+                gps.fixes()
+                    .iter()
+                    .map(|fix| CoreLatLon::new(fix.latitude, fix.longitude))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
 
 #[uniffi::export]
@@ -742,6 +802,26 @@ impl SessionHandle {
                 segment_times: lap_segment_times(lap, n),
             })
             .collect()
+    }
+
+    /// The circuit auto-recognized from the session's GPS trace against the bundled
+    /// track database (issue 9.2), with the start/finish + sector geometry read off
+    /// the matched definition — the beacon-free splits the map/split UI surfaces.
+    ///
+    /// Returns `None` when no track matches within tolerance (a GPS-less session
+    /// never matches); the caller then falls back to beacon segmentation
+    /// ([`Self::segment_times`]). Never panics.
+    #[must_use]
+    pub fn detect_track(&self) -> Option<DetectedTrack> {
+        let trace = self.gps_trace();
+        let db = bundled_tracks();
+        match_track(&trace, &db).map(|track| DetectedTrack {
+            id: track.id().to_string(),
+            name: track.name().to_string(),
+            tolerance_m: MATCH_TOLERANCE_M,
+            start_finish: track.start_finish().into(),
+            sector_gates: track.sectors().iter().map(TrackGate::from).collect(),
+        })
     }
 
     /// The delta-t of the `comparison` lap versus the `reference` lap, as
@@ -1479,6 +1559,39 @@ mod tests {
 
         let no_laps = handle_with_channels(vec![channel("AX", &[(0.0, 1.0)])]);
         assert!(no_laps.segment_times(4).is_empty());
+    }
+
+    #[test]
+    fn test_detect_track_is_none_without_gps() {
+        // A GPS-less session has no trace to match: detection is None, so the caller
+        // falls back to beacon segmentation.
+        let handle = handle_with_channels(vec![channel("AX", &[(0.0, 1.0), (1000.0, 2.0)])]);
+        assert!(handle.detect_track().is_none());
+    }
+
+    #[test]
+    fn test_detect_track_matches_real_adria_session() {
+        // The `aim_official_test` fixture was recorded at Adria, on whose real GPS
+        // trace the bundled `adria` gates sit — so the session auto-recognizes it and
+        // surfaces the definition's start/finish + sector geometry.
+        let Some(path) = xrk_or_skip("aim_official_test.xrk") else {
+            return;
+        };
+        let handle = open_session(path.to_string_lossy().into_owned()).expect("decode");
+
+        let detected = handle.detect_track().expect("Adria is recognized");
+        assert_eq!(detected.id, "adria");
+        assert_eq!(detected.name, "Adria International Raceway");
+        assert!((detected.tolerance_m - MATCH_TOLERANCE_M).abs() < 1e-9);
+        assert_eq!(
+            detected.sector_gates.len(),
+            3,
+            "Adria has three sector gates"
+        );
+        // The start/finish geometry is the definition's line, near the fixture's
+        // paddock (~45.045 N, 12.149 E) — read from the track, not from a beacon.
+        assert!((detected.start_finish.a_latitude - 45.045).abs() < 0.01);
+        assert!((detected.start_finish.a_longitude - 12.149).abs() < 0.01);
     }
 
     #[test]

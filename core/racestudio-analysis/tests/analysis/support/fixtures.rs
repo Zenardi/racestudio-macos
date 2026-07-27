@@ -180,6 +180,32 @@ pub struct DistancePoint {
     pub distance: f64,
 }
 
+/// `<name>.track.json` — a real GPS trace plus the id of the bundled track it is
+/// expected to match (issue 9.2). The oracle for
+/// [`match_track`](racestudio_analysis::track::match_track): `trace` is a
+/// committed window of real `(lat, lon)` fixes decoded from the fixture, and
+/// `expected_match` is the [`bundled_tracks`](racestudio_analysis::track::bundled_tracks)
+/// id whose start/finish + sector gates lie on that trace. `tolerance_m` records
+/// the closest-approach tolerance the match holds at. Committed (independent of
+/// the git-ignored `.xrk`) so the real-data match test always runs.
+#[derive(Debug, Deserialize)]
+pub struct TrackGolden {
+    pub file: String,
+    /// The bundled track id the trace is expected to resolve to.
+    pub expected_match: String,
+    /// Closest-approach tolerance (metres) the recorded match holds at.
+    pub tolerance_m: f64,
+    /// The real GPS trace, in fix order.
+    pub trace: Vec<LatLonGolden>,
+}
+
+/// One `(latitude, longitude)` point of a [`TrackGolden`] trace.
+#[derive(Debug, Deserialize)]
+pub struct LatLonGolden {
+    pub lat: f64,
+    pub lon: f64,
+}
+
 /// `<name>.derived.json` — a contiguous window of GPS-derived channels (issue
 /// 3.6). Heading is reconstructed via libxrk's own `gps.ecef_velocity_to_enu`;
 /// the acceleration/yaw outputs match libxrk's stored `GPS_*` channels to
