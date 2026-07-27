@@ -44,7 +44,7 @@ status set, the gap-issue links, and the backlog ordering.
 | Min/max/avg statistics | Whole-channel, windowed and per-lap min/max/mean/std readouts | Done | 3.4, 8.5, 8.10 (channel_stats, stats_per_lap) | — | — |
 | Channels report | Per-lap/segment stats table plus stat-vs-lap graph, presets | Done | 8.10 (stats 3.4) | — | — |
 | Split / segment times | Per-segment times, best theoretical & best rolling lap, split editing | Done | 8.11 (segment_times in splits, laps 3.1) | — | — |
-| Multi-session compare | Load several sessions together and overlay their laps across every panel | Missing | — | 9.1 (proposed) | P1 |
+| Multi-session compare | Load several sessions together and overlay their laps across every panel | Done | 9.1 (#138; `MultiSessionModel` over the 8.7 distance overlay + 3.1/3.2 alignment) | — | — |
 | Gauges & digital displays | Measures bar with digital readouts plus analog-style gauge widgets | Partial | 4.4, 8.5 (readouts shipped; no gauge widgets) | 9.4 (proposed) | P3 |
 | Report / export | CSV export/import, printable report (PDF/print), plot image export | Partial | 5.1, 5.2 (CSV both ways), 5.4 (project files; no PDF/print/image export) | 9.3 (proposed) | P2 |
 | Video sync | Synchronized video playback tied to the analysis cursor | Missing | — | 9.5 (proposed) | P3 |
@@ -82,7 +82,7 @@ a ready-to-open follow-up issue for milestone M9 and must meet
 
 | Priority | Proposed issue | Area label | Impact | Effort | Scope |
 | --- | --- | --- | --- | --- | --- |
-| P1 | 9.1 | area:analysis | 5 | 3 | Multi-session compare: open ≥2 sessions in one analysis window and overlay their laps across plot, delta strip, track map and reports |
+| ✅ Done | 9.1 (#138) | area:analysis | 5 | 3 | Multi-session compare: open ≥2 sessions in one analysis window and overlay their laps across plot, delta strip, track map and reports — shipped via `MultiSessionModel` |
 | P2 | 9.2 | area:analysis | 4 | 3 | Track detection & track database: auto-recognize the circuit from GPS, bundled start/finish + sector definitions per track |
 | P2 | 9.3 | area:import-export | 3 | 2 | Report export: printable PDF report of plots and stats tables plus PNG plot-image export |
 | P3 | 9.4 | area:ui | 2 | 2 | Gauge widgets: analog-style gauge displays alongside the digital measures bar |
