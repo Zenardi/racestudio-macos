@@ -82,7 +82,6 @@ a ready-to-open follow-up issue for milestone M9 and must meet
 
 | Priority | Proposed issue | Area label | Impact | Effort | Scope |
 | --- | --- | --- | --- | --- | --- |
-| ✅ Done | 9.1 (#138) | area:analysis | 5 | 3 | Multi-session compare: open ≥2 sessions in one analysis window and overlay their laps across plot, delta strip, track map and reports — shipped via `MultiSessionModel` |
 | P2 | 9.2 | area:analysis | 4 | 3 | Track detection & track database: auto-recognize the circuit from GPS, bundled start/finish + sector definitions per track |
 | P2 | 9.3 | area:import-export | 3 | 2 | Report export: printable PDF report of plots and stats tables plus PNG plot-image export |
 | P3 | 9.4 | area:ui | 2 | 2 | Gauge widgets: analog-style gauge displays alongside the digital measures bar |
