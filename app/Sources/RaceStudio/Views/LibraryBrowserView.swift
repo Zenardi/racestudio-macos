@@ -238,6 +238,14 @@ private struct LibraryPreviewPane: View {
     let preview: SessionPreview
     let onOpen: () -> Void
 
+    /// "Vehicle • Driver", but only the parts that exist — so a session missing
+    /// both (e.g. a device-imported lap set) doesn't render a stray "•" under the
+    /// venue title. `nil` when neither is present, which hides the line entirely.
+    private var subtitle: String? {
+        let parts = [summary.vehicle, summary.driver].filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
             HStack {
@@ -245,9 +253,11 @@ private struct LibraryPreviewPane: View {
                     Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
                         .font(.token(theme.typography.title))
                         .foregroundStyle(theme.palette.textPrimary.color(scheme))
-                    Text("\(summary.vehicle) • \(summary.driver)")
-                        .font(.token(theme.typography.callout))
-                        .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.token(theme.typography.callout))
+                            .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                    }
                 }
                 Spacer()
                 Button(action: onOpen) {
