@@ -36,7 +36,9 @@ struct MeasuresBar: View {
         }
         .padding(theme.spacing.sm)
         .frame(maxWidth: .infinity)
-        .background(theme.palette.surface.color(scheme))
+        // Translucent glass bar (macOS-13-safe Material) — it sits over the plots,
+        // so the blurred content behind gives the most effective glass look.
+        .background(.regularMaterial)
     }
 
     /// A slider bound to the cursor's time position over its scrub range; hidden

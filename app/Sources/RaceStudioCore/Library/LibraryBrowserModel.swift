@@ -33,6 +33,12 @@ public final class LibraryBrowserModel: ObservableObject {
 
     /// The visible (filtered) sessions, date-descending.
     @Published public private(set) var sessions: [SessionSummary]
+
+    /// Every indexed session, date-descending — the **unfiltered** library,
+    /// independent of the active scope / search / facets. The Home dashboard reads
+    /// this so its at-a-glance stats and recents reflect the whole library rather
+    /// than whatever filter the browser happens to have left active.
+    public var allSessions: [SessionSummary] { index.summaries }
     /// The facet constraints applied on top of the current scope + search.
     @Published public private(set) var facets = FilterSpec()
     /// What the list is scoped to (all / recent / a collection).
