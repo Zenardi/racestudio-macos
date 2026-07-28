@@ -15,6 +15,8 @@ struct DevicePanelView: View {
     /// The active locale (issue 7.3) — drives the localized control labels, and
     /// honours a SwiftUI `\.locale` override in previews/tests.
     @Environment(\.locale) private var locale
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
 
     /// Inject a model (used by previews/tests-of-the-shell).
     init(model: DevicePanelModel) {
@@ -42,44 +44,47 @@ struct DevicePanelView: View {
     private var content: some View {
         switch model.state {
         case .idle, .discovering:
-            ProgressView("Looking for MyChron devices…")
+            BrandLoadingView("Looking for MyChron devices…")
         case let .devices(devices):
             deviceList(devices)
         case let .enumerating(device):
-            ProgressView("Reading sessions from \(device.name)…")
+            BrandLoadingView("Reading sessions from \(device.name)…")
         case let .sessions(device, sessions), let .confirmingDeletion(device, sessions, _):
             // The delete-confirmation sheet overlays the session table, so both
             // states render the same underlying table.
             sessionTable(device, sessions)
         case let .downloading(_, session, progress):
-            VStack(spacing: 12) {
-                Text("Downloading \(session.name)…")
-                ProgressView(value: progress).frame(width: 240)
-            }
+            BrandLoadingView("Downloading \(session.name)…", value: progress)
         case let .deleting(_, session):
-            ProgressView("Deleting \(session.name)…")
+            BrandLoadingView("Deleting \(session.name)…")
         case let .downloaded(_, session, data):
-            resultView(
-                title: "Downloaded \(session.name)",
-                detail: "\(data.count) bytes ready to import.",
-                symbol: "checkmark.circle.fill"
-            )
+            BrandStateView(role: .success, symbol: "checkmark.circle.fill",
+                           title: "Downloaded \(session.name)",
+                           message: "\(data.count) bytes ready to import.",
+                           actionLabel: "Done", action: { model.reset() })
         case let .failed(message):
-            resultView(title: "Something went wrong", detail: message, symbol: "exclamationmark.triangle.fill")
+            BrandStateView(role: .error, symbol: "exclamationmark.triangle.fill",
+                           title: "Something went wrong",
+                           message: message,
+                           actionLabel: "Done", action: { model.reset() })
         }
     }
 
     private func deviceList(_ devices: [Device]) -> some View {
         Group {
             if devices.isEmpty {
-                emptyState("No MyChron devices found", symbol: "wifi.slash")
+                BrandStateView(symbol: "wifi.slash", title: "No MyChron devices found",
+                               message: "Make sure the logger is powered on and on the same Wi-Fi network.")
             } else {
                 List(devices, id: \.address) { device in
                     Button { Task { await model.select(device) } } label: {
-                        VStack(alignment: .leading) {
-                            Text(device.name).font(.headline)
+                        VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
+                            Text(device.name)
+                                .font(.token(theme.typography.headline))
+                                .foregroundStyle(theme.palette.textPrimary.color(scheme))
                             Text("\(device.address):\(String(device.port)) · \(device.model)")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.token(theme.typography.caption))
+                                .foregroundStyle(theme.palette.textSecondary.color(scheme))
                         }
                     }
                     .buttonStyle(.plain)
@@ -89,21 +94,26 @@ struct DevicePanelView: View {
     }
 
     private func sessionTable(_ device: Device, _ sessions: [SessionInfo]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
             HStack {
-                Text(device.name).font(.title3.bold())
+                Text(device.name)
+                    .font(.token(theme.typography.title))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Spacer()
                 Button("Devices") { Task { await model.loadDevices() } }
             }
             if sessions.isEmpty {
-                emptyState("No sessions on this device", symbol: "tray")
+                BrandStateView(symbol: "tray", title: "No sessions on this device")
             } else {
                 List(sessions, id: \.id) { session in
                     HStack {
-                        VStack(alignment: .leading) {
-                            Text(session.name).font(.headline)
+                        VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
+                            Text(session.name)
+                                .font(.token(theme.typography.headline))
+                                .foregroundStyle(theme.palette.textPrimary.color(scheme))
                             Text("\(session.lapCount) laps · \(session.sizeBytes) bytes")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.token(theme.typography.caption))
+                                .foregroundStyle(theme.palette.textSecondary.color(scheme))
                         }
                         Spacer()
                         Button(ControlLabel.downloadSession.label(locale: locale)) {
@@ -119,23 +129,6 @@ struct DevicePanelView: View {
         }
     }
 
-    private func resultView(title: String, detail: String, symbol: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: symbol).font(.largeTitle)
-            Text(title).font(.headline)
-            Text(detail).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Done") { model.reset() }
-        }
-    }
-
-    private func emptyState(_ message: String, symbol: String) -> some View {
-        VStack(spacing: 8) {
-            Image(systemName: symbol).font(.largeTitle).foregroundStyle(.secondary)
-            Text(message).foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
     // MARK: - guarded delete dialog (issue 6.6)
 
     private var deleteDialogShown: Binding<Bool> {
@@ -148,11 +141,14 @@ struct DevicePanelView: View {
     @ViewBuilder
     private var deleteConfirmationSheet: some View {
         if let target = model.pendingDeletion {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Delete “\(target.name)”?").font(.headline)
+            VStack(alignment: .leading, spacing: theme.spacing.md) {
+                Text("Delete “\(target.name)”?")
+                    .font(.token(theme.typography.headline))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Text("This permanently erases the session from the device and cannot be undone. "
                     + "Type the session name to confirm.")
-                    .foregroundStyle(.secondary)
+                    .font(.token(theme.typography.callout))
+                    .foregroundStyle(theme.palette.textSecondary.color(scheme))
                 TextField("Session name", text: $typedName)
                     .textFieldStyle(.roundedBorder)
                 HStack {

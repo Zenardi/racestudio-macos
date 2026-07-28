@@ -14,6 +14,8 @@ struct LibraryBrowserView: View {
     @ObservedObject var library: LibraryBrowserModel
     let onOpen: (SessionSummary) -> Void
     let onImport: () -> Void
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         NavigationSplitView {
@@ -160,40 +162,44 @@ struct LibraryBrowserView: View {
     }
 
     private func sessionRow(_ summary: SessionSummary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
             HStack {
-                Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue).fontWeight(.semibold)
+                Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
+                    .font(.token(theme.typography.headline))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Spacer()
                 if !summary.isAvailable {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(theme.palette.negative.color(scheme))
                         .help("The source file is missing or moved")
                 }
             }
             Text(summary.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.caption).foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                Text(summary.vehicle).font(.caption)
+                .font(.token(theme.typography.caption))
+                .foregroundStyle(theme.palette.textSecondary.color(scheme))
+            HStack(spacing: theme.spacing.xs + 2) {
+                Text(summary.vehicle)
+                    .font(.token(theme.typography.caption))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 if !summary.driver.isEmpty {
-                    Text("• \(summary.driver)").font(.caption).foregroundStyle(.secondary)
+                    Text("• \(summary.driver)")
+                        .font(.token(theme.typography.caption))
+                        .foregroundStyle(theme.palette.textSecondary.color(scheme))
                 }
                 Spacer()
                 Text("\(summary.lapCount) lap\(summary.lapCount == 1 ? "" : "s")")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.token(theme.typography.caption))
+                    .foregroundStyle(theme.palette.textSecondary.color(scheme))
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, theme.spacing.xs / 2)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "tray").font(.largeTitle).foregroundStyle(.secondary)
-            Text("No sessions").font(.headline)
-            Text("Import a .xrk / .xrz file to get started.")
-                .font(.caption).foregroundStyle(.secondary)
-            Button("Import…", action: onImport)
-        }
-        .padding()
+        BrandStateView(symbol: "tray",
+                       title: "No sessions",
+                       message: "Import a .xrk / .xrz file to get started.",
+                       actionLabel: "Import…", action: onImport)
     }
 
     // MARK: - Preview pane (laps summary + map thumbnail)
@@ -232,6 +238,14 @@ private struct LibraryPreviewPane: View {
     let preview: SessionPreview
     let onOpen: () -> Void
 
+    /// "Vehicle • Driver", but only the parts that exist — so a session missing
+    /// both (e.g. a device-imported lap set) doesn't render a stray "•" under the
+    /// venue title. `nil` when neither is present, which hides the line entirely.
+    private var subtitle: String? {
+        let parts = [summary.vehicle, summary.driver].filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
             HStack {
@@ -239,9 +253,11 @@ private struct LibraryPreviewPane: View {
                     Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
                         .font(.token(theme.typography.title))
                         .foregroundStyle(theme.palette.textPrimary.color(scheme))
-                    Text("\(summary.vehicle) • \(summary.driver)")
-                        .font(.token(theme.typography.callout))
-                        .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.token(theme.typography.callout))
+                            .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                    }
                 }
                 Spacer()
                 Button(action: onOpen) {
@@ -322,19 +338,13 @@ private struct MapThumbnail: View {
 
 /// A small "nothing here" placeholder (a lightweight stand-in for
 /// `ContentUnavailableView`, which is macOS 14+, so the app keeps its macOS 13
-/// floor).
+/// floor). Brand-tokenized via ``BrandStateView`` (issue 7.5).
 private struct ContentUnavailableMessage: View {
     let title: String
     let systemImage: String
     let message: String
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: systemImage).font(.largeTitle).foregroundStyle(.secondary)
-            Text(title).font(.headline)
-            Text(message).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        BrandStateView(symbol: systemImage, title: title, message: message)
     }
 }

@@ -69,28 +69,39 @@ struct AnalysisWindowView: View {
 
 /// The left rail: one button per layout, highlighting the active one.
 private struct LayoutRail: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let layouts: [WindowLayout]
     let active: WindowLayout
     let onSelect: (WindowLayout) -> Void
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: theme.spacing.xs) {
             ForEach(layouts) { layout in
                 Button { onSelect(layout) } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: layout.systemImageName).font(.title3)
-                        Text(layout.title).font(.caption2).multilineTextAlignment(.center)
+                    VStack(spacing: theme.spacing.xs) {
+                        Image(systemName: layout.systemImageName).font(.token(theme.typography.headline))
+                        Text(layout.title).font(.token(theme.typography.caption)).multilineTextAlignment(.center)
                     }
                     .frame(width: 64, height: 56)
-                    .background(layout == active ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .cornerRadius(6)
+                    // Active vs inactive is signalled by primary-vs-secondary text
+                    // (both WCAG-AA proven on the canvas) plus the accent wash — the
+                    // label itself is never drawn in `accent`, which is only proven
+                    // at the ≥3:1 non-text bar, not the 4.5:1 a caption needs.
+                    .foregroundStyle(layout == active
+                        ? theme.palette.textPrimary.color(scheme)
+                        : theme.palette.textSecondary.color(scheme))
+                    .background(layout == active
+                        ? theme.palette.accent.color(scheme).opacity(0.16)
+                        : Color.clear)
+                    .cornerRadius(theme.radius.sm)
                 }
                 .buttonStyle(.plain)
                 .help(layout.title)
             }
             Spacer()
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, theme.spacing.sm)
         .frame(width: 80)
     }
 }
@@ -337,55 +348,15 @@ private struct LapOverlayPanel: View {
     }
 }
 
-/// A centered, secondary placeholder shown when a panel has nothing to render.
-/// Shared across the window's panel views (issues 8.3 / 8.9).
+/// A centered, designed placeholder shown when a panel has nothing to render —
+/// a brand-tokenized empty state (issue 7.5) shared across the window's panels
+/// (issues 8.3 / 8.9), so "nothing selected yet" reads as intentional, not blank.
 struct ContentUnavailableHint: View {
     let text: String
+    var symbol: String = "square.dashed"
     var body: some View {
-        Text(text).foregroundColor(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+        BrandStateView(symbol: symbol, title: text)
     }
 }
 
-// MARK: - Measures bar (scrubber + value-at-cursor)
-
-/// The bottom bar: a cursor scrubber (moving the shared cursor along the time
-/// axis) and the value-at-cursor for every selected channel.
-private struct MeasuresBar: View {
-    @ObservedObject var model: AnalysisWindowModel
-    @ObservedObject var cursor: LinkedCursor
-
-    var body: some View {
-        VStack(spacing: 6) {
-            scrubber
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 16) {
-                    ForEach(model.measures) { measure in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(measure.channel.name).font(.caption2).foregroundColor(.secondary)
-                            Text(measure.formatted)
-                                .font(.body.monospacedDigit())
-                                .foregroundColor(measure.readout.extrapolated ? .secondary : .primary)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity)
-    }
-
-    /// A slider bound to the cursor's time position over its scrub range; hidden
-    /// when the session has no positive-width extent (decided in Core).
-    @ViewBuilder private var scrubber: some View {
-        if let range = cursor.scrubRange {
-            HStack(spacing: 12) {
-                Text(String(format: "t = %.2f s", cursor.timePosition))
-                    .font(.caption.monospacedDigit()).foregroundColor(.secondary)
-                    .frame(width: 96, alignment: .leading)
-                Slider(value: Binding(get: { cursor.timePosition },
-                                      set: { cursor.moveTime($0) }),
-                       in: range)
-            }
-        }
-    }
-}
+// The bottom measures bar (scrubber + value-at-cursor) lives in `MeasuresBar.swift`.
