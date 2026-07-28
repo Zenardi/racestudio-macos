@@ -106,8 +106,7 @@ struct HomeView: View {
                               + "then open it to explore laps, channels, and the racing line.",
                        actionLabel: "Import a session…", action: onImport)
         .frame(minHeight: 200)
-        .background(theme.palette.surface.color(scheme),
-                    in: RoundedRectangle(cornerRadius: theme.radius.lg))
+        .brandGlassCard(cornerRadius: theme.radius.lg)
     }
 
     // MARK: - Dashboard stat tiles
@@ -179,10 +178,7 @@ private struct HomeStatTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(theme.spacing.md)
-        .background(theme.palette.surface.color(scheme),
-                    in: RoundedRectangle(cornerRadius: theme.radius.md))
-        .overlay(RoundedRectangle(cornerRadius: theme.radius.md)
-            .strokeBorder(theme.palette.separator.color(scheme)))
+        .brandGlassCard(cornerRadius: theme.radius.md)
         .accessibilityElement(children: .combine)
     }
 }
@@ -216,8 +212,7 @@ private struct HomeRecentRow: View {
         }
         .padding(theme.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.palette.surface.color(scheme),
-                    in: RoundedRectangle(cornerRadius: theme.radius.md))
+        .brandGlassCard(cornerRadius: theme.radius.md)
         .contentShape(Rectangle())
     }
 
@@ -254,8 +249,7 @@ private struct HomeTipRow: View {
         }
         .padding(theme.spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.palette.surface.color(scheme),
-                    in: RoundedRectangle(cornerRadius: theme.radius.md))
+        .brandGlassCard(cornerRadius: theme.radius.md)
         .accessibilityElement(children: .combine)
     }
 }
