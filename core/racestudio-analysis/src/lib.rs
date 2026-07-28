@@ -33,6 +33,12 @@
 //! [`apply_window`], [`Window`]): a `rustfft`-backed single-sided amplitude
 //! [`Spectrum`] with per-window coherent-gain correction and `k·fs/N` scaling.
 //!
+//! The eighth layer (issue 9.2) is **track detection** ([`match_track`],
+//! [`auto_splits`], [`bundled_tracks`]): identifying the circuit from a GPS trace
+//! against a bundled, versioned [`TrackDb`] of start/finish + sector [`Gate`]s,
+//! then reading the auto start/finish and sector splits off the matched track's
+//! geometry instead of from hand-placed beacons.
+//!
 //! Every fallible entry point returns [`Result`] and never panics on caller
 //! input — the [`AnalysisError`] enum for the numeric layers, and the dedicated
 //! [`ExprError`](expr::ExprError) for the expression engine.
@@ -55,6 +61,7 @@ mod math;
 pub mod resample;
 pub mod splits;
 pub mod stats;
+pub mod track;
 
 pub use decimate::min_max_decimate;
 pub use delta::delta_t;
@@ -70,3 +77,7 @@ pub use laps::{
 pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid};
 pub use splits::segment_times;
 pub use stats::{channel_stats, stats_over_range, stats_per_lap, Stats};
+pub use track::{
+    auto_splits, auto_splits_within, bundled_tracks, match_track, match_track_within, AutoSplits,
+    Gate, LatLon, TrackDb, TrackDef, MATCH_TOLERANCE_M, TRACK_DB_VERSION,
+};

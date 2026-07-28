@@ -188,6 +188,27 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
             window: FfiWindow(start: start * 1000, end: end * 1000))
         return ChannelSpectrum(freqs: dto.freqs, amps: dto.amps)
     }
+
+    public func detectTrack() -> DetectedTrackInfo? {
+        // The Rust matcher (9.2) runs the whole GPS trace against the bundled track
+        // DB; the adapter only maps the FFI record's geometry into Core's own types.
+        handle.detectTrack().map { ffi in
+            DetectedTrackInfo(
+                id: ffi.id, name: ffi.name, toleranceM: ffi.toleranceM,
+                startFinish: DetectedTrackGate(ffi.startFinish),
+                sectorGates: ffi.sectorGates.map(DetectedTrackGate.init))
+        }
+    }
+}
+
+private extension DetectedTrackGate {
+    /// Map a generated-binding `TrackGate` (two `(lat, lon)` endpoints) into Core's
+    /// ``DetectedTrackGate`` (issue 9.2).
+    init(_ ffi: TrackGate) {
+        self.init(
+            start: GPSCoord(latitude: ffi.aLatitude, longitude: ffi.aLongitude),
+            end: GPSCoord(latitude: ffi.bLatitude, longitude: ffi.bLongitude))
+    }
 }
 
 private extension SpectrumWindowKind {

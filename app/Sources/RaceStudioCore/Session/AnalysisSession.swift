@@ -211,6 +211,12 @@ public protocol SessionDataSource: Sendable {
     /// window holds too few samples to transform.
     func spectrum(channel: String, windowFunction: SpectrumWindowKind,
                   start: Double, end: Double) throws -> ChannelSpectrum
+
+    /// Auto-recognize the circuit from the session's GPS trace against the bundled
+    /// track database (issue 9.2), or `nil` when no track matches — the split UI
+    /// then falls back to beacon segmentation. Defaulted (see ``TrackDetectionModel``)
+    /// so only the FFI-backed source implements it; others fall back. Never traps.
+    func detectTrack() -> DetectedTrackInfo?
 }
 
 /// The live analysis pump for a loaded session (issue 8.1) — the linchpin of the
@@ -301,6 +307,13 @@ public final class AnalysisSession {
         guard requested > 0 else { return [] }
         return dataSource.gpsTrack(start: window.start, count: requested)
     }
+
+    /// The circuit auto-recognized from the session's GPS trace against the bundled
+    /// track database (issue 9.2), or `nil` when none matches — the split UI then
+    /// falls back to beacons (``trackDetection()`` / ``TrackDetectionModel``).
+    /// Matched **once** and cached (the match is a pure function of the immutable
+    /// session), so it blocks the main actor at most once per session.
+    public private(set) lazy var detectedTrack: DetectedTrackInfo? = dataSource.detectTrack()
 
     // MARK: - Lap overlay + delta-t (issue 8.7)
 

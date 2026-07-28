@@ -30,3 +30,5 @@ mod laps;
 mod resample;
 #[path = "analysis/stats.rs"]
 mod stats;
+#[path = "analysis/track.rs"]
+mod track;

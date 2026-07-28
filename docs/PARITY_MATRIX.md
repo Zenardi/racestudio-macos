@@ -35,7 +35,7 @@ status set, the gap-issue links, and the backlog ordering.
 | Multi-lap overlay | Overlay selected laps of a session on a shared axis | Done | 4.2, 8.7 (lap alignment 3.1) | — | — |
 | Delta-t / predictive lap | Time-variance strip vs reference lap, predictive gain/loss readout | Done | 4.2, 8.7 (delta_t 3.2) | — | — |
 | GPS track map | Racing line, colour-by-channel, sector markers, cursor sync | Done | 4.3, 8.6 (GPS decode 1.4, GPS FFI 8.2) | — | — |
-| Track detection & track database | Auto-recognizes the circuit from GPS against a bundled track DB; sets start/finish and sectors | Missing | — | 9.2 (proposed) | P2 |
+| Track detection & track database | Auto-recognizes the circuit from GPS against a bundled track DB; sets start/finish and sectors | Done | 9.2 (#139; `track` matcher over GPS decode 1.4 + a bundled versioned track DB, surfaced as `DetectedTrack`/`TrackDetectionModel`) | — | — |
 | Math channels & expression editor | User-defined channels from a live-validated expression editor | Done | 4.6, 8.8 (expression engine 3.5, FFI 3.8) | — | — |
 | Derived channels | Computed heading, lateral/longitudinal g, yaw rate, gear estimate | Done | 3.6, 8.8 (FFI 3.8) | — | — |
 | Histogram | Channel distribution with configurable bins, per-lap filter | Done | 4.5, 8.9 (stats 3.4) | — | — |
@@ -72,6 +72,7 @@ Every `Done` row above ultimately consumes the decode core (M1) through these
 - `derived` — heading, yaw rate, accelerations, gear estimate (3.6)
 - `fft` — windowed single-sided amplitude spectrum (3.7)
 - `splits` — per-segment times behind the Split Times report (8.11)
+- `track` — GPS→circuit match against a bundled track DB, with auto start/finish + sector gates (9.2)
 
 ## Gap backlog (prioritized)
 
@@ -82,7 +83,6 @@ a ready-to-open follow-up issue for milestone M9 and must meet
 
 | Priority | Proposed issue | Area label | Impact | Effort | Scope |
 | --- | --- | --- | --- | --- | --- |
-| P2 | 9.2 | area:analysis | 4 | 3 | Track detection & track database: auto-recognize the circuit from GPS, bundled start/finish + sector definitions per track |
 | P2 | 9.3 | area:import-export | 3 | 2 | Report export: printable PDF report of plots and stats tables plus PNG plot-image export |
 | P3 | 9.4 | area:ui | 2 | 2 | Gauge widgets: analog-style gauge displays alongside the digital measures bar |
 | P3 | 9.5 | area:ui | 3 | 5 | Video sync: import external video, align it to the session cursor, side-by-side playback |

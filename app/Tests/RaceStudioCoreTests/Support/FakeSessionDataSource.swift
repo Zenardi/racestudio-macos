@@ -33,6 +33,9 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     private let spectra: [SpectrumKey: ChannelSpectrum]
     /// When set, every `spectrum(...)` call throws it (the error path).
     private let spectrumError: Error?
+    /// The canned track detection this fake serves (issue 9.2); `nil` models a
+    /// session that matched no bundled track (the beacon fallback).
+    private let detectedTrack: DetectedTrackInfo?
 
     /// One recorded `samples(...)` request, so a test can assert the window
     /// `AnalysisSession` actually issued across the seam.
@@ -113,7 +116,8 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
          gps: [GPSTrackPoint] = [], distanceBanks: [[DistanceSample]] = [],
          deltas: [DeltaKey: [DeltaSample]] = [:], deltaError: Error? = nil,
          segments: [LapSegments] = [],
-         spectra: [SpectrumKey: ChannelSpectrum] = [:], spectrumError: Error? = nil) {
+         spectra: [SpectrumKey: ChannelSpectrum] = [:], spectrumError: Error? = nil,
+         detectedTrack: DetectedTrackInfo? = nil) {
         self.banks = banks
         self.stats = stats
         self.statsError = statsError
@@ -124,6 +128,7 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         self.segments = segments
         self.spectra = spectra
         self.spectrumError = spectrumError
+        self.detectedTrack = detectedTrack
     }
 
     func samples(channelIndex: UInt32, start: UInt32, count: UInt32) -> [DataSample] {
@@ -168,6 +173,10 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
     func segmentTimes(splits: UInt32) -> [LapSegments] {
         lastSegmentSplits = splits
         return segments
+    }
+
+    func detectTrack() -> DetectedTrackInfo? {
+        detectedTrack
     }
 
     func spectrum(channel: String, windowFunction: SpectrumWindowKind,
