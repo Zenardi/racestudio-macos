@@ -22,6 +22,8 @@
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>RaceStudio is an independent reader of AiM telemetry files and is not affiliated with AiM Tech srl.</string>
 
