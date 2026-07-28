@@ -23,6 +23,7 @@ struct RaceStudioApp: App {
     var body: some Scene {
         Window("RaceStudio", id: "library") {
             LibraryRootView()
+                .environment(\.theme, .raceStudio)  // brand design tokens (issue 7.3)
                 .environmentObject(model)
                 .environmentObject(model.store)
                 .frame(minWidth: 900, minHeight: 560)
