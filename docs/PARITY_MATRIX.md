@@ -47,7 +47,7 @@ status set, the gap-issue links, and the backlog ordering.
 | Multi-session compare | Load several sessions together and overlay their laps across every panel | Done | 9.1 (#138; `MultiSessionModel` over the 8.7 distance overlay + 3.1/3.2 alignment) | — | — |
 | Gauges & digital displays | Measures bar with digital readouts plus analog-style gauge widgets | Partial | 4.4, 8.5 (readouts shipped; no gauge widgets) | 9.4 (proposed) | P3 |
 | Report / export | CSV export/import, printable report (PDF/print), plot image export | Partial | 5.1, 5.2 (CSV both ways), 5.4 (project files; no PDF/print/image export) | 9.3 (proposed) | P2 |
-| Video sync | Synchronized video playback tied to the analysis cursor | Missing | — | 9.5 (proposed) | P3 |
+| Video sync | Synchronized video playback tied to the analysis cursor | Done | 9.5 (#140; `VideoSyncModel` maps the 8.3 linked-cursor time ↔ an external video playhead through a clamped sync offset, driving a thin `AVPlayer` shell) | — | — |
 | Suspension analysis | Suspension composite views and log sheets | Done | 8.17 | — | — |
 | Session library / database | Browsable session database with search, filters, collections, preview | Done | 5.3, 8.14, 8.15 | — | — |
 | Workspaces & profiles | Saved layouts/profiles, project files, storyboard switching | Done | 5.4, 8.13 | — | — |
@@ -85,4 +85,3 @@ a ready-to-open follow-up issue for milestone M9 and must meet
 | --- | --- | --- | --- | --- | --- |
 | P2 | 9.3 | area:import-export | 3 | 2 | Report export: printable PDF report of plots and stats tables plus PNG plot-image export |
 | P3 | 9.4 | area:ui | 2 | 2 | Gauge widgets: analog-style gauge displays alongside the digital measures bar |
-| P3 | 9.5 | area:ui | 3 | 5 | Video sync: import external video, align it to the session cursor, side-by-side playback |

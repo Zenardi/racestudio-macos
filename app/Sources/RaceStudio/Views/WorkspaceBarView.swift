@@ -14,6 +14,9 @@ struct WorkspaceBar: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
     @ObservedObject var logSheet: LogSheetModel
+    /// The imported session video (issue 9.5): non-nil presents the ``VideoSyncView``
+    /// sheet bound to this window's shared cursor.
+    @State private var videoURL: URL?
 
     private var store: ProjectStore { ProjectStore(validator: FFIExpressionValidator()) }
     private var projectType: UTType { UTType(filenameExtension: ProjectStore.fileExtension) ?? .json }
@@ -25,6 +28,9 @@ struct WorkspaceBar: View {
             Button { saveWorkspace() } label: { Label("Save Workspace…", systemImage: "square.and.arrow.down") }
                 .help("Save this workspace (layout, selection, math channels) to a .rsproj file")
             Divider().frame(height: 18)
+            Button { importVideo() } label: { Label(L10n.string(.controlImportVideo), systemImage: "film") }
+                .help("Play an external session video synced to the analysis cursor")
+            Divider().frame(height: 18)
             StoryBoardView(
                 board: StoryBoardModel(selection: model.selection.laps, laps: model.session.laps),
                 onSetReference: { model.setReferenceLap($0) },
@@ -33,6 +39,39 @@ struct WorkspaceBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .sheet(isPresented: videoSheetPresented) { videoSheet }
+    }
+
+    /// Presents / dismisses the video-sync sheet off the imported URL.
+    private var videoSheetPresented: Binding<Bool> {
+        Binding(get: { videoURL != nil }, set: { if !$0 { videoURL = nil } })
+    }
+
+    /// The video-sync sheet: the 9.5 player bound to the window's shared cursor,
+    /// with a header + Done to close.
+    @ViewBuilder private var videoSheet: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(L10n.string(.featureVideoSync)).font(.headline)
+                Spacer()
+                Button("Done") { videoURL = nil }
+            }
+            .padding(10)
+            Divider()
+            if let videoURL {
+                VideoSyncView(cursor: model.linkedCursor, videoURL: videoURL)
+            }
+        }
+        .frame(minWidth: 520, minHeight: 400)
+    }
+
+    /// Opens a video file and binds it to this window's cursor (issue 9.5).
+    private func importVideo() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        videoURL = url
     }
 
     private func saveWorkspace() {
