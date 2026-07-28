@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import RaceStudioCore
 
 /// The app's **Home / dashboard** startup page: a brand-tokenized landing shown
@@ -47,9 +48,12 @@ struct HomeView: View {
     private var hero: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
             HStack(spacing: theme.spacing.md) {
-                Image(systemName: "flag.checkered")
-                    .font(.token(theme.typography.largeTitle))
-                    .foregroundStyle(theme.palette.accent.color(scheme))
+                // The app's own icon (the 7.4 AppIcon wired into the bundle),
+                // rendered from the running app rather than a generic symbol.
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
                     Text("RaceStudio")
