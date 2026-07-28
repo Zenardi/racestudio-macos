@@ -9,19 +9,34 @@ import RaceStudioCore
 /// Thin, like the rest of the shell: the onboarding copy (``StartGuide``) and the
 /// at-a-glance stats (``LibraryDashboard``) come from `RaceStudioCore`; this view
 /// only lays them out with the ``Theme`` tokens and wires the quick actions. The
-/// full library browser is one click away via **Browse Library**.
+/// leaf rows are extracted into small `View` structs so a re-render of the page
+/// doesn't rebuild every tile, and the dashboard/recent scan is memoized so it
+/// runs only when the library actually changes — not on every re-render.
 struct HomeView: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
     @ObservedObject var library: LibraryBrowserModel
-    let onImport: () -> Void
-    let onBrowseLibrary: () -> Void
-    let onOpen: (SessionSummary) -> Void
+    private let onImport: () -> Void
+    private let onBrowseLibrary: () -> Void
+    private let onOpen: (SessionSummary) -> Void
 
-    // The whole library (never the browser's filtered view), so the dashboard's
-    // stats and recents are correct regardless of any active search/scope/facet.
-    private var dashboard: LibraryDashboard { LibraryDashboard(sessions: library.allSessions) }
-    private var recent: [SessionSummary] { Array(library.allSessions.prefix(6)) }
+    /// Memoized from the *unfiltered* library. Seeded in `init` (so a returning
+    /// user never sees a flash of the empty-library state) and refreshed by
+    /// `onChange` only when `allSessions` actually changes.
+    @State private var dashboard: LibraryDashboard
+    @State private var recent: [SessionSummary]
+
+    init(library: LibraryBrowserModel,
+         onImport: @escaping () -> Void,
+         onBrowseLibrary: @escaping () -> Void,
+         onOpen: @escaping (SessionSummary) -> Void) {
+        _library = ObservedObject(wrappedValue: library)
+        self.onImport = onImport
+        self.onBrowseLibrary = onBrowseLibrary
+        self.onOpen = onOpen
+        _dashboard = State(initialValue: LibraryDashboard(sessions: library.allSessions))
+        _recent = State(initialValue: Array(library.allSessions.prefix(6)))
+    }
 
     var body: some View {
         ScrollView {
@@ -41,6 +56,10 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .brandCanvas()
+        .onChange(of: library.allSessions) { newSessions in
+            dashboard = LibraryDashboard(sessions: newSessions)
+            recent = Array(newSessions.prefix(6))
+        }
     }
 
     // MARK: - Hero + quick actions
@@ -95,14 +114,57 @@ struct HomeView: View {
 
     private var statsRow: some View {
         HStack(spacing: theme.spacing.md) {
-            statTile("Sessions", "\(dashboard.sessionCount)", "square.stack.3d.up")
-            statTile("Venues", "\(dashboard.venueCount)", "mappin.and.ellipse")
-            statTile("Vehicles", "\(dashboard.vehicleCount)", "car.side")
-            statTile("Laps", "\(dashboard.totalLaps)", "timer")
+            HomeStatTile(symbol: "square.stack.3d.up", value: "\(dashboard.sessionCount)", label: "Sessions")
+            HomeStatTile(symbol: "mappin.and.ellipse", value: "\(dashboard.venueCount)", label: "Venues")
+            HomeStatTile(symbol: "car.side", value: "\(dashboard.vehicleCount)", label: "Vehicles")
+            HomeStatTile(symbol: "timer", value: "\(dashboard.totalLaps)", label: "Laps")
         }
     }
 
-    private func statTile(_ label: String, _ value: String, _ symbol: String) -> some View {
+    // MARK: - Recent sessions
+
+    private var recentSessions: some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            sectionHeader("Recent sessions")
+            VStack(spacing: theme.spacing.xs) {
+                ForEach(recent) { summary in
+                    Button { onOpen(summary) } label: { HomeRecentRow(summary: summary) }
+                        .buttonStyle(.plain)
+                        .disabled(!summary.isAvailable)
+                }
+            }
+        }
+    }
+
+    // MARK: - Tip sections
+
+    private func tipSection(title: String, tips: [StartTip]) -> some View {
+        VStack(alignment: .leading, spacing: theme.spacing.sm) {
+            sectionHeader(title)
+            VStack(spacing: theme.spacing.sm) {
+                ForEach(tips) { tip in HomeTipRow(tip: tip) }
+            }
+        }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.token(theme.typography.title))
+            .foregroundStyle(theme.palette.textPrimary.color(scheme))
+    }
+}
+
+// MARK: - Leaf views (extracted so a page re-render doesn't rebuild every tile)
+
+/// One dashboard statistic — an accent icon, a big value, and a caption label.
+private struct HomeStatTile: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
+    let symbol: String
+    let value: String
+    let label: String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.xs) {
             Image(systemName: symbol)
                 .font(.token(theme.typography.headline))
@@ -123,23 +185,16 @@ struct HomeView: View {
             .strokeBorder(theme.palette.separator.color(scheme)))
         .accessibilityElement(children: .combine)
     }
+}
 
-    // MARK: - Recent sessions
+/// One recent-session row — a quick-open target labelling a session by venue,
+/// who/when, and lap count. Rendered inside a `Button` by the parent.
+private struct HomeRecentRow: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
+    let summary: SessionSummary
 
-    private var recentSessions: some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            sectionHeader("Recent sessions")
-            VStack(spacing: theme.spacing.xs) {
-                ForEach(recent) { summary in
-                    Button { onOpen(summary) } label: { recentRow(summary) }
-                        .buttonStyle(.plain)
-                        .disabled(!summary.isAvailable)
-                }
-            }
-        }
-    }
-
-    private func recentRow(_ summary: SessionSummary) -> some View {
+    var body: some View {
         HStack(spacing: theme.spacing.md) {
             Image(systemName: summary.isAvailable ? "chart.xyaxis.line" : "exclamationmark.triangle.fill")
                 .foregroundStyle(summary.isAvailable
@@ -150,7 +205,7 @@ struct HomeView: View {
                 Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
                     .font(.token(theme.typography.headline))
                     .foregroundStyle(theme.palette.textPrimary.color(scheme))
-                Text(recentSubtitle(summary))
+                Text(subtitle)
                     .font(.token(theme.typography.caption))
                     .foregroundStyle(theme.palette.textSecondary.color(scheme))
             }
@@ -166,25 +221,20 @@ struct HomeView: View {
         .contentShape(Rectangle())
     }
 
-    private func recentSubtitle(_ summary: SessionSummary) -> String {
-        let parts = [summary.vehicle, summary.driver].filter { !$0.isEmpty }
-        let who = parts.joined(separator: " • ")
+    private var subtitle: String {
+        let who = [summary.vehicle, summary.driver].filter { !$0.isEmpty }.joined(separator: " • ")
         let when = summary.date.formatted(date: .abbreviated, time: .shortened)
         return who.isEmpty ? when : "\(who) · \(when)"
     }
+}
 
-    // MARK: - Tip sections
+/// One onboarding tip — an accent icon, a title, and a one-line detail.
+private struct HomeTipRow: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
+    let tip: StartTip
 
-    private func tipSection(title: String, tips: [StartTip]) -> some View {
-        VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            sectionHeader(title)
-            VStack(spacing: theme.spacing.sm) {
-                ForEach(tips) { tip in tipRow(tip) }
-            }
-        }
-    }
-
-    private func tipRow(_ tip: StartTip) -> some View {
+    var body: some View {
         HStack(alignment: .top, spacing: theme.spacing.md) {
             Image(systemName: tip.symbol)
                 .font(.token(theme.typography.title))
@@ -207,11 +257,5 @@ struct HomeView: View {
         .background(theme.palette.surface.color(scheme),
                     in: RoundedRectangle(cornerRadius: theme.radius.md))
         .accessibilityElement(children: .combine)
-    }
-
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.token(theme.typography.title))
-            .foregroundStyle(theme.palette.textPrimary.color(scheme))
     }
 }
