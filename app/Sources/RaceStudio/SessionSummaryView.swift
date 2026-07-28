@@ -23,55 +23,74 @@ struct SessionSummaryView: View {
 
 /// Vehicle / track / driver / date, each already em-dash-filled by the view-model.
 struct MetadataPanelView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let model: MetadataPanelModel
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 4) {
-            GridRow { Text("Vehicle").fieldLabel(); Text(model.vehicle) }
-            GridRow { Text("Track").fieldLabel(); Text(model.track) }
-            GridRow { Text("Driver").fieldLabel(); Text(model.driver) }
-            GridRow { Text("Date").fieldLabel(); Text(model.date) }
+        Grid(alignment: .leading, horizontalSpacing: theme.spacing.lg, verticalSpacing: theme.spacing.xs) {
+            row("Vehicle", model.vehicle)
+            row("Track", model.track)
+            row("Driver", model.driver)
+            row("Date", model.date)
         }
-        .padding()
+        .padding(theme.spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.token(theme.typography.callout))
+                .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                .frame(width: 64, alignment: .leading)
+            Text(value)
+                .font(.token(theme.typography.body))
+                .foregroundStyle(theme.palette.textPrimary.color(scheme))
+        }
     }
 }
 
 /// The channel list: name, unit, and formatted sample rate.
 struct ChannelListView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let rows: [ChannelRowModel]
 
     var body: some View {
         List(rows) { row in
             HStack {
-                Text(row.name)
+                Text(row.name).foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Spacer()
-                Text(row.unit).foregroundColor(.secondary)
-                Text(row.rate).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
+                Text(row.unit).foregroundStyle(theme.palette.textSecondary.color(scheme))
+                Text(row.rate).foregroundStyle(theme.palette.textSecondary.color(scheme))
+                    .frame(width: 80, alignment: .trailing)
             }
+            .font(.token(theme.typography.body))
         }
     }
 }
 
 /// The lap list: 1-based number, `m:ss.mmm` time, and a best-lap marker.
 struct LapListView: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let rows: [LapRowModel]
 
     var body: some View {
         List(rows) { row in
             HStack {
                 Text("Lap \(row.number)")
+                    .font(.token(theme.typography.body))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Spacer()
-                Text(row.time).monospacedDigit()
-                Text(row.isBest ? "★" : " ").foregroundColor(.yellow)
+                Text(row.time)
+                    .font(.token(theme.typography.readout))
+                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
+                // The best lap is marked in the brand `positive` colour, matching the
+                // "Best" marker on the library preview pane.
+                Text(row.isBest ? "★" : " ").foregroundStyle(theme.palette.positive.color(scheme))
             }
         }
-    }
-}
-
-private extension Text {
-    /// Secondary, fixed-width label styling shared by the metadata rows.
-    func fieldLabel() -> some View {
-        self.foregroundColor(.secondary).frame(width: 64, alignment: .leading)
     }
 }

@@ -12,7 +12,8 @@
 | **Tokens (pure, tested)** | [`app/Sources/RaceStudioCore/Theme/`](../app/Sources/RaceStudioCore/Theme/) | `Theme.raceStudio` — the palette, type scale, spacing and rounding as value types, plus `BrandColor`'s WCAG contrast math. No SwiftUI. |
 | **SwiftUI bridge (thin shell)** | [`app/Sources/RaceStudio/Views/Theme+SwiftUI.swift`](../app/Sources/RaceStudio/Views/Theme+SwiftUI.swift) | Maps `BrandColor → Color`, `FontToken → Font`, and threads the active `Theme` through the environment (`\.theme`). |
 | **Accessibility proof** | [`app/Tests/RaceStudioCoreTests/ThemeTests.swift`](../app/Tests/RaceStudioCoreTests/ThemeTests.swift) | Asserts every text/surface pair meets WCAG AA in both appearances; runs in CI. |
-| **Reference screen** | `LibraryPreviewPane` in [`LibraryBrowserView.swift`](../app/Sources/RaceStudio/Views/LibraryBrowserView.swift) | The worked example: the library preview pane drawn entirely from tokens. |
+| **Shared shell components** | [`BrandUI.swift`](../app/Sources/RaceStudio/Views/BrandUI.swift) | `BrandStateView` (designed empty/error/result), `BrandLoadingView`, and the `brandCanvas()` modifier — the app-wide designed states (issue 7.5), all from tokens. |
+| **Reference screen** | `LibraryPreviewPane` in [`LibraryBrowserView.swift`](../app/Sources/RaceStudio/Views/LibraryBrowserView.swift) | The worked example: the library preview pane drawn entirely from tokens. Issue 7.5 (#143) then rolled the tokens across the whole shell. |
 
 A view consumes tokens by reading the environment and painting semantic roles:
 

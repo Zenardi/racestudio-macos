@@ -34,6 +34,8 @@ extension EnvironmentValues {
 public struct WorkspaceView: View {
     @ObservedObject private var cursor: WorkspaceCursor
     @State private var registry = LinkedViewRegistry()
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
 
     private let traces: [ChannelTrace]
     private let readout: ReadoutTableModel
@@ -71,7 +73,7 @@ public struct WorkspaceView: View {
             Text(String(format: "d = %.1f m", cursor.distancePosition))
             Spacer()
         }
-        .font(.caption.monospacedDigit())
-        .foregroundColor(.secondary)
+        .font(.token(theme.typography.readout))
+        .foregroundStyle(theme.palette.textSecondary.color(scheme))
     }
 }

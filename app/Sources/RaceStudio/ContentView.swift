@@ -17,6 +17,7 @@ struct ContentView: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .brandCanvas()
             .onDrop(of: [.xrk, .xrz], isTargeted: nil) { providers in
                 model.receiveDrop(providers)
             }
@@ -45,11 +46,11 @@ struct ContentView: View {
             AnalysisWindowView(viewModel: viewModel)
                 .id(windowIdentity(of: viewModel))
         case let .loading(progress):
-            loadingView(progress)
+            BrandLoadingView(label(for: progress.phase), value: progress.fraction) { store.cancel() }
         case .idle, .failed:
-            Text("Drop a .xrk or .xrz file, or use File ▸ Open")
-                .foregroundColor(.secondary)
-                .padding()
+            BrandStateView(symbol: "square.and.arrow.down",
+                           title: "Open a session",
+                           message: "Drop a .xrk or .xrz file here, or use File ▸ Open.")
         }
     }
 
@@ -64,17 +65,6 @@ struct ContentView: View {
         let metadata = viewModel.session.metadata
         return "session:\(metadata.datetimeUtc)|\(metadata.vehicle)|\(metadata.track)|"
             + "\(metadata.driver)|\(viewModel.session.channels.count)|\(viewModel.session.laps.count)"
-    }
-
-    private func loadingView(_ progress: DecodeProgress) -> some View {
-        VStack(spacing: 12) {
-            ProgressView(value: progress.fraction) {
-                Text(label(for: progress.phase))
-            }
-            .frame(width: 240)
-            Button("Cancel") { store.cancel() }
-        }
-        .padding()
     }
 
     private func label(for phase: DecodeProgress.Phase) -> String {
