@@ -25,7 +25,7 @@ use racestudio_analysis::{
     bundled_tracks, cumulative_distance, delta_t, match_track, resample_uniform, segment_laps,
     segment_times as lap_segment_times, spectrum, stats_over_range, to_distance_grid,
     AnalysisError as CoreAnalysisError, Gate as CoreGate, Lap, LatLon as CoreLatLon, Stats,
-    Window as FftWindow, MATCH_TOLERANCE_M,
+    TrackDb as CoreTrackDb, Window as FftWindow, MATCH_TOLERANCE_M,
 };
 use racestudio_decode::{decode_session, DecodeError, Session};
 use racestudio_device::{
@@ -501,6 +501,9 @@ pub struct SessionHandle {
     /// accessors so a paged caller does not re-integrate the whole session on
     /// every windowed call.
     distance_axis: OnceLock<DistanceAxis>,
+    /// Lazily-computed track detection (9.2), cached so a repeat caller does not
+    /// re-scan the whole GPS trace against the bundled DB on every call.
+    detected_track: OnceLock<Option<DetectedTrack>>,
 }
 
 /// The session's cumulative distance axis, derived once from `GPS Speed` and
@@ -599,18 +602,28 @@ impl SessionHandle {
     }
 
     /// The session's GPS fix positions — the trace the track matcher (9.2) runs
-    /// over. Empty when the session carries no GPS.
+    /// over. Empty when the session carries no GPS. Only 2D/3D fixes are kept: a
+    /// no-fix sample carries a stale/blank position whose error is comparable to
+    /// the match tolerance, so it would only add scatter.
     fn gps_trace(&self) -> Vec<CoreLatLon> {
         self.session
             .gps()
             .map(|gps| {
                 gps.fixes()
                     .iter()
+                    .filter(|fix| fix.fix >= 2)
                     .map(|fix| CoreLatLon::new(fix.latitude, fix.longitude))
                     .collect()
             })
             .unwrap_or_default()
     }
+}
+
+/// The bundled track database (9.2), built once — it is pure, session-independent
+/// data, so every session shares one copy instead of rebuilding it per match.
+fn bundled_db() -> &'static CoreTrackDb {
+    static DB: OnceLock<CoreTrackDb> = OnceLock::new();
+    DB.get_or_init(bundled_tracks)
 }
 
 #[uniffi::export]
@@ -813,15 +826,18 @@ impl SessionHandle {
     /// ([`Self::segment_times`]). Never panics.
     #[must_use]
     pub fn detect_track(&self) -> Option<DetectedTrack> {
-        let trace = self.gps_trace();
-        let db = bundled_tracks();
-        match_track(&trace, &db).map(|track| DetectedTrack {
-            id: track.id().to_string(),
-            name: track.name().to_string(),
-            tolerance_m: MATCH_TOLERANCE_M,
-            start_finish: track.start_finish().into(),
-            sector_gates: track.sectors().iter().map(TrackGate::from).collect(),
-        })
+        self.detected_track
+            .get_or_init(|| {
+                let trace = self.gps_trace();
+                match_track(&trace, bundled_db()).map(|track| DetectedTrack {
+                    id: track.id().to_string(),
+                    name: track.name().to_string(),
+                    tolerance_m: MATCH_TOLERANCE_M,
+                    start_finish: track.start_finish().into(),
+                    sector_gates: track.sectors().iter().map(TrackGate::from).collect(),
+                })
+            })
+            .clone()
     }
 
     /// The delta-t of the `comparison` lap versus the `reference` lap, as
@@ -1032,6 +1048,7 @@ pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> 
         session,
         segmented_laps: OnceLock::new(),
         distance_axis: OnceLock::new(),
+        detected_track: OnceLock::new(),
     }))
 }
 
@@ -1482,6 +1499,7 @@ mod tests {
             ),
             segmented_laps: OnceLock::new(),
             distance_axis: OnceLock::new(),
+            detected_track: OnceLock::new(),
         }
     }
 
@@ -1503,6 +1521,7 @@ mod tests {
             ),
             segmented_laps: OnceLock::new(),
             distance_axis: OnceLock::new(),
+            detected_track: OnceLock::new(),
         }
     }
 

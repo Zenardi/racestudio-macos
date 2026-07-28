@@ -310,10 +310,14 @@ pub fn match_track_within<'a>(
 /// scored). A track always has at least the start/finish gate, so a non-empty
 /// trace always produces a value.
 fn worst_gate_approach(track: &TrackDef, trace: &[LatLon]) -> Option<f64> {
-    track
-        .gates()
-        .map(|gate| gate.closest(trace).map(|(_, dist)| dist))
-        .try_fold(0.0_f64, |worst, approach| Some(worst.max(approach?)))
+    track.gates().try_fold(0.0_f64, |worst, gate| {
+        let approach = gate.closest(trace)?.1;
+        // A non-finite approach (a NaN fix in the caller-supplied trace) must
+        // disqualify the track, not be silently discarded by `f64::max` — else a
+        // gate with an undefined distance could pull the worst-case below tolerance
+        // and produce a false match.
+        approach.is_finite().then(|| worst.max(approach))
+    })
 }
 
 /// Read the start/finish and sector-boundary crossing times of one lap off
@@ -342,16 +346,22 @@ pub fn auto_splits_within(
     if trace.is_empty() || !tolerance_m.is_finite() {
         return None;
     }
-    let crossing_ms = |gate: &Gate| -> Option<f64> {
-        let (index, distance) = gate.closest(trace)?;
-        (distance <= tolerance_m).then(|| trace[index].0)
+    // The car crosses the gates in track order, so resolve each crossing at or
+    // after the previous one — walking the trace once, gate by gate. This keeps the
+    // crossing times monotonically non-decreasing even when the lap sweeps past a
+    // later gate's vicinity early or revisits a gate (a spin, or two gates that sit
+    // close together), so no segment can come out negative-length.
+    let crossing = |gate: &Gate, from: usize| -> Option<usize> {
+        let (offset, distance) = gate.closest(&trace[from..])?;
+        (distance <= tolerance_m).then_some(from + offset)
     };
-    let start_finish_ms = crossing_ms(track.start_finish())?;
-    let sector_crossings_ms = track
-        .sectors()
-        .iter()
-        .map(crossing_ms)
-        .collect::<Option<Vec<f64>>>()?;
+    let mut cursor = crossing(track.start_finish(), 0)?;
+    let start_finish_ms = trace[cursor].0;
+    let mut sector_crossings_ms = Vec::with_capacity(track.sectors().len());
+    for gate in track.sectors() {
+        cursor = crossing(gate, cursor)?;
+        sector_crossings_ms.push(trace[cursor].0);
+    }
     Some(AutoSplits {
         track_id: track.id.clone(),
         start_finish_ms,
@@ -606,5 +616,51 @@ mod tests {
         assert!(splits.sector_crossings_ms().is_empty());
         assert_eq!(splits.segment_count(), 1);
         assert_eq!(splits.track_id(), "t");
+    }
+
+    #[test]
+    fn test_auto_splits_crossings_stay_ordered_when_the_trace_passes_a_later_gate_early() {
+        // The lap sweeps past sector 2's location early (t = 1000) before it has
+        // crossed sector 1 (t = 2000), then reaches sector 2 for real (t = 3000).
+        // Resolving each gate independently against the whole trace would snap
+        // sector 2 to the early pass (t = 1000) — behind sector 1 — for a negative
+        // segment. The in-order walk keeps the crossings monotonic.
+        let track = TrackDef::new(
+            "t",
+            "T",
+            gate_at(45.0, 12.000),
+            vec![gate_at(45.0, 12.001), gate_at(45.0, 12.002)],
+        );
+        let trace = [
+            (0.0, LatLon::new(45.0, 12.000)),
+            (1000.0, LatLon::new(45.0, 12.002)), // near sector 2, early
+            (2000.0, LatLon::new(45.0, 12.001)), // sector 1
+            (3000.0, LatLon::new(45.0, 12.002)), // sector 2, in order
+        ];
+
+        let splits = auto_splits(&trace, &track).expect("gates reachable in order");
+
+        assert_eq!(
+            splits.sector_crossings_ms(),
+            &[2000.0, 3000.0],
+            "crossings are monotonic and in track order, not snapped to the early pass"
+        );
+        assert!(splits.start_finish_ms() <= splits.sector_crossings_ms()[0]);
+    }
+
+    #[test]
+    fn test_match_within_rejects_a_trace_with_a_non_finite_point() {
+        // A NaN fix must not be silently absorbed into a false-positive match: a
+        // gate whose closest approach is undefined disqualifies the track (the
+        // caller falls back to beacons) rather than scoring as distance 0.
+        let db = TrackDb::new(
+            1,
+            vec![TrackDef::new("t", "T", gate_at(45.0, 12.0), vec![])],
+        );
+        let trace = [LatLon::new(f64::NAN, f64::NAN), LatLon::new(45.0, 12.0)];
+        assert!(
+            match_track_within(&trace, &db, 100.0).is_none(),
+            "a non-finite trace point must not yield a false match"
+        );
     }
 }
