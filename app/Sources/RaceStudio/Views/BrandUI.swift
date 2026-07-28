@@ -136,3 +136,30 @@ extension View {
     /// Fills the view's background with the brand canvas token for the appearance.
     func brandCanvas() -> some View { modifier(BrandCanvasModifier()) }
 }
+
+private struct BrandGlassCardModifier: ViewModifier {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
+    let radius: Double
+    func body(content: Content) -> some View {
+        content
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: radius))
+            .overlay(RoundedRectangle(cornerRadius: radius)
+                .strokeBorder(theme.palette.separator.color(scheme)))
+    }
+}
+
+extension View {
+    /// A translucent **glass** card surface — a SwiftUI `Material` (the macOS-13-safe
+    /// precursor to iOS/macOS-26 Liquid Glass), with a hairline brand border. The
+    /// single place the app's "glass chrome" is defined, so it can later be swapped
+    /// for `.glassEffect()` behind `#available` without touching call sites.
+    ///
+    /// Reserved for chrome/containers: `.regularMaterial` is Apple's most legible
+    /// content material, and the brand text drawn on it stays high-contrast
+    /// (`textPrimary`/`textSecondary`). Text whose contrast must be *proven* keeps a
+    /// solid surface token instead.
+    func brandGlassCard(cornerRadius radius: Double) -> some View {
+        modifier(BrandGlassCardModifier(radius: radius))
+    }
+}

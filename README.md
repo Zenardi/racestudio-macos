@@ -2,7 +2,9 @@
   <img src="app/AppIcon/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" width="128" height="128" alt="RaceStudio app icon (7.4/#142) — a brand-red squircle with a white racing line through a telemetry apex">
 </p>
 
-<h1 align="center">RaceStudio-macOS</h1>
+<h1 align="center">RaceStudio for macOS</h1>
+
+![app](./docs/app.png)
 
 <p align="center">
   <a href="https://github.com/Zenardi/racestudio-macos/actions/workflows/ci.yml"><img src="https://github.com/Zenardi/racestudio-macos/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
