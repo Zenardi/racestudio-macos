@@ -108,6 +108,12 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Adicionar gráfico" } }
       }
     },
+    "control.alignVideoToCursor" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Align to cursor" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alinhar ao cursor" } }
+      }
+    },
     "control.connectDevice" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect device" } },
@@ -136,6 +142,12 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Import session" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Importar sessão" } }
+      }
+    },
+    "control.importVideo" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import Video…" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Importar vídeo…" } }
       }
     },
     "control.open" : {
@@ -172,6 +184,12 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Toggle lap overlay" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alternar sobreposição de voltas" } }
+      }
+    },
+    "control.videoOffset" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Video offset" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Deslocamento do vídeo" } }
       }
     },
     "control.zoomIn" : {
