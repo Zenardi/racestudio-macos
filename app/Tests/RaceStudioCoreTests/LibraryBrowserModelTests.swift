@@ -24,6 +24,19 @@ import Testing
         #expect(LibraryBrowserModel().sessions.isEmpty)
     }
 
+    /// The Home dashboard reads ``LibraryBrowserModel/allSessions`` — the whole
+    /// library — so its stats stay correct even when the browser has an active
+    /// filter that narrows the visible ``sessions``.
+    @Test func test_all_sessions_is_unfiltered_by_the_active_search() {
+        let model = LibraryBrowserModel()
+        model.add(SessionFixture.make(track: "Adria"), sourceURL: url("a"))
+        model.add(SessionFixture.make(track: "Mugello"), sourceURL: url("b"))
+
+        model.search("Adria")
+        #expect(model.sessions.count == 1, "the visible list narrows to the match")
+        #expect(model.allSessions.count == 2, "allSessions stays the whole library")
+    }
+
     // MARK: - Import / dedup
 
     @Test func test_import_adds_the_session_to_the_index() {
