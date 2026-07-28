@@ -220,42 +220,67 @@ struct LibraryBrowserView: View {
 
 /// The detail preview for one selected session (issue 8.14): its identity, a
 /// racing-line thumbnail, and a laps table — with an "Open in Analysis" action.
+///
+/// This is the **reference screen** for the brand tokens (issue 7.3, #141): every
+/// colour, font, gap, and corner here is drawn from the `RaceStudioCore` ``Theme``
+/// (via `\.theme`) rather than a hard-coded value, and it renders correctly in
+/// both light and dark because the palette resolves per ``ColorScheme``.
 private struct LibraryPreviewPane: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let summary: SessionSummary
     let preview: SessionPreview
     let onOpen: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: theme.spacing.md) {
             HStack {
-                VStack(alignment: .leading) {
-                    Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue).font(.title2).bold()
+                VStack(alignment: .leading, spacing: theme.spacing.xs) {
+                    Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
+                        .font(.token(theme.typography.title))
+                        .foregroundStyle(theme.palette.textPrimary.color(scheme))
                     Text("\(summary.vehicle) • \(summary.driver)")
-                        .font(.subheadline).foregroundStyle(.secondary)
+                        .font(.token(theme.typography.callout))
+                        .foregroundStyle(theme.palette.textSecondary.color(scheme))
                 }
                 Spacer()
-                Button(action: onOpen) { Label("Open in Analysis", systemImage: "chart.xyaxis.line") }
+                Button(action: onOpen) {
+                    Label("Open in Analysis", systemImage: "chart.xyaxis.line")
+                        .foregroundStyle(theme.palette.onAccent.color(scheme))
+                }
                     .buttonStyle(.borderedProminent)
+                    .tint(theme.palette.accent.color(scheme))
                     .disabled(!summary.isAvailable)
             }
 
             MapThumbnail(map: preview.map)
                 .frame(height: 180)
                 .frame(maxWidth: .infinity)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                .background(theme.palette.surfaceElevated.color(scheme),
+                            in: RoundedRectangle(cornerRadius: theme.radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.radius.md)
+                        .strokeBorder(theme.palette.separator.color(scheme)))
 
-            Text("Laps").font(.headline)
+            Text("Laps")
+                .font(.token(theme.typography.headline))
+                .foregroundStyle(theme.palette.textPrimary.color(scheme))
             lapsTable
         }
-        .padding()
+        .padding(theme.spacing.lg)
+        .background(theme.palette.surface.color(scheme))
     }
 
     private var lapsTable: some View {
         Table(preview.summary.laps) {
-            TableColumn("Lap") { Text("\($0.number)") }
-            TableColumn("Time") { Text($0.time) }
+            TableColumn("Lap") { Text("\($0.number)").font(.token(theme.typography.readout)) }
+            TableColumn("Time") { Text($0.time).font(.token(theme.typography.readout)) }
             TableColumn("") { lap in
-                if lap.isBest { Text("Best").font(.caption).foregroundStyle(.green) }
+                if lap.isBest {
+                    Text("Best")
+                        .font(.token(theme.typography.caption))
+                        .foregroundStyle(theme.palette.positive.color(scheme))
+                }
             }
         }
     }
@@ -264,13 +289,16 @@ private struct LibraryPreviewPane: View {
 /// Strokes the ``MapPreviewModel`` unit-box points as a racing line, scaled to the
 /// view with a little inset. An empty preview shows a "no GPS" placeholder.
 private struct MapThumbnail: View {
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var scheme
     let map: MapPreviewModel
 
     var body: some View {
         GeometryReader { geo in
             if map.isEmpty {
                 Text("No GPS track")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.token(theme.typography.caption))
+                    .foregroundStyle(theme.palette.textSecondary.color(scheme))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Path { path in
@@ -282,7 +310,11 @@ private struct MapThumbnail: View {
                     }
                     path.addLines(scaled)
                 }
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+                // Brand accent — not the user's macOS system accent — so the racing
+                // line stays the brand red and never collides with the green
+                // `positive` best-lap marker.
+                .stroke(theme.palette.accent.color(scheme),
+                        style: StrokeStyle(lineWidth: 2, lineJoin: .round))
             }
         }
     }
