@@ -18,6 +18,9 @@ cd "$(dirname "$0")/../app"
 # The static FFI xcframework is linked into the binary; build it if missing.
 [ -d RaceStudioFFI.xcframework ] || bash ../scripts/build_xcframework.sh
 
+# The app icon (issue 7.4) is committed under app/AppIcon; regenerate if missing.
+[ -f AppIcon/AppIcon.icns ] || bash ../scripts/gen_app_icon.sh
+
 swift build --product RaceStudio
 
 BIN="$(swift build --product RaceStudio --show-bin-path)/RaceStudio"
@@ -43,10 +46,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHighResolutionCapable</key><true/>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
 </dict>
 </plist>
 PLIST
 printf 'APPL????' > "$APP/Contents/PkgInfo"
+
+# Install the app icon (issue 7.4) so it shows in the Dock, Finder, and Launchpad.
+mkdir -p "$APP/Contents/Resources"
+cp AppIcon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 open "$APP"
 echo "Launched $(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
