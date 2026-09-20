@@ -101,3 +101,77 @@ public struct VideoSyncModel: Equatable, Sendable {
         isPlaying && !isEmpty
     }
 }
+
+/// How much of a session-time window the attached footage actually holds
+/// (issue 9.6) — what lets the review grid grey a section that was never filmed
+/// instead of seeking to a clamped, wrong frame.
+public enum VideoCoverage: Equatable, Sendable {
+    /// The whole window lies inside the footage.
+    case full
+    /// The window overlaps the footage but runs off one end (or both).
+    case partial
+    /// No part of the window was filmed (or there is no footage at all).
+    case none
+}
+
+/// The issue 9.6 window mapping: the 9.5 offset applied to a whole **section**
+/// of the session (a lap or a sector) rather than a single instant, plus the
+/// track-anchored and wall-clock alignments lap/sector review needs.
+///
+/// These take a ``SessionTimeSpan`` rather than a `ClosedRange` deliberately: a
+/// reversed or non-finite span is ordinary degraded input here (a stale layout, a
+/// lap the core mis-timed), and `ClosedRange` traps on those bounds.
+public extension VideoSyncModel {
+
+    /// The playhead window a session-time section maps to, each end clamped to the
+    /// footage — the span "play this sector" plays. Always well-formed: a reversed
+    /// or non-finite section collapses rather than inverting.
+    func videoRange(for span: SessionTimeSpan) -> ClosedRange<Double> {
+        let lower = videoTime(forCursorTime: span.start)
+        let upper = videoTime(forCursorTime: span.end)
+        return lower...Swift.max(lower, upper)
+    }
+
+    /// How much of `span` the footage holds. Computed on the **unclamped**
+    /// projection, so a section past the end reads `partial` / `none` instead of
+    /// looking full after the clamp.
+    func coverage(of span: SessionTimeSpan) -> VideoCoverage {
+        guard !isEmpty, span.start.isFinite, span.end.isFinite else { return .none }
+        let lower = span.start + offset
+        let upper = Swift.max(lower, span.end + offset)
+        guard upper >= videoBounds.lowerBound, lower <= videoBounds.upperBound else { return .none }
+        return lower >= videoBounds.lowerBound && upper <= videoBounds.upperBound ? .full : .partial
+    }
+
+    /// The span the fine-trim slider covers: ±``offsetRange`` **around the current
+    /// offset**, so a coarse track-anchored alignment can still be nudged
+    /// frame-accurately without the control jumping to an unrelated range.
+    var trimRange: ClosedRange<Double> {
+        (offset + Self.offsetRange.lowerBound)...(offset + Self.offsetRange.upperBound)
+    }
+
+    /// The same video re-aligned so `sessionTime` — a lap or sector boundary read
+    /// off the track data — lands on the frame at `playhead`.
+    ///
+    /// Unlike the 9.5 ``aligned(playhead:toCursorTime:)`` cursor nudge this is
+    /// **not** clamped to ``offsetRange``: a camera rolling minutes before the
+    /// logger needs an offset far outside that span, and the result is exact by
+    /// construction. A non-finite input leaves the mapping untouched.
+    func aligned(sessionTime: Double, toPlayhead playhead: Double) -> VideoSyncModel {
+        guard sessionTime.isFinite, playhead.isFinite else { return self }
+        return withOffset(playhead - sessionTime)
+    }
+
+    /// The offset implied by two wall clocks — the session's start (the decoder's
+    /// `datetimeUtc`) and the video's creation date — or `nil` when either is
+    /// missing or unusable, so the operator is never handed a fabricated
+    /// alignment.
+    ///
+    /// Both instants name the same moment from two origins, so
+    /// `videoTime = cursorTime + (sessionStart − videoStart)`.
+    static func autoOffset(sessionStartEpoch: Double, videoStartEpoch: Double) -> Double? {
+        guard sessionStartEpoch.isFinite, videoStartEpoch.isFinite,
+              sessionStartEpoch > 0, videoStartEpoch > 0 else { return nil }
+        return sessionStartEpoch - videoStartEpoch
+    }
+}

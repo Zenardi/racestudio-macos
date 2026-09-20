@@ -53,7 +53,7 @@ import Foundation
         #expect(makeModel().layouts
             == [.timeDistance, .channelTable, .trackMap, .lapOverlay,
                 .histogram, .scatter, .spectrum, .suspension, .channelsReport, .splitTimes,
-                .mathChannels, .summary, .logSheet])
+                .videoReview, .mathChannels, .summary, .logSheet])
     }
 
     @Test func test_initial_active_layout_is_time_distance_not_the_summary() {

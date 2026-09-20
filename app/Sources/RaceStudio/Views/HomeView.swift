@@ -71,7 +71,7 @@ struct HomeView: View {
                 // rendered from the running app rather than a generic symbol.
                 Image(nsImage: NSApplication.shared.applicationIconImage)
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {

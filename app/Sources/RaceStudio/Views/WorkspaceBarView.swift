@@ -14,9 +14,9 @@ struct WorkspaceBar: View {
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
     @ObservedObject var logSheet: LogSheetModel
-    /// The imported session video (issue 9.5): non-nil presents the ``VideoSyncView``
-    /// sheet bound to this window's shared cursor.
-    @State private var videoURL: URL?
+    /// The window's video-review player (issue 9.6): the bar reads the attached
+    /// footage off it when saving, and hands a loaded project's attachment back.
+    @ObservedObject var video: VideoReviewController
 
     private var store: ProjectStore { ProjectStore(validator: FFIExpressionValidator()) }
     private var projectType: UTType { UTType(filenameExtension: ProjectStore.fileExtension) ?? .json }
@@ -28,8 +28,9 @@ struct WorkspaceBar: View {
             Button { saveWorkspace() } label: { Label("Save Workspace…", systemImage: "square.and.arrow.down") }
                 .help("Save this workspace (layout, selection, math channels) to a .rsproj file")
             Divider().frame(height: 18)
-            Button { importVideo() } label: { Label(L10n.string(.controlImportVideo), systemImage: "film") }
-                .help("Play an external session video synced to the analysis cursor")
+            Button { model.select(layout: .videoReview) }
+                label: { Label(L10n.string(.featureVideoReview), systemImage: "film") }
+                .help("Review the session video lap by lap and sector by sector")
             Divider().frame(height: 18)
             StoryBoardView(
                 board: StoryBoardModel(selection: model.selection.laps, laps: model.session.laps),
@@ -39,39 +40,6 @@ struct WorkspaceBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .sheet(isPresented: videoSheetPresented) { videoSheet }
-    }
-
-    /// Presents / dismisses the video-sync sheet off the imported URL.
-    private var videoSheetPresented: Binding<Bool> {
-        Binding(get: { videoURL != nil }, set: { if !$0 { videoURL = nil } })
-    }
-
-    /// The video-sync sheet: the 9.5 player bound to the window's shared cursor,
-    /// with a header + Done to close.
-    @ViewBuilder private var videoSheet: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(L10n.string(.featureVideoSync)).font(.headline)
-                Spacer()
-                Button("Done") { videoURL = nil }
-            }
-            .padding(10)
-            Divider()
-            if let videoURL {
-                VideoSyncView(cursor: model.linkedCursor, videoURL: videoURL)
-            }
-        }
-        .frame(minWidth: 520, minHeight: 400)
-    }
-
-    /// Opens a video file and binds it to this window's cursor (issue 9.5).
-    private func importVideo() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
-        panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        videoURL = url
     }
 
     private func saveWorkspace() {
@@ -79,8 +47,11 @@ struct WorkspaceBar: View {
         panel.allowedContentTypes = [projectType]
         panel.nameFieldStringValue = "Workspace.\(ProjectStore.fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        // The attached video (issue 9.6) is captured with the alignment in force,
+        // so a trim made after attaching is what reopens.
         try? store.save(
-            model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet), to: url)
+            model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet,
+                                  video: video.attachmentForSaving), to: url)
     }
 
     private func openWorkspace() {
@@ -98,6 +69,12 @@ struct WorkspaceBar: View {
             return
         }
         model.restore(from: document)
+        // Re-open the workspace's video (issue 9.6). A moved or deleted file leaves
+        // the panel in a stated failure rather than aborting the load.
+        if let attachment = document.video {
+            Task { await video.restore(attachment,
+                                       sessionStartEpoch: Double(model.session.metadata.datetimeUtc)) }
+        }
         // The log sheet (issue 8.17) is owned outside the window like the math
         // channels, so reapply the loaded document's sheet here.
         logSheet.apply(document.logSheet)

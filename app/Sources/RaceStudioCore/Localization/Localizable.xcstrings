@@ -1,354 +1,1004 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "accessibility.channel.label" : {
-      "comment" : "VoiceOver label naming the plotted channel. %1$@ = channel name.",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel %1$@" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Canal %1$@" } }
+  "sourceLanguage": "en",
+  "strings": {
+    "accessibility.channel.label": {
+      "comment": "VoiceOver label naming the plotted channel. %1$@ = channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canal %1$@"
+          }
+        }
       }
     },
-    "accessibility.channel.noData" : {
-      "comment" : "VoiceOver value when a channel has no finite samples. %1$@ = channel name.",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, no data" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, sem dados" } }
+    "accessibility.channel.noData": {
+      "comment": "VoiceOver value when a channel has no finite samples. %1$@ = channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, no data"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, sem dados"
+          }
+        }
       }
     },
-    "accessibility.channel.summary" : {
-      "comment" : "VoiceOver value summarizing a plotted channel. 1=name 2=unit 3=min 4=max.",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, in %2$@, ranging from %3$@ to %4$@" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, em %2$@, variando de %3$@ a %4$@" } }
+    "accessibility.channel.summary": {
+      "comment": "VoiceOver value summarizing a plotted channel. 1=name 2=unit 3=min 4=max.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, in %2$@, ranging from %3$@ to %4$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, em %2$@, variando de %3$@ a %4$@"
+          }
+        }
       }
     },
-    "accessibility.channel.summary.noUnit" : {
-      "comment" : "VoiceOver value for a dimensionless channel. 1=name 2=min 3=max.",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, ranging from %2$@ to %3$@" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%1$@, variando de %2$@ a %3$@" } }
+    "accessibility.channel.summary.noUnit": {
+      "comment": "VoiceOver value for a dimensionless channel. 1=name 2=min 3=max.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, ranging from %2$@ to %3$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, variando de %2$@ a %3$@"
+          }
+        }
       }
     },
-    "app.name" : {
-      "comment" : "The application name (brand — not translated).",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "RaceStudio" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "RaceStudio" } }
+    "app.name": {
+      "comment": "The application name (brand — not translated).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RaceStudio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RaceStudio"
+          }
+        }
       }
     },
-    "chart.analysisWindow" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Analysis window" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Janela de análise" } }
+    "chart.analysisWindow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysis window"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Janela de análise"
+          }
+        }
       }
     },
-    "chart.deltaStrip" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delta-t gain/loss strip" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Faixa de ganho/perda de delta-t" } }
+    "chart.deltaStrip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delta-t gain/loss strip"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faixa de ganho/perda de delta-t"
+          }
+        }
       }
     },
-    "chart.histogram" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel distribution histogram" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Histograma de distribuição do canal" } }
+    "chart.histogram": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel distribution histogram"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Histograma de distribuição do canal"
+          }
+        }
       }
     },
-    "chart.mathEditor" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Math-channel editor" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Editor de canais matemáticos" } }
+    "chart.mathEditor": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Math-channel editor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor de canais matemáticos"
+          }
+        }
       }
     },
-    "chart.plot" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel plot" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Gráfico do canal" } }
+    "chart.plot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gráfico do canal"
+          }
+        }
       }
     },
-    "chart.scatter" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel-vs-channel scatter plot" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Gráfico de dispersão canal a canal" } }
+    "chart.scatter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel-vs-channel scatter plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gráfico de dispersão canal a canal"
+          }
+        }
       }
     },
-    "chart.spectrum" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Amplitude spectrum" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Espectro de amplitude" } }
+    "chart.spectrum": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Amplitude spectrum"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espectro de amplitude"
+          }
+        }
       }
     },
-    "chart.trackMap" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "GPS track map" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Mapa do traçado GPS" } }
+    "chart.trackMap": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPS track map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa do traçado GPS"
+          }
+        }
       }
     },
-    "chart.workspace" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Analysis workspace" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Espaço de análise" } }
+    "chart.workspace": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analysis workspace"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaço de análise"
+          }
+        }
       }
     },
-    "control.addChannel" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add channel" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Adicionar canal" } }
+    "control.addChannel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add channel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar canal"
+          }
+        }
       }
     },
-    "control.addMathChannel" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add math channel" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Adicionar canal matemático" } }
+    "control.addMathChannel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add math channel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar canal matemático"
+          }
+        }
       }
     },
-    "control.addPlot" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add plot" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Adicionar gráfico" } }
+    "control.addPlot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar gráfico"
+          }
+        }
       }
     },
-    "control.alignVideoToCursor" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Align to cursor" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alinhar ao cursor" } }
+    "control.alignVideoToCursor": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Align to cursor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alinhar ao cursor"
+          }
+        }
       }
     },
-    "control.connectDevice" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect device" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Conectar dispositivo" } }
+    "control.anchorVideoToSection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync to Section"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar com o trecho"
+          }
+        }
       }
     },
-    "control.delete" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete session" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Excluir sessão" } }
+    "control.connectDevice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect device"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar dispositivo"
+          }
+        }
       }
     },
-    "control.download" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Download session" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Baixar sessão" } }
+    "control.delete": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluir sessão"
+          }
+        }
       }
     },
-    "control.exportCSV" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Export CSV" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Exportar CSV" } }
+    "control.download": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baixar sessão"
+          }
+        }
       }
     },
-    "control.import" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import session" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Importar sessão" } }
+    "control.exportCSV": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export CSV"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar CSV"
+          }
+        }
       }
     },
-    "control.importVideo" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import Video…" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Importar vídeo…" } }
+    "control.import": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar sessão"
+          }
+        }
       }
     },
-    "control.open" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open session" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Abrir sessão" } }
+    "control.importVideo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Video…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar vídeo…"
+          }
+        }
       }
     },
-    "control.removeChannel" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove channel" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover canal" } }
+    "control.loopSection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop Section"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir trecho"
+          }
+        }
       }
     },
-    "control.removePlot" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove plot" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover gráfico" } }
+    "control.open": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir sessão"
+          }
+        }
       }
     },
-    "control.resetZoom" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset zoom" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Redefinir zoom" } }
+    "control.playSection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Section"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproduzir trecho"
+          }
+        }
       }
     },
-    "control.selectLap" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select lap" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Selecionar volta" } }
+    "control.removeChannel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove channel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover canal"
+          }
+        }
       }
     },
-    "control.toggleLapOverlay" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Toggle lap overlay" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Alternar sobreposição de voltas" } }
+    "control.removePlot": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover gráfico"
+          }
+        }
       }
     },
-    "control.videoOffset" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Video offset" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Deslocamento do vídeo" } }
+    "control.removeVideo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover vídeo"
+          }
+        }
       }
     },
-    "control.zoomIn" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Zoom in" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ampliar" } }
+    "control.resetZoom": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset zoom"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redefinir zoom"
+          }
+        }
       }
     },
-    "control.zoomOut" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Zoom out" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Reduzir" } }
+    "control.selectLap": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecionar volta"
+          }
+        }
       }
     },
-    "feature.channelsReport" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channels report" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Relatório de canais" } }
+    "control.toggleLapOverlay": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle lap overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar sobreposição de voltas"
+          }
+        }
       }
     },
-    "feature.gauges" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Gauges & digital displays" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Medidores e mostradores digitais" } }
+    "control.videoOffset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video offset"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento do vídeo"
+          }
+        }
       }
     },
-    "feature.multiSessionCompare" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Multi-session compare" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Comparação de várias sessões" } }
+    "control.zoomIn": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom in"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ampliar"
+          }
+        }
       }
     },
-    "feature.reportExport" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Report / export" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Relatório / exportação" } }
+    "control.zoomOut": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom out"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reduzir"
+          }
+        }
       }
     },
-    "feature.trackDetection" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Track detection & track database" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Detecção de pista e banco de dados de pistas" } }
+    "feature.channelsReport": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channels report"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relatório de canais"
+          }
+        }
       }
     },
-    "feature.videoSync" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Video sync" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Sincronização de vídeo" } }
+    "feature.gauges": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gauges & digital displays"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medidores e mostradores digitais"
+          }
+        }
       }
     },
-    "menu.file" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "File" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Arquivo" } }
+    "feature.multiSessionCompare": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multi-session compare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparação de várias sessões"
+          }
+        }
       }
     },
-    "menu.file.export" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Export…" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Exportar…" } }
+    "feature.reportExport": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Report / export"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relatório / exportação"
+          }
+        }
       }
     },
-    "menu.file.import" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Import…" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Importar…" } }
+    "feature.trackDetection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track detection & track database"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detecção de pista e banco de dados de pistas"
+          }
+        }
       }
     },
-    "menu.help" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Help" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Ajuda" } }
+    "feature.videoReview": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video Review"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisão de vídeo"
+          }
+        }
       }
     },
-    "menu.view" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "View" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Visualizar" } }
+    "feature.videoSync": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video sync"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronização de vídeo"
+          }
+        }
       }
     },
-    "unit.bar" : {
-      "comment" : "Pressure unit (bar) — same symbol in pt-BR.",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "bar" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "bar" } }
+    "menu.file": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arquivo"
+          }
+        }
       }
     },
-    "unit.celsius" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "°C" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "°C" } }
+    "menu.file.export": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar…"
+          }
+        }
       }
     },
-    "unit.degrees" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "°" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "°" } }
+    "menu.file.import": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar…"
+          }
+        }
       }
     },
-    "unit.g" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "g" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "g" } }
+    "menu.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Help"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuda"
+          }
+        }
       }
     },
-    "unit.hertz" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hz" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Hz" } }
+    "menu.view": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visualizar"
+          }
+        }
       }
     },
-    "unit.kmh" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "km/h" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "km/h" } }
+    "unit.bar": {
+      "comment": "Pressure unit (bar) — same symbol in pt-BR.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bar"
+          }
+        }
       }
     },
-    "unit.meter" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "m" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "m" } }
+    "unit.celsius": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "°C"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "°C"
+          }
+        }
       }
     },
-    "unit.millimeter" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "mm" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "mm" } }
+    "unit.degrees": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "°"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "°"
+          }
+        }
       }
     },
-    "unit.mph" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "mph" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "mph" } }
+    "unit.g": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "g"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "g"
+          }
+        }
       }
     },
-    "unit.percent" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "%" } }
+    "unit.hertz": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hz"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hz"
+          }
+        }
       }
     },
-    "unit.rpm" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "rpm" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "rpm" } }
+    "unit.kmh": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "km/h"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "km/h"
+          }
+        }
       }
     },
-    "unit.second" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "s" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "s" } }
+    "unit.meter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "m"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "m"
+          }
+        }
       }
     },
-    "unit.volt" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "V" } },
-        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "V" } }
+    "unit.millimeter": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mm"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mm"
+          }
+        }
+      }
+    },
+    "unit.mph": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mph"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mph"
+          }
+        }
+      }
+    },
+    "unit.percent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%"
+          }
+        }
+      }
+    },
+    "unit.rpm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rpm"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "rpm"
+          }
+        }
+      }
+    },
+    "unit.second": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "s"
+          }
+        }
+      }
+    },
+    "unit.volt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "V"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "V"
+          }
+        }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }
