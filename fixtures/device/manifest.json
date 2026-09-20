@@ -85,7 +85,7 @@
         "<hiMST>",
         "<hiHW>"
       ],
-      "note": "catalog/list response (cmd 0x0110); enumerated config/identity records because the recorded-session store was empty at capture time"
+      "note": "catalog/list response (cmd 0x0110); enumerated config/identity records because the recorded-session store was empty at capture time. Issue #133 established why: this phase was captured two minutes AFTER the transfer phase, by which point the app had imported and cleared the 44 sessions the transfer capture shows being downloaded."
     },
     {
       "file": "transfer/chunk.bin",
@@ -100,7 +100,7 @@
       "chunk_offset_field": "payload[0..4] u32 LE",
       "chunk_offset": 65472,
       "chunk_data_len": 65472,
-      "note": "one download data chunk; opaque telemetry, no embedded identifiers"
+      "note": "one download data chunk. Issue #133 identified it from the same capture as chunk #2 of the track/config file 0:/tkk/al.ria (which the device serves uncompressed) — not session telemetry. Kept as the verbatim, observed-checksum wire anchor for the chunk framing."
     },
     {
       "file": "delete/request.bin",
@@ -141,12 +141,101 @@
       "checksum_observed": false,
       "frame_length": 6,
       "note": "SYNTHETIC (issue 6.6): hypothesized delete-reject response — payload = status(u16 LE)=1 || session_id(u32 LE). Real capture tracked in issue #130."
+    },
+    {
+      "file": "transfer/open_request.bin",
+      "phase": "transfer-session",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "b5c13f422baf7bc55786d36bb270b0967f970c75eec84cd3585191772edd6c93",
+      "deidentified": false,
+      "checksum": 1331,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client read-file request (cmd 0x0402); payload[32..] is the NUL-terminated on-device path"
+    },
+    {
+      "file": "transfer/open_ack.bin",
+      "phase": "transfer-session",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "f5b978461f1e880b191658c7c1ffe1dd17e1e643527aa6aad1c2b929b83d0afa",
+      "deidentified": false,
+      "checksum": 1786,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "device open ack (tag 0x0a09): echoes the path, declares no length"
+    },
+    {
+      "file": "transfer/length_response.bin",
+      "phase": "transfer-session",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "0cf488b865c348271595735bf9f182ec6ffa7dee8bd26424ed097e3be92b2122",
+      "deidentified": true,
+      "scrubbed": [
+        "declared length re-stated after the session payload was de-identified"
+      ],
+      "checksum": 2087,
+      "checksum_observed": false,
+      "frame_length": 64,
+      "note": "device transfer header (tag 0x0a11): payload[16..20] = total length, payload[20..24] = 0xFFC0 chunk stride"
+    },
+    {
+      "file": "transfer/ack.bin",
+      "phase": "transfer-session",
+      "kind": "stcp_frame",
+      "bytes": 24,
+      "sha256": "3f3490d8a42ba791a096b2b6067e55f11a9357681e1985fd47c73bb16e57f413",
+      "deidentified": false,
+      "checksum": 447,
+      "checksum_observed": true,
+      "frame_length": 4,
+      "note": "client flow-control ACK: a bare u32 LE 'next offset' (here 65472)"
+    },
+    {
+      "file": "transfer/session_stream.bin",
+      "phase": "transfer-session",
+      "kind": "stcp_frame_stream",
+      "bytes": 210254,
+      "sha256": "17b8f884de0158daedc4b891f7ff3299fbe0d00026ca8c0bfb3aabea6d25c277",
+      "deidentified": true,
+      "scrubbed": [
+        "\u001c\u0019\u0016\u0002"
+      ],
+      "frames": 4,
+      "chunk_stride": 65472,
+      "chunk_data_lens": [
+        65472,
+        65472,
+        65472,
+        13742
+      ],
+      "reassembled_len": 210158,
+      "inflated_len": 477793,
+      "inflated_sha256": "2273c345b16ea045e9cf9e82479a47ee32f280d161ee59916b754cd3786e16f3",
+      "note": "issue #133: a whole captured session download (1:/mem/a_0053.xrz) as consecutive STCP chunk frames. The device's 4-byte identity word was replaced with 0x00000000 inside the session before it was re-deflated and re-framed, so the payload bytes are de-identified and the per-frame checksums are recomputed; every protocol field (framing, 0xFFC0 stride, offsets, short-final-chunk end-of-stream) is as observed. Originally 215325 B compressed."
     }
   ],
   "pending": [
     {
       "phase": "delete",
       "reason": "The real delete opcode + response are still uncaptured: the MyChron6 held 0 on-device sessions at 6.2 capture time (all imported to local), so no delete traffic could be observed. Issue 6.6 lands a guarded delete client over SYNTHETIC delete/*.bin fixtures (opcode + response shape hypothesized); a real on-the-wire delete must be captured to confirm them — tracked in issue #130."
+    },
+    {
+      "phase": "transfer-retry",
+      "reason": "The retry / re-request handshake is still unobserved: the session-present capture (issue #133) completed with zero chunk-checksum failures, so the device never had to re-send a chunk. Recovery remains exercised against synthetic streams in transfer_test.rs."
+    }
+  ],
+  "goldens": [
+    {
+      "file": "golden/transfer_reassembled.xrk",
+      "phase": "transfer-session",
+      "bytes": 477793,
+      "sha256": "2273c345b16ea045e9cf9e82479a47ee32f280d161ee59916b754cd3786e16f3",
+      "source": "transfer/session_stream.bin reassembled then zlib-inflated",
+      "deidentified": true,
+      "note": "the .xrk a real device download yields; decodes to track 'S.Marino AR', 26 channels"
     }
   ]
 }

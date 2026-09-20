@@ -202,49 +202,96 @@ the session magic is `DeviceError::MalformedRecord`. The parser never panics.
 
 ## 6. Transfer (download)
 
-After `start-download`, the device streams the session file as a sequence of STCP
-frames with a **65476-byte payload** = `[offset(u32 LE)][65472 data bytes]`
-(`transfer/chunk.bin`). The client ACKs each chunk with a 4-byte frame carrying
-the **next** offset; offsets advance by the data stride `0xFFC0` (65472):
-`0x00000000, 0x0000FFC0, 0x0001FF80, …` (a chunk resets to `0x0` at each new file
-within the session bundle). The final chunk is short (observed `23850` B).
+**Fully observed** (issue #133): the 6.2 transfer capture turned out to contain a
+bulk download of the device's whole recorded store — **44 file downloads**, 21 of
+them byte-exact, contiguous and gap-free. `transfer/session_stream.bin` is one of
+those 21, committed whole. (The §5 catalog fixture looks empty because the
+session-list phase was captured *two minutes after* this download, by which point
+the app had already imported and cleared the store.)
 
-- `transfer_chunk_offset` / `transfer_chunk_data` expose the two fields;
-  `test_transfer_framing_fields_are_documented` asserts the 65476-B frame length,
-  the 65472-B data length, and that the offset is a multiple of `0xFFC0`.
-- **Fields 6.5 (download) needs:** frame length, the 4-byte chunk offset, the
-  65472 chunk stride, the ACK-with-next-offset flow-control, and the STCP checksum
-  to validate each chunk.
+A download is **per file**, addressed by path — there is no separate
+"start-download" opcode:
+
+```
+client  0x0402  + "1:/mem/a_0053.xrz"        read-file request   (transfer/open_request.bin)
+device  0x0402  tag 0x0a09, length 0         open ack            (transfer/open_ack.bin)
+device  0x0402  tag 0x0a11, length N         transfer header     (transfer/length_response.bin)
+client  ACK(0)                               4-byte next-offset  (transfer/ack.bin)
+device  CHUNK(offset 0,       65472 B)
+client  ACK(65472)
+device  CHUNK(offset 65472,   65472 B)
+  ...
+device  CHUNK(offset k*65472, r B)   r < 65472  -> END OF STREAM
+```
+
+- **Transfer header** (`tag 0x0a11`, the second response): `payload[16..20]` is the
+  file's **total length** (u32 LE) — the on-wire source of
+  `DownloadPlan::total_len`; `payload[20..24]` is the **chunk stride** `0xFFC0`
+  (65472); `payload[32..]` echoes the NUL-terminated path. The first response
+  (`tag 0x0a09`) is a bare open ack and declares length 0.
+- **Chunk frames**: payload = `[offset(u32 LE)][data]`, `65476` bytes for a full
+  chunk. Offsets advance by the stride and **reset to 0 for each new file** —
+  the reset is per-`0x0402`, not per-session-bundle.
+- **ACK flow control**: the client replies to each chunk with a 4-byte frame
+  carrying the **next** offset it wants (`0, 0xFFC0, 0x1FF80, …`).
+- **End of stream** is the **short final chunk** — a chunk whose data is shorter
+  than the stride. There is no terminator frame and no trailing status. The chunk
+  data lengths must sum to exactly the declared total.
+- `transfer_chunk_offset` / `transfer_chunk_data` expose the two chunk fields;
+  `test_transfer_framing_fields_are_documented` asserts the framing against the
+  verbatim `transfer/chunk.bin` anchor.
+
+### Sessions are stored compressed (`.xrz`)
+
+A recorded session is served **zlib-compressed** — the reassembled bytes begin
+`78 01` and inflate ~2.3x to the `<hCNF>…<hCHS>` `.xrk` container the decoder
+reads. Compression is **per file**: the track/config files the same capture
+downloaded (e.g. `0:/tkk/al.ria`, which `transfer/chunk.bin` is chunk #2 of) are
+served **uncompressed**, so a client must sniff the zlib header rather than
+inflate unconditionally. `racestudio_device::inflate_session` does exactly that.
+
+### There is no whole-file checksum on the wire
+
+The transfer header carries **only** the length and the stride — no checksum
+field. On-wire integrity is per-chunk (the STCP trailer) plus the declared total
+length. `DownloadPlan::whole_file_checksum` is therefore a **caller-supplied**
+expectation, not a device-reported value.
 
 ### Typed chunked download (issue 6.5)
 
 `racestudio_device::download_session(plan, transport, progress)` reassembles the
-chunk stream into the original file. Each chunk frame's checksum is **verified
-before use** (a corrupt chunk is retried up to `MAX_CHUNK_RETRIES`; unrecoverable
-corruption is `DeviceError::ChecksumMismatch`); chunks are placed by their
-declared offset, so out-of-order and duplicate deliveries reassemble correctly
-and idempotently; a stream that ends before full coverage is
-`DeviceError::MissingChunk`; and the reassembled whole file is checksum-gated
-before it is surfaced — **no partial file is ever returned as success**. The byte
-source is injected as a [`Transport`], so CI replays fixtures with no live device;
-progress is reported via a [`ProgressSink`] for the 6.7 progress bar.
+chunk stream into the file as the device stores it, then
+`racestudio_device::inflate_session` unwraps it into the decodable `.xrk`. Each
+chunk frame's checksum is **verified before use** (a corrupt chunk is retried up
+to `MAX_CHUNK_RETRIES`; unrecoverable corruption is
+`DeviceError::ChecksumMismatch`); chunks are placed by their declared offset, so
+out-of-order and duplicate deliveries reassemble correctly and idempotently; a
+stream that ends before full coverage is `DeviceError::MissingChunk`; and the
+reassembled whole file is checksum-gated before it is surfaced — **no partial
+file is ever returned as success**. Inflation is bounded against a decompression
+bomb (`DeviceError::CorruptArchive`). The byte source is injected as a
+[`Transport`], so CI replays fixtures with no live device; progress is reported
+via a [`ProgressSink`] for the 6.7 progress bar.
 
 | Field | Source | Verified? |
 | --- | --- | --- |
 | Chunk frame + trailer checksum | `transfer/chunk.bin` (`checksum_observed`) | ✅ observed |
-| Chunk offset `payload[0..4]` u32 LE = 65472 | `transfer/chunk.bin` | ✅ observed |
-| Multi-chunk stream shape / end-of-stream | — | ⚠️ hypothesized |
-| Whole-file checksum source | — (passed via `DownloadPlan`) | ⚠️ hypothesized |
+| Chunk offset `payload[0..4]` u32 LE | `transfer/chunk.bin` | ✅ observed |
+| Multi-chunk stream shape / end-of-stream | `transfer/session_stream.bin` | ✅ observed (#133) |
+| Total length + 0xFFC0 stride | `transfer/length_response.bin` | ✅ observed (#133) |
+| ACK-with-next-offset flow control | `transfer/ack.bin` | ✅ observed (#133) |
+| Sessions are zlib-compressed (`.xrz`) | `transfer/session_stream.bin` → golden | ✅ observed (#133) |
+| Whole-file checksum | — **absent from the protocol** | ✅ observed absent (#133) |
 | Retry / re-request handshake | — | ⚠️ hypothesized |
 
-> **Caveat — the multi-chunk *stream* is unverified.** Only one real chunk was
-> captured (the device held 0 on-board sessions), so the reassembly, whole-file
-> checksum, and retry handshake are exercised only against synthetic multi-chunk
-> streams **and a real M1 `.xrk` streamed as chunks** — the reassembled bytes must
-> equal the file byte-for-byte and decode via `racestudio-decode` to the M1
-> golden, proving the reassemble→decode pipeline end-to-end. The stream protocol
-> itself must be confirmed against a session-present capture (**issue #133**)
-> before it is trusted against a live device.
+> **Remaining caveat — the retry handshake is still unverified.** The captured
+> transfer completed with **zero** chunk-checksum failures across 1474 frames, so
+> the device never had to re-send a chunk and its recovery behaviour could not be
+> observed. Re-requesting is *presumed* to be re-sending the ACK for the offset
+> that failed (that is the only flow-control vehicle on the wire), and
+> `download_session` is written to tolerate a re-delivery, but this path is
+> exercised only against synthetic streams in `tests/transfer_test.rs`. The same
+> applies to out-of-order and duplicate delivery, which the device never exhibited.
 
 [`Transport`]: the byte-source seam (recorded replay in CI; live TCP in 6.7).
 [`ProgressSink`]: the progress callback (bytes done / total).

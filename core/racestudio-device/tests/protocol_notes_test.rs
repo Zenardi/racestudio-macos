@@ -35,6 +35,17 @@ struct Manifest {
     checksum: ChecksumDoc,
     fixtures: Vec<Fixture>,
     pending: Vec<Pending>,
+    goldens: Vec<Golden>,
+}
+
+/// A committed decode target derived from a fixture (issue #133): the `.xrk` a
+/// real device download inflates to.
+#[derive(Deserialize)]
+struct Golden {
+    file: String,
+    bytes: usize,
+    sha256: String,
+    deidentified: bool,
 }
 
 #[derive(Deserialize)]
@@ -221,9 +232,13 @@ fn test_fixtures_contain_no_firmware_or_binaries() {
             !(name.ends_with(".fw") || name.ends_with(".dll") || name.ends_with(".ipa")),
             "forbidden AiM artifact present: {name}"
         );
+        // `.xrk` is permitted only for a golden we derived ourselves from a
+        // committed fixture (issue #133) — it is our own recorded telemetry, not
+        // an AiM artifact. The forbidden-extension and executable-magic checks
+        // above/below still apply to it.
         assert!(
-            name.ends_with(".bin") || name.ends_with(".json"),
-            "only .bin fixtures + manifest.json are kept, found {name}"
+            name.ends_with(".bin") || name.ends_with(".json") || name.ends_with(".xrk"),
+            "only .bin fixtures, .xrk goldens + manifest.json are kept, found {name}"
         );
         // reject executable container magics (PE/ELF/Mach-O) — we keep protocol bytes only
         let head = std::fs::read(f).unwrap();
@@ -259,6 +274,11 @@ fn test_capture_is_deidentified() {
     let mut bins = BTreeSet::new();
     collect_bins(&fixtures_dir(), &fixtures_dir(), &mut bins);
     assert!(!bins.is_empty());
+    // The goldens are scanned too: a session inflated from a fixture carries the
+    // device's identity word unless it was scrubbed before the fixture was framed.
+    for g in &manifest().goldens {
+        bins.insert(g.file.clone());
+    }
     for rel in &bins {
         let bytes = read(rel);
         for pat in forbidden {
@@ -271,6 +291,32 @@ fn test_capture_is_deidentified() {
     }
     // and the de-identified fixtures are flagged as such in the manifest
     assert!(manifest().fixtures.iter().any(|f| f.deidentified));
+}
+
+/// The manifest describes each committed golden accurately (size + sha256), so a
+/// golden cannot drift from the fixture it was derived from (issue #133).
+#[test]
+fn test_golden_manifest_matches_recorded_files() {
+    let goldens = manifest().goldens;
+    assert!(
+        !goldens.is_empty(),
+        "at least the transfer golden is recorded"
+    );
+    for g in &goldens {
+        let bytes = read(&g.file);
+        assert_eq!(bytes.len(), g.bytes, "size matches manifest for {}", g.file);
+        assert_eq!(
+            sha256_hex(&bytes),
+            g.sha256,
+            "sha256 matches manifest for {}",
+            g.file
+        );
+        assert!(
+            g.deidentified,
+            "a committed golden must be de-identified: {}",
+            g.file
+        );
+    }
 }
 
 /// Discovery probe/response parse as documented (covers the discovery helpers).

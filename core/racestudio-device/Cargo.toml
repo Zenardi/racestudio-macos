@@ -8,6 +8,12 @@ authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[dependencies]
+# Sessions are stored zlib-compressed on the device (`.xrz`); issue #133's capture
+# established this. Pure-Rust backend (miniz_oxide) so the xcframework build needs
+# no C toolchain.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
 [dev-dependencies]
 # Used only by the protocol-notes test harness to read fixtures/device/manifest.json
 # and verify recorded checksums/hashes; not shipped.
@@ -17,6 +23,8 @@ sha2 = "0.10"
 # Used only by the 6.5 transfer test to decode a reassembled download and assert
 # it against the M1 golden (proving the download is a valid, decodable .xrk).
 racestudio-decode = { path = "../racestudio-decode" }
+# Used only to build a decompression-bomb payload for the inflate guard's test.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 [lints.clippy]
 all = "warn"

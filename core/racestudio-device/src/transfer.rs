@@ -12,15 +12,26 @@
 //!
 //! # What is verified vs hypothesized
 //!
-//! The STCP framing and the chunk-offset field (`payload[0..4]`, u32 LE) are
-//! verified against the one captured chunk (`fixtures/device/transfer/chunk.bin`,
-//! offset 65472, checksum 57932). The multi-chunk *stream* protocol — how many
-//! chunks, the whole-file checksum's on-wire source, and the retry/re-request
-//! handshake — is hypothesized: no whole-session transfer was captured (the
-//! recorded store was empty), so it is exercised only against synthetic streams
-//! and a real M1 `.xrk` streamed as chunks (`tests/transfer_test.rs`), to be
-//! confirmed against a session-present capture (issue #133). Clean-room,
-//! interoperability-only (DMCA §1201(f); EU 2009/24/EC Art. 6).
+//! The STCP framing, the chunk-offset field (`payload[0..4]`, u32 LE), the 65472
+//! chunk stride, the short-final-chunk end-of-stream, and the ACK-with-next-offset
+//! flow control are all **observed** against a real session-present capture
+//! (issue #133, `fixtures/device/transfer/session_stream.bin`). That capture also
+//! showed two things the 6.5 notes had wrong:
+//!
+//! - A session is stored **zlib-compressed** (`.xrz`); the reassembled bytes must
+//!   be passed through [`inflate_session`] before they are a readable `.xrk`.
+//! - The device sends **no whole-file checksum**. Integrity on the wire is
+//!   per-chunk (the STCP trailer) plus the declared total length, so
+//!   [`DownloadPlan::whole_file_checksum`] is a caller-supplied expectation, not
+//!   a device-reported field.
+//!
+//! The **retry / re-request** handshake is still hypothesized: the captured
+//! transfer was error-free, so recovery behaviour was never exercised on the wire.
+//! Clean-room, interoperability-only (DMCA §1201(f); EU 2009/24/EC Art. 6).
+
+use std::io::Read;
+
+use flate2::read::ZlibDecoder;
 
 use crate::checksum::stcp_checksum;
 use crate::error::DeviceError;
@@ -49,6 +60,11 @@ pub struct DownloadPlan {
     /// output must cover exactly this many bytes.
     pub total_len: u64,
     /// The expected whole-file STCP checksum, verified after reassembly.
+    ///
+    /// **Caller-supplied.** The session-present capture (issue #133) showed the
+    /// device reports no whole-file checksum — the transfer header carries only
+    /// the total length and the chunk stride — so this is the caller's own
+    /// expectation, not a device-reported value.
     pub whole_file_checksum: u16,
 }
 
@@ -213,4 +229,65 @@ fn chunk_offset(payload: &[u8]) -> Result<usize, DeviceError> {
         .and_then(|b| <[u8; 4]>::try_from(b).ok())
         .ok_or(DeviceError::MalformedRecord)?;
     usize::try_from(u32::from_le_bytes(bytes)).map_err(|_| DeviceError::MalformedRecord)
+}
+
+/// How far a session may inflate relative to its compressed size before it is
+/// rejected as a decompression bomb. Real sessions in the capture inflate ~2.3x;
+/// this leaves two orders of magnitude of headroom while still refusing the
+/// 1000x-and-up ratios a crafted archive needs to exhaust memory.
+const MAX_INFLATION_RATIO: usize = 128;
+
+/// The floor for that bound, so a very small payload is not over-constrained.
+const MIN_INFLATION_ALLOWANCE: usize = 1024 * 1024;
+
+/// Unwrap a downloaded session into the `.xrk` container the decoder reads.
+///
+/// The device stores recorded sessions **zlib-compressed** (`.xrz`), so the bytes
+/// [`download_session`] reassembles are not directly decodable — issue #133's
+/// capture is what established this. Payloads the device serves uncompressed
+/// (the track/config files, e.g. `0:/tkk/al.ria`) are returned unchanged, so this
+/// is safe to apply to any downloaded file.
+///
+/// # Errors
+/// [`DeviceError::CorruptArchive`] if the payload carries a zlib header but its
+/// deflate stream is unreadable, or it inflates past [`MAX_INFLATION_RATIO`]
+/// times its compressed size — no partial session is ever surfaced.
+///
+/// Never panics.
+pub fn inflate_session(bytes: &[u8]) -> Result<Vec<u8>, DeviceError> {
+    if !is_zlib_stream(bytes) {
+        return Ok(bytes.to_vec());
+    }
+    let allowance = bytes
+        .len()
+        .saturating_mul(MAX_INFLATION_RATIO)
+        .max(MIN_INFLATION_ALLOWANCE);
+
+    let mut out = Vec::new();
+    // `take` bounds the read so a decompression bomb cannot exhaust memory: it
+    // stops one byte past the allowance, which the length check below rejects.
+    let limit = u64::try_from(allowance)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1);
+    ZlibDecoder::new(bytes)
+        .take(limit)
+        .read_to_end(&mut out)
+        .map_err(|_| DeviceError::CorruptArchive)?;
+
+    if out.len() > allowance {
+        return Err(DeviceError::CorruptArchive);
+    }
+    Ok(out)
+}
+
+/// Does this payload begin with a zlib header (RFC 1950)?
+///
+/// The compression method must be deflate (low nibble 8) and the two header bytes
+/// must satisfy the RFC's `(CMF << 8 | FLG) % 31 == 0` check — so an uncompressed
+/// payload that happens to start with `0x78` is not mistaken for an archive.
+fn is_zlib_stream(bytes: &[u8]) -> bool {
+    match bytes {
+        [cmf, flg, ..] => cmf & 0x0F == 8 && (u16::from(*cmf) << 8 | u16::from(*flg)) % 31 == 0,
+        _ => false,
+    }
 }

@@ -2,33 +2,38 @@
 //!
 //! # What is verified vs hypothesized
 //!
+//! Issue #133 replaced the synthetic multi-chunk stream with a **real,
+//! session-present capture**, so the stream protocol is now observed rather than
+//! assumed:
+//!
 //! - **Verified wire anchor:** `fixtures/device/transfer/chunk.bin` is a *real*,
 //!   checksum-observed device download chunk. `test_recorded_device_chunk_frames_and_verifies`
 //!   drives it through the same framing the reassembler uses and asserts its
-//!   declared offset (65472) and observed checksum (57932) — proving the chunk
-//!   wire format this module builds on matches a genuine capture.
-//! - **Verified decode pipeline:** the single captured chunk is one opaque
-//!   mid-stream chunk (offset 65472), not a whole decodable `.xrk`, and no
-//!   whole-file transfer was captured. So the reassemble→decode chain is proven
-//!   against a *real* M1 fixture (`fuji_0033.xrk`) streamed as chunks: the
-//!   reassembled bytes must equal the file byte-for-byte, and the result must
-//!   decode via `racestudio-decode` to the M1 golden. The `.xrk` and its golden
-//!   are real; only the *chunking of that file into a transfer stream* is
-//!   synthetic (documented), because the device's real multi-chunk stream is not
-//!   yet captured (tracked in issue #133).
-//! - **Hypothesized protocol:** out-of-order / duplicate / missing-chunk /
-//!   retry / whole-file-checksum behaviour is exercised against synthetic
-//!   multi-chunk streams built in-test. Clean-room, interoperability-only
+//!   declared offset (65472) and observed checksum (57932).
+//! - **Verified multi-chunk stream:** `transfer/session_stream.bin` is a whole
+//!   captured session download — three full 65472-byte chunks plus a short final
+//!   chunk. It reassembles to the device-stored `.xrz`, which **zlib-inflates**
+//!   to the `.xrk` golden and decodes via `racestudio-decode`. The device's
+//!   identity word was scrubbed from the session before re-framing (see the
+//!   manifest), so the payload bytes are de-identified; every *protocol* field
+//!   (framing, stride, offsets, short-final end-of-stream) is verbatim.
+//! - **Verified request/response fields:** the open request, its two responses,
+//!   and the ACK are committed frames; the declared total length and the 65472
+//!   stride are read out of the captured transfer header.
+//! - **Still hypothesized:** the **retry / re-request** handshake. The captured
+//!   transfer was error-free (no chunk ever failed its checksum), so recovery
+//!   behaviour could not be observed and remains exercised against synthetic
+//!   streams built in-test — as do out-of-order and duplicate delivery, which the
+//!   device never exhibited. Clean-room, interoperability-only
 //!   (DMCA §1201(f); EU 2009/24/EC Art. 6).
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
-use racestudio_device::stcp_checksum;
 use racestudio_device::transfer::{
-    download_session, DownloadPlan, ProgressSink, Transport, MAX_CHUNK_RETRIES,
+    download_session, inflate_session, DownloadPlan, ProgressSink, Transport, MAX_CHUNK_RETRIES,
 };
-use racestudio_device::DeviceError;
+use racestudio_device::{parse_frame, stcp_checksum, DeviceError};
 
 // ---- fixture access --------------------------------------------------------
 
@@ -119,74 +124,299 @@ fn plan_for(bytes: &[u8], session_id: u32) -> DownloadPlan {
     }
 }
 
-// ---- the seven named acceptance behaviours ---------------------------------
+// ---- the real captured session download (issue #133) -----------------------
 
+/// The device's chunk-data stride, observed in every full chunk of the capture.
+const CHUNK_STRIDE: usize = 65_472;
+
+/// The total length the captured transfer header declares for the session file,
+/// and which the reassembled `.xrz` must cover exactly.
+const DECLARED_LEN: u64 = 210_158;
+
+/// The STCP checksum over the whole reassembled `.xrz`. The protocol does **not**
+/// carry this on the wire (see `docs/device/PROTOCOL.md` §6), so it is pinned here
+/// as an observed property of the fixture rather than read from a device field.
+const XRZ_CHECKSUM: u16 = 29_097;
+
+/// The on-device path the capture requested, carried verbatim in the open request.
+const SESSION_PATH: &[u8] = b"1:/mem/a_0053.xrz";
+
+fn transfer_fixture(rel: &str) -> Vec<u8> {
+    std::fs::read(device_fixture(rel)).unwrap_or_else(|e| panic!("fixture {rel} must exist: {e}"))
+}
+
+/// Replays a recorded stream of concatenated STCP frames one frame at a time —
+/// exactly the byte sequence the device wrote during the capture.
+struct CapturedStream {
+    bytes: Vec<u8>,
+    pos: usize,
+}
+
+impl CapturedStream {
+    fn new(bytes: Vec<u8>) -> Self {
+        Self { bytes, pos: 0 }
+    }
+}
+
+impl Transport for CapturedStream {
+    fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, DeviceError> {
+        if self.pos >= self.bytes.len() {
+            return Ok(None);
+        }
+        let (_, consumed) =
+            parse_frame(&self.bytes[self.pos..]).ok_or(DeviceError::TruncatedList)?;
+        let frame = self.bytes[self.pos..self.pos + consumed].to_vec();
+        self.pos += consumed;
+        Ok(Some(frame))
+    }
+}
+
+/// The plan a caller builds from the captured transfer header: the declared total
+/// length comes off the wire; the whole-file checksum does not (§6) and is supplied
+/// by the caller.
+fn captured_plan() -> DownloadPlan {
+    DownloadPlan {
+        session_id: 53,
+        total_len: DECLARED_LEN,
+        whole_file_checksum: XRZ_CHECKSUM,
+    }
+}
+
+/// Replaying the real captured stream reassembles the session byte-for-byte into
+/// the `.xrz` the device holds — the multi-chunk protocol, no longer hypothesized.
 #[test]
-fn test_reassembled_bytes_match_expected_xrk() {
-    let file = std::fs::read(repo_root().join("fixtures/fuji_0033.xrk")).expect("read fixture");
-    let frames = split_into_frames(&file, 65472);
-    let mut transport = RecordedTransport::new(frames);
+fn test_real_capture_reassembles_byte_exact() {
+    let mut transport = CapturedStream::new(transfer_fixture("transfer/session_stream.bin"));
     let mut progress = CollectingProgress::default();
 
-    let out = download_session(&plan_for(&file, 33), &mut transport, &mut progress)
-        .expect("download reassembles");
+    let out = download_session(&captured_plan(), &mut transport, &mut progress)
+        .expect("the captured stream reassembles");
 
+    assert_eq!(out.len() as u64, DECLARED_LEN, "covers the declared length");
+    assert_eq!(stcp_checksum(&out), XRZ_CHECKSUM, "whole-file checksum");
+    assert!(
+        out.starts_with(&[0x78, 0x01]),
+        "the device stores sessions zlib-compressed"
+    );
     assert_eq!(
-        out, file,
-        "reassembled bytes equal the source .xrk byte-for-byte"
+        progress.events.last().copied(),
+        Some((DECLARED_LEN, DECLARED_LEN)),
+        "progress reaches 100%"
     );
 }
 
+/// The reassembled `.xrz` inflates to the committed `.xrk` golden and decodes —
+/// the end-to-end proof that a real device download yields a usable session.
 #[test]
-fn test_reassembled_file_decodes_via_m1_golden() {
-    let file = std::fs::read(repo_root().join("fixtures/fuji_0033.xrk")).expect("read fixture");
-    let frames = split_into_frames(&file, 65472);
-    let mut transport = RecordedTransport::new(frames);
+fn test_real_capture_inflates_and_decodes_to_golden() {
+    let mut transport = CapturedStream::new(transfer_fixture("transfer/session_stream.bin"));
     let mut progress = CollectingProgress::default();
+    let compressed = download_session(&captured_plan(), &mut transport, &mut progress)
+        .expect("the captured stream reassembles");
 
-    let out = download_session(&plan_for(&file, 33), &mut transport, &mut progress)
-        .expect("download reassembles");
+    let inflated = inflate_session(&compressed).expect("the session inflates");
 
-    // Decode the *reassembled* bytes (via a temp file, since decode_session reads
-    // a path) and assert the M1 golden for fuji_0033 — proving the download is a
-    // valid, decodable file, not just byte-equal.
+    let golden = transfer_fixture("golden/transfer_reassembled.xrk");
+    assert_eq!(
+        inflated, golden,
+        "inflates to the committed golden byte-for-byte"
+    );
+
+    // Decode the inflated bytes (via a temp file, since decode_session reads a
+    // path) — proof the download is a valid session, not just byte-equal.
     let tmp = std::env::temp_dir().join(format!(
-        "rs_device_transfer_{}_decode.xrk",
+        "rs_device_transfer_{}_capture.xrk",
         std::process::id()
     ));
-    std::fs::write(&tmp, &out).expect("write temp");
-    let session = racestudio_decode::decode_session(&tmp).expect("reassembled file decodes");
+    std::fs::write(&tmp, &inflated).expect("write temp");
+    let session = racestudio_decode::decode_session(&tmp).expect("the download decodes");
     let _ = std::fs::remove_file(&tmp);
 
-    // Golden metadata fields from fixtures/golden/fuji_0033.metadata.json — proof
-    // the reassembled download decodes to the known M1 result, not just any file.
     let meta = session.metadata();
-    assert_eq!(meta.track, "Fuji GP Sh", "M1 golden: track");
-    assert_eq!(meta.driver, "CMD", "M1 golden: driver");
-    assert_eq!(meta.vehicle, "SFJ", "M1 golden: vehicle");
-    assert_eq!(meta.series, "Fuji Practice", "M1 golden: series");
-    assert_eq!(meta.session, "Generic testing", "M1 golden: session name");
-    assert_eq!(meta.datetime_utc, 1_762_271_407, "M1 golden: datetime");
+    assert_eq!(meta.track, "S.Marino AR", "golden: track");
+    assert_eq!(meta.datetime_utc, 1_751_802_697, "golden: datetime");
+    assert_eq!(session.channels().len(), 26, "golden: channel count");
+}
 
-    // The reassembled file decodes identically to the original fixture (channels
-    // and full metadata), independent of the container-vs-decoded count nuance.
-    let original = racestudio_decode::decode_session(repo_root().join("fixtures/fuji_0033.xrk"))
-        .expect("original fixture decodes");
+/// The captured transfer header is where a caller learns the file's size and the
+/// chunk stride — the on-wire source of `DownloadPlan::total_len`.
+#[test]
+fn test_observed_transfer_header_declares_total_len_and_stride() {
+    let bytes = transfer_fixture("transfer/length_response.bin");
+    let (frame, consumed) = parse_frame(&bytes).expect("frame parses");
+    assert_eq!(consumed, bytes.len(), "the fixture is exactly one frame");
+    assert!(frame.checksum_valid());
+
+    let p = frame.payload;
     assert_eq!(
-        session.channels().len(),
-        original.channels().len(),
-        "reassembled channels match the original decode"
+        &p[8..12],
+        &[0x02, 0x00, 0x04, 0x00],
+        "read-file opcode 0x0402"
     );
     assert_eq!(
-        meta,
-        original.metadata(),
-        "reassembled metadata matches the original decode"
+        u32::from_le_bytes(p[16..20].try_into().unwrap()) as u64,
+        DECLARED_LEN,
+        "payload[16..20] declares the file's total length"
+    );
+    assert_eq!(
+        u32::from_le_bytes(p[20..24].try_into().unwrap()) as usize,
+        CHUNK_STRIDE,
+        "payload[20..24] declares the 0xFFC0 chunk stride"
+    );
+    assert_eq!(
+        u32::from_le_bytes(p[24..28].try_into().unwrap()),
+        0x0a11,
+        "tag 0x0a11 marks the transfer header (0x0a09 is the open ack)"
     );
     assert!(
-        !session.channels().is_empty(),
-        "the decoded download has channels"
+        p[32..].starts_with(SESSION_PATH),
+        "the header echoes the requested path"
     );
 }
+
+/// The open request names the file to download; its ack echoes it with no length.
+#[test]
+fn test_observed_open_request_names_the_session_file() {
+    let req = transfer_fixture("transfer/open_request.bin");
+    let (frame, _) = parse_frame(&req).expect("frame parses");
+    assert!(frame.checksum_valid());
+    assert_eq!(&frame.payload[8..12], &[0x02, 0x00, 0x04, 0x00]);
+    assert!(frame.payload[32..].starts_with(SESSION_PATH));
+
+    let ack = transfer_fixture("transfer/open_ack.bin");
+    let (frame, _) = parse_frame(&ack).expect("frame parses");
+    assert!(frame.checksum_valid());
+    assert_eq!(
+        u32::from_le_bytes(frame.payload[24..28].try_into().unwrap()),
+        0x0a09,
+        "the open ack is tagged 0x0a09"
+    );
+    assert_eq!(
+        u32::from_le_bytes(frame.payload[16..20].try_into().unwrap()),
+        0,
+        "the open ack declares no length — the header that follows does"
+    );
+}
+
+/// Flow control: the client ACKs each chunk with the **next** offset it wants.
+#[test]
+fn test_observed_ack_carries_the_next_chunk_offset() {
+    let bytes = transfer_fixture("transfer/ack.bin");
+    let (frame, consumed) = parse_frame(&bytes).expect("frame parses");
+    assert_eq!(consumed, bytes.len());
+    assert!(frame.checksum_valid());
+    assert_eq!(frame.payload.len(), 4, "an ACK is a bare u32 LE offset");
+    assert_eq!(
+        u32::from_le_bytes(frame.payload.try_into().unwrap()) as usize,
+        CHUNK_STRIDE,
+        "the observed ACK requests the second chunk"
+    );
+}
+
+/// End-of-stream is signalled by a **short** final chunk, not a terminator frame:
+/// full chunks run at the stride until one arrives with fewer data bytes.
+#[test]
+fn test_short_final_chunk_signals_end_of_stream() {
+    let stream = transfer_fixture("transfer/session_stream.bin");
+    let mut pos = 0;
+    let mut lens = Vec::new();
+    let mut offsets = Vec::new();
+    while pos < stream.len() {
+        let (frame, consumed) = parse_frame(&stream[pos..]).expect("frame parses");
+        assert!(frame.checksum_valid(), "every captured chunk verifies");
+        let offset = racestudio_device::transfer_chunk_offset(frame.payload).expect("offset");
+        let data = racestudio_device::transfer_chunk_data(frame.payload).expect("data");
+        offsets.push(offset as usize);
+        lens.push(data.len());
+        pos += consumed;
+    }
+
+    assert_eq!(lens, vec![CHUNK_STRIDE, CHUNK_STRIDE, CHUNK_STRIDE, 13_742]);
+    assert_eq!(
+        offsets,
+        vec![0, CHUNK_STRIDE, 2 * CHUNK_STRIDE, 3 * CHUNK_STRIDE]
+    );
+    assert!(
+        lens.last().is_some_and(|&n| n < CHUNK_STRIDE),
+        "the final chunk is short — that is the end-of-stream signal"
+    );
+    assert_eq!(
+        lens.iter().sum::<usize>() as u64,
+        DECLARED_LEN,
+        "the chunks cover exactly the declared length"
+    );
+}
+
+// ---- the session container (zlib) ------------------------------------------
+
+/// A session served by the device is zlib-compressed; inflating it yields the
+/// `.xrk` container `racestudio-decode` reads.
+#[test]
+fn test_inflate_session_unwraps_a_compressed_session() {
+    let compressed = {
+        let mut t = CapturedStream::new(transfer_fixture("transfer/session_stream.bin"));
+        let mut p = CollectingProgress::default();
+        download_session(&captured_plan(), &mut t, &mut p).expect("reassembles")
+    };
+    let out = inflate_session(&compressed).expect("inflates");
+    assert!(out.starts_with(b"<hCNF"), "an .xrk container header");
+    assert!(out.len() > compressed.len(), "inflating grows the payload");
+}
+
+/// Not every file the device serves is compressed — the track/config files are
+/// stored plain, so an already-uncompressed payload passes through untouched.
+#[test]
+fn test_inflate_session_passes_through_uncompressed_payloads() {
+    // The observed `0:/tkk/al.ria` track file begins with this plain ASCII header.
+    let plain = b"106 ACW\x00\x00\x00\x00 track data".to_vec();
+    assert_eq!(
+        inflate_session(&plain).expect("plain payload passes through"),
+        plain
+    );
+    // An empty payload is not a compressed stream either, and must not error.
+    assert_eq!(
+        inflate_session(&[]).expect("empty passes through"),
+        Vec::<u8>::new()
+    );
+}
+
+/// A payload that claims to be compressed but is corrupt is a typed error, never
+/// a partial or silently-empty session.
+#[test]
+fn test_inflate_session_rejects_a_corrupt_archive() {
+    let mut corrupt = transfer_fixture("transfer/session_stream.bin")[12..2048].to_vec();
+    corrupt[0] = 0x78; // a zlib header...
+    corrupt[1] = 0x01; // ...over bytes that are not a valid deflate stream
+    assert_eq!(
+        inflate_session(&corrupt),
+        Err(DeviceError::CorruptArchive),
+        "a corrupt archive is typed, not silently truncated"
+    );
+}
+
+/// A crafted archive that would inflate orders of magnitude past its compressed
+/// size is refused before it can exhaust memory.
+#[test]
+fn test_inflate_session_refuses_a_decompression_bomb() {
+    use std::io::Write;
+    // ~2 MiB of zeros compresses to a couple of KiB — a ratio far past the guard,
+    // while staying small enough to build and reject in milliseconds.
+    let mut enc = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    enc.write_all(&vec![0u8; 2 * 1024 * 1024]).expect("encode");
+    let bomb = enc.finish().expect("finish");
+    assert!(
+        bomb.len() * 128 < 2 * 1024 * 1024,
+        "the fixture really does exceed the allowance"
+    );
+
+    assert_eq!(
+        inflate_session(&bomb),
+        Err(DeviceError::CorruptArchive),
+        "an implausible inflation ratio is refused"
+    );
+}
+
+// ---- synthetic streams: delivery faults the capture never exhibited ---------
 
 #[test]
 fn test_out_of_order_chunks_reassemble() {
@@ -458,5 +688,9 @@ fn test_new_error_variants_display() {
     assert_eq!(
         DeviceError::MissingChunk.to_string(),
         "the session download is missing one or more chunks"
+    );
+    assert_eq!(
+        DeviceError::CorruptArchive.to_string(),
+        "the downloaded session is not a readable compressed container"
     );
 }
