@@ -6,18 +6,23 @@
 COVERAGE_THRESHOLD ?= 95
 export COVERAGE_THRESHOLD
 
+# Version stamped into the packaged .app/.dmg. Empty = let the scripts pick
+# it up from the newest `v*` git tag (the release workflow passes the tag).
+VERSION ?=
+VERSION_ARG := $(if $(strip $(VERSION)),--version $(VERSION),)
+
 # SwiftLint needs the Command-Line-Tools SourceKit only when no full Xcode is the
 # active developer dir; omitted otherwise (e.g. the CI runner, which has Xcode).
 SWIFTLINT_ENV := $(if $(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),DYLD_FRAMEWORK_PATH=/Library/Developer/CommandLineTools/usr/lib,)
 
-.PHONY: help setup run test test-rust test-swift coverage e2e lint security fixtures xcframework docs ci clean
+.PHONY: help setup run dmg release-smoke test test-rust test-swift coverage e2e lint security fixtures xcframework docs ci clean
 
 .DEFAULT_GOAL := help
 
 help: ## List all available targets with their descriptions
 	@echo "RaceStudio-macOS — available targets:"
 	@echo ""
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 setup: ## Install toolchains + fetch test fixtures
 	rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -29,6 +34,13 @@ setup: ## Install toolchains + fetch test fixtures
 
 run: ## Build and launch the RaceStudio macOS app (as a .app bundle so it shows a window)
 	bash scripts/run_app.sh
+
+dmg: ## Package the downloadable dist/RaceStudio-<version>.dmg (VERSION=1.2.0 to stamp one)
+	bash scripts/build_app.sh $(VERSION_ARG)
+	bash scripts/package_dmg.sh $(VERSION_ARG)
+
+release-smoke: ## Verify the release packaging in seconds (no Swift build)
+	bash scripts/release_smoke.sh --dry-run
 
 test: test-rust test-swift ## Run the Rust + Swift test suites
 

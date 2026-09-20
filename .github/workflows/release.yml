@@ -1,0 +1,163 @@
+name: Release
+
+# Tag-driven, downloadable macOS builds (issue #50).
+#
+# This project ships **unsigned** artifacts on purpose: there is no paid Apple
+# signing certificate behind it, so the pipeline deliberately consumes no
+# secrets at all and performs no notarization. The app is ad-hoc signed and
+# packaged into a `.dmg` that is attached to the GitHub Release. Users clear the
+# download quarantine themselves once -- docs/RELEASE.md documents how, and the
+# release notes below repeat it. `tests/release_test.sh` pins that decision.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. 1.2.0 (default: newest v* tag)'
+        required: false
+        default: ''
+
+# Needed only to create the Release and upload its assets.
+permissions:
+  contents: write
+
+# A tag build is a publish: never cancel one mid-flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # A tag can never ship an unverified build: this is the exact gate CI runs on
+  # every PR (lint -> 95% coverage -> e2e), re-run against the tagged tree.
+  verify:
+    name: verify (make ci)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview, clippy, rustfmt
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Cache cargo & SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            app/.build
+          key: ${{ runner.os }}-ci-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-ci-
+
+      - name: Fetch .xrk fixtures
+        run: bash scripts/fetch_fixtures.sh --no-goldens
+
+      - name: make ci
+        run: make ci
+        env:
+          COVERAGE_THRESHOLD: "95"
+
+  build:
+    name: build & package .dmg
+    needs: verify
+    runs-on: macos-15
+    steps:
+      # Full history so `git describe` can find the newest v* tag on a manual run.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+
+      - name: Cache cargo & SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            app/.build
+          key: ${{ runner.os }}-release-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-release-
+
+      # `v1.2.0` -> `1.2.0`; a manual run may name the version outright.
+      - name: Derive the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="$INPUT_VERSION"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo 0.0.0)"
+            VERSION="${VERSION#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "building RaceStudio $VERSION"
+
+      # Proves the packaging code itself before spending minutes on the real
+      # build, so a packaging regression fails in seconds rather than at the end.
+      - name: Release packaging smoke test
+        run: bash scripts/release_smoke.sh --dry-run
+
+      - name: Build the universal RaceStudio.app
+        run: bash scripts/build_app.sh --version "${{ steps.version.outputs.version }}"
+
+      - name: Package the .dmg + checksums
+        run: bash scripts/package_dmg.sh --version "${{ steps.version.outputs.version }}"
+
+      - name: Upload the build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: RaceStudio-${{ steps.version.outputs.version }}-macos
+          path: |
+            dist/RaceStudio-${{ steps.version.outputs.version }}.dmg
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/RaceStudio-${{ steps.version.outputs.version }}.dmg
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          body: |
+            ## RaceStudio ${{ steps.version.outputs.version }} for macOS
+
+            Download **`RaceStudio-${{ steps.version.outputs.version }}.dmg`**, open it, and drag
+            **RaceStudio** to **Applications**. Universal: Apple Silicon + Intel, macOS 13 or later.
+
+            > **First launch.** This build is ad-hoc signed and **not** notarized (the project has
+            > no paid Apple signing certificate), so macOS quarantines the download. Open it once
+            > with **right-click -> Open -> Open**, or clear the quarantine flag yourself:
+            >
+            > ```sh
+            > xattr -dr com.apple.quarantine /Applications/RaceStudio.app
+            > ```
+            >
+            > After that it launches normally. See
+            > [docs/RELEASE.md](https://github.com/Zenardi/racestudio-macos/blob/main/docs/RELEASE.md).
+
+            Verify your download against `SHA256SUMS.txt`:
+
+            ```sh
+            shasum -a 256 -c SHA256SUMS.txt
+            ```
