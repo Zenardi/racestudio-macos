@@ -32,11 +32,11 @@ use racestudio_device::{
     ap_mode_fallback as core_ap_mode_fallback,
     build_session_list_request as core_build_session_list_request,
     delete_session as core_delete_session, download_session as core_download_session,
-    parse_discovery as core_parse_discovery, parse_session_list as core_parse_session_list,
-    DeleteConfirmation as CoreDeleteConfirmation, DeleteTransport as CoreDeleteTransport,
-    Device as CoreDevice, DeviceError as CoreDeviceError, DownloadPlan as CoreDownloadPlan,
-    ProgressSink as CoreProgressSink, SessionDate as CoreSessionDate,
-    SessionInfo as CoreSessionInfo, Transport as CoreTransport,
+    inflate_session as core_inflate_session, parse_discovery as core_parse_discovery,
+    parse_session_list as core_parse_session_list, DeleteConfirmation as CoreDeleteConfirmation,
+    DeleteTransport as CoreDeleteTransport, Device as CoreDevice, DeviceError as CoreDeviceError,
+    DownloadPlan as CoreDownloadPlan, ProgressSink as CoreProgressSink,
+    SessionDate as CoreSessionDate, SessionInfo as CoreSessionInfo, Transport as CoreTransport,
 };
 
 uniffi::setup_scaffolding!();
@@ -1112,6 +1112,9 @@ pub enum DiscoveryError {
     /// The device rejected a delete request (non-ack response); a typed failure,
     /// never blindly retried (issue 6.6).
     DeleteRejected,
+    /// A downloaded session's compressed (`.xrz`) container could not be inflated,
+    /// so no session is surfaced (issue #133).
+    CorruptArchive,
 }
 
 impl std::fmt::Display for DiscoveryError {
@@ -1134,6 +1137,10 @@ impl std::fmt::Display for DiscoveryError {
             ),
             DiscoveryError::NotArmed => write!(f, "the delete was not armed; nothing was sent"),
             DiscoveryError::DeleteRejected => write!(f, "the device rejected the delete request"),
+            DiscoveryError::CorruptArchive => write!(
+                f,
+                "the downloaded session is not a readable compressed container"
+            ),
         }
     }
 }
@@ -1152,6 +1159,7 @@ impl From<CoreDeviceError> for DiscoveryError {
             CoreDeviceError::ConfirmationMismatch => DiscoveryError::ConfirmationMismatch,
             CoreDeviceError::NotArmed => DiscoveryError::NotArmed,
             CoreDeviceError::DeleteRejected => DiscoveryError::DeleteRejected,
+            CoreDeviceError::CorruptArchive => DiscoveryError::CorruptArchive,
         }
     }
 }
@@ -1339,11 +1347,16 @@ impl CoreProgressSink for ProgressAdapter {
 /// incomplete transfer never masquerades as a good file. Progress is reported to
 /// `progress` so a UI can render a progress bar.
 ///
+/// The reassembled bytes are then **inflated**: the device stores recorded
+/// sessions zlib-compressed (`.xrz`), so what this returns is the `.xrk` container
+/// the decoder reads, not the raw wire payload (issue #133).
+///
 /// # Errors
 /// A thrown [`DiscoveryError`] — `ChecksumMismatch` (unrecoverable corruption),
 /// `MissingChunk` (the stream ended with a gap, or only non-progressing chunks
-/// arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable), or
-/// `MalformedRecord` (a chunk overran the declared size). Never traps.
+/// arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable),
+/// `MalformedRecord` (a chunk overran the declared size), or `CorruptArchive`
+/// (the session's compressed container was unreadable). Never traps.
 #[uniffi::export]
 pub fn download_session(
     plan: DownloadPlan,
@@ -1357,8 +1370,12 @@ pub fn download_session(
     };
     let mut adapted_source = ChunkSourceAdapter(source);
     let mut adapted_progress = ProgressAdapter(progress);
-    core_download_session(&core_plan, &mut adapted_source, &mut adapted_progress)
-        .map_err(DiscoveryError::from)
+    let compressed = core_download_session(&core_plan, &mut adapted_source, &mut adapted_progress)
+        .map_err(DiscoveryError::from)?;
+    // The device stores sessions zlib-compressed (`.xrz`); the caller wants the
+    // `.xrk` the decoder reads (issue #133). Payloads the device serves
+    // uncompressed pass through untouched.
+    core_inflate_session(&compressed).map_err(DiscoveryError::from)
 }
 
 /// An explicit, typed delete confirmation carried across the FFI boundary (6.6).

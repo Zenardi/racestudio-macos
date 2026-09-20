@@ -213,7 +213,8 @@ public final class DevicePanelModel: ObservableObject {
         switch discovery {
         case let .MalformedRecord(message), let .NoService(message), let .BadChecksum(message),
              let .TruncatedList(message), let .ChecksumMismatch(message), let .MissingChunk(message),
-             let .ConfirmationMismatch(message), let .NotArmed(message), let .DeleteRejected(message):
+             let .ConfirmationMismatch(message), let .NotArmed(message), let .DeleteRejected(message),
+             let .CorruptArchive(message):
             return message
         }
     }

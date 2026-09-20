@@ -43,6 +43,10 @@ pub enum DeviceError {
     /// The device answered a delete request with a non-ack/error response; it is a
     /// typed failure and is never blindly retried (no double-delete) (issue 6.6).
     DeleteRejected,
+    /// A downloaded session claimed to be a compressed (`.xrz`) container but its
+    /// deflate stream could not be inflated, or it inflated implausibly far past
+    /// its compressed size. No partial session is ever surfaced (issue #133).
+    CorruptArchive,
 }
 
 impl fmt::Display for DeviceError {
@@ -69,6 +73,12 @@ impl fmt::Display for DeviceError {
             }
             DeviceError::NotArmed => write!(f, "the delete was not armed; nothing was sent"),
             DeviceError::DeleteRejected => write!(f, "the device rejected the delete request"),
+            DeviceError::CorruptArchive => {
+                write!(
+                    f,
+                    "the downloaded session is not a readable compressed container"
+                )
+            }
         }
     }
 }

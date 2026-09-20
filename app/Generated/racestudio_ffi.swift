@@ -3390,6 +3390,12 @@ public enum DiscoveryError {
      */
     case DeleteRejected(message: String)
     
+    /**
+     * A downloaded session's compressed (`.xrz`) container could not be inflated,
+     * so no session is surfaced (issue #133).
+     */
+    case CorruptArchive(message: String)
+    
 }
 
 
@@ -3442,6 +3448,10 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 10: return .CorruptArchive(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3471,6 +3481,8 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(8))
         case .DeleteRejected(_ /* message is ignored*/):
             writeInt(&buf, Int32(9))
+        case .CorruptArchive(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
 
         
         }
@@ -4533,11 +4545,16 @@ public func deleteSession(target: SessionInfo, confirmation: DeleteConfirmation?
  * incomplete transfer never masquerades as a good file. Progress is reported to
  * `progress` so a UI can render a progress bar.
  *
+ * The reassembled bytes are then **inflated**: the device stores recorded
+ * sessions zlib-compressed (`.xrz`), so what this returns is the `.xrk` container
+ * the decoder reads, not the raw wire payload (issue #133).
+ *
  * # Errors
  * A thrown [`DiscoveryError`] — `ChecksumMismatch` (unrecoverable corruption),
  * `MissingChunk` (the stream ended with a gap, or only non-progressing chunks
- * arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable), or
- * `MalformedRecord` (a chunk overran the declared size). Never traps.
+ * arrived), `TruncatedList` (a chunk frame was incomplete/unverifiable),
+ * `MalformedRecord` (a chunk overran the declared size), or `CorruptArchive`
+ * (the session's compressed container was unreadable). Never traps.
  */
 public func downloadSession(plan: DownloadPlan, source: ChunkSource, progress: DownloadProgress)throws  -> Data {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
@@ -4647,7 +4664,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_delete_session() != 3178) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_func_download_session() != 41158) {
+    if (uniffi_racestudio_ffi_checksum_func_download_session() != 42953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
