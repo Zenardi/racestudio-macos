@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 4
+    public static let currentSchemaVersion = 5
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -31,6 +31,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// weights/fuel/gearing metadata (issue 8.17). Added in schema v4; a migrated
     /// pre-8.17 project defaults to an empty ``LogSheet``.
     public var logSheet: LogSheet
+    /// The session video attached to this workspace and the sync offset it was
+    /// aligned by (issue 9.6), so a reopened project plays the same footage in
+    /// step with the cursor. Added in schema v5; a migrated pre-9.6 project has
+    /// no attachment.
+    public var video: VideoAttachment?
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -46,7 +51,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         selectedLaps: [LapSelection] = [],
         mathChannels: [MathChannelDef] = [],
         activeLayout: WindowLayout = .timeDistance,
-        logSheet: LogSheet = LogSheet()
+        logSheet: LogSheet = LogSheet(),
+        video: VideoAttachment? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
@@ -55,12 +61,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.mathChannels = mathChannels
         self.activeLayout = activeLayout
         self.logSheet = logSheet
+        self.video = video
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet
+        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet, video
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -74,5 +81,6 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.mathChannels == rhs.mathChannels
             && lhs.activeLayout == rhs.activeLayout
             && lhs.logSheet == rhs.logSheet
+            && lhs.video == rhs.video
     }
 }

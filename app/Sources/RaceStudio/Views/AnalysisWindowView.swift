@@ -28,6 +28,12 @@ struct AnalysisWindowView: View {
     // the window level like the math-channels manager, so an edited sheet survives
     // layout switches and is captured into / restored from the project.
     @StateObject private var logSheet = LogSheetModel()
+    // The Video Review state (issue 9.6) — the lap/sector timeline, the alignment,
+    // and which section is under review — plus the player that applies it. Owned
+    // here, not in the panel, so the attached footage survives layout switches and
+    // can be captured into / restored from the project.
+    @StateObject private var videoReview: VideoReviewModel
+    @StateObject private var videoController: VideoReviewController
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -39,11 +45,15 @@ struct AnalysisWindowView: View {
         // (issue 8.8); a non-FFI build/preview falls back to a rejecting evaluator.
         _mathManager = StateObject(wrappedValue: MathChannelsManagerModel(
             evaluator: viewModel.evaluator ?? NoSessionEvaluator()))
+        let review = VideoReviewModel()
+        _videoReview = StateObject(wrappedValue: review)
+        _videoController = StateObject(wrappedValue: VideoReviewController(review: review))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet)
+            WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
+                         video: videoController)
             Divider()
             HStack(spacing: 0) {
                 LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
@@ -54,7 +64,8 @@ struct AnalysisWindowView: View {
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
-                              logSheet: logSheet, analysis: analysis)
+                              logSheet: logSheet, videoReview: videoReview,
+                              videoController: videoController, analysis: analysis)
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -118,6 +129,8 @@ private struct PanelHost: View {
     @ObservedObject var splitReport: SplitReportModel
     @ObservedObject var spectrum: SpectrumPanelModel
     @ObservedObject var logSheet: LogSheetModel
+    @ObservedObject var videoReview: VideoReviewModel
+    @ObservedObject var videoController: VideoReviewController
     let analysis: AnalysisSession?
 
     var body: some View {
@@ -149,6 +162,10 @@ private struct PanelHost: View {
                 ChannelsReportPanel(model: model, report: report)
             case .splitTimes:
                 SplitTimesPanel(model: model, report: splitReport, analysis: analysis)
+            case .videoReview:
+                VideoReviewPanel(model: model, review: videoReview, splitReport: splitReport,
+                                 cursor: model.linkedCursor, controller: videoController,
+                                 analysis: analysis)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:

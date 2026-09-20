@@ -111,6 +111,11 @@ public final class ProjectStore {
                 throw ProjectError.corruptDocument
             }
             return document
+        case 4:
+            guard let raw = try? JSONDecoder().decode(ProjectDocumentV4.self, from: data) else {
+                throw ProjectError.corruptDocument
+            }
+            return migrate(raw)
         case 3:
             guard let raw = try? JSONDecoder().decode(ProjectDocumentV3.self, from: data) else {
                 throw ProjectError.corruptDocument
@@ -170,6 +175,21 @@ public final class ProjectStore {
             mathChannels: raw.mathChannels,
             activeLayout: raw.activeLayout,
             logSheet: LogSheet())
+    }
+
+    /// Upgrade a decoded v4 document to the current shape: v4 predates the
+    /// attached session video (issue 9.6), so it opens with no footage;
+    /// everything else — including the v4 `logSheet` — is carried over unchanged.
+    static func migrate(_ raw: ProjectDocumentV4) -> ProjectDocument {
+        ProjectDocument(
+            schemaVersion: ProjectDocument.currentSchemaVersion,
+            sessionRefs: raw.sessionRefs,
+            layout: raw.layout,
+            selectedLaps: raw.selectedLaps,
+            mathChannels: raw.mathChannels,
+            activeLayout: raw.activeLayout,
+            logSheet: raw.logSheet,
+            video: nil)
     }
 
     // MARK: - Resolution / validation
@@ -247,6 +267,17 @@ struct ProjectDocumentV2: Decodable {
     let layout: AnalysisLayout
     let selectedLaps: [LapSelection]
     let mathChannels: [MathChannelDef]
+}
+
+/// The v4 on-disk shape — identical to the current document except it predates
+/// the attached session video (issue 9.6). Used only by ``ProjectStore/migrate(_:)``.
+struct ProjectDocumentV4: Decodable {
+    let sessionRefs: [SessionRef]
+    let layout: AnalysisLayout
+    let selectedLaps: [LapSelection]
+    let mathChannels: [MathChannelDef]
+    let activeLayout: WindowLayout
+    let logSheet: LogSheet
 }
 
 /// The v3 on-disk shape — identical to the current document except it predates the

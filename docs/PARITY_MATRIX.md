@@ -47,7 +47,7 @@ status set, the gap-issue links, and the backlog ordering.
 | Multi-session compare | Load several sessions together and overlay their laps across every panel | Done | 9.1 (#138; `MultiSessionModel` over the 8.7 distance overlay + 3.1/3.2 alignment) | — | — |
 | Gauges & digital displays | Measures bar with digital readouts plus analog-style gauge widgets | Partial | 4.4, 8.5 (readouts shipped; no gauge widgets) | 9.4 (proposed) | P3 |
 | Report / export | CSV export/import, printable report (PDF/print), plot image export | Partial | 5.1, 5.2 (CSV both ways), 5.4 (project files; no PDF/print/image export) | 9.3 (proposed) | P2 |
-| Video sync | Synchronized video playback tied to the analysis cursor | Done | 9.5 (#140; `VideoSyncModel` maps the 8.3 linked-cursor time ↔ an external video playhead through a clamped sync offset, driving a thin `AVPlayer` shell) | — | — |
+| Video sync | Synchronized video playback tied to the analysis cursor | Done | 9.5 (#140; `VideoSyncModel` maps the 8.3 linked-cursor time ↔ an external video playhead through a clamped sync offset, driving a thin `AVPlayer` shell) · 9.6 (#156; the video is attached to the workspace by security-scoped bookmark and persisted in `.rsproj` v5, aligned against the track data (a lap/sector boundary or the asset's wall clock), and reviewed section by section through `LapSectorTimeline` + `VideoReviewModel` in a first-class Video Review panel) | — | — |
 | Suspension analysis | Suspension composite views and log sheets | Done | 8.17 | — | — |
 | Session library / database | Browsable session database with search, filters, collections, preview | Done | 5.3, 8.14, 8.15 | — | — |
 | Workspaces & profiles | Saved layouts/profiles, project files, storyboard switching | Done | 5.4, 8.13 | — | — |
