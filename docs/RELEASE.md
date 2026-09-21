@@ -37,21 +37,43 @@ shasum -a 256 -c SHA256SUMS.txt
 Releases are produced entirely by `.github/workflows/release.yml`; nothing is built or uploaded
 from a laptop.
 
+**Every commit that lands on `main` is released automatically.** A merge publishes the newest
+`v*` tag with its patch segment bumped (`v1.2.0` → `v1.2.1`), and the release action creates that
+tag itself — there is nothing to push by hand. A commit users cannot download is a commit that
+never shipped, so the pipeline does not wait for someone to remember.
+
+To cut a **minor or major** version, push the tag yourself; an explicit tag always wins:
+
 ```sh
 git switch main && git pull
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
-The tag push runs two jobs:
+[`scripts/next_version.sh`](../scripts/next_version.sh) owns that decision — which version, and
+whether the run publishes at all — so it is unit-tested in `tests/release_test.sh` rather than
+buried in YAML. Its rules:
+
+| Trigger | Version | Publishes? |
+| --- | --- | --- |
+| push to `main` | newest `v*` tag, patch + 1 (or `0.1.0` if there are no tags yet) | yes |
+| push of a `v*` tag | that tag | yes |
+| `main` at a commit that already has a `v*` tag | that tag | no — its own tag push is publishing it |
+| `workflow_dispatch` with a `version` | that version | no — a dry run never mints a tag |
+| push to any other branch | newest tag | no |
+
+A tag created by the release action is made with `GITHUB_TOKEN`, and GitHub does not re-trigger
+workflows for those, so a self-releasing `main` cannot loop.
+
+Either trigger runs two jobs:
 
 | Job | What it does |
 | --- | --- |
 | `verify` | Re-runs `make ci` — swiftlint + `cargo clippy`/`fmt`, the ≥95% line-coverage gate, and the e2e golden-corpus harness — against the tagged tree. |
-| `build` | Only `needs: verify`. Derives `1.2.0` from `v1.2.0`, smoke-tests the packaging, builds the universal `.app`, packages the `.dmg` + `SHA256SUMS.txt`, and publishes the Release with generated notes. |
+| `build` | Only `needs: verify`. Resolves the version via `scripts/next_version.sh`, smoke-tests the packaging, builds the universal `.app`, packages the `.dmg` + `SHA256SUMS.txt`, and publishes the Release with generated notes. |
 
 `workflow_dispatch` runs the same pipeline with an optional `version` input; it uploads the build
-artifacts but publishes no Release (that happens only on a tag).
+artifacts but publishes no Release.
 
 **No secrets are involved.** The workflow reads nothing beyond the automatic
 `permissions: contents: write`, so anyone who can push a tag can cut a release.
