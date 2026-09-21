@@ -25,6 +25,7 @@ WF="$ROOT/.github/workflows/release.yml"
 BUILD_APP="$ROOT/scripts/build_app.sh"
 PACKAGE_DMG="$ROOT/scripts/package_dmg.sh"
 SMOKE="$ROOT/scripts/release_smoke.sh"
+NEXT_VERSION="$ROOT/scripts/next_version.sh"
 RELEASE_DOC="$ROOT/docs/RELEASE.md"
 
 PASS=0
@@ -116,11 +117,16 @@ test_verify_job_runs_the_ci_gate() {
 }
 
 test_version_derived_from_tag() {
-  # Given a tag `v1.2.0`, Then VERSION is derived from it as `1.2.0`.
-  if [ -f "$WF" ] && grep -q 'GITHUB_REF_NAME#v' "$WF"; then
+  # Given a tag `v1.2.0`, Then the version is derived from it as `1.2.0`.
+  # The derivation moved out of the workflow into next_version.sh, so this
+  # asserts the behaviour rather than the YAML text (see also
+  # test_tag_push_uses_the_tag_and_publishes for the publish decision).
+  local out
+  out="$(nv v0.9.0 "v1.2.0" tag v1.2.0)"
+  if grep -q '^version=1\.2\.0$' <<<"$out"; then
     ok "test_version_derived_from_tag"
   else
-    bad "test_version_derived_from_tag" "VERSION is not stripped from the tag name"
+    bad "test_version_derived_from_tag" "$(tr '\n' ' ' <<<"$out")"
   fi
 }
 
@@ -318,6 +324,134 @@ test_app_does_not_depend_on_swiftpm_bundle_module() {
   fi
 }
 
+# --- automatic tagging (every commit to main ships) -------------------------
+
+# Run next_version.sh with git lookups stubbed out, so the decision logic is
+# tested directly instead of through whatever tags this checkout happens to have.
+nv() {
+  bash "$NEXT_VERSION" --latest-tag "$1" --head-tags "$2" \
+    --ref-type "$3" --ref-name "$4" --input-version "${5:-}" 2>&1
+}
+
+test_main_push_bumps_the_patch_version() {
+  # Given a push to main on top of v0.2.0, Then the next release is v0.2.1.
+  local out
+  out="$(nv v0.2.0 "" branch main)"
+  if grep -q '^version=0\.2\.1$' <<<"$out" && grep -q '^publish=true$' <<<"$out"; then
+    ok "test_main_push_bumps_the_patch_version"
+  else
+    bad "test_main_push_bumps_the_patch_version" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_main_push_with_no_tags_yet_starts_at_0_1_0() {
+  # Given a repo with no v* tag, Then the first automatic release is 0.1.0 --
+  # never 0.0.1, which reads like a broken bump.
+  local out
+  out="$(nv "" "" branch main)"
+  if grep -q '^version=0\.1\.0$' <<<"$out" && grep -q '^publish=true$' <<<"$out"; then
+    ok "test_main_push_with_no_tags_yet_starts_at_0_1_0"
+  else
+    bad "test_main_push_with_no_tags_yet_starts_at_0_1_0" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_already_tagged_head_does_not_publish_twice() {
+  # Given a main push whose commit is already tagged (someone pushed the tag by
+  # hand, and that tag push is publishing it), Then this run must not publish a
+  # second release for the same commit.
+  local out
+  out="$(nv v0.2.0 "v0.2.0" branch main)"
+  if grep -q '^publish=false$' <<<"$out"; then
+    ok "test_already_tagged_head_does_not_publish_twice"
+  else
+    bad "test_already_tagged_head_does_not_publish_twice" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_tag_push_uses_the_tag_and_publishes() {
+  # Given a v* tag push, Then the version comes from the tag (unchanged
+  # behaviour) and it publishes.
+  local out
+  out="$(nv v0.2.0 "v1.5.2" tag v1.5.2)"
+  if grep -q '^version=1\.5\.2$' <<<"$out" && grep -q '^publish=true$' <<<"$out"; then
+    ok "test_tag_push_uses_the_tag_and_publishes"
+  else
+    bad "test_tag_push_uses_the_tag_and_publishes" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_manual_dispatch_builds_without_publishing() {
+  # Given an explicit version on a manual run, Then it builds that version but
+  # does not cut a release -- a dry run must never mint a tag.
+  local out
+  out="$(nv v0.2.0 "" branch main 9.9.9)"
+  if grep -q '^version=9\.9\.9$' <<<"$out" && grep -q '^publish=false$' <<<"$out"; then
+    ok "test_manual_dispatch_builds_without_publishing"
+  else
+    bad "test_manual_dispatch_builds_without_publishing" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_other_branches_build_a_bare_version_without_publishing() {
+  # Given a push on some other branch, Then it builds but never releases -- and
+  # the version is bare (`0.2.0`, not `v0.2.0`), since it names the .dmg.
+  local out
+  out="$(nv v0.2.0 "" branch feature/x)"
+  if grep -q '^version=0\.2\.0$' <<<"$out" && grep -q '^publish=false$' <<<"$out"; then
+    ok "test_other_branches_build_a_bare_version_without_publishing"
+  else
+    bad "test_other_branches_build_a_bare_version_without_publishing" "$(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_next_version_rejects_an_unparseable_tag() {
+  # Given a latest tag that is not x.y.z, Then fail loudly rather than emitting
+  # a bogus version that would be published under a wrong number.
+  local rc=0
+  bash "$NEXT_VERSION" --latest-tag "vBANANA" --head-tags "" \
+    --ref-type branch --ref-name main >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    ok "test_next_version_rejects_an_unparseable_tag"
+  else
+    bad "test_next_version_rejects_an_unparseable_tag" "accepted a non-semver tag"
+  fi
+}
+
+test_release_yml_triggers_on_a_main_push() {
+  # Given the policy "every commit to main ships", Then release.yml runs on a
+  # push to main, not only on a tag.
+  local triggers
+  triggers="$([ -f "$WF" ] && awk '/^on:/,/^jobs:/' "$WF")"
+  if grep -q 'branches:' <<<"$triggers" && grep -q 'main' <<<"$triggers"; then
+    ok "test_release_yml_triggers_on_a_main_push"
+  else
+    bad "test_release_yml_triggers_on_a_main_push" "release.yml does not trigger on main"
+  fi
+}
+
+test_release_yml_delegates_version_choice_to_the_script() {
+  # The decision logic must live in the tested script, not inline in YAML where
+  # nothing can exercise it.
+  if grep -q 'scripts/next_version.sh' "$WF"; then
+    ok "test_release_yml_delegates_version_choice_to_the_script"
+  else
+    bad "test_release_yml_delegates_version_choice_to_the_script" "version logic is not in next_version.sh"
+  fi
+}
+
+test_publish_is_gated_on_the_publish_output() {
+  # Publishing must follow the script's decision, and name the tag explicitly --
+  # on a main push there is no tag ref for the action to infer one from.
+  local b
+  b="$(job_block build)"
+  if grep -q "steps.version.outputs.publish == 'true'" <<<"$b" && grep -q 'tag_name:' <<<"$b"; then
+    ok "test_publish_is_gated_on_the_publish_output"
+  else
+    bad "test_publish_is_gated_on_the_publish_output" "publish step is not gated on the publish output"
+  fi
+}
+
 test_make_dmg_builds_and_packages() {
   # Given `make dmg`, Then it builds the .app and packages the .dmg.
   local out
@@ -375,6 +509,16 @@ test_dry_run_bundle_carries_the_requested_version_and_utis
 test_dry_run_bundle_ships_the_localization_catalog
 test_build_app_requires_the_resource_bundle
 test_app_does_not_depend_on_swiftpm_bundle_module
+test_main_push_bumps_the_patch_version
+test_main_push_with_no_tags_yet_starts_at_0_1_0
+test_already_tagged_head_does_not_publish_twice
+test_tag_push_uses_the_tag_and_publishes
+test_manual_dispatch_builds_without_publishing
+test_other_branches_build_a_bare_version_without_publishing
+test_next_version_rejects_an_unparseable_tag
+test_release_yml_triggers_on_a_main_push
+test_release_yml_delegates_version_choice_to_the_script
+test_publish_is_gated_on_the_publish_output
 test_make_dmg_builds_and_packages
 test_release_doc_warns_about_gatekeeper
 
