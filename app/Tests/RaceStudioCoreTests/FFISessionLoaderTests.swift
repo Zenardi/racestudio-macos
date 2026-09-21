@@ -85,7 +85,13 @@ import RaceStudioFFIBindings
 
         let session = try await FFISessionLoader().load(url) { _ in }.session
 
-        #expect(session.channels.count == (try GoldenSession.channelCount(Self.fixtureName)))
+        // The listing is the CHS channels plus the GPS ones (the `.xrk` keeps GPS
+        // in its own stream, but they are channels to plot like any other), so
+        // both halves of the golden are checked.
+        let expectedChannels = try GoldenSession.channelCount(Self.fixtureName)
+            + GoldenSession.gpsChannelCount(Self.fixtureName)
+        #expect(session.channels.count == expectedChannels)
+        #expect(session.channels.contains { $0.name.hasPrefix("GPS") }, "GPS channels must be listed")
         #expect(session.laps.count == (try GoldenSession.lapCount(Self.fixtureName)))
         #expect(!session.metadata.driver.isEmpty)
     }
@@ -97,7 +103,8 @@ import RaceStudioFFIBindings
         await store.load(url: url)
 
         let viewModel = try #require(store.viewModel)
-        #expect(viewModel.channels.count == (try GoldenSession.channelCount(Self.fixtureName)))
+        #expect(viewModel.channels.count == (try GoldenSession.channelCount(Self.fixtureName))
+            + GoldenSession.gpsChannelCount(Self.fixtureName))
     }
 }
 #endif

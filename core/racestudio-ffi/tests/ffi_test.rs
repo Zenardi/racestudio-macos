@@ -53,8 +53,16 @@ fn test_open_session_returns_handle() {
         "SESSION DRIVER",
         "metadata driver"
     );
+    // The listing is the CHS channels followed by the GPS ones, so it is sized
+    // from the decode rather than hardcoded.
+    let session = decode_session(path.to_string_lossy().into_owned()).expect("decode session");
+    let gps_count = session.gps().map_or(0, |g| g.channels().len());
     let channels = handle.channels();
-    assert_eq!(channels.len(), 1, "one channel");
+    assert_eq!(
+        channels.len(),
+        1 + gps_count,
+        "one CHS channel, plus any GPS"
+    );
     assert_eq!(channels[0].name, "RPM", "channel name");
     assert_eq!(channels[0].sample_count, 6, "sample count in listing");
 }
@@ -145,17 +153,20 @@ fn test_window_out_of_range_is_bounded() {
     let none = handle.samples(0, 0, 0).expect("zero count");
     assert!(none.is_empty(), "zero count yields nothing");
 
-    // channel index out of range → typed error, never a panic.
+    // channel index out of range → typed error, never a panic. The reported
+    // count is the whole listing (CHS + GPS), which is what the caller indexes.
+    let session = decode_session(path.to_string_lossy().into_owned()).expect("decode session");
+    let total = u32::try_from(1 + session.gps().map_or(0, |g| g.channels().len())).expect("fits");
     let err = handle.samples(99, 0, 1).expect_err("bad channel index");
+    // `channel_count: total` inside `matches!` would *bind* a fresh `total`
+    // rather than compare against it, matching any count -- hence the guard.
     assert!(
         matches!(
             err,
-            FfiDecodeError::ChannelOutOfRange {
-                index: 99,
-                channel_count: 1
-            }
+            FfiDecodeError::ChannelOutOfRange { index: 99, channel_count }
+                if channel_count == total
         ),
-        "channel out of range, got {err:?}"
+        "channel out of range (expected count {total}), got {err:?}"
     );
 }
 
@@ -456,5 +467,126 @@ fn test_open_session_maps_an_unreadable_csv_to_an_io_error() {
     assert!(
         matches!(result, Err(FfiDecodeError::Io { .. })),
         "got {result:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// GPS channels in the channel listing
+// ---------------------------------------------------------------------------
+//
+// The decoder keeps GPS in its own `GpsData` (the `<hGPS` records are not `CHS`
+// channels), and the FFI only ever surfaced it as a track polyline. So an app
+// driving `channels()` saw the CHS channels and nothing else -- on the session
+// that prompted this, 15 where the same data exported to CSV lists 26. The
+// missing 11 were all GPS. `channel_samples` already resolves GPS *by name*, so
+// exposing them in the listing makes the index-based path agree with it.
+
+#[test]
+fn test_channel_listing_includes_gps_channels() {
+    let Some(path) = xrk_or_skip(SAMPLE) else {
+        return;
+    };
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("open real");
+    let session = decode_session(path.to_string_lossy().into_owned()).expect("decode real");
+
+    let listed: Vec<String> = handle.channels().iter().map(|c| c.name.clone()).collect();
+    let gps_count = session.gps().map_or(0, |g| g.channels().len());
+
+    assert!(gps_count > 0, "the sample must carry GPS to exercise this");
+    assert_eq!(
+        listed.len(),
+        session.channels().len() + gps_count,
+        "listing must be CHS channels followed by GPS channels"
+    );
+    assert!(
+        listed.iter().any(|n| n == "GPS Latitude"),
+        "GPS Latitude must be listed; got {listed:?}"
+    );
+}
+
+#[test]
+fn test_gps_channels_are_appended_so_chs_indices_are_stable() {
+    // Appending matters: an index is a stable handle for a plotted channel, and
+    // interleaving GPS would silently repoint every workspace saved before this.
+    let Some(path) = xrk_or_skip(SAMPLE) else {
+        return;
+    };
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("open real");
+    let session = decode_session(path.to_string_lossy().into_owned()).expect("decode real");
+
+    for (index, channel) in session.channels().iter().enumerate() {
+        assert_eq!(
+            handle.channels()[index].name,
+            channel.name(),
+            "CHS channel {index} moved"
+        );
+    }
+}
+
+#[test]
+fn test_samples_of_a_gps_channel_are_readable_by_index() {
+    // The listing would be a lie if the index it implies could not be read.
+    let Some(path) = xrk_or_skip(SAMPLE) else {
+        return;
+    };
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("open real");
+    let session = decode_session(path.to_string_lossy().into_owned()).expect("decode real");
+    let gps = session.gps().expect("sample carries GPS");
+
+    let first_gps_index = u32::try_from(session.channels().len()).expect("fits");
+    let expected = gps.channels()[0].samples();
+    let got = handle
+        .samples(first_gps_index, 0, 8)
+        .expect("GPS channel must be readable by index");
+
+    assert_eq!(
+        handle.channels()[first_gps_index as usize].name,
+        gps.channels()[0].name()
+    );
+    assert!(!got.is_empty(), "a GPS channel must yield samples");
+    for (index, sample) in got.iter().enumerate() {
+        assert_eq!(sample.timecode, expected[index].0);
+        assert_eq!(sample.value, expected[index].1);
+    }
+}
+
+#[test]
+fn test_out_of_range_index_reports_the_combined_channel_count() {
+    // The error must describe the list the caller was given, GPS included --
+    // otherwise a valid GPS index looks out of range.
+    let Some(path) = xrk_or_skip(SAMPLE) else {
+        return;
+    };
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("open real");
+    let total = u32::try_from(handle.channels().len()).expect("fits");
+
+    let error = handle
+        .samples(total, 0, 1)
+        .expect_err("past the end must error");
+
+    assert!(
+        matches!(
+            error,
+            FfiDecodeError::ChannelOutOfRange { index, channel_count }
+                if index == total && channel_count == total
+        ),
+        "got {error:?}"
+    );
+}
+
+#[test]
+fn test_a_session_without_gps_lists_only_chs_channels() {
+    // The merge must not invent channels for a GPS-less session.
+    // A CSV import has no GPS stream at all, so it isolates the no-GPS path.
+    let path = write_temp("no-gps-listing.csv", AIM_CSV);
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("import csv");
+    let listed = handle.channels().len();
+    let named: Vec<String> = handle.channels().iter().map(|c| c.name.clone()).collect();
+    let _ = std::fs::remove_file(&path);
+
+    assert!(listed > 0, "the CSV must yield channels");
+    assert!(
+        !named.iter().any(|n| n == "GPS Latitude"),
+        "no GPS stream means no GPS channels invented: {named:?}"
     );
 }

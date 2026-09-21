@@ -27,7 +27,7 @@ use racestudio_analysis::{
     AnalysisError as CoreAnalysisError, Gate as CoreGate, Lap, LatLon as CoreLatLon, Stats,
     Window as FftWindow, MATCH_TOLERANCE_M,
 };
-use racestudio_decode::{decode_session, DecodeError, Session};
+use racestudio_decode::{decode_session, DecodeError, GpsData, Session};
 use racestudio_device::{
     ap_mode_fallback as core_ap_mode_fallback,
     build_session_list_request as core_build_session_list_request,
@@ -45,6 +45,11 @@ uniffi::setup_scaffolding!();
 /// axis — the same channel the analysis crate's `distance_axis` uses for the
 /// distance-domain accessors (issues 3.1 / 8.2).
 const SPEED_CHANNEL: &str = "GPS Speed";
+
+/// Display precision for a GPS channel. `CHS` channels carry their own from the
+/// definition; the GPS stream has none, and 3 covers degrees of latitude to
+/// roughly a metre without printing noise on speed or accuracy.
+const GPS_CHANNEL_DECIMALS: u8 = 3;
 
 /// The RaceStudio Rust core version, exported across the UniFFI boundary.
 ///
@@ -572,13 +577,26 @@ impl SessionHandle {
         count: u32,
     ) -> Result<&[(f64, f64)], FfiDecodeError> {
         let channels = self.session.channels();
-        let channel = channels.get(channel_index as usize).ok_or_else(|| {
-            FfiDecodeError::ChannelOutOfRange {
-                index: channel_index,
-                channel_count: u32::try_from(channels.len()).unwrap_or(u32::MAX),
-            }
-        })?;
-        Ok(window(channel.samples(), start, count))
+        let gps = self
+            .session
+            .gps()
+            .map(GpsData::channels)
+            .unwrap_or_default();
+        let total = channels.len() + gps.len();
+        let index = channel_index as usize;
+        // Indices past the CHS channels address the GPS channels appended by
+        // `channels()`; the two listings must stay in lock-step.
+        let samples = if index < channels.len() {
+            channels[index].samples()
+        } else {
+            gps.get(index - channels.len())
+                .ok_or(FfiDecodeError::ChannelOutOfRange {
+                    index: channel_index,
+                    channel_count: u32::try_from(total).unwrap_or(u32::MAX),
+                })?
+                .samples()
+        };
+        Ok(window(samples, start, count))
     }
 
     /// The cumulative track distance (m) at each of `timecodes`, by interpolating
@@ -635,17 +653,32 @@ impl SessionHandle {
     /// [`Self::samples`] to read a channel's sample window.
     #[must_use]
     pub fn channels(&self) -> Vec<ChannelInfo> {
-        self.session
-            .channels()
+        let chs = self.session.channels().iter().map(|c| ChannelInfo {
+            name: c.name().to_string(),
+            unit: c.unit().to_string(),
+            sample_rate_hz: c.sample_rate_hz(),
+            decimals: c.decimals(),
+            sample_count: u32::try_from(c.samples().len()).unwrap_or(u32::MAX),
+        });
+        // GPS lives in its own stream (`<hGPS` records are not `CHS` channels),
+        // but to a user "GPS Speed" is just another channel to plot -- and
+        // `channel_samples` already resolves it by name. Appending keeps every
+        // existing CHS index stable, so a workspace saved earlier still points
+        // at the channel it was plotting.
+        let gps = self
+            .session
+            .gps()
+            .map(GpsData::channels)
+            .unwrap_or_default()
             .iter()
             .map(|c| ChannelInfo {
                 name: c.name().to_string(),
                 unit: c.unit().to_string(),
-                sample_rate_hz: c.sample_rate_hz(),
-                decimals: c.decimals(),
+                sample_rate_hz: average_rate_hz(c.samples()),
+                decimals: GPS_CHANNEL_DECIMALS,
                 sample_count: u32::try_from(c.samples().len()).unwrap_or(u32::MAX),
-            })
-            .collect()
+            });
+        chs.chain(gps).collect()
     }
 
     /// The lap timing as a listing.
