@@ -438,7 +438,10 @@ fn test_open_session_still_rejects_a_non_csv_non_xrk_file() {
     let result = open_session(path.to_string_lossy().into_owned());
     let _ = std::fs::remove_file(&path);
 
-    assert!(matches!(result, Err(FfiDecodeError::BadMagic)), "got {result:?}");
+    assert!(
+        matches!(result, Err(FfiDecodeError::BadMagic)),
+        "got {result:?}"
+    );
 }
 
 #[test]

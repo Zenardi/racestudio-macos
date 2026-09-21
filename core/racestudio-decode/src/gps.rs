@@ -24,7 +24,9 @@
 
 use std::f64::consts::PI;
 
-use crate::container::{le_i32, le_u16, le_u32, read_header, resync_past_data, tokstr, Container, MAGIC};
+use crate::container::{
+    le_i32, le_u16, le_u32, read_header, resync_past_data, tokstr, Container, MAGIC,
+};
 use crate::error::DecodeError;
 
 /// Bytes per u-blox NAV-SOL record.

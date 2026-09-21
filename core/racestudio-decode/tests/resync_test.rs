@@ -127,10 +127,7 @@ fn test_undefined_channel_does_not_truncate_the_defined_channel() {
     let session = decode_session(path.to_string_lossy().into_owned()).expect("decode");
     let _ = std::fs::remove_file(&path);
 
-    let channel = session
-        .channels()
-        .first()
-        .expect("channel 0 must decode");
+    let channel = session.channels().first().expect("channel 0 must decode");
     assert_eq!(
         channel.samples().len(),
         2,

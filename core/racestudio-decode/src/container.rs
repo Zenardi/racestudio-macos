@@ -222,8 +222,7 @@ fn starts_message(bytes: &[u8], at: usize) -> bool {
     if bytes.get(at..at + 2) == Some(MAGIC.as_slice()) {
         return true;
     }
-    bytes.get(at) == Some(&b'(')
-        && matches!(bytes.get(at + 1), Some(b'S' | b'M' | b'G' | b'c'))
+    bytes.get(at) == Some(&b'(') && matches!(bytes.get(at + 1), Some(b'S' | b'M' | b'G' | b'c'))
 }
 
 /// Accumulates parse state across the (recursive) message walk.
