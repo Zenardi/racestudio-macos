@@ -57,6 +57,13 @@ enum GoldenSession {
         golden.channels.filter { $0.sampleRateHz != nil && !gpsNames.contains($0.name) }
     }
 
+    /// How many GPS channels the golden lists. The loader's channel listing is
+    /// the CHS channels followed by these, so a test asserting the whole listing
+    /// needs both halves of the oracle.
+    static func gpsChannelCount(_ name: String) -> Int {
+        gpsChannelNames(name).count
+    }
+
     private static func gpsChannelNames(_ name: String) -> Set<String> {
         guard let gps: GpsGolden = try? FixtureLoader.golden(name, aspect: "gps") else { return [] }
         return Set(gps.channels.map(\.name))
