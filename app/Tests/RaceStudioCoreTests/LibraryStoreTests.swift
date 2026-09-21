@@ -327,19 +327,42 @@ import Foundation
         #expect(url.deletingLastPathComponent().lastPathComponent == "RaceStudio")
     }
 
-    // MARK: - Decoder-generation invalidation
+}
 
-    /// A library written by a superseded decoder holds summaries that are both
-    /// wrong and un-updatable: the row id hashes the decoded content, so a
-    /// re-import lands beside the stale row instead of replacing it. Loading one
-    /// must discard those summaries.
+/// Tests for ``SessionIndex/decoderGeneration`` — the stamp that lets a library
+/// written by a superseded decoder be discarded instead of shown forever.
+///
+/// A summary caches decoded output *and* is keyed by a hash of it, so improving
+/// the decoder makes every stored row both wrong and un-updatable: re-importing
+/// the same file hashes differently and lands beside the stale row.
+@Suite struct LibraryStoreGenerationTests {
+
+    private func tempURL(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-\(UUID().uuidString).json")
+    }
+
+    /// A gen-1 library on disk: one summary the old decoder recorded as lapless.
+    private func writeStaleIndex(to url: URL) throws {
+        let document: [String: Any] = [
+            "decoderGeneration": 1,
+            "collections": [],
+            "summaries": [[
+                "id": "abc",
+                "logger": "", "driver": "", "championship": "", "vehicle": "", "comment": "",
+                "venue": "S.MarinoK",
+                "date": 811_503_430,
+                "lapCount": 0,
+                "sourceURL": "file:///tmp/stint1.xrk",
+                "importedAt": 811_645_953
+            ]]
+        ]
+        try JSONSerialization.data(withJSONObject: document).write(to: url)
+    }
+
     @Test func test_load_discards_summaries_from_a_superseded_decoder() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("stale-\(UUID().uuidString).json")
-        let stale = #"""
-        {"summaries":[{"id":"abc","logger":"","driver":"","championship":"","venue":"S.MarinoK","date":811503430,"vehicle":"","comment":"","lapCount":0,"sourceURL":"file:///tmp/stint1.xrk","importedAt":811645953}],"collections":[],"decoderGeneration":1}
-        """#
-        try Data(stale.utf8).write(to: url)
+        let url = tempURL("stale")
+        try writeStaleIndex(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
         var logged: [LibraryError] = []
@@ -349,25 +372,20 @@ import Foundation
         #expect(logged.contains(.staleIndex(found: 1, expected: SessionIndex.decoderGeneration)))
     }
 
-    /// A library at the current generation is loaded untouched.
     @Test func test_load_keeps_summaries_at_the_current_generation() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("current-\(UUID().uuidString).json")
+        let url = tempURL("current")
         let index = SessionIndex()
         _ = index.add(SessionFixture.make(), sourceURL: URL(fileURLWithPath: "/tmp/a.xrk"))
         try LibraryStore().save(index, to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let reloaded = LibraryStore().load(from: url)
-
-        #expect(reloaded.summaries.count == 1)
+        #expect(LibraryStore().load(from: url).summaries.count == 1)
     }
 
-    /// The stamp is written on save, so a library round-trips at the current
-    /// generation rather than being discarded on the next launch.
+    /// The stamp is written on save, so a library round-trips rather than being
+    /// discarded on the next launch.
     @Test func test_saved_index_is_stamped_with_the_current_generation() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("stamp-\(UUID().uuidString).json")
+        let url = tempURL("stamp")
         try LibraryStore().save(SessionIndex(), to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
