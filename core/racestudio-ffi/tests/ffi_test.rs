@@ -440,3 +440,18 @@ fn test_open_session_still_rejects_a_non_csv_non_xrk_file() {
 
     assert!(matches!(result, Err(FfiDecodeError::BadMagic)), "got {result:?}");
 }
+
+#[test]
+fn test_open_session_maps_an_unreadable_csv_to_an_io_error() {
+    // Given a .csv path that does not exist, Then the failure is reported as I/O
+    // -- distinct from a parse failure, so the UI can tell "gone" from "corrupt".
+    let missing = std::env::temp_dir().join("rs-ffi-definitely-absent.csv");
+    let _ = std::fs::remove_file(&missing);
+
+    let result = open_session(missing.to_string_lossy().into_owned());
+
+    assert!(
+        matches!(result, Err(FfiDecodeError::Io { .. })),
+        "got {result:?}"
+    );
+}

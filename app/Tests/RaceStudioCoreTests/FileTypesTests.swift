@@ -48,6 +48,19 @@ import UniformTypeIdentifiers
         #expect(SupportedFileType(pathExtension: "") == nil)
     }
 
+    /// Each case exposes the uniform type the open panel and document scene use,
+    /// so those two lists cannot drift from this enum.
+    @Test func test_each_case_exposes_its_uniform_type() {
+        #expect(SupportedFileType.xrk.contentType == .xrk)
+        #expect(SupportedFileType.xrz.contentType == .xrz)
+        #expect(SupportedFileType.csv.contentType == .commaSeparatedText)
+    }
+
+    @Test func test_all_content_types_covers_every_case_in_order() {
+        #expect(SupportedFileType.allContentTypes == SupportedFileType.allCases.map(\.contentType))
+        #expect(SupportedFileType.allContentTypes.count == SupportedFileType.allCases.count)
+    }
+
     /// Every case maps to the extension it is named for, so `allCases` can drive
     /// the open panel's allowed types without drifting from this enum.
     @Test func test_every_case_round_trips_through_its_extension() {
