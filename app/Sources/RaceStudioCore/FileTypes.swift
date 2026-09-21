@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-/// The AiM telemetry file types RaceStudio can open.
+/// The telemetry file types RaceStudio can open.
 ///
 /// This is the testable classification logic the document-based shell (issue
 /// 2.1) and the later open/drag/recents flows (2.3) build on. It lives in
@@ -19,11 +19,16 @@ public enum SupportedFileType: String, CaseIterable, Equatable {
     /// Compressed AiM telemetry container (`.xrz`).
     case xrz
 
+    /// An AiM (or generic) CSV export. Not a container format — the Rust core's
+    /// CSV importer reconstructs a session from the `"AiM CSV File"` header
+    /// block, recovering laps from its `Beacon Markers` row.
+    case csv
+
     /// Classifies a bare path extension, case-insensitively.
     ///
     /// - Parameter pathExtension: An extension **without** the leading dot
-    ///   (e.g. `"xrk"`, `"XRK"`). The empty string and any unsupported
-    ///   extension yield `nil`.
+    ///   (e.g. `"xrk"`, `"XRK"`, `"csv"`). The empty string and any
+    ///   unsupported extension yield `nil`.
     public init?(pathExtension: String) {
         self.init(rawValue: pathExtension.lowercased())
     }
@@ -35,6 +40,22 @@ public enum SupportedFileType: String, CaseIterable, Equatable {
     public init?(url: URL) {
         self.init(pathExtension: url.pathExtension)
     }
+}
+
+public extension SupportedFileType {
+
+    /// The uniform type for this file type, for an `NSOpenPanel`'s
+    /// `allowedContentTypes` or a document scene's readable types.
+    var contentType: UTType {
+        switch self {
+        case .xrk: return .xrk
+        case .xrz: return .xrz
+        case .csv: return .commaSeparatedText
+        }
+    }
+
+    /// Every importable content type, so callers never hand-maintain the list.
+    static var allContentTypes: [UTType] { allCases.map(\.contentType) }
 }
 
 public extension UTType {

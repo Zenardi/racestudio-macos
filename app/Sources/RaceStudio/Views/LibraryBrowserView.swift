@@ -43,7 +43,7 @@ struct LibraryBrowserView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button(action: onImport) { Label("Import…", systemImage: "plus") }
-                    .help("Import a .xrk / .xrz telemetry file into the library")
+                    .help("Import a .xrk, .xrz, or .csv telemetry file into the library")
             }
         }
         .task(id: library.selectedID) { await library.loadPreview() }
@@ -198,7 +198,7 @@ struct LibraryBrowserView: View {
     private var emptyState: some View {
         BrandStateView(symbol: "tray",
                        title: "No sessions",
-                       message: "Import a .xrk / .xrz file to get started.",
+                       message: "Import a .xrk, .xrz, or .csv file to get started.",
                        actionLabel: "Import…", action: onImport)
     }
 

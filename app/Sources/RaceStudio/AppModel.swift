@@ -47,11 +47,11 @@ final class AppModel: ObservableObject {
         self.coordinator = ImportCoordinator(store: store, recents: recents)
     }
 
-    /// Present the standard Open panel and import the chosen `.xrk`/`.xrz` file(s)
-    /// into the library.
+    /// Present the standard Open panel and import the chosen telemetry file(s)
+    /// (`.xrk` / `.xrz` / `.csv`) into the library.
     func presentOpenPanel() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.xrk, .xrz]
+        panel.allowedContentTypes = SupportedFileType.allContentTypes
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         guard panel.runModal() == .OK else { return }
@@ -78,8 +78,11 @@ final class AppModel: ObservableObject {
             objectWillChange.send() // a stale entry was pruned; refresh the menu
             return
         }
-        defer { recents.endAccess(resolved) }
-        Task { await store.load(url: resolved) }
+        Task {
+            // As in `openFromLibrary`, access must outlive the asynchronous load.
+            defer { recents.endAccess(resolved) }
+            await store.load(url: resolved)
+        }
     }
 
     /// Import `urls` into the library: decode each, add it (dedup by content id),
@@ -107,8 +110,35 @@ final class AppModel: ObservableObject {
 
     /// Open a library session for full analysis; the shared store transitions the
     /// main window from the browser to the analysis view.
+    ///
+    /// The URL is re-opened through its security-scoped bookmark. In the sandbox
+    /// the plain `sourceURL` is unreadable in any later launch — the Powerbox
+    /// grant from the import does not survive the process — so loading it
+    /// directly failed for every session the user had imported earlier. The file
+    /// still *stat*s (`isAvailable` stays true), which is why the row looked
+    /// openable and simply did nothing.
     func openFromLibrary(_ summary: SessionSummary) {
-        Task { await store.load(url: summary.sourceURL) }
+        guard let resolved = try? recents.resolve(summary.sourceURL) else {
+            presentUnreadable(summary.sourceURL)
+            return
+        }
+        Task {
+            // Access must outlive the load, so it is released here rather than
+            // when this method returns.
+            defer { recents.endAccess(resolved) }
+            await store.load(url: resolved)
+        }
+    }
+
+    /// Report a library entry the app can no longer read — moved, deleted, or
+    /// imported before its bookmark could be stored.
+    private func presentUnreadable(_ url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Can\u{2019}t open \u{201C}\(url.lastPathComponent)\u{201D}"
+        alert.informativeText = "RaceStudio no longer has permission to read this file. "
+            + "It may have been moved, renamed, or deleted.\n\nRe-import it with File \u{25B8} Open."
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     /// Surface files that couldn't be decoded during import rather than dropping

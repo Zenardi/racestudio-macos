@@ -50,7 +50,7 @@ struct ContentView: View {
         case .idle, .failed:
             BrandStateView(symbol: "square.and.arrow.down",
                            title: "Open a session",
-                           message: "Drop a .xrk or .xrz file here, or use File ▸ Open.")
+                           message: "Drop a .xrk, .xrz, or .csv file here, or use File ▸ Open.")
         }
     }
 

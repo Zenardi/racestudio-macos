@@ -22,23 +22,35 @@ import Foundation
 
     // MARK: - accept(urls:)
 
-    @MainActor @Test func test_accept_filters_non_xrk_urls() {
+    @MainActor @Test func test_accept_filters_unsupported_urls() {
         let coordinator = makeCoordinator()
 
         let accepted = coordinator.accept(urls: [
             url("/data/a.xrk"), url("/data/notes.txt"),
-            url("/data/b.xrz"), url("/data/sheet.csv")
+            url("/data/b.xrz"), url("/data/report.pdf")
         ])
 
         #expect(accepted.map(\.lastPathComponent) == ["a.xrk", "b.xrz"])
     }
 
+    /// A `.csv` export is a first-class import source, not a stray file to drop:
+    /// the Rust core reconstructs a session from an AiM CSV.
+    @MainActor @Test func test_accept_takes_csv_exports() {
+        let coordinator = makeCoordinator()
+
+        let accepted = coordinator.accept(urls: [url("/data/stint1.csv"), url("/data/notes.txt")])
+
+        #expect(accepted.map(\.lastPathComponent) == ["stint1.csv"])
+    }
+
     @MainActor @Test func test_accept_is_case_insensitive() {
         let coordinator = makeCoordinator()
 
-        let accepted = coordinator.accept(urls: [url("/data/A.XRK"), url("/data/B.Xrz")])
+        let accepted = coordinator.accept(urls: [
+            url("/data/A.XRK"), url("/data/B.Xrz"), url("/data/C.CSV")
+        ])
 
-        #expect(accepted.map(\.lastPathComponent) == ["A.XRK", "B.Xrz"])
+        #expect(accepted.map(\.lastPathComponent) == ["A.XRK", "B.Xrz", "C.CSV"])
     }
 
     @MainActor @Test func test_accept_dedupes_and_preserves_order() {

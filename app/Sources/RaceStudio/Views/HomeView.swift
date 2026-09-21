@@ -102,7 +102,7 @@ struct HomeView: View {
     private var firstRun: some View {
         BrandStateView(symbol: "tray",
                        title: "Your library is empty",
-                       message: "Import a .xrk / .xrz telemetry file to get started — "
+                       message: "Import a .xrk, .xrz, or .csv telemetry file to get started — "
                               + "then open it to explore laps, channels, and the racing line.",
                        actionLabel: "Import a session…", action: onImport)
         .frame(minHeight: 200)

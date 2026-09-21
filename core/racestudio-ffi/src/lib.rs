@@ -1017,22 +1017,57 @@ fn average_rate_hz(samples: &[(f64, f64)]) -> f64 {
     1000.0 * (samples.len() as f64 - 1.0) / span_ms
 }
 
-/// Open and decode the `.xrk` file at `path` into an opaque [`SessionHandle`].
+/// Open the telemetry file at `path` into an opaque [`SessionHandle`].
 ///
-/// The whole session (metadata + channels + GPS + laps) is decoded up front via
-/// [`decode_session`]; the returned handle is `Arc`-backed and immutable.
+/// The whole session (metadata + channels + GPS + laps) is decoded up front; the
+/// returned handle is `Arc`-backed and immutable.
+///
+/// Two input formats are accepted, chosen by the path's extension so the app has
+/// a single "open whatever the user picked" entry point:
+///
+/// - **`.csv`** (case-insensitive) — an AiM `"AiM CSV File"` export or a generic
+///   name/unit/data CSV, parsed by [`racestudio_io::read_csv`]. `Beacon Markers`
+///   in an AiM header are recovered as laps.
+/// - **anything else** — the binary `.xrk` decoder, [`decode_session`].
 ///
 /// # Errors
-/// An [`FfiDecodeError`] mapped from the decode failure — I/O, bad magic, or a
-/// truncated/malformed stream. Never panics or traps.
+/// An [`FfiDecodeError`] mapped from the failure — I/O, bad magic, or a
+/// truncated/malformed stream; a CSV parse failure maps onto
+/// [`FfiDecodeError::Io`] (unreadable) or [`FfiDecodeError::Other`] carrying the
+/// typed importer message. Never panics or traps.
 #[uniffi::export]
 pub fn open_session(path: String) -> Result<Arc<SessionHandle>, FfiDecodeError> {
-    let session = decode_session(path)?;
+    let session = if has_csv_extension(&path) {
+        import_csv_session(&path)?
+    } else {
+        decode_session(path)?
+    };
     Ok(Arc::new(SessionHandle {
         session,
         segmented_laps: OnceLock::new(),
         distance_axis: OnceLock::new(),
     }))
+}
+
+/// Whether `path` ends in a `.csv` extension, ignoring case.
+fn has_csv_extension(path: &str) -> bool {
+    std::path::Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("csv"))
+}
+
+/// Read and parse a CSV export into a [`Session`](racestudio_decode::Session).
+///
+/// The importer takes a reader, so an unreadable path is reported as
+/// [`FfiDecodeError::Io`] before parsing begins; every parse failure is a typed
+/// `ImportError` rendered into [`FfiDecodeError::Other`].
+fn import_csv_session(path: &str) -> Result<racestudio_decode::Session, FfiDecodeError> {
+    let file = std::fs::File::open(path).map_err(|err| FfiDecodeError::Io {
+        message: err.to_string(),
+    })?;
+    racestudio_io::read_csv(file).map_err(|err| FfiDecodeError::Other {
+        message: err.to_string(),
+    })
 }
 
 /// Parse-validate a math-channel expression against the M2 grammar (issue 5.4).

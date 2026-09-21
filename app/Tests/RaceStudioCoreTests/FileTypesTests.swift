@@ -31,12 +31,43 @@ import UniformTypeIdentifiers
         #expect(SupportedFileType(pathExtension: "XRZ") == .xrz)
     }
 
-    /// Anything that is not an AiM telemetry extension — including the empty
-    /// string — yields `nil` rather than a bogus type.
+    /// A `.csv` export is importable too: the Rust core parses the AiM
+    /// "AiM CSV File" block (and a generic name/unit/data CSV) back into a
+    /// session, so the app accepts it wherever it accepts a `.xrk`.
+    @Test func test_csv_extension_recognized() {
+        #expect(SupportedFileType(pathExtension: "csv") == .csv)
+        #expect(SupportedFileType(pathExtension: "CSV") == .csv)
+        #expect(SupportedFileType(url: URL(fileURLWithPath: "/data/stint1.CSV")) == .csv)
+    }
+
+    /// Anything that is not an importable telemetry extension — including the
+    /// empty string — yields `nil` rather than a bogus type.
     @Test func test_unsupported_extension_returns_nil() {
-        #expect(SupportedFileType(pathExtension: "csv") == nil)
         #expect(SupportedFileType(pathExtension: "txt") == nil)
+        #expect(SupportedFileType(pathExtension: "xls") == nil)
         #expect(SupportedFileType(pathExtension: "") == nil)
+    }
+
+    /// Each case exposes the uniform type the open panel and document scene use,
+    /// so those two lists cannot drift from this enum.
+    @Test func test_each_case_exposes_its_uniform_type() {
+        #expect(SupportedFileType.xrk.contentType == .xrk)
+        #expect(SupportedFileType.xrz.contentType == .xrz)
+        #expect(SupportedFileType.csv.contentType == .commaSeparatedText)
+    }
+
+    @Test func test_all_content_types_covers_every_case_in_order() {
+        #expect(SupportedFileType.allContentTypes == SupportedFileType.allCases.map(\.contentType))
+        #expect(SupportedFileType.allContentTypes.count == SupportedFileType.allCases.count)
+    }
+
+    /// Every case maps to the extension it is named for, so `allCases` can drive
+    /// the open panel's allowed types without drifting from this enum.
+    @Test func test_every_case_round_trips_through_its_extension() {
+        for type in SupportedFileType.allCases {
+            #expect(SupportedFileType(pathExtension: type.rawValue) == type)
+        }
+        #expect(SupportedFileType.allCases.count == 3)
     }
 
     // MARK: - SupportedFileType(url:)

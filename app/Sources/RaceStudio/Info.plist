@@ -45,6 +45,20 @@
 				<string>com.aim-sportline.xrz</string>
 			</array>
 		</dict>
+		<!-- CSV exports (AiM "AiM CSV File" or generic) are importable too, but
+		     the app is only an Alternate handler: .csv belongs to spreadsheets. -->
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Telemetry CSV</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.comma-separated-values-text</string>
+			</array>
+		</dict>
 	</array>
 
 	<!-- Imported UTI declarations for AiM's telemetry containers. The

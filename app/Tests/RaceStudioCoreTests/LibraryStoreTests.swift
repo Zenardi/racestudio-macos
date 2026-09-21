@@ -326,4 +326,71 @@ import Foundation
         #expect(url.lastPathComponent == "library.json")
         #expect(url.deletingLastPathComponent().lastPathComponent == "RaceStudio")
     }
+
+}
+
+/// Tests for ``SessionIndex/decoderGeneration`` — the stamp that lets a library
+/// written by a superseded decoder be discarded instead of shown forever.
+///
+/// A summary caches decoded output *and* is keyed by a hash of it, so improving
+/// the decoder makes every stored row both wrong and un-updatable: re-importing
+/// the same file hashes differently and lands beside the stale row.
+@Suite struct LibraryStoreGenerationTests {
+
+    private func tempURL(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(name)-\(UUID().uuidString).json")
+    }
+
+    /// A gen-1 library on disk: one summary the old decoder recorded as lapless.
+    private func writeStaleIndex(to url: URL) throws {
+        let document: [String: Any] = [
+            "decoderGeneration": 1,
+            "collections": [],
+            "summaries": [[
+                "id": "abc",
+                "logger": "", "driver": "", "championship": "", "vehicle": "", "comment": "",
+                "venue": "S.MarinoK",
+                "date": 811_503_430,
+                "lapCount": 0,
+                "sourceURL": "file:///tmp/stint1.xrk",
+                "importedAt": 811_645_953
+            ]]
+        ]
+        try JSONSerialization.data(withJSONObject: document).write(to: url)
+    }
+
+    @Test func test_load_discards_summaries_from_a_superseded_decoder() throws {
+        let url = tempURL("stale")
+        try writeStaleIndex(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var logged: [LibraryError] = []
+        let index = LibraryStore(log: { logged.append($0) }).load(from: url)
+
+        #expect(index.summaries.isEmpty, "a superseded summary must not be shown")
+        #expect(logged.contains(.staleIndex(found: 1, expected: SessionIndex.decoderGeneration)))
+    }
+
+    @Test func test_load_keeps_summaries_at_the_current_generation() throws {
+        let url = tempURL("current")
+        let index = SessionIndex()
+        _ = index.add(SessionFixture.make(), sourceURL: URL(fileURLWithPath: "/tmp/a.xrk"))
+        try LibraryStore().save(index, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(LibraryStore().load(from: url).summaries.count == 1)
+    }
+
+    /// The stamp is written on save, so a library round-trips rather than being
+    /// discarded on the next launch.
+    @Test func test_saved_index_is_stamped_with_the_current_generation() throws {
+        let url = tempURL("stamp")
+        try LibraryStore().save(SessionIndex(), to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+
+        #expect(json?["decoderGeneration"] as? Int == SessionIndex.decoderGeneration)
+    }
 }

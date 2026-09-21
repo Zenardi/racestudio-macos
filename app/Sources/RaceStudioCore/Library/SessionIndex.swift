@@ -212,11 +212,33 @@ public final class SessionIndex: Codable, Equatable {
 
     // MARK: - Codable (summaries only; the clock is not persisted)
 
-    private enum CodingKeys: String, CodingKey { case summaries, collections }
+    /// Generation of the decoder whose output these summaries were derived from.
+    ///
+    /// A summary caches values produced by the decoder at import time — lap
+    /// count, channel listing, and the content hash that keys the row. When the
+    /// decoder changes what it extracts, every cached row is both **wrong** and
+    /// **un-updatable**: re-importing the same file hashes differently, so it
+    /// lands as a second row beside the stale one. Bump this whenever a decode
+    /// change alters summarised output, and ``LibraryStore/load(from:)`` drops
+    /// the superseded rows instead of showing them forever.
+    ///
+    /// - 1: initial (implicit — files written before this key existed).
+    /// - 2: data-message resynchronisation; files whose stream referenced a
+    ///   channel with no `CHS` definition previously summarised as 0 laps and
+    ///   0 channels.
+    public static let decoderGeneration = 2
+
+    /// The generation stamped on the decoded document, defaulting to `1` for a
+    /// library written before the key existed.
+    public private(set) var decoderGeneration = SessionIndex.decoderGeneration
+
+    private enum CodingKeys: String, CodingKey { case summaries, collections, decoderGeneration }
 
     public convenience init(from decoder: Decoder) throws {
         self.init()
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.decoderGeneration =
+            ((try? container.decodeIfPresent(Int.self, forKey: .decoderGeneration)) ?? nil) ?? 1
         let list = try container.decode([SessionSummary].self, forKey: .summaries)
         storage = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         // `collections` is optional AND lenient. A 5.3/8.14-era library (no such
@@ -236,6 +258,13 @@ public final class SessionIndex: Codable, Equatable {
         // Encode id-sorted for stable, diff-friendly on-disk output.
         try container.encode(storage.values.sorted { $0.id < $1.id }, forKey: .summaries)
         try container.encode(collectionStorage.values.sorted { $0.id < $1.id }, forKey: .collections)
+        try container.encode(SessionIndex.decoderGeneration, forKey: .decoderGeneration)
+    }
+
+    /// Drop every cached summary, keeping user-authored collections. Used when a
+    /// library was written by a superseded decoder (see ``decoderGeneration``).
+    func discardSummaries() {
+        storage.removeAll()
     }
 
     public static func == (lhs: SessionIndex, rhs: SessionIndex) -> Bool {

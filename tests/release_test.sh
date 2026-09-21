@@ -269,6 +269,55 @@ test_dry_run_bundle_carries_the_requested_version_and_utis() {
   fi
 }
 
+test_dry_run_bundle_ships_the_localization_catalog() {
+  # Given a packaged bundle, Then Localizable.xcstrings is inside
+  # Contents/Resources/RaceStudio_RaceStudioCore.bundle.
+  #
+  # Regression: v0.1.0 shipped without this bundle, so SwiftPM's Bundle.module
+  # accessor fatalError'd on the first localized string and the app died the
+  # moment a session was opened for analysis.
+  run_smoke_once
+  local catalog
+  catalog="$SMOKE_OUT/RaceStudio.app/Contents/Resources/RaceStudio_RaceStudioCore.bundle/Localizable.xcstrings"
+  if [ -f "$catalog" ] && grep -q 'sourceLanguage' "$catalog"; then
+    ok "test_dry_run_bundle_ships_the_localization_catalog"
+  else
+    bad "test_dry_run_bundle_ships_the_localization_catalog" "missing or invalid $catalog"
+  fi
+}
+
+test_build_app_requires_the_resource_bundle() {
+  # Given a build whose resource bundle is absent, Then build_app.sh fails loudly
+  # rather than emitting an .app that traps at runtime.
+  local work out rc=0
+  work="$(mktemp -d)"
+  printf 'int main(void) { return 0; }\n' > "$work/stub.c"
+  cc -arch arm64 -arch x86_64 -o "$work/RaceStudio" "$work/stub.c" 2>/dev/null
+  out="$(bash "$BUILD_APP" --version 0.0.0-nores --out "$work/out" \
+    --executable "$work/RaceStudio" --resource-bundle "$work/absent.bundle" 2>&1)" || rc=$?
+  rm -rf "$work"
+  if [ "$rc" -ne 0 ] && grep -qi 'resource bundle not found' <<<"$out"; then
+    ok "test_build_app_requires_the_resource_bundle"
+  else
+    bad "test_build_app_requires_the_resource_bundle" "rc=$rc out=$(head -3 <<<"$out" | tr '\n' ' ')"
+  fi
+}
+
+test_app_does_not_depend_on_swiftpm_bundle_module() {
+  # Given the shipped sources, Then no runtime code touches `Bundle.module`: its
+  # release accessor fatalErrors on a miss and bakes in the *build machine's*
+  # absolute path, neither of which survives packaging. ResourceBundle resolves
+  # the bundle totally instead. Tests may still use Bundle.module.
+  local hits
+  hits="$(grep -rn 'Bundle\.module\|from: \.module' "$ROOT/app/Sources" \
+    --include='*.swift' | grep -v '^\s*//' | grep -v '///' || true)"
+  if [ -z "$hits" ]; then
+    ok "test_app_does_not_depend_on_swiftpm_bundle_module"
+  else
+    bad "test_app_does_not_depend_on_swiftpm_bundle_module" "$(head -2 <<<"$hits" | tr '\n' ' ')"
+  fi
+}
+
 test_make_dmg_builds_and_packages() {
   # Given `make dmg`, Then it builds the .app and packages the .dmg.
   local out
@@ -323,6 +372,9 @@ test_dry_run_checksums_match_the_dmg
 test_dry_run_dmg_offers_drag_to_applications
 test_dry_run_bundle_is_universal_and_adhoc_signed
 test_dry_run_bundle_carries_the_requested_version_and_utis
+test_dry_run_bundle_ships_the_localization_catalog
+test_build_app_requires_the_resource_bundle
+test_app_does_not_depend_on_swiftpm_bundle_module
 test_make_dmg_builds_and_packages
 test_release_doc_warns_about_gatekeeper
 

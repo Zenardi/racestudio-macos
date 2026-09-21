@@ -28,6 +28,10 @@
 #   --executable  use this prebuilt binary instead of running `swift build`;
 #                 used by scripts/release_smoke.sh to exercise the packaging
 #                 path without a full Swift build
+#   --resource-bundle
+#                 the RaceStudio_RaceStudioCore.bundle to install (default: the
+#                 one `swift build` emits); paired with --executable so the smoke
+#                 test can exercise resource installation with a stub bundle
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,12 +44,15 @@ ICNS="$APP_DIR/AppIcon/AppIcon.icns"
 VERSION=""
 OUT="$ROOT/dist"
 EXECUTABLE=""
+RESOURCE_BUNDLE=""
+RESOURCE_BUNDLE_NAME="RaceStudio_RaceStudioCore.bundle"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --version) VERSION="${2:?--version needs a value}"; shift 2 ;;
     --out) OUT="${2:?--out needs a value}"; shift 2 ;;
     --executable) EXECUTABLE="${2:?--executable needs a value}"; shift 2 ;;
+    --resource-bundle) RESOURCE_BUNDLE="${2:?--resource-bundle needs a value}"; shift 2 ;;
     -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -92,6 +99,11 @@ else
 
   BIN="$(mktemp -d)/RaceStudio"
   lipo -create "$ARM_BIN" "$X86_BIN" -output "$BIN"
+
+  # SwiftPM drops the target's resources in a .bundle next to the binary. Both
+  # slices emit identical resources, so either copy will do.
+  [ -n "$RESOURCE_BUNDLE" ] \
+    || RESOURCE_BUNDLE="$(dirname "$ARM_BIN")/$RESOURCE_BUNDLE_NAME"
 fi
 
 echo "==> [2/5] assembling $(basename "$APP")"
@@ -101,6 +113,15 @@ cp "$BIN" "$APP/Contents/MacOS/RaceStudio"
 chmod +x "$APP/Contents/MacOS/RaceStudio"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp "$ICNS" "$APP/Contents/Resources/AppIcon.icns"
+
+# The localization catalog lives in SwiftPM's resource bundle. Shipping without
+# it is what crashed v0.1.0 (see ResourceBundle.swift), so this is a hard gate,
+# not a best-effort copy.
+if [ ! -d "$RESOURCE_BUNDLE" ]; then
+  echo "FAIL: resource bundle not found: ${RESOURCE_BUNDLE:-<unset>}" >&2
+  exit 1
+fi
+ditto "$RESOURCE_BUNDLE" "$APP/Contents/Resources/$RESOURCE_BUNDLE_NAME"
 
 echo "==> [3/5] Info.plist (version $VERSION, from the source plist)"
 cp "$SRC_PLIST" "$APP/Contents/Info.plist"
@@ -122,6 +143,9 @@ for arch in arm64 x86_64; do
     *) echo "FAIL: binary is missing the $arch slice (got: $ARCHS)" >&2; exit 1 ;;
   esac
 done
+
+CATALOG="$APP/Contents/Resources/$RESOURCE_BUNDLE_NAME/Localizable.xcstrings"
+[ -f "$CATALOG" ] || { echo "FAIL: $CATALOG missing from the bundle" >&2; exit 1; }
 
 echo "==> [5/5] ad-hoc signing (no Developer ID -- see docs/RELEASE.md)"
 codesign --force --sign - --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"

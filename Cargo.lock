@@ -643,6 +643,7 @@ dependencies = [
  "racestudio-analysis",
  "racestudio-decode",
  "racestudio-device",
+ "racestudio-io",
  "uniffi",
 ]
 

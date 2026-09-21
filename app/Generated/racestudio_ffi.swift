@@ -4566,14 +4566,24 @@ public func downloadSession(plan: DownloadPlan, source: ChunkSource, progress: D
 })
 }
 /**
- * Open and decode the `.xrk` file at `path` into an opaque [`SessionHandle`].
+ * Open the telemetry file at `path` into an opaque [`SessionHandle`].
  *
- * The whole session (metadata + channels + GPS + laps) is decoded up front via
- * [`decode_session`]; the returned handle is `Arc`-backed and immutable.
+ * The whole session (metadata + channels + GPS + laps) is decoded up front; the
+ * returned handle is `Arc`-backed and immutable.
+ *
+ * Two input formats are accepted, chosen by the path's extension so the app has
+ * a single "open whatever the user picked" entry point:
+ *
+ * - **`.csv`** (case-insensitive) — an AiM `"AiM CSV File"` export or a generic
+ * name/unit/data CSV, parsed by [`racestudio_io::read_csv`]. `Beacon Markers`
+ * in an AiM header are recovered as laps.
+ * - **anything else** — the binary `.xrk` decoder, [`decode_session`].
  *
  * # Errors
- * An [`FfiDecodeError`] mapped from the decode failure — I/O, bad magic, or a
- * truncated/malformed stream. Never panics or traps.
+ * An [`FfiDecodeError`] mapped from the failure — I/O, bad magic, or a
+ * truncated/malformed stream; a CSV parse failure maps onto
+ * [`FfiDecodeError::Io`] (unreadable) or [`FfiDecodeError::Other`] carrying the
+ * typed importer message. Never panics or traps.
  */
 public func openSession(path: String)throws  -> SessionHandle {
     return try  FfiConverterTypeSessionHandle.lift(try rustCallWithError(FfiConverterTypeFfiDecodeError.lift) {
@@ -4667,7 +4677,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_download_session() != 42953) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_func_open_session() != 3963) {
+    if (uniffi_racestudio_ffi_checksum_func_open_session() != 3684) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_parse_device_discovery() != 62004) {
