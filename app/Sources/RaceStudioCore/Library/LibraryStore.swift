@@ -7,6 +7,9 @@ public enum LibraryError: Error, Equatable {
     case corruptIndex
     /// Writing the index to disk failed.
     case ioFailure
+    /// The index was written by a superseded decoder, so its cached summaries
+    /// were discarded (see ``SessionIndex/decoderGeneration``).
+    case staleIndex(found: Int, expected: Int)
 }
 
 /// A structured filter over indexed sessions (issue 5.3, extended in 8.15). Each
@@ -142,6 +145,13 @@ public final class LibraryStore {
               let index = try? JSONDecoder().decode(SessionIndex.self, from: data) else {
             log(.corruptIndex)
             return SessionIndex()
+        }
+        // Summaries cached by a superseded decoder are stale *and* duplicate on
+        // re-import (their id hashes the decoded content), so they are dropped
+        // rather than shown; collections are user-authored and kept.
+        if index.decoderGeneration != SessionIndex.decoderGeneration {
+            log(.staleIndex(found: index.decoderGeneration, expected: SessionIndex.decoderGeneration))
+            index.discardSummaries()
         }
         index.refreshAvailability(fileManager: fileManager)
         return index

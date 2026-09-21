@@ -54,8 +54,17 @@ int main(void) { return 0; }
 C
 cc -arch arm64 -arch x86_64 -o "$WORK/RaceStudio" "$WORK/stub.c"
 
+# Stand in for the bundle `swift build` emits, carrying the *real* string catalog
+# so the smoke test proves the catalog reaches Contents/Resources -- the gap that
+# shipped v0.1.0 with a resource bundle it would fatalError without.
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+STUB_BUNDLE="$WORK/RaceStudio_RaceStudioCore.bundle"
+mkdir -p "$STUB_BUNDLE"
+cp "$ROOT/app/Sources/RaceStudioCore/Localization/Localizable.xcstrings" "$STUB_BUNDLE/"
+
 echo "==> [smoke 2/3] scripts/build_app.sh"
-bash "$SCRIPT_DIR/build_app.sh" --version "$VERSION" --out "$OUT" --executable "$WORK/RaceStudio"
+bash "$SCRIPT_DIR/build_app.sh" --version "$VERSION" --out "$OUT" \
+  --executable "$WORK/RaceStudio" --resource-bundle "$STUB_BUNDLE"
 
 echo "==> [smoke 3/3] scripts/package_dmg.sh"
 bash "$SCRIPT_DIR/package_dmg.sh" --version "$VERSION" --out "$OUT"

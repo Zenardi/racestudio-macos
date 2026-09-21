@@ -29,6 +29,9 @@ racestudio-decode = { path = "../racestudio-decode" }
 racestudio-analysis = { path = "../racestudio-analysis" }
 # Device discovery (M6, issue 6.3): typed Device + mDNS/AP-mode parsing.
 racestudio-device = { path = "../racestudio-device" }
+# CSV import (issue 5.2), so `open_session` accepts an AiM/generic CSV export
+# alongside a binary .xrk.
+racestudio-io = { path = "../racestudio-io" }
 
 # No [dev-dependencies]: the crate has `staticlib`/`cdylib` crate-types, and
 # adding any dev-dep makes cargo-llvm-cov instrument an extra, uncovered copy of

@@ -59,6 +59,7 @@ pub struct Container {
     channel_count: usize,
     has_gps: bool,
     lap_marker_count: usize,
+    unsized_messages: usize,
     /// The full file bytes, retained so the channel/GPS/lap decoders can walk
     /// the message stream without re-reading from disk. Shared (`Arc`) so
     /// cloning a `Container` stays cheap.
@@ -120,6 +121,14 @@ impl Container {
     pub fn lap_marker_count(&self) -> usize {
         self.lap_marker_count
     }
+
+    /// How many data messages were skipped because their channel had no `CHS`
+    /// definition (see [`resync_past_data`]). `0` for a fully-defined file; a
+    /// non-zero count means some samples in the stream could not be attributed.
+    #[must_use]
+    pub fn unsized_message_count(&self) -> usize {
+        self.unsized_messages
+    }
 }
 
 /// Open and parse the header of an AiM `.xrk` file at `path`.
@@ -177,9 +186,53 @@ pub(crate) fn read_header(bytes: &[u8], off: usize) -> Option<Header<'_>> {
     })
 }
 
+/// Longest span searched when resynchronising past an unsized data message.
+/// Real data messages are tens of bytes; this only bounds the pathological case.
+pub(crate) const RESYNC_WINDOW: usize = 4096;
+
+/// The offset just past a data message whose length cannot be computed, or
+/// `None` when no plausible terminator is in range.
+///
+/// A data message ends with `)`, so the terminator is the first `)` that is
+/// followed by something a message can actually start with. That test has to be
+/// strict: sample bytes routinely contain `0x29`, and accepting a lone `<` (or
+/// any `(`) resynchronises into the *middle* of a burst — on the file that
+/// prompted this, a `0x29 0x3c` inside a 10-sample `(M` payload stopped the walk
+/// at 16% of the stream. Requiring a full `<h` header magic or a `(` paired with
+/// a known message kind consumes the same files end to end.
+///
+/// Recovering at all keeps a single unknown channel from discarding the rest of
+/// the file: real MyChron exports carry samples for channels with no `CHS`
+/// definition, and while such a message cannot be *sized*, it can be *skipped*.
+pub(crate) fn resync_past_data(bytes: &[u8], off: usize) -> Option<usize> {
+    let limit = bytes.len().min(off.saturating_add(RESYNC_WINDOW));
+    let mut i = off.checked_add(2)?;
+    while i + 1 < limit {
+        if bytes[i] == b')' && starts_message(bytes, i + 1) {
+            return Some(i + 1);
+        }
+        i += 1;
+    }
+    None
+}
+
+/// Whether `at` looks like the start of a message: a `<h` header frame, or a
+/// data message whose kind byte is one the walkers know (`S`/`M`/`G`/`c`).
+fn starts_message(bytes: &[u8], at: usize) -> bool {
+    if bytes.get(at..at + 2) == Some(MAGIC.as_slice()) {
+        return true;
+    }
+    bytes.get(at) == Some(&b'(')
+        && matches!(bytes.get(at + 1), Some(b'S' | b'M' | b'G' | b'c'))
+}
+
 /// Accumulates parse state across the (recursive) message walk.
 #[derive(Default)]
 struct Walker {
+    /// Data messages skipped by ``resync_past_data`` because their channel had
+    /// no `CHS` definition. Surfaced so an undecodable region is observable
+    /// rather than silently dropped.
+    unsized_messages: usize,
     channel_sizes: HashMap<u16, usize>,
     group_sizes: HashMap<u16, usize>,
     chs_indices: HashSet<u16>,
@@ -209,7 +262,15 @@ impl Walker {
             } else if top && bytes[off] == b'(' {
                 match self.skip_data(bytes, off) {
                     Some(next) if next > off => off = next,
-                    _ => break,
+                    // Unknown channel/kind: skip this one message and carry on
+                    // rather than abandoning the rest of the stream.
+                    _ => match resync_past_data(bytes, off) {
+                        Some(next) if next > off => {
+                            self.unsized_messages += 1;
+                            off = next;
+                        }
+                        _ => break,
+                    },
                 }
             } else {
                 break;
@@ -314,6 +375,7 @@ impl Walker {
             channel_count: self.chs_indices.len(),
             has_gps: self.gps > 0,
             lap_marker_count: self.lap,
+            unsized_messages: self.unsized_messages,
             bytes,
             metadata: Metadata {
                 vehicle: self.vehicle,

@@ -24,7 +24,7 @@
 
 use std::f64::consts::PI;
 
-use crate::container::{le_i32, le_u16, le_u32, read_header, tokstr, Container, MAGIC};
+use crate::container::{le_i32, le_u16, le_u32, read_header, resync_past_data, tokstr, Container, MAGIC};
 use crate::error::DecodeError;
 
 /// Bytes per u-blox NAV-SOL record.
@@ -208,7 +208,12 @@ impl Gatherer {
             } else if top && bytes[off] == b'(' {
                 match self.skip_data(bytes, off) {
                     Some(next) if next > off => off = next,
-                    _ => break,
+                    // Skip an unsizable message instead of dropping the rest of
+                    // the stream (see `resync_past_data`).
+                    _ => match resync_past_data(bytes, off) {
+                        Some(next) if next > off => off = next,
+                        _ => break,
+                    },
                 }
             } else {
                 break;

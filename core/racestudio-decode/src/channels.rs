@@ -31,7 +31,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-use crate::container::{le_i32, le_u16, le_u32, nullterm, read_header, tokstr, Container, MAGIC};
+use crate::container::{
+    le_i32, le_u16, le_u32, nullterm, read_header, resync_past_data, tokstr, Container, MAGIC,
+};
 use crate::error::DecodeError;
 
 /// libxrk drops these virtual channels from its output; we match it.
@@ -372,7 +374,12 @@ impl Builder {
             } else if top && bytes[off] == b'(' {
                 match self.consume_data(bytes, off)? {
                     Some(next) if next > off => off = next,
-                    _ => break,
+                    // An undefined channel cannot be sized, but skipping it keeps
+                    // the samples of every *defined* channel that follows.
+                    _ => match resync_past_data(bytes, off) {
+                        Some(next) if next > off => off = next,
+                        _ => break,
+                    },
                 }
             } else {
                 break;

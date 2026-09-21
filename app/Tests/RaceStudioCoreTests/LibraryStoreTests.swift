@@ -326,4 +326,53 @@ import Foundation
         #expect(url.lastPathComponent == "library.json")
         #expect(url.deletingLastPathComponent().lastPathComponent == "RaceStudio")
     }
+
+    // MARK: - Decoder-generation invalidation
+
+    /// A library written by a superseded decoder holds summaries that are both
+    /// wrong and un-updatable: the row id hashes the decoded content, so a
+    /// re-import lands beside the stale row instead of replacing it. Loading one
+    /// must discard those summaries.
+    @Test func test_load_discards_summaries_from_a_superseded_decoder() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stale-\(UUID().uuidString).json")
+        let stale = #"""
+        {"summaries":[{"id":"abc","logger":"","driver":"","championship":"","venue":"S.MarinoK","date":811503430,"vehicle":"","comment":"","lapCount":0,"sourceURL":"file:///tmp/stint1.xrk","importedAt":811645953}],"collections":[],"decoderGeneration":1}
+        """#
+        try Data(stale.utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var logged: [LibraryError] = []
+        let index = LibraryStore(log: { logged.append($0) }).load(from: url)
+
+        #expect(index.summaries.isEmpty, "a superseded summary must not be shown")
+        #expect(logged.contains(.staleIndex(found: 1, expected: SessionIndex.decoderGeneration)))
+    }
+
+    /// A library at the current generation is loaded untouched.
+    @Test func test_load_keeps_summaries_at_the_current_generation() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("current-\(UUID().uuidString).json")
+        let index = SessionIndex()
+        _ = index.add(SessionFixture.make(), sourceURL: URL(fileURLWithPath: "/tmp/a.xrk"))
+        try LibraryStore().save(index, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let reloaded = LibraryStore().load(from: url)
+
+        #expect(reloaded.summaries.count == 1)
+    }
+
+    /// The stamp is written on save, so a library round-trips at the current
+    /// generation rather than being discarded on the next launch.
+    @Test func test_saved_index_is_stamped_with_the_current_generation() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stamp-\(UUID().uuidString).json")
+        try LibraryStore().save(SessionIndex(), to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+
+        #expect(json?["decoderGeneration"] as? Int == SessionIndex.decoderGeneration)
+    }
 }

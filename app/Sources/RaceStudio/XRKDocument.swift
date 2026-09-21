@@ -15,7 +15,7 @@ import RaceStudioCore
 /// / `fileWrapper` exist only to satisfy the protocol and simply echo the loaded
 /// bytes back — RaceStudio never rewrites a telemetry file.
 final class XRKDocument: ReferenceFileDocument {
-    static var readableContentTypes: [UTType] { [.xrk, .xrz] }
+    static var readableContentTypes: [UTType] { SupportedFileType.allContentTypes }
 
     let contents: DocumentContents
 

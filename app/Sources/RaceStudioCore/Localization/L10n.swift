@@ -111,7 +111,13 @@ public struct LocalizationCatalog: Sendable, Equatable {
 
     /// The catalog bundled with `RaceStudioCore`. Loaded once; degrades to
     /// ``empty`` on a packaging fault (which the tests would catch first).
-    public static let shared = loaded(from: .module)
+    ///
+    /// The bundle is resolved through ``ResourceBundle`` rather than SwiftPM's
+    /// synthesised `Bundle.module`: that accessor `fatalError`s when the bundle is
+    /// missing, which defeated the graceful fallback above and crashed v0.1.0 on
+    /// the first localized string. ``ResourceBundle/localization()`` returns `nil`
+    /// instead, so a packaging fault degrades to sentinel strings.
+    public static let shared = ResourceBundle.localization().map(loaded(from:)) ?? empty
 
     // MARK: - Codable mirror of the .xcstrings schema
 

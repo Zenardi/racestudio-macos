@@ -329,3 +329,114 @@ mod synth {
         file
     }
 }
+
+// ---------------------------------------------------------------------------
+// CSV import through `open_session` (user request: "allow imports from xrk and csv")
+// ---------------------------------------------------------------------------
+
+/// Write `body` to a uniquely named file under the temp dir and return its path.
+///
+/// The crate carries no dev-dependencies on purpose (see Cargo.toml), so this
+/// stands in for `tempfile`.
+fn write_temp(name: &str, body: &str) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!(
+        "rs-ffi-{}-{}-{name}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::write(&path, body).expect("write temp csv");
+    path
+}
+
+/// An AiM "AiM CSV File" export: header block, name row, unit row, data rows.
+/// Mirrors the layout RaceStudio 3 writes (and the samples in the user's corpus).
+const AIM_CSV: &str = concat!(
+    "\"Format\",\"AiM CSV File\"\n",
+    "\"Session\",\"S.MarinoK\"\n",
+    "\"Vehicle\",\"Kart 7\"\n",
+    "\"Racer\",\"E. Zenardi\"\n",
+    "\"Championship\",\"\"\n",
+    "\"Comment\",\"\"\n",
+    "\"Date\",\"09/19/2026\"\n",
+    "\"Time\",\"09:37:10\"\n",
+    "\"Sample Rate\",\"20\"\n",
+    "\"Duration\",\"3.0\"\n",
+    "\"Segment\",\"Session\"\n",
+    "\"Beacon Markers\",\"1.0\",\"2.0\"\n",
+    "\"Segment Times\",\"0:01.000\",\"0:01.000\"\n",
+    "\n",
+    "\"Time\",\"GPS Speed\",\"RPM\"\n",
+    "\"s\",\"km/h\",\"rpm\"\n",
+    "\n",
+    "\"0.0\",\"36.0\",\"1000\"\n",
+    "\"1.0\",\"72.0\",\"2000\"\n",
+    "\"2.0\",\"108.0\",\"3000\"\n",
+    "\"3.0\",\"144.0\",\"4000\"\n",
+);
+
+#[test]
+fn test_open_session_imports_an_aim_csv() {
+    // Given an AiM CSV, When opened through the same entry point the app uses for
+    // .xrk, Then it decodes into a usable session (metadata + channels).
+    let path = write_temp("aim.csv", AIM_CSV);
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("import AiM csv");
+    let _ = std::fs::remove_file(&path);
+
+    assert_eq!(handle.metadata().track, "S.MarinoK");
+    assert_eq!(handle.metadata().vehicle, "Kart 7");
+    assert_eq!(handle.metadata().driver, "E. Zenardi");
+    let names: Vec<String> = handle.channels().iter().map(|c| c.name.clone()).collect();
+    assert!(
+        names.iter().any(|n| n == "RPM"),
+        "expected an RPM channel, got {names:?}"
+    );
+}
+
+#[test]
+fn test_open_session_recovers_laps_from_csv_beacon_markers() {
+    // Given `Beacon Markers`, Then laps are reconstructed — the CSV path must not
+    // silently import a lapless session.
+    let path = write_temp("laps.csv", AIM_CSV);
+    let handle = open_session(path.to_string_lossy().into_owned()).expect("import AiM csv");
+    let _ = std::fs::remove_file(&path);
+
+    assert!(
+        !handle.laps().is_empty(),
+        "Beacon Markers must yield laps on the CSV import path"
+    );
+}
+
+#[test]
+fn test_open_session_csv_extension_is_case_insensitive() {
+    // Given `.CSV`, Then it still imports — Finder happily hands over uppercase.
+    let path = write_temp("upper.CSV", AIM_CSV);
+    let result = open_session(path.to_string_lossy().into_owned());
+    let _ = std::fs::remove_file(&path);
+
+    assert!(result.is_ok(), "uppercase .CSV must import: {result:?}");
+}
+
+#[test]
+fn test_open_session_maps_a_malformed_csv_to_a_typed_error() {
+    // Given an unparseable CSV, Then the boundary returns a typed error rather
+    // than panicking or masquerading as an .xrk decode failure.
+    let path = write_temp("bad.csv", "\"Time\",\"A\"\n\"0.0\",\"1.0\",\"2.0\"\n");
+    let result = open_session(path.to_string_lossy().into_owned());
+    let _ = std::fs::remove_file(&path);
+
+    assert!(result.is_err(), "a ragged CSV must not import");
+}
+
+#[test]
+fn test_open_session_still_rejects_a_non_csv_non_xrk_file() {
+    // Given a .xrk path holding junk, Then the .xrk decoder still reports BadMagic
+    // — adding CSV support must not weaken the .xrk contract.
+    let path = write_temp("junk.xrk", "not a telemetry file at all");
+    let result = open_session(path.to_string_lossy().into_owned());
+    let _ = std::fs::remove_file(&path);
+
+    assert!(matches!(result, Err(FfiDecodeError::BadMagic)), "got {result:?}");
+}
