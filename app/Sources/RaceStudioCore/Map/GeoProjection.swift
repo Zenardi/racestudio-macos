@@ -33,8 +33,18 @@ public struct GeoProjection: Equatable, Sendable {
     /// single uniform scale (aspect preserved). A degenerate (single-point or
     /// zero-span) set — or a null / non-finite `rect` — collapses to a finite
     /// point without dividing by zero or producing an infinite origin.
+    /// - Parameters:
+    ///   - coords: the coordinates to frame.
+    ///   - rect: the target rect.
+    ///   - trimmingFraction: the fraction of each axis's extremes to exclude when
+    ///     computing the bounds, `0` (the default) for the plain min/max. A logger's
+    ///     opening fixes are often hundreds of metres out — one such fix framed a
+    ///     200 m circuit across 1232 m — so the map passes a small fraction to frame
+    ///     what was actually driven. Ignored below ``minimumPointsToTrim`` points,
+    ///     where there is no distribution to trim.
     public static func fit(to coords: [GPSCoord],
-                           in rect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> GeoProjection {
+                           in rect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
+                           trimmingFraction: Double = 0) -> GeoProjection {
         // A null rect (e.g. `insetBy` larger than the view) or a non-finite one
         // has no usable center; map everything to the origin.
         guard !rect.isNull, rect.width.isFinite, rect.height.isFinite,
@@ -53,9 +63,14 @@ public struct GeoProjection: Equatable, Sendable {
 
         var latMin = first.latitude, latMax = first.latitude
         var lonMin = first.longitude, lonMax = first.longitude
-        for coord in coords {
-            latMin = min(latMin, coord.latitude); latMax = max(latMax, coord.latitude)
-            lonMin = min(lonMin, coord.longitude); lonMax = max(lonMax, coord.longitude)
+        if let trimmed = trimmedBounds(coords, fraction: trimmingFraction) {
+            latMin = trimmed.latMin; latMax = trimmed.latMax
+            lonMin = trimmed.lonMin; lonMax = trimmed.lonMax
+        } else {
+            for coord in coords {
+                latMin = min(latMin, coord.latitude); latMax = max(latMax, coord.latitude)
+                lonMin = min(lonMin, coord.longitude); lonMax = max(lonMax, coord.longitude)
+            }
         }
 
         let centroidLat = (latMin + latMax) / 2
@@ -84,10 +99,99 @@ public struct GeoProjection: Equatable, Sendable {
                              translateY: originY + rawMaxY * scale)
     }
 
+    /// Below this many points there is no distribution to trim, so trimming is
+    /// skipped and the plain min/max is used — otherwise a short trace would lose
+    /// real data.
+    public static let minimumPointsToTrim = 20
+
+    /// Per-axis quantile bounds, or `nil` when trimming does not apply (a
+    /// non-positive fraction, or too few points). Each axis is trimmed
+    /// independently, which is all the framing needs.
+    private static func trimmedBounds(_ coords: [GPSCoord], fraction: Double) -> Bounds? {
+        guard fraction > 0, fraction.isFinite, coords.count >= minimumPointsToTrim else { return nil }
+        // Clamp so an absurd fraction still leaves a non-empty interval.
+        let clamped = min(fraction, 0.45)
+        let lats = coords.map(\.latitude).sorted()
+        let lons = coords.map(\.longitude).sorted()
+        let low = Int((Double(coords.count - 1) * clamped).rounded(.down))
+        let high = coords.count - 1 - low
+        guard low < high else { return nil }
+        return Bounds(latMin: lats[low], latMax: lats[high],
+                      lonMin: lons[low], lonMax: lons[high])
+    }
+
+    /// A coordinate bounding box. A named type rather than a tuple so the bounds
+    /// cannot be assembled in the wrong order at a call site.
+    private struct Bounds {
+        let latMin: Double
+        let latMax: Double
+        let lonMin: Double
+        let lonMax: Double
+    }
+
     /// Maps a coordinate into the fitted planar rect (north maps to the top).
     public func project(_ coord: GPSCoord) -> CGPoint {
         let rawX = (coord.longitude - centroidLongitude) * cosLatitude
         let rawY = coord.latitude - centroidLatitude
         return CGPoint(x: translateX + rawX * scale, y: translateY - rawY * scale)
+    }
+
+    /// The inverse of ``project(_:)`` — the coordinate a view point corresponds to.
+    ///
+    /// Needed to tell a real map which ground the plot is showing (see
+    /// ``GeoRegion/covering(_:size:)``). A degenerate projection (``scale`` 0, from a
+    /// coordinate-less or single-point session) has no inverse; it reports the
+    /// centroid rather than dividing by zero.
+    public func unproject(_ point: CGPoint) -> GPSCoord {
+        guard scale > 0, scale.isFinite else {
+            return GPSCoord(latitude: centroidLatitude, longitude: centroidLongitude)
+        }
+        let rawX = (Double(point.x) - translateX) / scale
+        let rawY = (translateY - Double(point.y)) / scale
+        // cosLatitude is cos of a latitude, so it is only zero exactly at a pole —
+        // guarded anyway so a bad projection cannot produce an infinite longitude.
+        let lon = cosLatitude != 0 ? centroidLongitude + rawX / cosLatitude : centroidLongitude
+        return GPSCoord(latitude: centroidLatitude + rawY, longitude: lon)
+    }
+}
+
+/// The geographic region a view shows — the centre and full angular span, the shape
+/// a map view is configured with.
+///
+/// Derived by inverting a fitted ``GeoProjection`` at the view's corners, so the
+/// imagery underneath the racing line covers exactly the ground the line was drawn
+/// for. Deriving it rather than choosing a zoom level is what keeps the two aligned
+/// when the pane is resized.
+public struct GeoRegion: Equatable, Sendable {
+    /// The region's centre.
+    public let center: GPSCoord
+    /// Full north–south span, in degrees of latitude.
+    public let latitudeDelta: Double
+    /// Full east–west span, in degrees of longitude.
+    public let longitudeDelta: Double
+
+    public init(center: GPSCoord, latitudeDelta: Double, longitudeDelta: Double) {
+        self.center = center
+        self.latitudeDelta = latitudeDelta
+        self.longitudeDelta = longitudeDelta
+    }
+
+    /// The region `projection` shows across a view of `size`, or `nil` when there is
+    /// nothing to frame — a zero/non-finite size, or a degenerate projection from a
+    /// session with no GPS (or a single fix, which has no extent).
+    public static func covering(_ projection: GeoProjection, size: CGSize) -> GeoRegion? {
+        guard size.width > 0, size.height > 0,
+              size.width.isFinite, size.height.isFinite,
+              projection.scale > 0, projection.scale.isFinite else { return nil }
+        let topLeft = projection.unproject(.zero)
+        let bottomRight = projection.unproject(CGPoint(x: size.width, y: size.height))
+        let latitudeDelta = abs(topLeft.latitude - bottomRight.latitude)
+        let longitudeDelta = abs(bottomRight.longitude - topLeft.longitude)
+        guard latitudeDelta.isFinite, longitudeDelta.isFinite,
+              latitudeDelta > 0, longitudeDelta > 0 else { return nil }
+        return GeoRegion(
+            center: GPSCoord(latitude: (topLeft.latitude + bottomRight.latitude) / 2,
+                             longitude: (topLeft.longitude + bottomRight.longitude) / 2),
+            latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
     }
 }

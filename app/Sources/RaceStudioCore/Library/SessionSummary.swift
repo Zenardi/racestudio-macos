@@ -26,6 +26,20 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     /// display-only: ``venue`` stays the facet/filter key, so a renamed session
     /// still groups with its circuit.
     public var customName: String?
+    /// The stable id of the circuit auto-recognized from this session's GPS trace,
+    /// or `nil` when none matched. Stamped at import; the key a user-chosen **track**
+    /// name is stored against.
+    public var trackID: String?
+    /// The user's name for ``trackID``, denormalized from the index so a row can
+    /// render its own title. Maintained by ``SessionIndex/renameTrack(id:to:)``.
+    public var trackNickname: String?
+    /// The recognized circuit's name including its layout (e.g. `"Kartódromo San
+    /// Marino — Layout 2"`), or `nil` when no track matched. Stamped at import so
+    /// the library can show which circuit a session is from without re-decoding it.
+    public var trackLabel: String?
+    /// The direction the recognized layout is driven, or `nil` when no track matched
+    /// or the database does not record it.
+    public var trackDirection: TrackDirection?
     /// Session start, derived from the metadata's UTC timestamp.
     public let date: Date
     /// Vehicle identifier.
@@ -61,11 +75,16 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
         id: String, venue: String, date: Date, vehicle: String, driver: String,
         lapCount: Int, bestLap: Duration?, sourceURL: URL, importedAt: Date,
         isAvailable: Bool, championship: String = "", comment: String = "", logger: String = "",
-        customName: String? = nil
+        customName: String? = nil, trackID: String? = nil, trackNickname: String? = nil,
+        trackLabel: String? = nil, trackDirection: TrackDirection? = nil
     ) {
         self.id = id
         self.venue = venue
         self.customName = customName
+        self.trackID = trackID
+        self.trackNickname = trackNickname
+        self.trackLabel = trackLabel
+        self.trackDirection = trackDirection
         self.date = date
         self.vehicle = vehicle
         self.driver = driver
@@ -83,7 +102,8 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     /// state (see above), so it is never encoded and defaults on decode.
     private enum CodingKeys: String, CodingKey {
         case id, venue, date, vehicle, driver, championship, comment, logger,
-             lapCount, bestLap, sourceURL, importedAt, customName
+             lapCount, bestLap, sourceURL, importedAt, customName, trackID, trackNickname,
+             trackLabel, trackDirection
     }
 
     /// Custom decode so the 8.15 facet fields (``championship``/``comment``/
@@ -97,6 +117,10 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
         venue = try container.decode(String.self, forKey: .venue)
         // Optional on disk: a library written before renaming existed has no key.
         customName = try container.decodeIfPresent(String.self, forKey: .customName)
+        trackID = try container.decodeIfPresent(String.self, forKey: .trackID)
+        trackNickname = try container.decodeIfPresent(String.self, forKey: .trackNickname)
+        trackLabel = try container.decodeIfPresent(String.self, forKey: .trackLabel)
+        trackDirection = try container.decodeIfPresent(TrackDirection.self, forKey: .trackDirection)
         date = try container.decode(Date.self, forKey: .date)
         vehicle = try container.decode(String.self, forKey: .vehicle)
         driver = try container.decode(String.self, forKey: .driver)
@@ -116,11 +140,29 @@ public extension SessionSummary {
     /// decoded venue, so a row is never blank.
     static let untitledText = "Unknown venue"
 
-    /// The title to show for this session: the user's ``customName`` when set, else
-    /// the decoded ``venue``, else ``untitledText``.
+    /// The title to show for this session, most specific name first: the name the
+    /// user gave *this session*, else the name they gave *this track*, else the
+    /// decoded ``venue``, else ``untitledText``.
+    ///
+    /// The track name sits between the two because it is the fix for a logger that
+    /// mis-stamps the venue — naming the circuit once retitles every session
+    /// recorded there — while a session-specific name ("wet session") is still more
+    /// specific than the circuit's.
     var displayTitle: String {
         if let customName, !customName.isEmpty { return customName }
+        if let trackNickname, !trackNickname.isEmpty { return trackNickname }
         return venue.isEmpty ? SessionSummary.untitledText : venue
+    }
+}
+
+public extension SessionSummary {
+    /// The recognized circuit and the way round it is driven, e.g.
+    /// `"Kartódromo San Marino — Layout 2 · Counter-clockwise"`. `nil` when no track
+    /// matched, in which case splits come from the logged beacons instead.
+    var trackSummary: String? {
+        guard let trackLabel else { return nil }
+        guard let trackDirection else { return trackLabel }
+        return "\(trackLabel) · \(trackDirection.title)"
     }
 }
 
@@ -140,5 +182,6 @@ extension SessionSummary {
             || vehicle.lowercased().contains(needle)
             || driver.lowercased().contains(needle)
             || (customName?.lowercased().contains(needle) ?? false)
+            || (trackNickname?.lowercased().contains(needle) ?? false)
     }
 }

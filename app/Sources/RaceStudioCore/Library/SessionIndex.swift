@@ -14,6 +14,10 @@ public final class SessionIndex: Codable, Equatable {
 
     private var storage: [String: SessionSummary]
     private var collectionStorage: [String: SessionCollection] = [:]
+    /// Track id → the name the user gave that circuit. Kept keyed by track rather
+    /// than copied per session so naming a circuit once covers every session
+    /// recorded there, including ones imported later.
+    private var trackNames: [String: String] = [:]
     private let now: () -> Date
 
     /// - Parameter now: clock used to stamp ``SessionSummary/importedAt``
@@ -33,13 +37,39 @@ public final class SessionIndex: Codable, Equatable {
     /// ``SessionSummary/sourceURL``/``SessionSummary/importedAt``) rather than
     /// creating a duplicate. Returns the stored summary.
     @discardableResult
-    public func add(_ session: Session, sourceURL: URL) -> SessionSummary {
+    public func add(
+        _ session: Session, sourceURL: URL, track: DetectedTrackInfo? = nil
+    ) -> SessionSummary {
+        let trackID = track?.id
         var summary = Self.summarize(session, sourceURL: sourceURL, importedAt: now())
         // Re-importing the same content must not discard a name the user chose: the
         // summary is re-derived from the decode, which knows nothing about renames.
         summary.customName = storage[summary.id]?.customName
+        summary.trackID = trackID ?? storage[summary.id]?.trackID
+        // Pick up the circuit's name now, so a session imported after the track was
+        // named does not have to be renamed by hand.
+        summary.trackNickname = summary.trackID.flatMap { trackNames[$0] }
+        summary.trackLabel = track?.displayName ?? storage[summary.id]?.trackLabel
+        summary.trackDirection = track?.direction ?? storage[summary.id]?.trackDirection
         storage[summary.id] = summary
         return summary
+    }
+
+    /// The name the user gave the circuit with `id`, or `nil`.
+    public func trackName(id: String) -> String? {
+        trackNames[id]
+    }
+
+    /// Name the circuit with `id`, retitling every session recorded there — the fix
+    /// for a logger that stamps the venue inconsistently. A blank name clears it,
+    /// restoring each session's decoded venue.
+    public func renameTrack(id: String, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        trackNames[id] = trimmed.isEmpty ? nil : trimmed
+        for (key, var summary) in storage where summary.trackID == id {
+            summary.trackNickname = trackNames[id]
+            storage[key] = summary
+        }
     }
 
     /// Remove the summary with the given content id, if present, and prune it from
@@ -251,7 +281,9 @@ public final class SessionIndex: Codable, Equatable {
     /// library written before the key existed.
     public private(set) var decoderGeneration = SessionIndex.decoderGeneration
 
-    private enum CodingKeys: String, CodingKey { case summaries, collections, decoderGeneration }
+    private enum CodingKeys: String, CodingKey {
+        case summaries, collections, decoderGeneration, trackNames
+    }
 
     public convenience init(from decoder: Decoder) throws {
         self.init()
@@ -267,6 +299,8 @@ public final class SessionIndex: Codable, Equatable {
         // library index (every summary too) via LibraryStore's corrupt-index path.
         let wrapped = (try? container.decodeIfPresent(
             [FailableDecodable<SessionCollection>].self, forKey: .collections)) ?? nil
+        trackNames = ((try? container.decodeIfPresent(
+            [String: String].self, forKey: .trackNames)) ?? nil) ?? [:]
         let savedCollections = wrapped?.compactMap(\.value) ?? []
         collectionStorage = Dictionary(
             savedCollections.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
@@ -278,6 +312,7 @@ public final class SessionIndex: Codable, Equatable {
         try container.encode(storage.values.sorted { $0.id < $1.id }, forKey: .summaries)
         try container.encode(collectionStorage.values.sorted { $0.id < $1.id }, forKey: .collections)
         try container.encode(SessionIndex.decoderGeneration, forKey: .decoderGeneration)
+        try container.encode(trackNames, forKey: .trackNames)
     }
 
     /// Drop every cached summary, keeping user-authored collections. Used when a
@@ -286,8 +321,13 @@ public final class SessionIndex: Codable, Equatable {
         storage.removeAll()
     }
 
+    /// Whether any circuit has been named by the user (track names are
+    /// user-authored, so — like collections — they survive a generation purge).
+    var hasTrackNames: Bool { !trackNames.isEmpty }
+
     public static func == (lhs: SessionIndex, rhs: SessionIndex) -> Bool {
         lhs.storage == rhs.storage && lhs.collectionStorage == rhs.collectionStorage
+            && lhs.trackNames == rhs.trackNames
     }
 }
 

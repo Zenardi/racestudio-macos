@@ -16,6 +16,8 @@ public struct TrackMapView: View {
     private let colorScale: ChannelColorScale
     private let lapDistance: Double
     private let sectorSplits: Int
+    /// The map imagery drawn under the racing line, or ``TrackMapBackdrop/none``.
+    private let backdrop: TrackMapBackdrop
     @Binding private var cursorIndex: Int?
 
     /// Mini-sectors drawn per sector (they nest within the sector boundaries).
@@ -23,6 +25,7 @@ public struct TrackMapView: View {
 
     public init(coords: [GPSCoord], distances: [Double], channelValues: [Double],
                 colorScale: ChannelColorScale, lapDistance: Double, sectorSplits: Int,
+                backdrop: TrackMapBackdrop = .none,
                 cursorIndex: Binding<Int?>) {
         self.coords = coords
         self.distances = distances
@@ -30,18 +33,23 @@ public struct TrackMapView: View {
         self.colorScale = colorScale
         self.lapDistance = lapDistance
         self.sectorSplits = sectorSplits
+        self.backdrop = backdrop
         _cursorIndex = cursorIndex
     }
 
     public var body: some View {
         GeometryReader { geometry in
             // Fit + project once per render; the Canvas and the drag both reuse it.
-            let projected = coords.map(projection(for: geometry.size).project)
+            let fitted = projection(for: geometry.size)
+            let projected = coords.map(fitted.project)
             Canvas { context, _ in
                 drawRacingLine(context, projected: projected)
                 drawBoundaries(context, projected: projected)
                 drawMarker(context, projected: projected)
             }
+            // Imagery goes *behind* the Canvas, covering exactly the ground the
+            // projection maps onto this view — see `TrackMapBackdropView`.
+            .background(mapBackdrop(size: geometry.size, projection: fitted))
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
@@ -52,11 +60,38 @@ public struct TrackMapView: View {
         .accessibilityLabel(L10n.string(.chartTrackMap))
     }
 
+    /// The map under the line, or nothing when no imagery is wanted or the session
+    /// has no extent to frame.
+    @ViewBuilder
+    private func mapBackdrop(size: CGSize, projection: GeoProjection) -> some View {
+        if backdrop != .none, let region = GeoRegion.covering(projection, size: size) {
+            TrackMapBackdropView(region: region, style: backdrop)
+        }
+    }
+
+    /// The fraction of each axis's extremes excluded when framing the racing line.
+    ///
+    /// Taking the plain min/max framed one 207 m circuit across 924 m, leaving the
+    /// line a squiggle in the middle and the map backdrop zoomed uselessly far out.
+    /// In that session 95% of fixes sat within 122 m of the circuit and then a tight
+    /// cluster of 575 (3%) sat ~700 m away — a coherent excursion, not scatter. 5%
+    /// rejects it and frames the track at 215 m, while costing a clean trace 1.4%:
+    ///
+    ///     trim   real trace   clean circuit
+    ///     0.00      924 m         209 m
+    ///     0.04      257 m         207 m
+    ///     0.05      215 m         206 m
+    ///     0.08      198 m         202 m
+    ///
+    /// Trimmed fixes are still *drawn* — they are only excluded from the bounds — so
+    /// nothing is hidden, it simply falls outside the pane.
+    private static let framingTrim = 0.05
+
     private func projection(for size: CGSize) -> GeoProjection {
         // Clamp the inset to half the size so a small pane never yields a null rect.
         let inset = CGRect(origin: .zero, size: size)
             .insetBy(dx: min(12, size.width / 2), dy: min(12, size.height / 2))
-        return GeoProjection.fit(to: coords, in: inset)
+        return GeoProjection.fit(to: coords, in: inset, trimmingFraction: Self.framingTrim)
     }
 
     /// Strokes each racing-line segment in the color of its start sample; a
@@ -72,6 +107,12 @@ public struct TrackMapView: View {
             var segment = Path()
             segment.move(to: start)
             segment.addLine(to: end)
+            // Over satellite imagery the channel colours lose contrast against grass
+            // and tarmac, so the line gets a dark casing — omitted on the plain
+            // background, where it would only muddy the colour.
+            if backdrop != .none {
+                context.stroke(segment, with: .color(.black.opacity(0.55)), lineWidth: 5)
+            }
             context.stroke(segment, with: .color(color), lineWidth: 2.5)
         }
     }

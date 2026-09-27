@@ -27,6 +27,25 @@ public struct DetectedTrackGate: Equatable, Sendable {
     }
 }
 
+/// The direction a circuit is driven, viewed from above.
+///
+/// Lap times, sector splits, and a racing line are only comparable within one
+/// direction, so it belongs to the track's identity rather than to a session.
+public enum TrackDirection: String, Equatable, Sendable, Codable, CaseIterable {
+    /// Driven clockwise (Portuguese *horário*).
+    case clockwise
+    /// Driven counter-clockwise (*anti-horário*).
+    case counterClockwise
+
+    /// The direction in words, for display.
+    public var title: String {
+        switch self {
+        case .clockwise: return "Clockwise"
+        case .counterClockwise: return "Counter-clockwise"
+        }
+    }
+}
+
 /// A circuit auto-recognized from a session's GPS trace against the bundled track
 /// database (issue 9.2), carrying the start/finish + sector geometry read off the
 /// matched definition — so the UI places splits from the track, not from beacons.
@@ -35,6 +54,12 @@ public struct DetectedTrackInfo: Equatable, Sendable {
     public let id: String
     /// Human-readable circuit name.
     public let name: String
+    /// The layout this definition describes (e.g. `Layout 2`), or `""` when the
+    /// venue has a single configuration.
+    public let layout: String
+    /// The direction the layout is driven, or `nil` when the database does not
+    /// record it — reported as absent rather than guessed.
+    public let direction: TrackDirection?
     /// The closest-approach tolerance (metres) the match was accepted at.
     public let toleranceM: Double
     /// The definition's start/finish line.
@@ -43,11 +68,13 @@ public struct DetectedTrackInfo: Equatable, Sendable {
     public let sectorGates: [DetectedTrackGate]
 
     public init(
-        id: String, name: String, toleranceM: Double,
-        startFinish: DetectedTrackGate, sectorGates: [DetectedTrackGate]
+        id: String, name: String, layout: String = "", direction: TrackDirection? = nil,
+        toleranceM: Double, startFinish: DetectedTrackGate, sectorGates: [DetectedTrackGate]
     ) {
         self.id = id
         self.name = name
+        self.layout = layout
+        self.direction = direction
         self.toleranceM = toleranceM
         self.startFinish = startFinish
         self.sectorGates = sectorGates
@@ -55,6 +82,12 @@ public struct DetectedTrackInfo: Equatable, Sendable {
 
     /// The number of segments a lap is cut into: one more than the sector gates.
     public var segmentCount: Int { sectorGates.count + 1 }
+
+    /// The circuit name with its layout appended when there is one, e.g.
+    /// `"Kartódromo San Marino — Layout 2"`.
+    public var displayName: String {
+        layout.isEmpty ? name : "\(name) — \(layout)"
+    }
 }
 
 /// Chooses the split/segment source for a session (issue 9.2): the auto-detected
@@ -85,9 +118,24 @@ public struct TrackDetectionModel: Equatable, Sendable {
         return false
     }
 
-    /// The recognized circuit name, or `nil` under the beacon fallback.
+    /// The recognized circuit name — including its layout when the venue has more
+    /// than one — or `nil` under the beacon fallback.
     public var trackName: String? {
-        if case let .autoDetected(track) = source { return track.name }
+        if case let .autoDetected(track) = source { return track.displayName }
+        return nil
+    }
+
+    /// The direction the recognized layout is driven, or `nil` under the beacon
+    /// fallback or when the database does not record it.
+    public var trackDirection: TrackDirection? {
+        if case let .autoDetected(track) = source { return track.direction }
+        return nil
+    }
+
+    /// The recognized track's stable id, or `nil` under the beacon fallback — the
+    /// key a user-chosen track name is stored against.
+    public var trackID: String? {
+        if case let .autoDetected(track) = source { return track.id }
         return nil
     }
 
