@@ -34,14 +34,33 @@ public final class SessionIndex: Codable, Equatable {
     /// creating a duplicate. Returns the stored summary.
     @discardableResult
     public func add(_ session: Session, sourceURL: URL) -> SessionSummary {
-        let summary = Self.summarize(session, sourceURL: sourceURL, importedAt: now())
+        var summary = Self.summarize(session, sourceURL: sourceURL, importedAt: now())
+        // Re-importing the same content must not discard a name the user chose: the
+        // summary is re-derived from the decode, which knows nothing about renames.
+        summary.customName = storage[summary.id]?.customName
         storage[summary.id] = summary
         return summary
     }
 
-    /// Remove the summary with the given content id, if present.
+    /// Remove the summary with the given content id, if present, and prune it from
+    /// every manual collection so a deleted session leaves no phantom member behind.
     public func remove(id: String) {
-        storage[id] = nil
+        guard storage.removeValue(forKey: id) != nil else { return }
+        for (key, collection) in collectionStorage where collection.memberIDs.contains(id) {
+            collectionStorage[key] = collection.removing(id)
+        }
+    }
+
+    /// Set (or clear) the user-chosen display name of the summary with `id`.
+    ///
+    /// A blank or whitespace-only name **clears** the override rather than blanking
+    /// the title, so the decoded venue comes back; the name is otherwise trimmed.
+    /// Renaming an id that is not in the index does nothing.
+    public func rename(id: String, to name: String) {
+        guard var summary = storage[id] else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        summary.customName = trimmed.isEmpty ? nil : trimmed
+        storage[id] = summary
     }
 
     /// Case-insensitive substring search across venue, vehicle, and driver.

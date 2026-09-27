@@ -14,8 +14,9 @@ struct LibraryBrowserView: View {
     @ObservedObject var library: LibraryBrowserModel
     let onOpen: (SessionSummary) -> Void
     let onImport: () -> Void
-    @Environment(\.theme) private var theme
-    @Environment(\.colorScheme) private var scheme
+    /// The session being renamed. Owned here so the list's context menu and the
+    /// preview pane's Rename button present one sheet rather than two.
+    @State private var renaming: SessionSummary?
 
     var body: some View {
         NavigationSplitView {
@@ -47,6 +48,9 @@ struct LibraryBrowserView: View {
             }
         }
         .task(id: library.selectedID) { await library.loadPreview() }
+        .sheet(item: $renaming) { summary in
+            SessionRenameSheet(summary: summary) { library.rename(id: summary.id, to: $0) }
+        }
     }
 
     // MARK: - Left column (collections sidebar + faceted search)
@@ -146,60 +150,12 @@ struct LibraryBrowserView: View {
 
     // MARK: - Sessions list (date-descending)
 
+    // The list, its row actions (double-click to open, rename, delete), and the
+    // empty state live in `LibrarySessionList` so each type stays inside the
+    // lint's body-length budget.
     private var sessionList: some View {
-        List(selection: idSelection) {
-            ForEach(library.sessions) { summary in
-                sessionRow(summary)
-                    .tag(summary.id)
-                    .draggable(summary.id)  // drag into a manual collection to curate it
-            }
-        }
-        .overlay { if library.sessions.isEmpty { emptyState } }
-    }
-
-    private var idSelection: Binding<String?> {
-        Binding(get: { library.selectedID }, set: { library.select($0) })
-    }
-
-    private func sessionRow(_ summary: SessionSummary) -> some View {
-        VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
-            HStack {
-                Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
-                    .font(.token(theme.typography.headline))
-                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
-                Spacer()
-                if !summary.isAvailable {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(theme.palette.negative.color(scheme))
-                        .help("The source file is missing or moved")
-                }
-            }
-            Text(summary.date.formatted(date: .abbreviated, time: .shortened))
-                .font(.token(theme.typography.caption))
-                .foregroundStyle(theme.palette.textSecondary.color(scheme))
-            HStack(spacing: theme.spacing.xs + 2) {
-                Text(summary.vehicle)
-                    .font(.token(theme.typography.caption))
-                    .foregroundStyle(theme.palette.textPrimary.color(scheme))
-                if !summary.driver.isEmpty {
-                    Text("• \(summary.driver)")
-                        .font(.token(theme.typography.caption))
-                        .foregroundStyle(theme.palette.textSecondary.color(scheme))
-                }
-                Spacer()
-                Text("\(summary.lapCount) lap\(summary.lapCount == 1 ? "" : "s")")
-                    .font(.token(theme.typography.caption))
-                    .foregroundStyle(theme.palette.textSecondary.color(scheme))
-            }
-        }
-        .padding(.vertical, theme.spacing.xs / 2)
-    }
-
-    private var emptyState: some View {
-        BrandStateView(symbol: "tray",
-                       title: "No sessions",
-                       message: "Import a .xrk, .xrz, or .csv file to get started.",
-                       actionLabel: "Import…", action: onImport)
+        LibrarySessionList(library: library, onOpen: onOpen, onImport: onImport,
+                           onRename: { renaming = $0 })
     }
 
     // MARK: - Preview pane (laps summary + map thumbnail)
@@ -207,7 +163,9 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private var previewPane: some View {
         if let summary = library.selectedSummary, let preview = library.preview {
-            LibraryPreviewPane(summary: summary, preview: preview) { onOpen(summary) }
+            LibraryPreviewPane(summary: summary, preview: preview,
+                               onOpen: { onOpen(summary) },
+                               onRename: { renaming = summary })
         } else if library.previewFailed {
             ContentUnavailableMessage(
                 title: "Preview unavailable",
@@ -237,6 +195,7 @@ private struct LibraryPreviewPane: View {
     let summary: SessionSummary
     let preview: SessionPreview
     let onOpen: () -> Void
+    let onRename: () -> Void
 
     /// "Vehicle • Driver", but only the parts that exist — so a session missing
     /// both (e.g. a device-imported lap set) doesn't render a stray "•" under the
@@ -250,7 +209,7 @@ private struct LibraryPreviewPane: View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
             HStack {
                 VStack(alignment: .leading, spacing: theme.spacing.xs) {
-                    Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
+                    Text(summary.displayTitle)
                         .font(.token(theme.typography.title))
                         .foregroundStyle(theme.palette.textPrimary.color(scheme))
                     if let subtitle {
@@ -260,6 +219,14 @@ private struct LibraryPreviewPane: View {
                     }
                 }
                 Spacer()
+                // A visible rename affordance: the venue a logger stamps is often
+                // wrong, so fixing it must not be hidden behind a right-click.
+                Button(action: onRename) {
+                    Label("Rename", systemImage: "pencil")
+                }
+                    .buttonStyle(.bordered)
+                    .tint(theme.palette.accent.color(scheme))
+                    .help("Give this session your own name")
                 Button(action: onOpen) {
                     Label("Open in Analysis", systemImage: "chart.xyaxis.line")
                         .foregroundStyle(theme.palette.onAccent.color(scheme))
