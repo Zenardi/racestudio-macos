@@ -222,6 +222,13 @@ private struct TrackMapPanel: View {
     // re-renders on every cursor move — do not remove even though `body` reads it
     // only through the model.
     @ObservedObject var cursor: LinkedCursor
+    /// The map imagery under the racing line. Persisted, and off by default so the
+    /// app stays readable and makes no network requests unless asked.
+    @AppStorage("trackMap.backdrop") private var backdropRaw = TrackMapBackdrop.default.rawValue
+
+    private var backdrop: TrackMapBackdrop {
+        TrackMapBackdrop(rawValue: backdropRaw) ?? .default
+    }
 
     var body: some View {
         let map = model.trackMap
@@ -237,6 +244,7 @@ private struct TrackMapPanel: View {
                              colorScale: map.colorScale,
                              lapDistance: map.lapDistance,
                              sectorSplits: model.sectorSplits,
+                             backdrop: backdrop,
                              cursorIndex: Binding(
                                 get: { model.gpsCursorIndex },
                                 set: { if let index = $0 { model.moveTrackCursor(toFix: index) } }))
@@ -263,6 +271,14 @@ private struct TrackMapPanel: View {
                 get: { model.sectorSplits },
                 set: { model.setSectorSplits($0) }), in: 0...12)
                 .fixedSize()
+            Picker("Map", selection: $backdropRaw) {
+                ForEach(TrackMapBackdrop.allCases, id: \.rawValue) { style in
+                    Text(style.title).tag(style.rawValue)
+                }
+            }
+            .pickerStyle(.menu)
+            .fixedSize()
+            .help("Show satellite imagery under the racing line")
             Spacer()
         }
         .padding(.horizontal, 8)
