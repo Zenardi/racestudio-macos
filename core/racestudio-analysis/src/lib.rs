@@ -78,6 +78,7 @@ pub use resample::{resample_uniform, resample_uniform_max_gap, to_distance_grid}
 pub use splits::segment_times;
 pub use stats::{channel_stats, stats_over_range, stats_per_lap, Stats};
 pub use track::{
-    auto_splits, auto_splits_within, bundled_tracks, match_track, match_track_within, AutoSplits,
-    Gate, LatLon, TrackDb, TrackDef, MATCH_TOLERANCE_M, TRACK_DB_VERSION,
+    auto_splits, auto_splits_within, bundled_tracks, match_track, match_track_within,
+    track_direction, AutoSplits, Direction, Gate, LatLon, TrackDb, TrackDef, MATCH_TOLERANCE_M,
+    TRACK_DB_VERSION,
 };

@@ -55,6 +55,66 @@ impl LatLon {
     }
 }
 
+/// The direction a circuit is driven, viewed from above.
+///
+/// A venue is often run both ways on different days, and lap times, sector splits,
+/// and a racing line are only comparable within one direction — so it is part of a
+/// track's identity, not a detail of a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Direction {
+    /// Driven clockwise (Portuguese *horário*).
+    Clockwise,
+    /// Driven counter-clockwise (*anti-horário*).
+    CounterClockwise,
+}
+
+/// The smallest enclosed area (m²) a trace must cover for its rotation direction to
+/// be meaningful. Below this the trace is effectively a line — an out-lap down a pit
+/// straight, or a stationary logger — and no direction is reported.
+const MIN_LOOP_AREA_M2: f64 = 100.0;
+
+/// The direction `trace` was driven, or `None` when it encloses too little area for
+/// the question to have an answer (fewer than three points, or a near-straight run).
+///
+/// Derived from the sign of the shoelace area on the local tangent plane, with East
+/// as x and North as y, so a positive area is counter-clockwise on a north-up map.
+/// The polygon is closed back to its first point, making the result independent of
+/// where in the lap the logger began recording.
+#[must_use]
+pub fn track_direction(trace: &[LatLon]) -> Option<Direction> {
+    if trace.len() < 3 {
+        return None;
+    }
+    // Anchor the tangent plane at the first point; a constant offset cannot change
+    // the shoelace sum of a closed polygon.
+    let origin = trace[0];
+    let k = origin.lat.to_radians().cos();
+    let xy: Vec<(f64, f64)> = trace
+        .iter()
+        .map(|p| {
+            (
+                (p.lon - origin.lon) * DEG_M * k,
+                (p.lat - origin.lat) * DEG_M,
+            )
+        })
+        .collect();
+    let mut area = 0.0;
+    for i in 0..xy.len() {
+        let (x0, y0) = xy[i];
+        let (x1, y1) = xy[(i + 1) % xy.len()];
+        area += x0 * y1 - x1 * y0;
+    }
+    area /= 2.0;
+    if !area.is_finite() || area.abs() < MIN_LOOP_AREA_M2 {
+        return None;
+    }
+    Some(if area > 0.0 {
+        Direction::CounterClockwise
+    } else {
+        Direction::Clockwise
+    })
+}
+
 /// A gate the car crosses: a short line segment between two `(lat, lon)`
 /// endpoints. A [`TrackDef`]'s start/finish line and each sector boundary are
 /// gates; the car's trace is matched by how close it comes to the segment.
@@ -119,6 +179,8 @@ impl Gate {
 pub struct TrackDef {
     id: String,
     name: String,
+    layout: String,
+    direction: Option<Direction>,
     start_finish: Gate,
     sectors: Vec<Gate>,
 }
@@ -136,8 +198,51 @@ impl TrackDef {
         Self {
             id: id.into(),
             name: name.into(),
+            layout: String::new(),
+            direction: None,
             start_finish,
             sectors,
+        }
+    }
+
+    /// Name the layout this definition describes (e.g. `Layout 2`). A venue driven
+    /// in more than one configuration has one definition per layout.
+    #[must_use]
+    pub fn with_layout(mut self, layout: impl Into<String>) -> Self {
+        self.layout = layout.into();
+        self
+    }
+
+    /// Record the direction this layout is driven.
+    #[must_use]
+    pub fn with_direction(mut self, direction: Direction) -> Self {
+        self.direction = Some(direction);
+        self
+    }
+
+    /// The layout name, or `""` when the venue has a single configuration.
+    #[must_use]
+    pub fn layout(&self) -> &str {
+        &self.layout
+    }
+
+    /// The direction this layout is driven, or `None` when the database does not
+    /// record it. Absent is reported as absent rather than guessed — most bundled
+    /// entries predate this field, and `track_direction` can derive what a given
+    /// session actually drove.
+    #[must_use]
+    pub fn direction(&self) -> Option<Direction> {
+        self.direction
+    }
+
+    /// The circuit name with its layout appended when there is one, e.g.
+    /// `"Kartódromo San Marino — Layout 2"`.
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        if self.layout.is_empty() {
+            self.name.clone()
+        } else {
+            format!("{} — {}", self.name, self.layout)
         }
     }
 
@@ -395,7 +500,10 @@ pub fn bundled_tracks() -> TrackDb {
                 ll(45.0464834177, 12.1519724018),
             ),
         ],
-    );
+    )
+    // AiM's own official test capture of this circuit runs clockwise, so the
+    // direction is recorded rather than left unknown.
+    .with_direction(Direction::Clockwise);
     let vallelunga = TrackDef::new(
         "vallelunga",
         "Autodromo Vallelunga",
@@ -414,7 +522,35 @@ pub fn bundled_tracks() -> TrackDb {
             ),
         ],
     );
-    TrackDb::new(TRACK_DB_VERSION, vec![adria, vallelunga])
+    // Kartódromo San Marino, Paulínia SP, Brazil. Derived from a real session's own
+    // beacon crossings: 15 interior lap boundaries whose positions clustered within
+    // 2.2 m, giving the start/finish line, with sector gates placed at even thirds
+    // of the 889 m lap. Counter-clockwise, matching the logged trace's rotation.
+    //
+    // This venue is why the database matters: the logger stamped one stint
+    // `S.Marino AR` and the next `Velopark1000` — a different circuit entirely —
+    // even though both ran this identical layout.
+    let san_marino = TrackDef::new(
+        "sanmarino-kart-l2",
+        "Kartódromo San Marino",
+        Gate::new(
+            ll(-22.7768311739, -47.1200740472),
+            ll(-22.7767721400, -47.1201944862),
+        ),
+        vec![
+            Gate::new(
+                ll(-22.7778218936, -47.1203504895),
+                ll(-22.7777288067, -47.1202587713),
+            ),
+            Gate::new(
+                ll(-22.7771658916, -47.1197935108),
+                ll(-22.7772015199, -47.1199243233),
+            ),
+        ],
+    )
+    .with_layout("Layout 2")
+    .with_direction(Direction::CounterClockwise);
+    TrackDb::new(TRACK_DB_VERSION, vec![adria, vallelunga, san_marino])
 }
 
 // --------------------------------------------------------------------------- //

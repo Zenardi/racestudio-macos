@@ -18,7 +18,8 @@
 
 use crate::support::fixtures::{load_golden, TrackGolden};
 use racestudio_analysis::track::{
-    auto_splits, bundled_tracks, match_track, match_track_within, Gate, LatLon, TrackDb, TrackDef,
+    auto_splits, bundled_tracks, match_track, match_track_within, track_direction, Direction, Gate,
+    LatLon, TrackDb, TrackDef,
 };
 
 /// Metres per degree of latitude — the constant the synthetic gate helpers use to
@@ -168,4 +169,188 @@ fn test_matcher_is_direction_agnostic() {
         forward_match, reversed_match,
         "reversing the trace must not change the match"
     );
+}
+
+// --------------------------------------------------------------------------- //
+// Layout & direction (track database metadata).
+//
+// A venue can be driven in more than one configuration — a shorter layout, or the
+// same layout the other way round — and lap times are only comparable within one.
+// A definition therefore carries the layout it describes and the direction it is
+// driven, and `track_direction` reports the direction a trace was *actually*
+// driven so a session can be checked against the definition.
+// --------------------------------------------------------------------------- //
+
+/// A closed loop of `n` points around `(lat, lon)`, radius `radius_m`, walked
+/// counter-clockwise when `ccw` (increasing bearing: east, then north).
+fn loop_trace(lat: f64, lon: f64, radius_m: f64, n: usize, ccw: bool) -> Vec<LatLon> {
+    let k = lat.to_radians().cos();
+    (0..n)
+        .map(|i| {
+            let mut a = (i as f64 / n as f64) * std::f64::consts::TAU;
+            if !ccw {
+                a = -a;
+            }
+            ll(
+                lat + radius_m * a.sin() / DEG_M,
+                lon + radius_m * a.cos() / (DEG_M * k),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn test_direction_of_a_counter_clockwise_loop() {
+    // GIVEN a loop walked with increasing bearing (east then north), WHEN its
+    // direction is derived, THEN it reads counter-clockwise.
+    let trace = loop_trace(-22.777, -47.120, 100.0, 64, true);
+
+    assert_eq!(track_direction(&trace), Some(Direction::CounterClockwise));
+}
+
+#[test]
+fn test_direction_of_a_clockwise_loop() {
+    let trace = loop_trace(-22.777, -47.120, 100.0, 64, false);
+
+    assert_eq!(track_direction(&trace), Some(Direction::Clockwise));
+}
+
+#[test]
+fn test_direction_is_the_same_wherever_the_lap_starts() {
+    // The direction is a property of the loop, not of where the logger happened to
+    // start recording, so rotating the trace must not change it.
+    let trace = loop_trace(-22.777, -47.120, 100.0, 64, true);
+    let rotated: Vec<LatLon> = trace[20..]
+        .iter()
+        .chain(trace[..20].iter())
+        .copied()
+        .collect();
+
+    assert_eq!(track_direction(&rotated), track_direction(&trace));
+}
+
+#[test]
+fn test_direction_of_a_straight_line_is_unknown() {
+    // A trace that encloses no area has no rotation direction — an out-lap down a
+    // pit straight must not be reported as either.
+    let straight: Vec<LatLon> = (0..20)
+        .map(|i| ll(-22.777 + i as f64 * 1e-4, -47.120))
+        .collect();
+
+    assert_eq!(track_direction(&straight), None);
+}
+
+#[test]
+fn test_direction_of_too_few_points_is_unknown() {
+    assert_eq!(track_direction(&[]), None);
+    assert_eq!(
+        track_direction(&[ll(-22.777, -47.120), ll(-22.778, -47.121)]),
+        None
+    );
+}
+
+#[test]
+fn test_a_definition_records_no_layout_or_direction_by_default() {
+    // Most bundled tracks predate this metadata; absent is reported as absent
+    // rather than guessed, so the UI can say "not recorded".
+    let track = TrackDef::new("t", "T", gate_at(45.0, 12.0), vec![]);
+
+    assert_eq!(track.layout(), "");
+    assert_eq!(track.direction(), None);
+    assert_eq!(track.display_name(), "T");
+}
+
+#[test]
+fn test_a_definition_carries_its_layout_and_direction() {
+    let track = TrackDef::new("t", "T", gate_at(45.0, 12.0), vec![])
+        .with_layout("Layout 2")
+        .with_direction(Direction::CounterClockwise);
+
+    assert_eq!(track.layout(), "Layout 2");
+    assert_eq!(track.direction(), Some(Direction::CounterClockwise));
+    assert_eq!(track.display_name(), "T — Layout 2");
+}
+
+#[test]
+fn test_the_bundled_database_has_unique_ids() {
+    // Ids key a persisted match, so a duplicate would make a stored detection
+    // ambiguous.
+    let db = bundled_tracks();
+    let mut ids: Vec<&str> = db.tracks().iter().map(TrackDef::id).collect();
+    ids.sort_unstable();
+    let count = ids.len();
+    ids.dedup();
+
+    assert_eq!(
+        ids.len(),
+        count,
+        "duplicate track id in the bundled database"
+    );
+}
+
+#[test]
+fn test_san_marino_is_bundled_with_its_layout_and_direction() {
+    // The user's home circuit. Its logger stamps the venue inconsistently (one
+    // session arrived named after a different track entirely), so the database is
+    // what identifies it.
+    let db = bundled_tracks();
+    let track = db
+        .track("sanmarino-kart-l2")
+        .expect("San Marino Kart Layout 2 is bundled");
+
+    assert_eq!(track.name(), "Kartódromo San Marino");
+    assert_eq!(track.layout(), "Layout 2");
+    assert_eq!(
+        track.direction(),
+        Some(Direction::CounterClockwise),
+        "driven anti-horário"
+    );
+    assert_eq!(
+        track.segment_count(),
+        3,
+        "two sector gates cut the lap in three"
+    );
+}
+
+#[test]
+fn test_san_marino_matches_a_trace_along_its_own_geometry() {
+    // A trace threaded through the definition's own gates must resolve to it —
+    // the geometry is derived from 15 beacon crossings that clustered within 2.2 m.
+    let db = bundled_tracks();
+    let track = db.track("sanmarino-kart-l2").expect("bundled");
+    let trace: Vec<LatLon> = std::iter::once(track.start_finish())
+        .chain(track.sectors())
+        .map(|gate| gate.midpoint())
+        .collect();
+
+    let matched = match_track(&trace, &db).expect("its own gates must match");
+
+    assert_eq!(matched.id(), "sanmarino-kart-l2");
+}
+
+#[test]
+fn test_a_trace_at_another_circuit_does_not_match_san_marino() {
+    // Adria is in Italy; San Marino Kart is in Brazil. Thousands of kilometres must
+    // not be within tolerance of each other.
+    let db = bundled_tracks();
+    let adria = db.track("adria").expect("bundled");
+    let trace = vec![adria.start_finish().midpoint()];
+
+    let matched = match_track(&trace, &db);
+
+    assert_ne!(matched.map(TrackDef::id), Some("sanmarino-kart-l2"));
+}
+
+#[test]
+fn test_adria_records_the_direction_its_official_capture_runs() {
+    let db = bundled_tracks();
+    let adria = db.track("adria").expect("bundled");
+
+    assert_eq!(adria.direction(), Some(Direction::Clockwise));
+    assert_eq!(
+        adria.layout(),
+        "",
+        "a single-configuration venue names no layout"
+    );
+    assert_eq!(adria.display_name(), "Adria International Raceway");
 }

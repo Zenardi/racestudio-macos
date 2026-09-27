@@ -116,8 +116,10 @@ public final class LibraryBrowserModel: ObservableObject {
     /// visible list. Re-adding the same content updates its entry in place.
     /// Returns the stored summary.
     @discardableResult
-    public func add(_ session: Session, sourceURL: URL) -> SessionSummary {
-        let summary = index.add(session, sourceURL: sourceURL)
+    public func add(
+        _ session: Session, sourceURL: URL, track: DetectedTrackInfo? = nil
+    ) -> SessionSummary {
+        let summary = index.add(session, sourceURL: sourceURL, track: track)
         refresh()
         return summary
     }
@@ -199,6 +201,16 @@ public final class LibraryBrowserModel: ObservableObject {
         index.rename(id: id, to: name)
         refresh()
     }
+
+    /// Name the circuit with `id`, retitling every session recorded there. A blank
+    /// name clears it. Call ``save(to:using:)`` to persist.
+    public func renameTrack(id: String, to name: String) {
+        index.renameTrack(id: id, to: name)
+        refresh()
+    }
+
+    /// The name the user gave the circuit with `id`, or `nil`.
+    public func trackName(id: String) -> String? { index.trackName(id: id) }
 
     /// Whether RaceStudio owns a copy of this session's file, and can therefore
     /// offer to delete it. `false` for a row imported before adoption existed,

@@ -114,7 +114,11 @@ final class AppModel: ObservableObject {
                     // app owns, so deleting the original never strands the session.
                     let owned = try files.adopt(url)
                     let loaded = try await loader.load(owned, onProgress: { _ in })
-                    imported.append(library.add(loaded.session, sourceURL: owned))
+                    // Recognize the circuit from the GPS trace so the library can
+                    // show which track (and layout, and direction) the session is
+                    // from — the logger's own venue name is often wrong.
+                    let track = loaded.dataSource?.detectTrack()
+                    imported.append(library.add(loaded.session, sourceURL: owned, track: track))
                     // A save failure is non-fatal — the session is already in the
                     // in-memory library and re-imports next launch — so it stays
                     // best-effort, unlike a decode failure which is surfaced below.

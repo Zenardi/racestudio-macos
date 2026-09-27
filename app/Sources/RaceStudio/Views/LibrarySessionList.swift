@@ -19,9 +19,9 @@ struct LibrarySessionList: View {
     @ObservedObject var library: LibraryBrowserModel
     let onOpen: (SessionSummary) -> Void
     let onImport: () -> Void
-    /// Start renaming a session — the sheet is owned by ``LibraryBrowserView`` so the
-    /// list's context menu and the preview pane's button drive the same one.
-    let onRename: (SessionSummary) -> Void
+    /// Start renaming — the sheet is owned by ``LibraryBrowserView`` so the list's
+    /// context menu and the preview pane's buttons drive the same one.
+    let onRename: (RenameTarget) -> Void
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
 
@@ -67,7 +67,10 @@ struct LibrarySessionList: View {
     private func rowMenu(_ summary: SessionSummary) -> some View {
         Button("Open in Analysis") { onOpen(summary) }
             .disabled(!summary.isAvailable)
-        Button("Rename…") { onRename(summary) }
+        Button("Rename Session…") { onRename(.session(summary)) }
+        if summary.trackID != nil {
+            Button("Rename Track…") { onRename(.track(summary)) }
+        }
         Divider()
         Button("Delete…", role: .destructive) { deleting = summary }
     }
@@ -164,27 +167,77 @@ private struct SessionListRow: View {
     }
 }
 
-/// The rename sheet: edits a session's display name, with the decoded venue shown
-/// as the placeholder so clearing the field visibly restores it.
+/// What a rename sheet is editing: the name of one session, or the name of the
+/// circuit it was recorded at.
+///
+/// Naming the **track** is the fix for a logger that stamps the venue
+/// inconsistently — it retitles every session recorded there, including ones
+/// imported later — while naming the **session** labels just that one outing.
+enum RenameTarget: Identifiable {
+    /// Rename this one session.
+    case session(SessionSummary)
+    /// Rename the circuit this session was recorded at.
+    case track(SessionSummary)
+
+    var id: String {
+        switch self {
+        case .session(let summary): return "session-\(summary.id)"
+        case .track(let summary): return "track-\(summary.trackID ?? summary.id)"
+        }
+    }
+
+    var summary: SessionSummary {
+        switch self {
+        case .session(let summary), .track(let summary): return summary
+        }
+    }
+
+    var isTrack: Bool {
+        if case .track = self { return true }
+        return false
+    }
+}
+
+/// The rename sheet, for a session or a track. Whatever name is currently in
+/// effect is shown as the placeholder, so clearing the field visibly restores it.
 struct SessionRenameSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.theme) private var theme
-    let summary: SessionSummary
+    let target: RenameTarget
+    /// The circuit's current user-chosen name, when renaming a track.
+    let currentTrackName: String?
     let onCommit: (String) -> Void
     @State private var name: String = ""
 
+    /// What the name falls back to when the field is left empty.
+    private var fallback: String {
+        let summary = target.summary
+        if target.isTrack { return summary.trackLabel ?? summary.venue }
+        return summary.venue.isEmpty ? SessionSummary.untitledText : summary.venue
+    }
+
+    private var hint: String {
+        let named = fallback.isEmpty ? "." : " (\u{201C}\(fallback)\u{201D})."
+        return target.isTrack
+            ? "Applies to every session recorded at this track. Leave it empty to use "
+                + "the circuit\u{2019}s own name\(named)"
+            : "Applies to this session only. Leave it empty to use the name recorded "
+                + "by the logger\(named)"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
-            Text("Rename Session").font(.token(theme.typography.headline))
-            TextField(summary.venue.isEmpty ? SessionSummary.untitledText : summary.venue,
-                      text: $name)
+            Text(target.isTrack ? "Rename Track" : "Rename Session")
+                .font(.token(theme.typography.headline))
+            TextField(fallback.isEmpty ? SessionSummary.untitledText : fallback, text: $name)
                 .textFieldStyle(.roundedBorder)
-                .frame(width: 320)
+                .frame(width: 340)
                 .onSubmit(commit)
-            Text("Leave it empty to use the name recorded by the logger"
-                 + (summary.venue.isEmpty ? "." : " (“\(summary.venue)”)."))
+            Text(hint)
                 .font(.token(theme.typography.caption))
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: 340, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
@@ -192,7 +245,7 @@ struct SessionRenameSheet: View {
             }
         }
         .padding(theme.spacing.lg)
-        .onAppear { name = summary.customName ?? "" }
+        .onAppear { name = (target.isTrack ? currentTrackName : target.summary.customName) ?? "" }
     }
 
     private func commit() {

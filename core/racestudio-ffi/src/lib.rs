@@ -24,8 +24,8 @@ use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
     bundled_tracks, cumulative_distance, delta_t, match_track, resample_uniform, segment_laps,
     segment_times as lap_segment_times, spectrum, stats_over_range, to_distance_grid,
-    AnalysisError as CoreAnalysisError, Gate as CoreGate, Lap, LatLon as CoreLatLon, Stats,
-    Window as FftWindow, MATCH_TOLERANCE_M,
+    AnalysisError as CoreAnalysisError, Direction, Gate as CoreGate, Lap, LatLon as CoreLatLon,
+    Stats, Window as FftWindow, MATCH_TOLERANCE_M,
 };
 use racestudio_decode::{decode_session, DecodeError, GpsData, Session};
 use racestudio_device::{
@@ -244,6 +244,26 @@ impl From<&CoreGate> for TrackGate {
 }
 
 /// The circuit auto-recognized from a session's GPS trace against the bundled
+/// The direction a circuit is driven, viewed from above. Lap times and sector
+/// splits are only comparable within one direction, so it is part of a track's
+/// identity rather than a per-session detail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TrackDirection {
+    /// Driven clockwise (Portuguese *horário*).
+    Clockwise,
+    /// Driven counter-clockwise (*anti-horário*).
+    CounterClockwise,
+}
+
+impl From<Direction> for TrackDirection {
+    fn from(direction: Direction) -> Self {
+        match direction {
+            Direction::Clockwise => TrackDirection::Clockwise,
+            Direction::CounterClockwise => TrackDirection::CounterClockwise,
+        }
+    }
+}
+
 /// track database (issue 9.2), with the start/finish + sector geometry read off
 /// the matched definition — so the UI places splits from the track, not beacons.
 #[derive(Debug, Clone, uniffi::Record)]
@@ -252,6 +272,12 @@ pub struct DetectedTrack {
     pub id: String,
     /// Human-readable circuit name.
     pub name: String,
+    /// The layout this definition describes (e.g. `Layout 2`), or `""` when the
+    /// venue has a single configuration.
+    pub layout: String,
+    /// The direction the layout is driven, or `None` when the database does not
+    /// record it. Absent is reported as absent rather than guessed.
+    pub direction: Option<TrackDirection>,
     /// Closest-approach tolerance (metres) the match was accepted at.
     pub tolerance_m: f64,
     /// The definition's start/finish line.
@@ -851,6 +877,8 @@ impl SessionHandle {
         match_track(&trace, &db).map(|track| DetectedTrack {
             id: track.id().to_string(),
             name: track.name().to_string(),
+            layout: track.layout().to_string(),
+            direction: track.direction().map(TrackDirection::from),
             tolerance_m: MATCH_TOLERANCE_M,
             start_finish: track.start_finish().into(),
             sector_gates: track.sectors().iter().map(TrackGate::from).collect(),
@@ -1677,6 +1705,30 @@ mod tests {
         // paddock (~45.045 N, 12.149 E) — read from the track, not from a beacon.
         assert!((detected.start_finish.a_latitude - 45.045).abs() < 0.01);
         assert!((detected.start_finish.a_longitude - 12.149).abs() < 0.01);
+        // Adria is a single-configuration venue, driven clockwise.
+        assert_eq!(detected.layout, "");
+        assert_eq!(detected.direction, Some(TrackDirection::Clockwise));
+    }
+
+    #[test]
+    fn test_detected_track_carries_layout_and_direction() {
+        // A venue with more than one configuration surfaces which one was driven —
+        // lap times are only comparable within a layout and a direction.
+        let db = bundled_tracks();
+        let track = db
+            .track("sanmarino-kart-l2")
+            .expect("San Marino is bundled");
+
+        assert_eq!(track.layout(), "Layout 2");
+        assert_eq!(track.direction(), Some(Direction::CounterClockwise));
+        assert_eq!(
+            TrackDirection::from(Direction::CounterClockwise),
+            TrackDirection::CounterClockwise
+        );
+        assert_eq!(
+            TrackDirection::from(Direction::Clockwise),
+            TrackDirection::Clockwise
+        );
     }
 
     #[test]

@@ -194,9 +194,21 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
         // DB; the adapter only maps the FFI record's geometry into Core's own types.
         handle.detectTrack().map { ffi in
             DetectedTrackInfo(
-                id: ffi.id, name: ffi.name, toleranceM: ffi.toleranceM,
+                id: ffi.id, name: ffi.name, layout: ffi.layout,
+                direction: ffi.direction.map(TrackDirection.init),
+                toleranceM: ffi.toleranceM,
                 startFinish: DetectedTrackGate(ffi.startFinish),
                 sectorGates: ffi.sectorGates.map(DetectedTrackGate.init))
+        }
+    }
+}
+
+private extension TrackDirection {
+    /// Map the generated binding's direction enum into Core's own.
+    init(_ ffi: RaceStudioFFIBindings.TrackDirection) {
+        switch ffi {
+        case .clockwise: self = .clockwise
+        case .counterClockwise: self = .counterClockwise
         }
     }
 }

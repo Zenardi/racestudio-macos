@@ -14,9 +14,9 @@ struct LibraryBrowserView: View {
     @ObservedObject var library: LibraryBrowserModel
     let onOpen: (SessionSummary) -> Void
     let onImport: () -> Void
-    /// The session being renamed. Owned here so the list's context menu and the
-    /// preview pane's Rename button present one sheet rather than two.
-    @State private var renaming: SessionSummary?
+    /// What is being renamed — a session or a track. Owned here so the list's
+    /// context menu and the preview pane's buttons present one sheet, not several.
+    @State private var renaming: RenameTarget?
 
     var body: some View {
         NavigationSplitView {
@@ -48,8 +48,19 @@ struct LibraryBrowserView: View {
             }
         }
         .task(id: library.selectedID) { await library.loadPreview() }
-        .sheet(item: $renaming) { summary in
-            SessionRenameSheet(summary: summary) { library.rename(id: summary.id, to: $0) }
+        .sheet(item: $renaming) { target in
+            SessionRenameSheet(
+                target: target,
+                currentTrackName: target.summary.trackID.flatMap { library.trackName(id: $0) }
+            ) { name in
+                switch target {
+                case .session(let summary):
+                    library.rename(id: summary.id, to: name)
+                case .track(let summary):
+                    guard let trackID = summary.trackID else { return }
+                    library.renameTrack(id: trackID, to: name)
+                }
+            }
         }
     }
 
@@ -165,7 +176,7 @@ struct LibraryBrowserView: View {
         if let summary = library.selectedSummary, let preview = library.preview {
             LibraryPreviewPane(summary: summary, preview: preview,
                                onOpen: { onOpen(summary) },
-                               onRename: { renaming = summary })
+                               onRename: { renaming = $0 })
         } else if library.previewFailed {
             ContentUnavailableMessage(
                 title: "Preview unavailable",
@@ -195,7 +206,7 @@ private struct LibraryPreviewPane: View {
     let summary: SessionSummary
     let preview: SessionPreview
     let onOpen: () -> Void
-    let onRename: () -> Void
+    let onRename: (RenameTarget) -> Void
 
     /// "Vehicle • Driver", but only the parts that exist — so a session missing
     /// both (e.g. a device-imported lap set) doesn't render a stray "•" under the
@@ -217,16 +228,31 @@ private struct LibraryPreviewPane: View {
                             .font(.token(theme.typography.callout))
                             .foregroundStyle(theme.palette.textSecondary.color(scheme))
                     }
+                    // The circuit recognized from the GPS trace, with its layout and
+                    // direction. Absent when nothing matched, in which case splits
+                    // come from the logged beacons instead.
+                    if let track = summary.trackSummary {
+                        Label(track, systemImage: "mappin.and.ellipse")
+                            .font(.token(theme.typography.caption))
+                            .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                            .help("Recognized from the GPS trace against the track database")
+                    }
                 }
                 Spacer()
-                // A visible rename affordance: the venue a logger stamps is often
+                // Visible rename affordances: the venue a logger stamps is often
                 // wrong, so fixing it must not be hidden behind a right-click.
-                Button(action: onRename) {
+                // Naming the *track* fixes every session recorded there at once.
+                Menu {
+                    Button("Rename Session…") { onRename(.session(summary)) }
+                    if summary.trackID != nil {
+                        Button("Rename Track…") { onRename(.track(summary)) }
+                    }
+                } label: {
                     Label("Rename", systemImage: "pencil")
                 }
-                    .buttonStyle(.bordered)
-                    .tint(theme.palette.accent.color(scheme))
-                    .help("Give this session your own name")
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Name this session, or the track it was recorded at")
                 Button(action: onOpen) {
                     Label("Open in Analysis", systemImage: "chart.xyaxis.line")
                         .foregroundStyle(theme.palette.onAccent.color(scheme))

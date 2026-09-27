@@ -1380,7 +1380,6 @@ public func FfiConverterTypeDeltaPoint_lower(_ value: DeltaPoint) -> RustBuffer 
 
 
 /**
- * The circuit auto-recognized from a session's GPS trace against the bundled
  * track database (issue 9.2), with the start/finish + sector geometry read off
  * the matched definition — so the UI places splits from the track, not beacons.
  */
@@ -1393,6 +1392,16 @@ public struct DetectedTrack {
      * Human-readable circuit name.
      */
     public var name: String
+    /**
+     * The layout this definition describes (e.g. `Layout 2`), or `""` when the
+     * venue has a single configuration.
+     */
+    public var layout: String
+    /**
+     * The direction the layout is driven, or `None` when the database does not
+     * record it. Absent is reported as absent rather than guessed.
+     */
+    public var direction: TrackDirection?
     /**
      * Closest-approach tolerance (metres) the match was accepted at.
      */
@@ -1417,6 +1426,14 @@ public struct DetectedTrack {
          * Human-readable circuit name.
          */name: String, 
         /**
+         * The layout this definition describes (e.g. `Layout 2`), or `""` when the
+         * venue has a single configuration.
+         */layout: String, 
+        /**
+         * The direction the layout is driven, or `None` when the database does not
+         * record it. Absent is reported as absent rather than guessed.
+         */direction: TrackDirection?, 
+        /**
          * Closest-approach tolerance (metres) the match was accepted at.
          */toleranceM: Double, 
         /**
@@ -1428,6 +1445,8 @@ public struct DetectedTrack {
          */sectorGates: [TrackGate]) {
         self.id = id
         self.name = name
+        self.layout = layout
+        self.direction = direction
         self.toleranceM = toleranceM
         self.startFinish = startFinish
         self.sectorGates = sectorGates
@@ -1442,6 +1461,12 @@ extension DetectedTrack: Equatable, Hashable {
             return false
         }
         if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.layout != rhs.layout {
+            return false
+        }
+        if lhs.direction != rhs.direction {
             return false
         }
         if lhs.toleranceM != rhs.toleranceM {
@@ -1459,6 +1484,8 @@ extension DetectedTrack: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(id)
         hasher.combine(name)
+        hasher.combine(layout)
+        hasher.combine(direction)
         hasher.combine(toleranceM)
         hasher.combine(startFinish)
         hasher.combine(sectorGates)
@@ -1475,6 +1502,8 @@ public struct FfiConverterTypeDetectedTrack: FfiConverterRustBuffer {
             try DetectedTrack(
                 id: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
+                layout: FfiConverterString.read(from: &buf), 
+                direction: FfiConverterOptionTypeTrackDirection.read(from: &buf), 
                 toleranceM: FfiConverterDouble.read(from: &buf), 
                 startFinish: FfiConverterTypeTrackGate.read(from: &buf), 
                 sectorGates: FfiConverterSequenceTypeTrackGate.read(from: &buf)
@@ -1484,6 +1513,8 @@ public struct FfiConverterTypeDetectedTrack: FfiConverterRustBuffer {
     public static func write(_ value: DetectedTrack, into buf: inout [UInt8]) {
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.layout, into: &buf)
+        FfiConverterOptionTypeTrackDirection.write(value.direction, into: &buf)
         FfiConverterDouble.write(value.toleranceM, into: &buf)
         FfiConverterTypeTrackGate.write(value.startFinish, into: &buf)
         FfiConverterSequenceTypeTrackGate.write(value.sectorGates, into: &buf)
@@ -3744,6 +3775,82 @@ extension SpectrumWindow: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * The circuit auto-recognized from a session's GPS trace against the bundled
+ * The direction a circuit is driven, viewed from above. Lap times and sector
+ * splits are only comparable within one direction, so it is part of a track's
+ * identity rather than a per-session detail.
+ */
+
+public enum TrackDirection {
+    
+    /**
+     * Driven clockwise (Portuguese *horário*).
+     */
+    case clockwise
+    /**
+     * Driven counter-clockwise (*anti-horário*).
+     */
+    case counterClockwise
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrackDirection: FfiConverterRustBuffer {
+    typealias SwiftType = TrackDirection
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrackDirection {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .clockwise
+        
+        case 2: return .counterClockwise
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TrackDirection, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .clockwise:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .counterClockwise:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrackDirection_lift(_ buf: RustBuffer) throws -> TrackDirection {
+    return try FfiConverterTypeTrackDirection.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrackDirection_lower(_ value: TrackDirection) -> RustBuffer {
+    return FfiConverterTypeTrackDirection.lower(value)
+}
+
+
+
+extension TrackDirection: Equatable, Hashable {}
+
+
+
 
 
 
@@ -4197,6 +4304,30 @@ fileprivate struct FfiConverterOptionTypeGpsSummary: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeGpsSummary.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeTrackDirection: FfiConverterRustBuffer {
+    typealias SwiftType = TrackDirection?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTrackDirection.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTrackDirection.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
