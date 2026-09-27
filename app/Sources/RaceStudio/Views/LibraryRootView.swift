@@ -43,6 +43,7 @@ struct LibraryRootView: View {
         switch landing {
         case .home:
             HomeView(library: model.library,
+                     version: model.version,
                      onImport: { model.presentOpenPanel() },
                      onBrowseLibrary: { landing = .library },
                      onOpen: { model.openFromLibrary($0) })

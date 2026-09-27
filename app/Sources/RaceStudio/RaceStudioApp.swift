@@ -29,6 +29,12 @@ struct RaceStudioApp: App {
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
+            // Replace the stock About so the panel also reports the Rust core's
+            // version — a mismatched xcframework is otherwise invisible.
+            CommandGroup(replacing: .appInfo) {
+                AboutCommand(version: model.version)
+            }
+
             CommandGroup(after: .newItem) {
                 Button("Open…") { model.presentOpenPanel() }
                     .keyboardShortcut("o", modifiers: .command)
@@ -65,4 +71,5 @@ struct RaceStudioApp: App {
         }
         #endif
     }
+
 }

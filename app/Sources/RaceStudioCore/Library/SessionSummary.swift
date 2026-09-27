@@ -19,6 +19,13 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     /// Track/venue name (from the session metadata).
     public let venue: String
+    /// A user-chosen name shown in place of ``venue``, or `nil` to use the decoded
+    /// value. A logger stamps the venue from whatever track was last configured on
+    /// it, so the decoded name is often wrong — one of two stints at the same
+    /// circuit can arrive named after a different track entirely. The override is
+    /// display-only: ``venue`` stays the facet/filter key, so a renamed session
+    /// still groups with its circuit.
+    public var customName: String?
     /// Session start, derived from the metadata's UTC timestamp.
     public let date: Date
     /// Vehicle identifier.
@@ -53,10 +60,12 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     public init(
         id: String, venue: String, date: Date, vehicle: String, driver: String,
         lapCount: Int, bestLap: Duration?, sourceURL: URL, importedAt: Date,
-        isAvailable: Bool, championship: String = "", comment: String = "", logger: String = ""
+        isAvailable: Bool, championship: String = "", comment: String = "", logger: String = "",
+        customName: String? = nil
     ) {
         self.id = id
         self.venue = venue
+        self.customName = customName
         self.date = date
         self.vehicle = vehicle
         self.driver = driver
@@ -74,7 +83,7 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     /// state (see above), so it is never encoded and defaults on decode.
     private enum CodingKeys: String, CodingKey {
         case id, venue, date, vehicle, driver, championship, comment, logger,
-             lapCount, bestLap, sourceURL, importedAt
+             lapCount, bestLap, sourceURL, importedAt, customName
     }
 
     /// Custom decode so the 8.15 facet fields (``championship``/``comment``/
@@ -86,6 +95,8 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         venue = try container.decode(String.self, forKey: .venue)
+        // Optional on disk: a library written before renaming existed has no key.
+        customName = try container.decodeIfPresent(String.self, forKey: .customName)
         date = try container.decode(Date.self, forKey: .date)
         vehicle = try container.decode(String.self, forKey: .vehicle)
         driver = try container.decode(String.self, forKey: .driver)
@@ -100,16 +111,34 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public extension SessionSummary {
+    /// Shown as the title of a session that has neither a user-chosen name nor a
+    /// decoded venue, so a row is never blank.
+    static let untitledText = "Unknown venue"
+
+    /// The title to show for this session: the user's ``customName`` when set, else
+    /// the decoded ``venue``, else ``untitledText``.
+    var displayTitle: String {
+        if let customName, !customName.isEmpty { return customName }
+        return venue.isEmpty ? SessionSummary.untitledText : venue
+    }
+}
+
 extension SessionSummary {
-    /// Case-insensitive substring match across venue, vehicle, and driver — the
-    /// library's free-text search (issue 5.3). An empty query matches everything.
-    /// Shared by ``SessionIndex/search(_:)`` and the browser's scoped search so
-    /// they agree on what "matches the text" means.
+    /// Case-insensitive substring match across the custom name, venue, vehicle, and
+    /// driver — the library's free-text search (issue 5.3). An empty query matches
+    /// everything. Shared by ``SessionIndex/search(_:)`` and the browser's scoped
+    /// search so they agree on what "matches the text" means.
+    ///
+    /// The custom name is included because renaming is how a user makes a
+    /// mis-stamped session findable; searching only the decoded fields would hide
+    /// the very session they just named.
     func matchesText(_ query: String) -> Bool {
         let needle = query.lowercased()
         guard !needle.isEmpty else { return true }
         return venue.lowercased().contains(needle)
             || vehicle.lowercased().contains(needle)
             || driver.lowercased().contains(needle)
+            || (customName?.lowercased().contains(needle) ?? false)
     }
 }

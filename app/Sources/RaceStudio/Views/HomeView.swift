@@ -19,6 +19,9 @@ struct HomeView: View {
     private let onImport: () -> Void
     private let onBrowseLibrary: () -> Void
     private let onOpen: (SessionSummary) -> Void
+    /// The running build, shown in the page footer so a user can report — or check
+    /// for — a fix without hunting through the About panel.
+    private let version: AppVersion
 
     /// Memoized from the *unfiltered* library. Seeded in `init` (so a returning
     /// user never sees a flash of the empty-library state) and refreshed by
@@ -27,10 +30,12 @@ struct HomeView: View {
     @State private var recent: [SessionSummary]
 
     init(library: LibraryBrowserModel,
+         version: AppVersion = .current,
          onImport: @escaping () -> Void,
          onBrowseLibrary: @escaping () -> Void,
          onOpen: @escaping (SessionSummary) -> Void) {
         _library = ObservedObject(wrappedValue: library)
+        self.version = version
         self.onImport = onImport
         self.onBrowseLibrary = onBrowseLibrary
         self.onOpen = onOpen
@@ -50,6 +55,7 @@ struct HomeView: View {
                 }
                 tipSection(title: "How to start", tips: StartGuide.gettingStarted)
                 tipSection(title: "How to analyze", tips: StartGuide.analysisTips)
+                versionFooter
             }
             .padding(theme.spacing.xxl)
             .frame(maxWidth: 900, alignment: .leading)
@@ -60,6 +66,18 @@ struct HomeView: View {
             dashboard = LibraryDashboard(sessions: newSessions)
             recent = Array(newSessions.prefix(6))
         }
+    }
+
+    // MARK: - Version
+
+    /// The running build, selectable so it can be copied into a bug report.
+    private var versionFooter: some View {
+        Text(version.fullDisplay)
+            .font(.token(theme.typography.caption))
+            .foregroundStyle(theme.palette.textSecondary.color(scheme))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityLabel("Running \(version.fullDisplay)")
     }
 
     // MARK: - Hero + quick actions
@@ -198,7 +216,7 @@ private struct HomeRecentRow: View {
                     : theme.palette.negative.color(scheme))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
-                Text(summary.venue.isEmpty ? "Unknown venue" : summary.venue)
+                Text(summary.displayTitle)
                     .font(.token(theme.typography.headline))
                     .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 Text(subtitle)
@@ -218,7 +236,7 @@ private struct HomeRecentRow: View {
 
     private var subtitle: String {
         let who = [summary.vehicle, summary.driver].filter { !$0.isEmpty }.joined(separator: " • ")
-        let when = summary.date.formatted(date: .abbreviated, time: .shortened)
+        let when = SessionDate.text(summary.date)
         return who.isEmpty ? when : "\(who) · \(when)"
     }
 }

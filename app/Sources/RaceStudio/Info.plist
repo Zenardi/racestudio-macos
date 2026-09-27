@@ -4,32 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleExecutable</key>
-	<string>RaceStudio</string>
-	<key>CFBundleIdentifier</key>
-	<string>com.racestudio.RaceStudio</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>RaceStudio</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>RaceStudio is an independent reader of AiM telemetry files and is not affiliated with AiM Tech srl.</string>
-
-	<!-- Document types RaceStudio opens. These reference the imported AiM UTIs
-	     declared below; the Viewer role + Alternate rank list the app under
-	     Finder's "Open With" without claiming ownership of AiM's formats. -->
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -45,8 +19,6 @@
 				<string>com.aim-sportline.xrz</string>
 			</array>
 		</dict>
-		<!-- CSV exports (AiM "AiM CSV File" or generic) are importable too, but
-		     the app is only an Alternate handler: .csv belongs to spreadsheets. -->
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>Telemetry CSV</string>
@@ -60,21 +32,39 @@
 			</array>
 		</dict>
 	</array>
-
-	<!-- Imported UTI declarations for AiM's telemetry containers. The
-	     identifiers here are kept in lock-step with UTType.xrk / UTType.xrz in
-	     RaceStudioCore (FileTypes.swift). -->
+	<key>CFBundleExecutable</key>
+	<string>RaceStudio</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.racestudio.RaceStudio</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>RaceStudio</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.2</string>
+	<key>CFBundleVersion</key>
+	<string>0.2.2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>RaceStudio is an independent reader of AiM telemetry files and is not affiliated with AiM Tech srl.</string>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.aim-sportline.xrk</string>
-			<key>UTTypeDescription</key>
-			<string>AiM Telemetry (XRK)</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>AiM Telemetry (XRK)</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.aim-sportline.xrk</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -84,14 +74,14 @@
 			</dict>
 		</dict>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.aim-sportline.xrz</string>
-			<key>UTTypeDescription</key>
-			<string>AiM Telemetry (XRZ, compressed)</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>AiM Telemetry (XRZ, compressed)</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.aim-sportline.xrz</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

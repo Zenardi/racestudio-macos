@@ -12,6 +12,19 @@ public enum LibraryScope: Equatable, Sendable {
     case collection(String)
 }
 
+/// What removing a session from the library should do with the file behind it.
+///
+/// Deleting is offered as an explicit choice rather than a single destructive
+/// action: the library row and the bytes on disk are separate things to lose, and
+/// only RaceStudio's own copy is ever a candidate — the file the user picked is
+/// never deleted by either case.
+public enum SessionDeletion: Equatable, Sendable {
+    /// Forget the row; leave RaceStudio's copy of the file on disk.
+    case removeFromLibrary
+    /// Forget the row and delete RaceStudio's copy of the file.
+    case discardingCopy
+}
+
 /// The session library browser (issue 8.14) — the RaceStudio 3 "choose what to
 /// analyze" window's model, over the 5.3 ``SessionIndex`` / ``LibraryStore``.
 ///
@@ -30,6 +43,10 @@ public final class LibraryBrowserModel: ObservableObject {
 
     private let index: SessionIndex
     private let loader: SessionLoading?
+    /// RaceStudio's own copy store, or `nil` when the browser is list-only (the
+    /// non-filesystem test configuration). Deleting can only offer to remove a file
+    /// this store owns.
+    private let files: ManagedFileStore?
 
     /// The visible (filtered) sessions, date-descending.
     @Published public private(set) var sessions: [SessionSummary]
@@ -57,9 +74,13 @@ public final class LibraryBrowserModel: ObservableObject {
     ///   - index: the session index to browse (defaults to an empty library).
     ///   - loader: the decoder used to read a session's preview inputs, or `nil`
     ///     (then ``loadPreview()`` is a no-op — e.g. list-only tests).
-    public init(index: SessionIndex = SessionIndex(), loader: SessionLoading? = nil) {
+    ///   - files: the store holding RaceStudio's own copy of each imported file, or
+    ///     `nil` when the browser owns no files (then nothing is discardable).
+    public init(index: SessionIndex = SessionIndex(), loader: SessionLoading? = nil,
+                files: ManagedFileStore? = nil) {
         self.index = index
         self.loader = loader
+        self.files = files
         self.sessions = index.summaries
     }
 
@@ -67,8 +88,9 @@ public final class LibraryBrowserModel: ObservableObject {
     /// missing or corrupt file (the 5.3 ``LibraryStore/load(from:)`` semantics).
     public convenience init(loadingFrom url: URL,
                             store: LibraryStore = LibraryStore(),
-                            loader: SessionLoading? = nil) {
-        self.init(index: store.load(from: url), loader: loader)
+                            loader: SessionLoading? = nil,
+                            files: ManagedFileStore? = nil) {
+        self.init(index: store.load(from: url), loader: loader, files: files)
     }
 
     /// The distinct vehicles present, sorted — the 8.14 vehicle facet's choices.
@@ -166,6 +188,41 @@ public final class LibraryBrowserModel: ObservableObject {
         guard let collection = index.collection(id: collectionID) else { return }
         index.upsertCollection(collection.adding(sessionID))
         refresh()
+    }
+
+    // MARK: - Naming and removal
+
+    /// Give the session with `id` a user-chosen display name, or clear it with a
+    /// blank string so the decoded venue comes back. Call ``save(to:using:)`` to
+    /// persist. Renaming an unknown id does nothing.
+    public func rename(id: String, to name: String) {
+        index.rename(id: id, to: name)
+        refresh()
+    }
+
+    /// Whether RaceStudio owns a copy of this session's file, and can therefore
+    /// offer to delete it. `false` for a row imported before adoption existed,
+    /// which still points at the user's own file.
+    public func canDiscardCopy(id: String) -> Bool {
+        guard let files, let summary = index.summaries.first(where: { $0.id == id }) else { return false }
+        return files.isManaged(summary.sourceURL)
+    }
+
+    /// Remove the session with `id` from the library, and — with
+    /// ``SessionDeletion/discardingCopy`` — delete RaceStudio's own copy of its file.
+    ///
+    /// The row is **always** removed, including when discarding the file fails: the
+    /// error is thrown afterwards so the caller can report it without the row
+    /// reappearing. A file outside the managed store is never deleted; asking to
+    /// discard one raises ``ManagedFileStore/StorageError/notManaged``.
+    public func delete(id: String, _ deletion: SessionDeletion) throws {
+        guard let summary = index.summaries.first(where: { $0.id == id }) else { return }
+        index.remove(id: id)
+        if selectedID == id { select(nil) }
+        refresh()
+        guard deletion == .discardingCopy else { return }
+        guard let files else { throw ManagedFileStore.StorageError.notManaged }
+        try files.discard(summary.sourceURL)
     }
 
     /// Select a session by content id (or `nil` to clear the selection). Clears
