@@ -40,8 +40,10 @@ public struct GeoProjection: Equatable, Sendable {
     ///     computing the bounds, `0` (the default) for the plain min/max. A logger's
     ///     opening fixes are often hundreds of metres out — one such fix framed a
     ///     200 m circuit across 1232 m — so the map passes a small fraction to frame
-    ///     what was actually driven. Ignored below ``minimumPointsToTrim`` points,
-    ///     where there is no distribution to trim.
+    ///     what was actually driven. An axis is only trimmed when it has such
+    ///     outliers (``outlierExtentRatio``), so a clean lap is framed whole.
+    ///     Ignored below ``minimumPointsToTrim`` points, where there is no
+    ///     distribution to trim.
     public static func fit(to coords: [GPSCoord],
                            in rect: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1),
                            trimmingFraction: Double = 0) -> GeoProjection {
@@ -106,7 +108,7 @@ public struct GeoProjection: Equatable, Sendable {
 
     /// Per-axis quantile bounds, or `nil` when trimming does not apply (a
     /// non-positive fraction, or too few points). Each axis is trimmed
-    /// independently, which is all the framing needs.
+    /// independently, and only when it has outliers (``trimmedAxis``).
     private static func trimmedBounds(_ coords: [GPSCoord], fraction: Double) -> Bounds? {
         guard fraction > 0, fraction.isFinite, coords.count >= minimumPointsToTrim else { return nil }
         // Clamp so an absurd fraction still leaves a non-empty interval.
@@ -116,8 +118,25 @@ public struct GeoProjection: Equatable, Sendable {
         let low = Int((Double(coords.count - 1) * clamped).rounded(.down))
         let high = coords.count - 1 - low
         guard low < high else { return nil }
-        return Bounds(latMin: lats[low], latMax: lats[high],
-                      lonMin: lons[low], lonMax: lons[high])
+        let (latMin, latMax) = trimmedAxis(lats, low: low, high: high)
+        let (lonMin, lonMax) = trimmedAxis(lons, low: low, high: high)
+        return Bounds(latMin: latMin, latMax: latMax, lonMin: lonMin, lonMax: lonMax)
+    }
+
+    /// How much wider an axis's full extent must be than its trimmed extent before
+    /// the trim is applied. Below this the extremes are the circuit itself — on a
+    /// real lap the hairpin tips, where a slowing kart bunches its fixes, so a 5%
+    /// trim cut 8–10% off each axis and clipped them out of the pane. Above it they
+    /// are an excursion: a whole session measured 4.3x its trimmed extent N–S.
+    public static let outlierExtentRatio = 1.25
+
+    /// One sorted axis's bounds: trimmed to `[low, high]` only when the full extent
+    /// is more than ``outlierExtentRatio`` times the trimmed one.
+    private static func trimmedAxis(_ sorted: [Double], low: Int, high: Int) -> (Double, Double) {
+        let full = (sorted[0], sorted[sorted.count - 1])
+        let trimmedSpan = sorted[high] - sorted[low]
+        guard trimmedSpan > 0, (full.1 - full.0) > trimmedSpan * outlierExtentRatio else { return full }
+        return (sorted[low], sorted[high])
     }
 
     /// A coordinate bounding box. A named type rather than a tuple so the bounds
