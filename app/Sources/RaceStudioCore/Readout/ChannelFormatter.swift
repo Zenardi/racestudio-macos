@@ -23,6 +23,13 @@ public struct ChannelFormatter: Sendable {
     /// ``ChannelFormatting/emDash`` when it is `nil` or non-finite.
     public func string(for value: Double?) -> String {
         guard let value, value.isFinite else { return ChannelFormatting.emDash }
+        // A millisecond channel is a *time*, not a count: the timing channels
+        // (Predictive Time, and the Best/Prev/Ref lap diffs) are unreadable as raw
+        // milliseconds. Rendered as a timecode, which carries its own sign and needs
+        // no unit suffix — "00:40.701 ms" would be wrong.
+        if TimecodeFormatter.isTimeUnit(unit) {
+            return TimecodeFormatter.string(fromMilliseconds: value)
+        }
         // Clamp precision to a sane range: <0 is meaningless, and beyond a
         // Double's significant digits it just prints noise (and a very large
         // width would balloon the string / overflow printf's int precision).

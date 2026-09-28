@@ -57,7 +57,7 @@ import Testing
         let subject = scrub(mode: .session, time: 55)
 
         #expect(subject.currentLap?.index == 1, "55 s is 15 s into the 38 s second lap")
-        #expect(subject.readout == "Lap 2 · 15.00 s / 38.00 s")
+        #expect(subject.readout == "Lap 2 · 00:15.000 / 00:38.000")
     }
 
     /// Lap boundaries drawn on the slider track are what make the control legible.
@@ -93,7 +93,8 @@ import Testing
     }
 
     @Test func test_lap_mode_readout_is_relative_to_the_lap() {
-        #expect(scrub(mode: .lap, time: 52, reference: 1).readout == "Lap 2 · 12.00 s / 38.00 s")
+        #expect(scrub(mode: .lap, time: 52, reference: 1).readout
+                == "Lap 2 · 00:12.000 / 00:38.000")
     }
 
     /// The point of the mode: the same lap-offset resolved in every selected lap, so
