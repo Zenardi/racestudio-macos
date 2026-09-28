@@ -38,14 +38,14 @@ import Testing
     // MARK: - Session mode
 
     @Test func test_session_mode_spans_the_whole_recording() throws {
-        let range = try #require(scrub(mode: .session, time: 0).range)
+        let range = try #require(scrub(mode: .session, time: 0, selected: [], reference: nil).range)
 
         #expect(range.lowerBound == 0)
         #expect(range.upperBound == 120, "40 + 38 + 42")
     }
 
     @Test func test_session_mode_values_are_absolute_seconds() {
-        let subject = scrub(mode: .session, time: 55)
+        let subject = scrub(mode: .session, time: 55, selected: [], reference: nil)
 
         #expect(subject.value == 55)
         #expect(subject.time(for: 70) == 70)
@@ -62,7 +62,7 @@ import Testing
 
     /// Lap boundaries drawn on the slider track are what make the control legible.
     @Test func test_session_mode_marks_the_lap_boundaries() {
-        let ticks = scrub(mode: .session, time: 0).lapTicks
+        let ticks = scrub(mode: .session, time: 0, selected: [], reference: nil).lapTicks
 
         #expect(ticks.count == 2, "two interior boundaries for three laps")
         #expect(abs(ticks[0] - 40.0 / 120.0) < 1e-9)
@@ -74,6 +74,82 @@ import Testing
 
         #expect(subject.currentLap == nil)
         #expect(subject.readout == LapScrub.outsideLapsText)
+    }
+
+    // MARK: - Session mode over the selected laps
+    //
+    // With laps selected the slider spans only them, joined end to end in time
+    // order: selecting laps 1 and 3 must not leave lap 2 (and everything else in
+    // the recording) under the thumb. Lap numbers in the names are 1-based, the
+    // indices passed in are 0-based.
+
+    @Test func test_selected_laps_limit_the_slider_to_those_laps() throws {
+        let subject = scrub(mode: .session, time: 55, selected: [1], reference: nil)
+
+        #expect(try #require(subject.range) == 0...38, "lap 2 alone, 38 s")
+        #expect(subject.value == 15, "55 s is 15 s into lap 2")
+        #expect(subject.time(for: 0) == 40, "the slider's start is lap 2's start")
+        #expect(subject.time(for: 38) == 78, "and its end is lap 2's end")
+    }
+
+    @Test func test_non_adjacent_laps_are_joined_without_the_laps_between() throws {
+        let subject = scrub(mode: .session, time: 100, selected: [0, 2], reference: nil)
+
+        #expect(try #require(subject.range) == 0...82, "40 + 42; lap 2's 38 s left out")
+        #expect(subject.value == 62, "22 s into lap 3 = 40 + 22 along the slider")
+        #expect(subject.time(for: 41) == 79, "1 s past the join is 1 s into lap 3")
+        #expect(subject.time(for: 20) == 20, "inside lap 1")
+    }
+
+    @Test func test_the_join_between_selected_laps_is_marked() {
+        let ticks = scrub(mode: .session, time: 0, selected: [0, 2], reference: nil).lapTicks
+
+        #expect(ticks.count == 1, "one join for two laps")
+        #expect(abs(ticks[0] - 40.0 / 82.0) < 1e-9)
+    }
+
+    @Test func test_a_single_selected_lap_has_no_marks() {
+        #expect(scrub(mode: .session, time: 50, selected: [1], reference: nil).lapTicks.isEmpty)
+    }
+
+    @Test func test_selection_order_does_not_change_the_timeline() {
+        let forward = scrub(mode: .session, time: 100, selected: [0, 2], reference: nil)
+        let backward = scrub(mode: .session, time: 100, selected: [2, 0], reference: nil)
+
+        #expect(forward.range == backward.range)
+        #expect(forward.value == backward.value)
+    }
+
+    @Test func test_a_cursor_between_selected_laps_sits_at_the_nearer_join() {
+        // 45 s is in unselected lap 2, 5 s after lap 1 ends and 33 s before lap 3.
+        #expect(scrub(mode: .session, time: 45, selected: [0, 2], reference: nil).value == 40)
+        // 75 s is 3 s before lap 3 starts: nearer lap 3, whose start is also 40.
+        #expect(scrub(mode: .session, time: 75, selected: [0, 2], reference: nil).value == 40)
+        // Before the first and after the last selected lap clamp to the ends.
+        #expect(scrub(mode: .session, time: 10, selected: [1], reference: nil).value == 0)
+        #expect(scrub(mode: .session, time: 500, selected: [1], reference: nil).value == 38)
+    }
+
+    @Test func test_slider_values_past_either_end_clamp_to_the_selected_laps() {
+        let subject = scrub(mode: .session, time: 50, selected: [1], reference: nil)
+
+        #expect(subject.time(for: -5) == 40)
+        #expect(subject.time(for: 99) == 78)
+    }
+
+    @Test func test_invalid_selected_laps_fall_back_to_the_whole_session() throws {
+        var withBroken = laps
+        withBroken.append(Lap(index: 3, startTimeS: 120, durationS: 0, endTimeS: 120))
+        let subject = LapScrub(laps: withBroken, selected: [3], reference: nil, mode: .session, time: 0)
+
+        #expect(try #require(subject.range) == 0...120, "nothing valid selected → the whole session")
+    }
+
+    @Test func test_help_says_the_slider_covers_the_selected_laps() {
+        let subject = scrub(mode: .session, time: 0, selected: [0, 2], reference: nil)
+
+        #expect(subject.help.contains("selected laps"))
+        #expect(!subject.help.contains("whole session"))
     }
 
     // MARK: - Lap mode
@@ -183,7 +259,7 @@ import Testing
     // MARK: - Explaining the control
 
     @Test func test_each_mode_explains_what_dragging_does() {
-        #expect(scrub(mode: .session, time: 0).help.contains("whole session"))
+        #expect(scrub(mode: .session, time: 0, selected: [], reference: nil).help.contains("whole session"))
         #expect(scrub(mode: .lap, time: 0).help.contains("every selected lap"))
     }
 
@@ -213,6 +289,55 @@ import Testing
     private func model() -> AnalysisWindowModel {
         AnalysisWindowModel(viewModel: SessionViewModel(
             session: SessionFixture.make(lapDurations: [40, 38, 42]), analysis: nil))
+    }
+
+    @Test func test_the_scrubber_spans_only_the_selected_laps() throws {
+        let subject = model()
+        subject.toggleLap(LapID(0))
+        subject.toggleLap(LapID(2))
+
+        #expect(try #require(subject.scrub(mode: .session).range).upperBound == 82, "40 + 42")
+    }
+
+    @Test func test_selecting_a_lap_moves_a_cursor_outside_it_to_its_start() {
+        let subject = model()
+        subject.linkedCursor.moveTime(10) // inside lap 1, which is not selected
+        subject.toggleLap(LapID(2))
+
+        #expect(subject.linkedCursor.timePosition == 78, "lap 3 starts at 40 + 38")
+    }
+
+    @Test func test_selecting_a_lap_leaves_a_cursor_already_in_a_selected_lap() {
+        let subject = model()
+        subject.toggleLap(LapID(0))
+        subject.linkedCursor.moveTime(10)
+        subject.toggleLap(LapID(2))
+
+        #expect(subject.linkedCursor.timePosition == 10, "still inside selected lap 1")
+    }
+
+    @Test func test_the_cursor_jumps_to_the_earliest_selected_lap() {
+        let subject = model()
+        subject.linkedCursor.moveTime(45) // in lap 2
+        subject.setSelection(channelNames: [], lapIndices: [2, 0])
+
+        #expect(subject.linkedCursor.timePosition == 0, "lap 1 is the earliest selected")
+    }
+
+    @Test func test_setting_a_reference_lap_brings_the_cursor_into_it() {
+        let subject = model()
+        subject.setReferenceLap(LapID(1))
+
+        #expect(subject.linkedCursor.timePosition == 40)
+    }
+
+    @Test func test_deselecting_every_lap_leaves_the_cursor_where_it_is() {
+        let subject = model()
+        subject.toggleLap(LapID(1))
+        subject.linkedCursor.moveTime(50)
+        subject.toggleLap(LapID(1))
+
+        #expect(subject.linkedCursor.timePosition == 50)
     }
 
     @Test func test_the_scrubber_spans_the_session_by_default() throws {

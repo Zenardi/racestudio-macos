@@ -83,6 +83,7 @@ public extension AnalysisWindowModel {
                                       laps: LapSelectionModel(selected: lapIDs, reference: referenceID))
         pinnedChannels.removeAll { !channels.contains($0) }
         if let override = colorChannelOverride, !channels.contains(override) { colorChannelOverride = nil }
+        keepCursorInSelectedLaps()
         rebuildSelectionData()
     }
 

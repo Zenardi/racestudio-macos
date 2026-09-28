@@ -11,11 +11,12 @@ import RaceStudioCore
 /// lap boundaries, and one absolute cursor said nothing about where in each selected
 /// lap it landed, which is the entire reason to select several.
 ///
-/// It now has two modes. **Session** sweeps the recording with lap boundaries marked
-/// on the track. **Lap** scrubs an offset *within* a lap and shows the equivalent
-/// point in every selected lap, so the channel readouts above compare like with
-/// like. Thin, as before: every conversion, readout, and tick position is computed
-/// by `RaceStudioCore.LapScrub`.
+/// It now has two modes. **Session** sweeps the selected laps joined end to end (the
+/// whole recording when none is selected), with lap boundaries marked on the track.
+/// **Lap** scrubs an offset *within* a lap and shows the equivalent point in every
+/// selected lap, so the channel readouts above compare like with like. Thin, as
+/// before: every conversion, readout, and tick position is computed by
+/// `RaceStudioCore.LapScrub`.
 struct MeasuresBar: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
@@ -80,7 +81,7 @@ struct MeasuresBar: View {
         .fixedSize()
         .disabled(!scrub.canScrubByLap && scrub.mode == .session)
         .help(scrub.canScrubByLap
-              ? "Scrub the whole session, or the same point within every selected lap"
+              ? "Scrub through the selected laps, or to the same point within each of them"
               : "Select a lap to scrub lap-by-lap")
     }
 
