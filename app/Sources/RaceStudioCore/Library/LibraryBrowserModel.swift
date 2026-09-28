@@ -109,7 +109,7 @@ public final class LibraryBrowserModel: ObservableObject {
 
     /// The selected summary, resolved from ``selectedID`` (or `nil`).
     public var selectedSummary: SessionSummary? {
-        selectedID.flatMap { id in index.summaries.first { $0.id == id } }
+        selectedID.flatMap(index.summary(id:))
     }
 
     /// Add a decoded session to the library (dedup by content id) and refresh the
@@ -216,7 +216,7 @@ public final class LibraryBrowserModel: ObservableObject {
     /// offer to delete it. `false` for a row imported before adoption existed,
     /// which still points at the user's own file.
     public func canDiscardCopy(id: String) -> Bool {
-        guard let files, let summary = index.summaries.first(where: { $0.id == id }) else { return false }
+        guard let files, let summary = index.summary(id: id) else { return false }
         return files.isManaged(summary.sourceURL)
     }
 
@@ -228,7 +228,7 @@ public final class LibraryBrowserModel: ObservableObject {
     /// reappearing. A file outside the managed store is never deleted; asking to
     /// discard one raises ``ManagedFileStore/StorageError/notManaged``.
     public func delete(id: String, _ deletion: SessionDeletion) throws {
-        guard let summary = index.summaries.first(where: { $0.id == id }) else { return }
+        guard let summary = index.summary(id: id) else { return }
         index.remove(id: id)
         if selectedID == id { select(nil) }
         refresh()
