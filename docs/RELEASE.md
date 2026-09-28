@@ -50,6 +50,12 @@ git tag v1.3.0
 git push origin v1.3.0
 ```
 
+The tag wins even when you push it while that commit's own `main` run is still building: the run
+re-checks the tags just before publishing and stands down if the commit has been tagged meanwhile.
+The one case this cannot undo is a tag pushed *after* the automatic release is already out — that
+commit then carries two releases, so delete the automatic one (`gh release delete vX.Y.Z
+--cleanup-tag`).
+
 [`scripts/next_version.sh`](../scripts/next_version.sh) owns that decision — which version, and
 whether the run publishes at all — so it is unit-tested in `tests/release_test.sh` rather than
 buried in YAML. Its rules:

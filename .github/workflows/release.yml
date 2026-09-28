@@ -106,6 +106,9 @@ jobs:
       # builds without releasing.
       - name: Derive the version
         id: version
+        # Explicit `shell: bash` runs with pipefail; the implicit default does
+        # not, so a failing script piped into `tee` would pass silently.
+        shell: bash
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
@@ -131,12 +134,28 @@ jobs:
             dist/SHA256SUMS.txt
           if-no-files-found: error
 
+      # The version above was chosen minutes ago. A tag pushed by hand since then
+      # must win rather than be duplicated -- #171's run chose v0.3.4 for
+      # 3bb73af, v0.4.0 was pushed at that commit 46s later, and both got
+      # published. Re-decide against freshly fetched tags just before publishing
+      # (see --expect-version in scripts/next_version.sh).
+      - name: Re-check the version against fresh tags
+        id: recheck
+        if: steps.version.outputs.publish == 'true'
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          BUILT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git fetch --tags --force --quiet origin
+          bash scripts/next_version.sh --expect-version "$BUILT_VERSION" | tee -a "$GITHUB_OUTPUT"
+
       # Creates the tag as well when one does not exist yet, which is what makes
       # a push to main self-releasing. A tag created here is made with
       # GITHUB_TOKEN, and GitHub does not re-trigger workflows for those -- so
       # this cannot loop back into another release run.
       - name: Publish the GitHub Release
-        if: steps.version.outputs.publish == 'true'
+        if: steps.version.outputs.publish == 'true' && steps.recheck.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
