@@ -105,11 +105,12 @@ pub struct ChannelInfo {
 pub struct LapInfo {
     /// Zero-based lap index within the session.
     pub index: u32,
-    /// Session-relative start time in seconds (cumulative).
+    /// Start time in seconds on the samples' clock — the raw logger timecode
+    /// that every channel, GPS fix and the cursor use.
     pub start_time_s: f64,
     /// Lap duration in seconds.
     pub duration_s: f64,
-    /// Session-relative end time in seconds (`start + duration`).
+    /// End time in seconds on the samples' clock (`start + duration`).
     pub end_time_s: f64,
 }
 
@@ -707,19 +708,15 @@ impl SessionHandle {
         chs.chain(gps).collect()
     }
 
-    /// The lap timing as a listing.
+    /// The lap timing as a listing, on the samples' clock (see [`lap_info`]).
     #[must_use]
     pub fn laps(&self) -> Vec<LapInfo> {
+        let origin = self.session.lap_timecode_origin_s();
         self.session
             .laps()
             .laps()
             .iter()
-            .map(|l| LapInfo {
-                index: l.index(),
-                start_time_s: l.start_time_s(),
-                duration_s: l.duration_s(),
-                end_time_s: l.end_time_s(),
-            })
+            .map(|l| lap_info(l, origin))
             .collect()
     }
 
@@ -832,18 +829,14 @@ impl SessionHandle {
     /// [`AnalysisError::WindowOutOfBounds`] for a non-finite or inverted window.
     pub fn list_laps(&self, window: FfiWindow) -> Result<Vec<LapInfo>, AnalysisError> {
         window.validate()?;
+        let origin = self.session.lap_timecode_origin_s();
         Ok(self
             .session
             .laps()
             .laps()
             .iter()
-            .filter(|l| l.end_time_s() >= window.start && l.start_time_s() <= window.end)
-            .map(|l| LapInfo {
-                index: l.index(),
-                start_time_s: l.start_time_s(),
-                duration_s: l.duration_s(),
-                end_time_s: l.end_time_s(),
-            })
+            .map(|l| lap_info(l, origin))
+            .filter(|l| l.end_time_s >= window.start && l.start_time_s <= window.end)
             .collect())
     }
 
@@ -1056,6 +1049,20 @@ impl SessionHandle {
             freqs: spec.freqs().to_vec(),
             amps: spec.amps().to_vec(),
         })
+    }
+}
+
+/// A lap's listing with its start and end on the **samples' clock** — the raw
+/// logger timecode every channel, GPS fix and the shared cursor use — rather than
+/// counted from the first lap's start as the decoder keeps them. `origin` is
+/// [`Session::lap_timecode_origin_s`]; without it each lap windowed the data
+/// `first_lap_origin` seconds early.
+fn lap_info(lap: &racestudio_decode::Lap, origin: f64) -> LapInfo {
+    LapInfo {
+        index: lap.index(),
+        start_time_s: lap.start_time_s() + origin,
+        duration_s: lap.duration_s(),
+        end_time_s: lap.end_time_s() + origin,
     }
 }
 
@@ -1612,16 +1619,110 @@ mod tests {
         channels: Vec<Channel>,
         laps: Vec<racestudio_decode::Lap>,
     ) -> SessionHandle {
+        handle_with_lap_origin(channels, laps, None)
+    }
+
+    /// [`handle_with_laps`] for a logger that started timing laps
+    /// `first_lap_origin_ms` into the recording, as a real `.xrk` does.
+    fn handle_with_lap_origin(
+        channels: Vec<Channel>,
+        laps: Vec<racestudio_decode::Lap>,
+        first_lap_origin_ms: Option<i64>,
+    ) -> SessionHandle {
         SessionHandle {
             session: Session::new(
                 Metadata::default(),
                 channels,
                 None,
                 LapData::new(laps),
-                None,
+                first_lap_origin_ms,
             ),
             segmented_laps: OnceLock::new(),
             distance_axis: OnceLock::new(),
+        }
+    }
+
+    /// A real session's laps are timed from its first lap's start, 31 s into the
+    /// recording in the user's stint; its samples carry the raw logger clock. The
+    /// listing must put each lap on the samples' clock, or every lap windows the
+    /// data 31 s early — the track map drew the start/finish line at a hairpin.
+    #[test]
+    fn test_laps_are_listed_on_the_samples_clock() {
+        let laps = vec![
+            racestudio_decode::Lap::new(0, 0.0, 41.0),
+            racestudio_decode::Lap::new(1, 41.0, 40.5),
+        ];
+        let handle = handle_with_lap_origin(Vec::new(), laps, Some(31_012));
+
+        let listed = handle.laps();
+
+        assert!((listed[0].start_time_s - 31.012).abs() < 1e-9);
+        assert!((listed[0].end_time_s - 72.012).abs() < 1e-9);
+        assert!((listed[1].start_time_s - 72.012).abs() < 1e-9);
+        assert!(
+            (listed[1].duration_s - 40.5).abs() < 1e-9,
+            "durations are unchanged"
+        );
+    }
+
+    #[test]
+    fn test_list_laps_windows_on_the_samples_clock() {
+        let laps = vec![
+            racestudio_decode::Lap::new(0, 0.0, 10.0),
+            racestudio_decode::Lap::new(1, 10.0, 10.0),
+        ];
+        let handle = handle_with_lap_origin(Vec::new(), laps, Some(30_000));
+
+        let hit = handle
+            .list_laps(FfiWindow {
+                start: 45.0,
+                end: 46.0,
+            })
+            .expect("valid window");
+
+        assert_eq!(
+            hit.len(),
+            1,
+            "45 s on the samples' clock is inside lap 1 only"
+        );
+        assert_eq!(hit[0].index, 1);
+    }
+
+    /// Per-lap analysis slices the samples by lap: with the lap origin ignored, a
+    /// recording whose laps start 30 s in found no samples in its laps and fell
+    /// back to equal-time segments — the Split Times report showed no real splits.
+    #[test]
+    fn test_segment_times_slice_laps_that_start_into_the_recording() {
+        // Each 5 s lap: slow (10 m/s) for its first half, fast (30 m/s) after.
+        let speed = channel(
+            SPEED_CHANNEL,
+            &(0..=20)
+                .map(|i| {
+                    let into_lap = (i % 10) as f64 * 0.5;
+                    (
+                        30_000.0 + i as f64 * 500.0,
+                        if into_lap < 2.5 { 10.0 } else { 30.0 },
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        let laps = vec![
+            racestudio_decode::Lap::new(0, 0.0, 5.0),
+            racestudio_decode::Lap::new(1, 5.0, 5.0),
+        ];
+        let handle = handle_with_lap_origin(vec![speed], laps, Some(30_000));
+
+        let rows = handle.segment_times(4);
+
+        assert_eq!(rows.len(), 2);
+        for row in &rows {
+            let (first, last) = (row.segment_times[0], row.segment_times[3]);
+            assert!(
+                first > last * 1.5,
+                "lap {}: the slow first quarter must take longer than the fast last: {:?}",
+                row.lap_index,
+                row.segment_times
+            );
         }
     }
 

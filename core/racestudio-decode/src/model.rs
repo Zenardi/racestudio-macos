@@ -92,6 +92,22 @@ impl Session {
     pub fn first_lap_origin_ms(&self) -> Option<i64> {
         self.first_lap_origin_ms
     }
+
+    /// The raw logger timecode (seconds) that lap time `0` falls on: add it to a
+    /// lap's [`start_time_s`](crate::Lap::start_time_s) /
+    /// [`end_time_s`](crate::Lap::end_time_s) to window the (raw-timecode) channel
+    /// and GPS samples by lap.
+    ///
+    /// Lap times count from the first lap's start, like libxrk's; the samples do
+    /// not. Windowing samples by the bare lap times cut every lap
+    /// `first_lap_origin` seconds early — 31 s in a real 41 s-lap session, which
+    /// put the start/finish line at a hairpin on the track map. `0` for a session
+    /// without lap markers (a CSV import), whose laps already share its samples' axis.
+    #[must_use]
+    pub fn lap_timecode_origin_s(&self) -> f64 {
+        self.first_lap_origin_ms
+            .map_or(0.0, |ms| ms as f64 / 1000.0)
+    }
 }
 
 /// Decode an AiM `.xrk` file at `path` into a complete [`Session`].
@@ -159,6 +175,11 @@ mod tests {
         assert!(session.gps().is_none());
         assert!(session.laps().is_empty());
         assert_eq!(session.first_lap_origin_ms(), None);
+        assert_eq!(
+            session.lap_timecode_origin_s(),
+            0.0,
+            "no laps: nothing to shift"
+        );
         assert_eq!(session.metadata(), &Metadata::default());
     }
 }

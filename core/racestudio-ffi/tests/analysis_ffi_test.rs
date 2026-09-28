@@ -80,16 +80,18 @@ fn test_list_laps_ffi_matches_rust() {
     assert_eq!(only_first.len(), 1, "window selects the first lap only");
     assert_eq!(only_first[0].index, 0);
 
-    // On the real sample the listing equals a direct decode's laps.
+    // On the real sample the listing equals a direct decode's laps, moved onto
+    // the samples' clock by the session's lap origin.
     let Some(path) = xrk_or_skip() else { return };
     let handle = open_session(path.to_string_lossy().into_owned()).expect("open real");
     let session = decode_session(&path).expect("decode");
+    let origin = session.lap_timecode_origin_s();
     let ffi = handle.list_laps(all()).expect("ffi laps");
     let direct = session.laps().laps();
     assert_eq!(ffi.len(), direct.len(), "same lap count");
     for (a, b) in ffi.iter().zip(direct) {
         assert_eq!(a.index, b.index());
-        assert!((a.start_time_s - b.start_time_s()).abs() < 1e-9);
+        assert!((a.start_time_s - (b.start_time_s() + origin)).abs() < 1e-9);
         assert!((a.duration_s - b.duration_s()).abs() < 1e-9);
     }
 }

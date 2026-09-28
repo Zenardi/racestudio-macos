@@ -104,25 +104,28 @@ fn test_lap_count_matches_golden() {
 
 #[test]
 fn test_lap_start_end_times_match_golden() {
-    // Each lap's number and cumulative [start, end) ms window matches the golden
-    // within a rounding tolerance (the golden stores integer ms).
+    // Each lap's number and [start, end) ms window matches the golden within a
+    // rounding tolerance (the golden stores integer ms). The golden counts from
+    // the first lap's start, as libxrk does; a segmented lap is on the samples'
+    // raw logger clock, so it sits the session's lap origin later.
     let Some(session) = decoded_session() else {
         return;
     };
     let laps = segment_laps(&session);
     let g = golden();
+    let origin_ms = session.lap_timecode_origin_s() * 1000.0;
     assert_eq!(laps.len(), g.laps.len(), "precondition: same count");
     for (lap, gl) in laps.iter().zip(g.laps.iter()) {
         assert_eq!(lap.number(), gl.index, "lap number");
         assert!(
-            (lap.start_time_ms() - gl.start_ms as f64).abs() < 1e-3,
+            (lap.start_time_ms() - (gl.start_ms as f64 + origin_ms)).abs() < 1e-3,
             "start for lap {}: {} vs {}",
             gl.index,
             lap.start_time_ms(),
             gl.start_ms
         );
         assert!(
-            (lap.end_time_ms() - gl.end_ms as f64).abs() < 1e-3,
+            (lap.end_time_ms() - (gl.end_ms as f64 + origin_ms)).abs() < 1e-3,
             "end for lap {}: {} vs {}",
             gl.index,
             lap.end_time_ms(),
