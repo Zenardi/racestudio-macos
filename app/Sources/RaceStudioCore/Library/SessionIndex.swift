@@ -72,6 +72,15 @@ public final class SessionIndex: Codable, Equatable {
         }
     }
 
+    /// The summary with the given content id, or `nil`.
+    ///
+    /// An O(1) dictionary read. Resolving a single row through ``summaries`` instead
+    /// sorts the whole library — which the browser's preview pane did on every
+    /// render.
+    public func summary(id: String) -> SessionSummary? {
+        storage[id]
+    }
+
     /// Remove the summary with the given content id, if present, and prune it from
     /// every manual collection so a deleted session leaves no phantom member behind.
     public func remove(id: String) {

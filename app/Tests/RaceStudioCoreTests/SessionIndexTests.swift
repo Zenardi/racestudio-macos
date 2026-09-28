@@ -294,3 +294,54 @@ import Foundation
         #expect(index.sessions(in: manual).map(\.venue) == ["A"])  // dangling member dropped
     }
 }
+
+/// Fetching a single session by its content id.
+///
+/// `summaries` sorts the whole library on every access, so resolving one row
+/// through it was O(n log n) — for a lookup the storage dictionary already answers
+/// in O(1). Three call sites did exactly that, one of them (`selectedSummary`) on
+/// every render of the browser's preview pane.
+@Suite struct SessionIndexLookupTests {
+
+    private func url(_ name: String) -> URL { URL(fileURLWithPath: "/tmp/\(name).xrk") }
+
+    @Test func test_a_session_is_found_by_its_id() {
+        let index = SessionIndex()
+        let stored = index.add(SessionFixture.make(track: "Adria"), sourceURL: url("a"))
+
+        #expect(index.summary(id: stored.id)?.venue == "Adria")
+    }
+
+    @Test func test_an_unknown_id_finds_nothing() {
+        #expect(SessionIndex().summary(id: "absent") == nil)
+    }
+
+    /// The lookup must see the same values `summaries` reports, including the
+    /// user-set name — otherwise the two paths could disagree.
+    @Test func test_the_lookup_reflects_a_rename() {
+        let index = SessionIndex()
+        let stored = index.add(SessionFixture.make(track: "Velopark1000"), sourceURL: url("a"))
+        index.rename(id: stored.id, to: "San Marino")
+
+        #expect(index.summary(id: stored.id)?.displayTitle == "San Marino")
+    }
+
+    @Test func test_a_removed_session_is_no_longer_found() {
+        let index = SessionIndex()
+        let stored = index.add(SessionFixture.make(), sourceURL: url("a"))
+        index.remove(id: stored.id)
+
+        #expect(index.summary(id: stored.id) == nil)
+    }
+
+    /// Agreement with the list path, so the two can never drift.
+    @Test func test_the_lookup_agrees_with_the_listing() {
+        let index = SessionIndex()
+        index.add(SessionFixture.make(track: "Adria", datetimeUtc: 1_000), sourceURL: url("a"))
+        index.add(SessionFixture.make(track: "Mugello", datetimeUtc: 2_000), sourceURL: url("b"))
+
+        for summary in index.summaries {
+            #expect(index.summary(id: summary.id) == summary)
+        }
+    }
+}
