@@ -32,29 +32,58 @@ public struct TrackMapModel: Sendable {
     /// range over the track.
     public let colorScale: ChannelColorScale
 
-    /// The total length (metres) of the rendered track — the last fix's cumulative
-    /// distance, `0` for an empty track. Named for the `SectorModel`/`TrackMapView`
-    /// parameter it feeds; the sector marks partition this whole extent.
+    /// The index in ``coordinates`` where each separately drawn run begins — one
+    /// per selected lap, or a single `[0]` for the whole track; empty when there
+    /// is nothing to draw. The view never strokes a segment *into* a run start,
+    /// so two laps are never joined by a line across the gap between them.
+    public let runStarts: [Int]
+
+    /// The selected laps' time windows, or `nil` when the whole track is shown.
+    private let windows: [ClosedRange<Double>]?
+
+    /// The first run's distances rebased to start at `0` — the axis the sector
+    /// marks are placed along. It is a prefix of the fixes (the first run starts
+    /// at index 0), so an index into it is also an index into ``coordinates``.
     ///
-    /// The window's model renders the whole GPS track (every lap), so on a
-    /// multi-lap session this is the session distance, not a single lap's — the
-    /// sectors then partition the full trace. Per-lap scoping (and the GPS↔channel
-    /// clock alignment it needs) is deferred to a later issue, consistent with
-    /// 8.3's whole-session time-axis scrubbing.
-    public var lapDistance: Double { distances.last ?? 0 }
+    /// Selected laps overlap on the ground, so marking one lap marks them all;
+    /// partitioning every lap's distance end to end would put a "sector" boundary
+    /// a lap and a half round the circuit.
+    ///
+    /// Stored, not computed: the panel reads it on every cursor-driven render.
+    public let sectorDistances: [Double]
+
+    /// The length (metres) of the lap the sector marks partition — the first
+    /// run's rebased extent, `0` for an empty map.
+    public var lapDistance: Double { sectorDistances.last ?? 0 }
 
     /// - Parameters:
     ///   - track: the GPS fixes forming the racing line.
     ///   - colorSeries: the channel whose value colours the line, or `nil` for a
     ///     neutral line.
+    ///   - laps: the selected laps' time windows (any order) — only fixes inside
+    ///     one are kept, each lap its own run — or `nil` for the whole track.
     ///   - low: the gradient colour at the channel minimum.
     ///   - high: the gradient colour at the channel maximum.
     public init(track: [GPSTrackPoint], colorSeries: ChannelSeries? = nil,
+                laps: [ClosedRange<Double>]? = nil,
                 low: PlotColor = TrackMapModel.defaultLow,
                 high: PlotColor = TrackMapModel.defaultHigh) {
-        self.coordinates = track.map(\.coordinate)
-        self.distances = track.map(\.distance)
-        self.times = track.map(\.time)
+        let runs = Self.runs(of: track, in: laps)
+        let kept = runs.flatMap { $0 }
+        self.coordinates = kept.map(\.coordinate)
+        self.distances = kept.map(\.distance)
+        self.times = kept.map(\.time)
+        self.windows = laps?.sorted { $0.lowerBound < $1.lowerBound }
+        var starts: [Int] = []
+        var offset = 0
+        for run in runs {
+            starts.append(offset)
+            offset += run.count
+        }
+        self.runStarts = starts
+        let firstRunEnd = starts.count > 1 ? starts[1] : distances.count
+        let base = distances.first ?? 0
+        self.sectorDistances = distances[..<firstRunEnd].map { $0 - base }
 
         guard let colorSeries, !colorSeries.xs.isEmpty else {
             self.channelValues = []
@@ -81,8 +110,12 @@ public struct TrackMapModel: Sendable {
     /// because GPS fix times carry no monotonicity guarantee across the FFI (a
     /// dropped fix can leave a non-finite time); the scan skips those and never
     /// mis-indexes or traps. Ties resolve to the lower index.
+    ///
+    /// Scoped to laps, a time outside every selected lap has no marker: snapping
+    /// it to the nearest selected lap would show the car where it was not.
     public func index(atTime time: Double) -> Int? {
         guard time.isFinite else { return nil }
+        if let windows, !windows.contains(where: { $0.contains(time) }) { return nil }
         var bestIndex: Int?
         var bestDelta = Double.infinity
         for (offset, fixTime) in times.enumerated() where fixTime.isFinite {
@@ -99,6 +132,18 @@ public struct TrackMapModel: Sendable {
     /// `nil` when the index is out of range.
     public func time(atIndex index: Int) -> Double? {
         times.indices.contains(index) ? times[index] : nil
+    }
+
+    /// The fixes to draw, grouped into runs: the whole track as one run, or one
+    /// run per lap window in time order holding the finite-time fixes inside it.
+    /// A window with no fixes contributes no run. Adjacent laps each keep their
+    /// shared boundary fix, so each is drawn closed.
+    private static func runs(of track: [GPSTrackPoint],
+                             in laps: [ClosedRange<Double>]?) -> [[GPSTrackPoint]] {
+        guard let laps else { return track.isEmpty ? [] : [track] }
+        return laps.sorted { $0.lowerBound < $1.lowerBound }
+            .map { window in track.filter { $0.time.isFinite && window.contains($0.time) } }
+            .filter { !$0.isEmpty }
     }
 
     /// The cool→hot default gradient endpoints (the shared palette's blue and
