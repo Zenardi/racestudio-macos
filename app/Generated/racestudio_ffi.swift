@@ -672,7 +672,7 @@ public protocol SessionHandleProtocol : AnyObject {
     func gpsTrack(start: UInt32, count: UInt32)  -> [GpsTrackPoint]
     
     /**
-     * The lap timing as a listing.
+     * The lap timing as a listing, on the samples' clock (see [`lap_info`]).
      */
     func laps()  -> [LapInfo]
     
@@ -931,7 +931,7 @@ open func gpsTrack(start: UInt32, count: UInt32) -> [GpsTrackPoint] {
 }
     
     /**
-     * The lap timing as a listing.
+     * The lap timing as a listing, on the samples' clock (see [`lap_info`]).
      */
 open func laps() -> [LapInfo] {
     return try!  FfiConverterSequenceTypeLapInfo.lift(try! rustCall() {
@@ -2168,7 +2168,8 @@ public struct LapInfo {
      */
     public var index: UInt32
     /**
-     * Session-relative start time in seconds (cumulative).
+     * Start time in seconds on the samples' clock — the raw logger timecode
+     * that every channel, GPS fix and the cursor use.
      */
     public var startTimeS: Double
     /**
@@ -2176,7 +2177,7 @@ public struct LapInfo {
      */
     public var durationS: Double
     /**
-     * Session-relative end time in seconds (`start + duration`).
+     * End time in seconds on the samples' clock (`start + duration`).
      */
     public var endTimeS: Double
 
@@ -2187,13 +2188,14 @@ public struct LapInfo {
          * Zero-based lap index within the session.
          */index: UInt32, 
         /**
-         * Session-relative start time in seconds (cumulative).
+         * Start time in seconds on the samples' clock — the raw logger timecode
+         * that every channel, GPS fix and the cursor use.
          */startTimeS: Double, 
         /**
          * Lap duration in seconds.
          */durationS: Double, 
         /**
-         * Session-relative end time in seconds (`start + duration`).
+         * End time in seconds on the samples' clock (`start + duration`).
          */endTimeS: Double) {
         self.index = index
         self.startTimeS = startTimeS
@@ -4844,7 +4846,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_gps_track() != 36905) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_laps() != 1553) {
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_laps() != 817) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_list_laps() != 54279) {

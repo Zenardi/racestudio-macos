@@ -187,13 +187,16 @@ impl Alignment {
 #[must_use]
 pub fn segment_laps(session: &Session) -> Vec<Lap> {
     let sources = channel_sources(session);
+    // Lap times count from the first lap's start; the samples are on the raw
+    // logger clock, so shift the lap onto it before slicing.
+    let origin_ms = session.lap_timecode_origin_s() * 1000.0;
     session
         .laps()
         .laps()
         .iter()
         .map(|lap| {
-            let start_ms = lap.start_time_s() * 1000.0;
-            let end_ms = lap.end_time_s() * 1000.0;
+            let start_ms = lap.start_time_s() * 1000.0 + origin_ms;
+            let end_ms = lap.end_time_s() * 1000.0 + origin_ms;
             let channels = sources
                 .iter()
                 .map(|(name, samples)| {

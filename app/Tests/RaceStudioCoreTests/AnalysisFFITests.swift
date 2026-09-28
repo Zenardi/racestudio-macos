@@ -78,9 +78,13 @@ import RaceStudioFFIBindings
         // `#require` halts the test (throws) so an empty/short result fails
         // cleanly here instead of trapping on a subscript below.
         try #require(laps.count == golden.laps.count, "same lap count")
+        // The golden counts from the first lap's start, as libxrk does; the FFI
+        // lists laps on the samples' raw logger clock, so every lap is moved by
+        // the same recording origin and keeps its golden duration.
+        let origin = try #require(laps.first).startTimeS - golden.laps[0].startMs / 1000
         for (ffi, want) in zip(laps, golden.laps) {
             #expect(ffi.index == UInt32(want.index))
-            #expect(abs(ffi.startTimeS - want.startMs / 1000) < 1e-6)
+            #expect(abs(ffi.startTimeS - (want.startMs / 1000 + origin)) < 1e-6)
             #expect(abs(ffi.durationS - want.durationMs / 1000) < 1e-6)
         }
 
