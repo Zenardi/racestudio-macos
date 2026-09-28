@@ -40,6 +40,43 @@ public extension AnalysisWindowModel {
         trackMapCache.index(atTime: linkedCursor.timePosition)
     }
 
+    /// How the racing line is coloured: one colour per selected lap — the lap's
+    /// colour in every other panel — or a gradient of ``colorChannel``.
+    ///
+    /// Follows the user's choice (``setTrackMapColoring(_:)``) while it can apply.
+    /// Otherwise it colours by lap whenever two or more laps are selected, since
+    /// telling overlaid lines apart is then the point of the map, or when there is
+    /// no channel to colour by; a single lap shows the channel.
+    var trackMapColoring: TrackMapColoring {
+        let channel = colorChannel
+        if let byLap = trackMapColorsByLap {
+            if !byLap, let channel { return .channel(channel) }
+            if byLap { return .laps }
+        }
+        if selection.laps.selected.count >= 2 { return .laps }
+        return channel.map(TrackMapColoring.channel) ?? .laps
+    }
+
+    /// Colour the racing line by lap, or by a selected channel; a channel that is
+    /// not selected is ignored (only a plotted channel can colour the line).
+    func setTrackMapColoring(_ coloring: TrackMapColoring) {
+        switch coloring {
+        case .laps:
+            trackMapColorsByLap = true
+        case .channel(let channel):
+            guard selection.channels.contains(channel) else { return }
+            trackMapColorsByLap = false
+            setColorChannel(channel)
+        }
+    }
+
+    /// Where each selected lap was at the cursor's time into its lap — one marker
+    /// per lap, so how far apart they sit is how far one lap was ahead of another.
+    /// Reads the live cursor; empty when the cursor is outside the selected laps.
+    var trackMapMarkers: [TrackMapMarker] {
+        trackMapCache.markers(atTime: linkedCursor.timePosition)
+    }
+
     /// Colour the racing line by `channel` (issue 8.6); ignored when it is not a
     /// selected channel (only a plotted channel can colour the line).
     func setColorChannel(_ channel: ChannelID) {
@@ -55,4 +92,13 @@ public extension AnalysisWindowModel {
         guard let time = trackMapCache.time(atIndex: index), time.isFinite else { return }
         linkedCursor.moveTime(time)
     }
+}
+
+/// How the track map colours its racing line (see
+/// ``AnalysisWindowModel/trackMapColoring``).
+public enum TrackMapColoring: Hashable, Sendable {
+    /// Each selected lap in its own colour.
+    case laps
+    /// A gradient of this channel's value.
+    case channel(ChannelID)
 }

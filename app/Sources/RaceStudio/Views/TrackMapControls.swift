@@ -10,17 +10,16 @@ struct TrackMapControls: View {
     @Binding var viewport: MapViewport
     /// The map view's size, which scales the pan steps and bounds.
     let size: CGSize
-    /// `true` when the map imagery cannot show anything closer.
-    let atImageryLimit: Bool
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
             panPad
             VStack(spacing: 2) {
-                button("plus.magnifyingglass", help: zoomInHelp, disabled: !viewport.canZoomIn || atImageryLimit) {
+                button("plus.magnifyingglass", help: "Zoom in (or scroll / pinch)", disabled: !viewport.canZoomIn) {
                     viewport.zoomIn(in: size)
                 }
-                button("minus.magnifyingglass", help: "Zoom out", disabled: !viewport.canZoomOut) {
+                button("minus.magnifyingglass", help: "Zoom out (or scroll / pinch)",
+                       disabled: !viewport.canZoomOut) {
                     viewport.zoomOut(in: size)
                 }
                 button("arrow.up.left.and.arrow.down.right", help: "Fit the laps to the view",
@@ -33,11 +32,8 @@ struct TrackMapControls: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
     }
 
-    private var zoomInHelp: String {
-        atImageryLimit ? "The map imagery can't show this area any closer" : "Zoom in (or pinch)"
-    }
-
-    /// Arrows that move the view; ⌥-drag on the map does the same continuously.
+    /// Arrows that move the view; a middle-button or ⌥-drag on the map does the
+    /// same continuously.
     private var panPad: some View {
         VStack(spacing: 2) {
             arrow(.up)
@@ -58,7 +54,7 @@ struct TrackMapControls: View {
         case .left: symbol = "chevron.left"; name = "left"
         case .right: symbol = "chevron.right"; name = "right"
         }
-        return button(symbol, help: "Move the map \(name) (or ⌥-drag)", disabled: false) {
+        return button(symbol, help: "Move the map \(name) (or drag with the wheel pressed)", disabled: false) {
             viewport.panStep(direction, in: size)
         }
     }

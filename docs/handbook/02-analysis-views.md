@@ -23,7 +23,7 @@ engine and **M4** analysis UI, issues 3.1–3.8 and 4.1–4.7).
 |---|---|
 | **Time / distance plot** | One or more channels against time or distance, the core trace view. |
 | **Lap overlay + Δt strip** | Two or more laps overlaid, with a delta-t strip (time gained/lost vs a reference lap). |
-| **GPS track map** | The racing line drawn from GPS, colorable by a channel (e.g. speed). |
+| **GPS track map** | The selected laps' racing lines drawn from GPS, one colour per lap or colored by a channel (e.g. speed) — see below. |
 | **Channel table** | A channels × laps grid of the value **at the cursor**, plus digital readouts. |
 | **Histogram** | Distribution of a channel's samples (equal-count or fixed-width bins). |
 | **XY scatter** | One channel against another, with a fitted trend line. |
@@ -33,6 +33,30 @@ engine and **M4** analysis UI, issues 3.1–3.8 and 4.1–4.7).
 
 Statistics (min/max/mean/standard deviation, per lap or over a selected range) are
 computed with a numerically stable (Welford) method and shown alongside the tables.
+
+## GPS track map
+
+The map draws the racing line of every **selected lap**, so select two or more
+laps to compare the lines you took.
+
+- **One colour per lap.** With two or more laps selected, each line takes the
+  lap's colour from everywhere else in the window, and a legend in the corner says
+  which is which. The **Colour** menu switches the line to a channel gradient
+  (speed, say) instead, or back to **By lap**.
+- **One dot per lap.** Each selected lap gets a dot at the same time into the lap
+  as the cursor, and the lap the cursor is in has the largest. The distance
+  between the dots is how far one lap was ahead of the other at that moment, so
+  scrubbing through a lap shows where time was won or lost. A lap that had already
+  finished shows its dot at the line with a white centre.
+- **Zoom and move.** Scroll the mouse wheel to zoom in and out around the pointer,
+  and drag with the wheel pressed (the middle button) to move the map. A trackpad
+  pinch also zooms, and ⌥-drag also moves. The buttons at the bottom right do the
+  same, and the last one fits the laps back into view. A plain click or drag moves
+  the cursor.
+- **Satellite imagery.** The **Map** menu adds satellite, road or hybrid imagery
+  under the line. It is off by default because it needs an internet connection.
+  The imagery scales with the zoom, so it stays under the line at any zoom, getting
+  softer once you zoom in past the detail the satellite images have.
 
 ## Video review
 
