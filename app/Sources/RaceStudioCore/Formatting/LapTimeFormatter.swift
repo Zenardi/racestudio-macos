@@ -13,8 +13,12 @@ public enum LapTimeFormatter {
     /// Format `seconds` as `m:ss.mmm` (or `h:mm:ss.mmm` past one hour).
     public static func string(from seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return placeholder }
-
-        let totalMilliseconds = Int((seconds * 1000).rounded())
+        // `isFinite` bounds nothing: 1e300 is finite and converting it to `Int`
+        // traps. A lap duration comes straight from decoded data, so this is
+        // reachable with a corrupt file. Such a value is not a lap time.
+        guard let totalMilliseconds = Int(exactly: (seconds * 1000).rounded()) else {
+            return placeholder
+        }
         let milliseconds = totalMilliseconds % 1000
         let totalSeconds = totalMilliseconds / 1000
         let secs = totalSeconds % 60

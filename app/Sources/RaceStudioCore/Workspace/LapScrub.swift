@@ -178,8 +178,8 @@ public struct LapScrub: Equatable, Sendable {
         let lap = mode == .lap ? anchor : currentLap
         guard let lap else { return Self.outsideLapsText }
         let offset = time - lap.startTimeS
-        return String(format: "Lap %d · %.2f s / %.2f s",
-                      Int(lap.index) + 1, offset, lap.durationS)
+        return "Lap \(Int(lap.index) + 1) · \(TimecodeFormatter.string(from: offset))"
+            + " / \(TimecodeFormatter.string(from: lap.durationS))"
     }
 
     /// The equivalent cursor position in every selected lap, in selection order.

@@ -93,7 +93,7 @@ struct MeasuresBar: View {
                     Text("Lap \(aligned.lapNumber)")
                         .font(.token(theme.typography.caption))
                         .foregroundStyle(theme.palette.textSecondary.color(scheme))
-                    Text(String(format: "%.2f s", aligned.time))
+                    Text(TimecodeFormatter.string(from: aligned.time))
                         .font(.token(theme.typography.readout))
                         .monospacedDigit()
                         .foregroundStyle(aligned.isBeyondLap
