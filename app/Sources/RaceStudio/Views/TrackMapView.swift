@@ -9,6 +9,10 @@ import RaceStudioCore
 /// `SectorModel` boundaries — is computed in `RaceStudioCore`. This view only
 /// strokes the resulting path and dots into a `Canvas` and turns a click into a
 /// cursor index (the shared 4.7 cursor supplies/consumes `cursorIndex`).
+///
+/// Zoom and pan (the buttons, a trackpad pinch, and ⌥-drag) are a
+/// `RaceStudioCore.MapViewport` applied on top of the automatic fit; a plain click
+/// or drag still moves the cursor.
 public struct TrackMapView: View {
     private let coords: [GPSCoord]
     private let distances: [Double]
@@ -22,6 +26,18 @@ public struct TrackMapView: View {
     /// The map imagery drawn under the racing line, or ``TrackMapBackdrop/none``.
     private let backdrop: TrackMapBackdrop
     @Binding private var cursorIndex: Int?
+
+    /// The user's zoom / pan on top of the fit.
+    @State private var viewport = MapViewport()
+    /// The viewport when the current pinch or ⌥-drag began; each gesture applies
+    /// its whole translation / magnification to this, not incrementally.
+    @State private var gestureBase: MapViewport?
+    /// The closest the map imagery will show, in pixels per degree of latitude —
+    /// learned from what MapKit actually displays, `nil` until it has refused a
+    /// region. MapKit will not zoom past ~0.54 m/pt on satellite imagery and
+    /// silently shows a wider region instead, which drew a small circuit at about
+    /// twice the size of the ground under it. The line is drawn at this scale.
+    @State private var imageryScaleLimit: Double?
 
     /// Mini-sectors drawn per sector (they nest within the sector boundaries).
     private static let miniSectorsPerSector = 4
@@ -44,9 +60,12 @@ public struct TrackMapView: View {
 
     public var body: some View {
         GeometryReader { geometry in
-            // Fit + project once per render; the Canvas and the drag both reuse it.
-            let fitted = projection(for: geometry.size)
-            let projected = coords.map(fitted.project)
+            let size = geometry.size
+            // Fit, apply the user's zoom/pan, cap at what the imagery can show —
+            // once per render; the Canvas, the drag and the backdrop all share it.
+            let requested = viewport.apply(to: projection(for: size), in: size)
+            let drawn = drawnProjection(requested, size: size)
+            let projected = coords.map(drawn.project)
             Canvas { context, _ in
                 drawRacingLine(context, projected: projected)
                 drawBoundaries(context, projected: projected)
@@ -54,24 +73,83 @@ public struct TrackMapView: View {
             }
             // Imagery goes *behind* the Canvas, covering exactly the ground the
             // projection maps onto this view — see `TrackMapBackdropView`.
-            .background(mapBackdrop(size: geometry.size, projection: fitted))
+            .background(mapBackdrop(size: size, projection: drawn, requested: requested))
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0).onChanged { value in
-                    cursorIndex = TrackPath.nearestIndex(to: value.location, in: projected)
-                }
-            )
+            .gesture(pointerGesture(projected: projected, size: size))
+            .simultaneousGesture(pinchGesture(size: size))
+            .overlay(alignment: .bottomTrailing) {
+                TrackMapControls(viewport: $viewport, size: size,
+                                 atImageryLimit: isAtImageryLimit(requested))
+                    .padding(8)
+            }
+            .clipped()
         }
         .accessibilityLabel(L10n.string(.chartTrackMap))
+        .onChange(of: backdrop) { _ in imageryScaleLimit = nil }
+    }
+
+    /// The projection the line is drawn with: the requested one, capped at the
+    /// imagery's limit while imagery is shown.
+    private func drawnProjection(_ requested: GeoProjection, size: CGSize) -> GeoProjection {
+        guard backdrop != .none, let limit = imageryScaleLimit else { return requested }
+        return requested.limited(toScale: limit, about: CGPoint(x: size.width / 2, y: size.height / 2))
+    }
+
+    /// Whether zooming in would only be refused by the imagery.
+    private func isAtImageryLimit(_ requested: GeoProjection) -> Bool {
+        guard backdrop != .none, let limit = imageryScaleLimit else { return false }
+        return requested.scale >= limit * 0.999
+    }
+
+    /// A plain click / drag moves the cursor to the nearest fix; ⌥-drag pans.
+    private func pointerGesture(projected: [CGPoint], size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if NSEvent.modifierFlags.contains(.option) {
+                    var next = gestureBase ?? viewport
+                    gestureBase = next
+                    next.pan(by: value.translation, in: size)
+                    viewport = next
+                } else {
+                    gestureBase = nil
+                    cursorIndex = TrackPath.nearestIndex(to: value.location, in: projected)
+                }
+            }
+            .onEnded { _ in gestureBase = nil }
+    }
+
+    /// Trackpad pinch zooms about the view centre.
+    private func pinchGesture(size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .onChanged { magnification in
+                var next = gestureBase ?? viewport
+                gestureBase = next
+                next.zoom(by: Double(magnification), anchor: CGPoint(x: size.width / 2, y: size.height / 2),
+                          in: size)
+                viewport = next
+            }
+            .onEnded { _ in gestureBase = nil }
     }
 
     /// The map under the line, or nothing when no imagery is wanted or the session
     /// has no extent to frame.
     @ViewBuilder
-    private func mapBackdrop(size: CGSize, projection: GeoProjection) -> some View {
+    private func mapBackdrop(size: CGSize, projection: GeoProjection,
+                             requested: GeoProjection) -> some View {
         if backdrop != .none, let region = GeoRegion.covering(projection, size: size) {
-            TrackMapBackdropView(region: region, style: backdrop)
+            TrackMapBackdropView(region: region, style: backdrop) { shown in
+                imageryShowed(shown, size: size, requested: requested)
+            }
         }
+    }
+
+    /// MapKit reported the region it really shows. Wider than asked means it hit
+    /// its zoom limit: remember the limit so the line is drawn at the imagery's
+    /// scale, and pull the zoom back so the buttons stay honest.
+    private func imageryShowed(_ region: GeoRegion, size: CGSize, requested: GeoProjection) {
+        guard let shown = region.zoomLimit(forRequest: requested, in: size) else { return }
+        imageryScaleLimit = shown
+        viewport.limitZoom(to: viewport.zoom * shown / requested.scale)
     }
 
     /// The fraction of each axis's extremes excluded when framing the racing line.
@@ -89,7 +167,9 @@ public struct TrackMapView: View {
     ///     0.08      198 m         202 m
     ///
     /// Trimmed fixes are still *drawn* — they are only excluded from the bounds — so
-    /// nothing is hidden, it simply falls outside the pane.
+    /// nothing is hidden, it simply falls outside the pane. An axis is only trimmed
+    /// when it actually has outliers (`GeoProjection.outlierExtentRatio`): a clean
+    /// real lap lost 8–10% per axis to the trim, clipping its hairpins.
     private static let framingTrim = 0.05
 
     private func projection(for size: CGSize) -> GeoProjection {

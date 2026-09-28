@@ -182,6 +182,35 @@ import Testing
         #expect(abs(plain - trimmed) / plain < 0.02)
     }
 
+    /// A clean trace is framed whole: no fix may fall outside the view. The trim
+    /// used to apply regardless, and on a real lap — where the kart slows into the
+    /// hairpins and bunches its fixes at the extremes — it cut 8–10% off each axis
+    /// and clipped the hairpin tips out of the pane.
+    @Test func test_a_clean_trace_is_framed_without_clipping_any_fix() {
+        let projection = GeoProjection.fit(to: circuit, in: rect, trimmingFraction: shippedTrim)
+        for coord in circuit {
+            let point = projection.project(coord)
+            #expect(point.x >= -1e-6 && point.x <= rect.width + 1e-6
+                    && point.y >= -1e-6 && point.y <= rect.height + 1e-6)
+        }
+    }
+
+    /// A kart-like lap: long straights with the fixes bunched into slow hairpins,
+    /// which is what made the old unconditional trim cut ~9% off a real lap.
+    @Test func test_bunched_hairpin_fixes_are_not_trimmed_away() {
+        let straight = (0..<600).map { i in
+            GPSCoord(latitude: -22.7780 + Double(i) / 600 * 0.0018, longitude: -47.1200)
+        }
+        let hairpin = (0..<200).map { i in
+            GPSCoord(latitude: -22.7762 + 0.00005 * sin(Double(i) / 200 * .pi),
+                     longitude: -47.1200 + 0.0001 * Double(i) / 200)
+        }
+        let lap = straight + hairpin
+        let projection = GeoProjection.fit(to: lap, in: rect, trimmingFraction: shippedTrim)
+        let tip = projection.project(GPSCoord(latitude: -22.77615, longitude: -47.11995))
+        #expect(tip.y >= -1e-6, "the hairpin tip stays inside the pane")
+    }
+
     /// The case it exists for: a cluster of off-track fixes (3% of the session, the
     /// shape of a real excursion) must not set the frame.
     @Test func test_the_shipped_trim_rejects_a_three_percent_excursion() throws {
