@@ -805,15 +805,21 @@ impl SessionHandle {
             return Vec::new();
         };
         let fixes = window(gps.fixes(), start, count);
-        let timecodes: Vec<f64> = fixes.iter().map(|fix| fix.timecode_ms).collect();
-        let distances = self.distance_at(&timecodes);
+        // Read each fix's distance from the cached axis **by index**, not by looking
+        // its timecode up in that axis. The axis is integrated from `GPS Speed`,
+        // which has one sample per fix, so the index is exact — whereas a
+        // timecode lookup interpolates, and a single out-of-order record (issue 164,
+        // left as logged so the deltas match libxrk) would resolve to the wrong
+        // point and break the monotonicity this vec is expected to have.
+        let axis = &self.distance_axis().series;
+        let offset = start as usize;
         fixes
             .iter()
-            .zip(distances)
-            .map(|(fix, distance)| GpsTrackPoint {
+            .enumerate()
+            .map(|(i, fix)| GpsTrackPoint {
                 latitude: fix.latitude,
                 longitude: fix.longitude,
-                distance,
+                distance: axis.get(offset + i).map_or(0.0, |&(_, d)| d),
                 timecode: fix.timecode_ms,
             })
             .collect()
@@ -1898,11 +1904,29 @@ mod tests {
             assert_eq!(point.longitude, fix.longitude);
             assert_eq!(point.timecode, fix.timecode_ms);
         }
+        // This fixture carries a single out-of-order GPS record, which the decoder
+        // repairs by shifting the tail (issue 164). The timebase must therefore come
+        // out strictly increasing — the invariant the distance axis, `delta_t`, and
+        // the shared cursor all depend on.
+        assert!(
+            fixes
+                .windows(2)
+                .all(|w| w[1].timecode_ms > w[0].timecode_ms),
+            "the repaired GPS timebase must be strictly increasing"
+        );
         // Distance is the clamped cumulative integral of GPS Speed, index-aligned
         // with the fixes and monotonically non-decreasing.
         let axis = cumulative_distance(gps.channel(SPEED_CHANNEL).expect("GPS Speed").samples());
         for (point, &distance) in track.iter().zip(&axis) {
             assert!((point.distance - distance).abs() < 1e-9);
+        }
+        // A windowed read must line up with the same axis at the window's offset.
+        let windowed = handle.gps_track(100, 5);
+        for (i, point) in windowed.iter().enumerate() {
+            assert!(
+                (point.distance - axis[100 + i]).abs() < 1e-9,
+                "windowed distance must be index-aligned at the window's offset"
+            );
         }
         assert!(track
             .windows(2)

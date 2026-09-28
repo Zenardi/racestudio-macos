@@ -287,7 +287,10 @@ fn build_gps(raw: &[u8]) -> GpsData {
     let records: Vec<&[u8]> = raw.chunks_exact(GPS_RECORD_LEN).collect();
     let n = records.len();
 
-    let timecodes = correct_timecodes(&records);
+    let Timecodes {
+        values: timecodes,
+        repaired,
+    } = correct_timecodes(&records);
     let mut fixes = Vec::with_capacity(n);
     let (mut lat, mut lon, mut alt) = (vec![0.0; n], vec![0.0; n], vec![0.0; n]);
     let (mut speed, mut pos_acc, mut vel_acc) = (vec![0.0; n], vec![0.0; n], vec![0.0; n]);
@@ -328,7 +331,7 @@ fn build_gps(raw: &[u8]) -> GpsData {
         });
     }
 
-    let (inline, lateral, yaw) = derived_channels(&timecodes, &speed, &heading);
+    let (inline, lateral, yaw) = derived_channels(&timecodes, &speed, &heading, &repaired);
 
     let mk = |name: &str, kind, unit: &str, interpolate: bool, values: &[f64]| GpsChannel {
         name: name.to_string(),
@@ -362,33 +365,119 @@ fn build_gps(raw: &[u8]) -> GpsData {
     GpsData { fixes, channels }
 }
 
+/// Half the 16-bit range. A decrease larger than this is a genuine wrap (the
+/// counter fell from near 65535 back toward 0); anything smaller is a single
+/// out-of-order record.
+const WRAP_THRESHOLD: i64 = 32_768;
+
 /// Reconstruct timecodes mangled by old firmware that periodically corrupts the
 /// upper 16 bits: mask to the low 16, re-add the first record's high bits, then
 /// add 65536 each time the masked value wraps. A no-op on well-formed streams.
-fn correct_timecodes(records: &[&[u8]]) -> Vec<f64> {
+///
+/// A wrap is recognised by the **size** of the decrease, not merely its presence
+/// (issue 164). Treating any backward step as a wrap corrupts a stream containing a
+/// single out-of-order record: one record stepping back 49 ms had 65536 ms added to
+/// it *and to every record after it*, putting 98% of a real session a full minute
+/// late while the fix stream itself was healthy at 40 ms spacing.
+///
+/// An out-of-order record is repaired by **shifting it and every record after it**
+/// forward, so that it lands one nominal sample interval past its predecessor. That
+/// restores monotonicity — which the distance axis, `delta_t`, and the shared cursor
+/// all require — while leaving every *subsequent* delta untouched, and the deltas are
+/// what each derived quantity is built from.
+///
+/// Neither clamping nor dropping works. Clamping the record to its predecessor makes
+/// the *next* delta wrong (4890 ms becomes 228 ms on `aim_official_test.xrk`), which
+/// moves `GPS_InlineAcc` past the oracle's tolerance. Dropping the record changes the
+/// fix count, which the GPS golden pins.
+///
+/// Shifting is also what libxrk does. On `aim_official_test.xrk` it reports
+/// `[4730, 4770, 9660, 9782, …]` where the raw records hold `[4741, 79, 4969, 5091,
+/// …]` — a constant offset from index 1 with identical deltas (`+4890, +122, +128,
+/// …`), i.e. the tail moved as a block.
+fn correct_timecodes(records: &[&[u8]]) -> Timecodes {
     let raw: Vec<i64> = records
         .iter()
         .map(|r| i64::from(le_i32(r, 0).unwrap_or(0)))
         .collect();
     let monotonic = raw.windows(2).all(|w| w[1] >= w[0]);
     if monotonic {
-        return raw.into_iter().map(|t| t as f64).collect();
+        return Timecodes {
+            values: raw.into_iter().map(|t| t as f64).collect(),
+            repaired: Vec::new(),
+        };
     }
     let base_hi = raw[0] - (raw[0] & 0xFFFF);
-    let mut out = Vec::with_capacity(raw.len());
+    let mut unwrapped = Vec::with_capacity(raw.len());
     let mut cum = 0i64;
     let mut prev_masked = None;
     for value in raw {
         let masked = (value & 0xFFFF) + base_hi;
         if let Some(prev) = prev_masked {
-            if masked < prev {
+            if prev - masked > WRAP_THRESHOLD {
                 cum += 1;
             }
         }
         prev_masked = Some(masked);
-        out.push((masked + 65536 * cum) as f64);
+        unwrapped.push(masked + 65536 * cum);
     }
-    out
+    let repaired = restore_monotonicity(&mut unwrapped);
+    Timecodes {
+        values: unwrapped.into_iter().map(|t| t as f64).collect(),
+        repaired,
+    }
+}
+
+/// A corrected timecode series, plus the indices whose timecode was **fabricated**
+/// to restore monotonicity.
+///
+/// A repaired sample's spacing from its predecessor is invented — the logger never
+/// told us when that record was taken — so differentiating across it is meaningless.
+/// [`derived_channels`] therefore treats those samples exactly as it treats a
+/// non-positive `dt`: the derived value is zero rather than a number computed from a
+/// made-up interval.
+struct Timecodes {
+    values: Vec<f64>,
+    repaired: Vec<usize>,
+}
+
+/// Shift each out-of-order record — and every record after it — forward so the
+/// series is strictly increasing, preserving all subsequent deltas.
+///
+/// The shift places the offending record one nominal sample interval past its
+/// predecessor. The interval is the series' own median positive step, so it adapts to
+/// the logger's GPS rate (8 Hz here, 25 Hz elsewhere) instead of assuming one.
+/// Returns the repaired indices, **ascending** — relied on by
+/// [`derived_channels`], which binary-searches them.
+fn restore_monotonicity(times: &mut [i64]) -> Vec<usize> {
+    let nominal = nominal_step(times);
+    let mut repaired = Vec::new();
+    let mut shift = 0i64;
+    for i in 1..times.len() {
+        times[i] += shift;
+        if times[i] <= times[i - 1] {
+            let correction = times[i - 1] + nominal - times[i];
+            times[i] += correction;
+            shift += correction;
+            repaired.push(i);
+        }
+    }
+    repaired
+}
+
+/// The median positive step of `times`, or `1` when there is none — the stand-in for
+/// one sample interval when repairing an out-of-order record.
+fn nominal_step(times: &[i64]) -> i64 {
+    let mut steps: Vec<i64> = times
+        .windows(2)
+        .map(|w| w[1] - w[0])
+        .filter(|&d| d > 0)
+        .collect();
+    if steps.is_empty() {
+        return 1;
+    }
+    let mid = steps.len() / 2;
+    *steps.select_nth_unstable(mid).1
 }
 
 /// Compute inline acceleration (g), lateral acceleration (g), and yaw rate
@@ -398,6 +487,7 @@ fn derived_channels(
     timecodes: &[f64],
     speed: &[f64],
     heading: &[f64],
+    repaired: &[usize],
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     let n = timecodes.len();
     let mut inline = vec![0.0; n];
@@ -405,7 +495,18 @@ fn derived_channels(
     let mut lateral = vec![0.0; n];
     for i in 1..n {
         let dt = (timecodes[i] - timecodes[i - 1]) / 1000.0;
-        let dt = if dt > 0.0 { dt } else { f64::INFINITY };
+        // A repaired timecode's spacing is fabricated, so the interval is unknown —
+        // handled exactly like a non-positive dt, yielding a zero derived sample
+        // rather than a value computed from an invented interval.
+        //
+        // `repaired` is ascending by construction, so this is a binary search rather
+        // than a scan: a linear `contains` here would make the whole loop O(n·r),
+        // which matters on a long session with many repairs.
+        let dt = if dt > 0.0 && repaired.binary_search(&i).is_err() {
+            dt
+        } else {
+            f64::INFINITY
+        };
         inline[i] = (speed[i] - speed[i - 1]) / dt / 9.81;
         let mut dh = heading[i] - heading[i - 1];
         if dh > 180.0 {
@@ -667,6 +768,108 @@ mod tests {
         let t = [data.fixes()[0].timecode_ms, data.fixes()[1].timecode_ms];
         assert_eq!(t[0], 65_500.0);
         assert_eq!(t[1], 65_536.0 + 20.0, "wrapped timecode reconstructed");
+    }
+
+    #[test]
+    fn test_a_small_backward_step_is_not_treated_as_an_overflow() {
+        // Issue 164. A single record whose timecode steps *back* a few ms is one
+        // out-of-order GPS record, not a 16-bit wrap. Counting it as a wrap adds a
+        // full 65536 ms to that record AND every record after it: a real session
+        // (`stint-2.xrk`) had fix 81 jump 12714 -> 78201 ms, leaving 98% of the
+        // session a minute late while the fix stream itself was perfectly healthy at
+        // 40 ms spacing. A genuine wrap drops by close to the whole range; this drops
+        // by 49.
+        let a = record(12_674, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9);
+        let b = record(12_714, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9);
+        let c = record(12_665, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9); // -49 ms
+        let d = record(12_705, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9);
+        let mut file = frame("GPS", &a);
+        for r in [&b, &c, &d] {
+            file.extend(frame("GPS", r));
+        }
+        let data = decode(&file).expect("decode").expect("has gps");
+        let t: Vec<f64> = data.fixes().iter().map(|f| f.timecode_ms).collect();
+        assert!(
+            t.iter().all(|&x| x < 20_000.0),
+            "no 65536 ms is injected anywhere: {t:?}"
+        );
+        assert!(
+            t.windows(2).all(|w| w[1] > w[0]),
+            "the series is repaired to strictly increasing: {t:?}"
+        );
+    }
+
+    #[test]
+    fn test_repairing_an_out_of_order_record_preserves_the_later_deltas() {
+        // The reason the repair shifts the tail rather than clamping: every delta
+        // after the bad record must survive, because the derived channels, the
+        // distance axis, and delta-t are all built from deltas. Clamping would leave
+        // the next delta wrong.
+        let raw = [1_000, 1_040, 990, 5_880, 6_002];
+        let mut file = frame(
+            "GPS",
+            &record(raw[0], 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9),
+        );
+        for &t in &raw[1..] {
+            file.extend(frame(
+                "GPS",
+                &record(t, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9),
+            ));
+        }
+        let data = decode(&file).expect("decode").expect("has gps");
+        let t: Vec<f64> = data.fixes().iter().map(|f| f.timecode_ms).collect();
+        let deltas: Vec<f64> = t.windows(2).map(|w| w[1] - w[0]).collect();
+
+        // The raw deltas after the inversion are 4890 and 122; both must be intact.
+        assert_eq!(deltas[2], 4_890.0, "delta after the repaired record: {t:?}");
+        assert_eq!(deltas[3], 122.0, "every later delta: {t:?}");
+        assert!(
+            deltas.iter().all(|&d| d > 0.0),
+            "strictly increasing: {t:?}"
+        );
+    }
+
+    #[test]
+    fn test_a_genuine_overflow_is_still_corrected_after_a_backward_step() {
+        // Both faults in one stream: a small backward step, then a real wrap. The
+        // wrap must still be reconstructed (the series has to cross 65536), and the
+        // result must be monotonic.
+        let a = record(65_400, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9);
+        let b = record(65_380, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9); // -20 ms
+        let c = record(40, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9); // wrapped
+        let mut file = frame("GPS", &a);
+        for r in [&b, &c] {
+            file.extend(frame("GPS", r));
+        }
+        let data = decode(&file).expect("decode").expect("has gps");
+        let t: Vec<f64> = data.fixes().iter().map(|f| f.timecode_ms).collect();
+        assert_eq!(t[0], 65_400.0);
+        assert!(t[1] > t[0] && t[2] > t[1], "monotonic: {t:?}");
+        assert!(
+            t[2] > 65_536.0,
+            "the real wrap is still reconstructed, so the series crosses the 16-bit \
+             range: {t:?}"
+        );
+    }
+
+    #[test]
+    fn test_a_wrap_at_the_half_range_boundary_is_recognised() {
+        // The rule is "a decrease larger than half the range". A decrease of exactly
+        // half is an out-of-order record, not a wrap, so the series is repaired near
+        // its predecessor rather than pushed past 65536. Pins the boundary so a
+        // future edit cannot slide it silently.
+        let mut file = frame(
+            "GPS",
+            &record(40_000, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9),
+        );
+        file.extend(frame(
+            "GPS",
+            // 40_000 - 7_232 = 32_768 exactly.
+            &record(7_232, 45.0, 12.0, 40.0, (0, 0, 0), 100, 50, 100, 3, 9),
+        ));
+        let data = decode(&file).expect("decode").expect("has gps");
+        let t = data.fixes()[1].timecode_ms;
+        assert!(t > 40_000.0 && t < 41_000.0, "repaired, not wrapped: {t}");
     }
 
     #[test]
