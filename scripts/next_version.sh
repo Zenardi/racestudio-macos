@@ -22,6 +22,15 @@
 # Usage:
 #   scripts/next_version.sh [--input-version V] [--ref-type tag|branch]
 #                           [--ref-name N] [--latest-tag v1.2.3] [--head-tags "v1.2.3 ..."]
+#                           [--expect-version V]
+#
+# `--expect-version` is the pre-publish re-check. The version is chosen minutes
+# before the release is published, and a tag pushed by hand in between used to
+# be missed (v0.3.4 and v0.4.0 were both published for one commit). The workflow
+# re-runs this with the tags fetched fresh and the version it built: if the
+# commit has been tagged meanwhile it stands down as usual, and if the decision
+# would now publish a *different* version it fails rather than ship a .dmg
+# labelled one version under another's tag.
 #
 # Defaults come from the environment GitHub Actions provides and from `git`;
 # every one is overridable so the decision logic is testable without tags.
@@ -38,6 +47,7 @@ LATEST_TAG=""
 HEAD_TAGS=""
 LATEST_TAG_SET=0
 HEAD_TAGS_SET=0
+EXPECT_VERSION=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,7 +56,8 @@ while [ $# -gt 0 ]; do
     --ref-name) REF_NAME="${2-}"; shift 2 ;;
     --latest-tag) LATEST_TAG="${2-}"; LATEST_TAG_SET=1; shift 2 ;;
     --head-tags) HEAD_TAGS="${2-}"; HEAD_TAGS_SET=1; shift 2 ;;
-    -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --expect-version) EXPECT_VERSION="${2-}"; shift 2 ;;
+    -h|--help) sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -57,6 +68,10 @@ done
   || HEAD_TAGS="$(git tag --points-at HEAD 2>/dev/null | tr '\n' ' ')"
 
 emit() {
+  if [ "$2" = true ] && [ -n "$EXPECT_VERSION" ] && [ "$1" != "${EXPECT_VERSION#v}" ]; then
+    echo "next_version: built ${EXPECT_VERSION#v} but would now publish $1; refusing to ship a mislabelled build" >&2
+    exit 1
+  fi
   echo "version=$1"
   echo "publish=$2"
 }

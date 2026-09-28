@@ -168,15 +168,24 @@ import RaceStudioFFIBindings
     }
 
     @MainActor @Test func test_debounce_delays_evaluation_until_quiet() async {
+        // The window is far longer than any runner can stall. It used to be
+        // 300 ms, which a starved main actor on a loaded CI runner outlasted
+        // between the keystroke and the check (release run 36365682049).
         let spy = SpyEvaluator(result: [MathSample(time: 0, value: 1)])
-        let model = MathChannelEditorModel(evaluator: spy, debounceInterval: .milliseconds(300))
+        let model = MathChannelEditorModel(evaluator: spy, debounceInterval: .seconds(60))
 
         model.update(text: "RPM")
         // Right after the keystroke — inside the debounce window — nothing has run.
         for _ in 0..<5 { await Task.yield() }
         #expect(await spy.calls.isEmpty, "evaluation waits for the quiet interval, not per keystroke")
         #expect(model.state == .idle)
+    }
 
+    @MainActor @Test func test_debounce_evaluates_once_after_the_quiet_interval() async {
+        let spy = SpyEvaluator(result: [MathSample(time: 0, value: 1)])
+        let model = MathChannelEditorModel(evaluator: spy, debounceInterval: .milliseconds(30))
+
+        model.update(text: "RPM")
         // Once the interval elapses, the latest text is evaluated exactly once.
         await model.awaitValidation()
         #expect(await spy.calls == ["RPM"])

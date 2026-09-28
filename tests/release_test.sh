@@ -418,6 +418,70 @@ test_next_version_rejects_an_unparseable_tag() {
   fi
 }
 
+# --- the pre-publish re-check (a tag pushed while the build ran) -------------
+#
+# The version is chosen minutes before the release is published. A tag pushed
+# by hand in that window used to be missed: #171's run chose v0.3.4 for 3bb73af,
+# v0.4.0 was pushed at the same commit 46s later, and the run published v0.3.4
+# anyway -- two releases of one build. The workflow now re-runs the decision
+# with the tags fetched fresh, passing the version it built as --expect-version.
+
+nv_recheck() {
+  bash "$NEXT_VERSION" --latest-tag "$1" --head-tags "$2" \
+    --ref-type branch --ref-name main --expect-version "$3" 2>&1
+}
+
+test_recheck_stands_down_when_head_was_tagged_during_the_build() {
+  # Given a build that chose 0.3.4, When the commit has since been tagged
+  # v0.4.0 by hand, Then the re-check does not publish (that tag's run does).
+  local out rc=0
+  out="$(nv_recheck v0.4.0 "v0.4.0" 0.3.4)" || rc=$?
+  if [ "$rc" -eq 0 ] && grep -q '^publish=false$' <<<"$out"; then
+    ok "test_recheck_stands_down_when_head_was_tagged_during_the_build"
+  else
+    bad "test_recheck_stands_down_when_head_was_tagged_during_the_build" "rc=$rc $(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_recheck_publishes_when_nothing_changed() {
+  # Given a build that chose 0.4.1 on top of v0.4.0, When no tag arrived
+  # meanwhile, Then the re-check agrees and publishes.
+  local out rc=0
+  out="$(nv_recheck v0.4.0 "" 0.4.1)" || rc=$?
+  if [ "$rc" -eq 0 ] && grep -q '^version=0\.4\.1$' <<<"$out" && grep -q '^publish=true$' <<<"$out"; then
+    ok "test_recheck_publishes_when_nothing_changed"
+  else
+    bad "test_recheck_publishes_when_nothing_changed" "rc=$rc $(tr '\n' ' ' <<<"$out")"
+  fi
+}
+
+test_recheck_fails_when_the_version_moved_under_the_build() {
+  # Given a build that chose 0.4.1, When a newer tag (v0.5.0) landed on an
+  # ancestor meanwhile, Then the re-check fails loudly: publishing a .dmg built
+  # as 0.4.1 under the tag v0.5.1 would ship a mislabelled app.
+  local out rc=0
+  out="$(nv_recheck v0.5.0 "" 0.4.1)" || rc=$?
+  if [ "$rc" -ne 0 ] && grep -q 'built 0.4.1' <<<"$out"; then
+    ok "test_recheck_fails_when_the_version_moved_under_the_build"
+  else
+    bad "test_recheck_fails_when_the_version_moved_under_the_build" "published under a different version than it built"
+  fi
+}
+
+test_publish_rechecks_tags_just_before_publishing() {
+  # Given the build job, Then it fetches tags fresh and re-runs the decision
+  # with --expect-version, and the publish step is gated on that re-check.
+  local b
+  b="$(job_block build)"
+  if grep -q 'git fetch --tags' <<<"$b" \
+    && grep -q -- '--expect-version' <<<"$b" \
+    && grep -q "steps.recheck.outputs.publish == 'true'" <<<"$b"; then
+    ok "test_publish_rechecks_tags_just_before_publishing"
+  else
+    bad "test_publish_rechecks_tags_just_before_publishing" "no fresh-tag re-check gates the publish step"
+  fi
+}
+
 test_release_yml_triggers_on_a_main_push() {
   # Given the policy "every commit to main ships", Then release.yml runs on a
   # push to main, not only on a tag.
@@ -516,6 +580,10 @@ test_tag_push_uses_the_tag_and_publishes
 test_manual_dispatch_builds_without_publishing
 test_other_branches_build_a_bare_version_without_publishing
 test_next_version_rejects_an_unparseable_tag
+test_recheck_stands_down_when_head_was_tagged_during_the_build
+test_recheck_publishes_when_nothing_changed
+test_recheck_fails_when_the_version_moved_under_the_build
+test_publish_rechecks_tags_just_before_publishing
 test_release_yml_triggers_on_a_main_push
 test_release_yml_delegates_version_choice_to_the_script
 test_publish_is_gated_on_the_publish_output
