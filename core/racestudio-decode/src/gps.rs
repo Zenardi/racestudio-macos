@@ -447,6 +447,8 @@ struct Timecodes {
 /// The shift places the offending record one nominal sample interval past its
 /// predecessor. The interval is the series' own median positive step, so it adapts to
 /// the logger's GPS rate (8 Hz here, 25 Hz elsewhere) instead of assuming one.
+/// Returns the repaired indices, **ascending** — relied on by
+/// [`derived_channels`], which binary-searches them.
 fn restore_monotonicity(times: &mut [i64]) -> Vec<usize> {
     let nominal = nominal_step(times);
     let mut repaired = Vec::new();
@@ -496,7 +498,11 @@ fn derived_channels(
         // A repaired timecode's spacing is fabricated, so the interval is unknown —
         // handled exactly like a non-positive dt, yielding a zero derived sample
         // rather than a value computed from an invented interval.
-        let dt = if dt > 0.0 && !repaired.contains(&i) {
+        //
+        // `repaired` is ascending by construction, so this is a binary search rather
+        // than a scan: a linear `contains` here would make the whole loop O(n·r),
+        // which matters on a long session with many repairs.
+        let dt = if dt > 0.0 && repaired.binary_search(&i).is_err() {
             dt
         } else {
             f64::INFINITY
