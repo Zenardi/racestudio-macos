@@ -1,8 +1,8 @@
 import SwiftUI
 import RaceStudioCore
 
-/// The GPS track map (issue 4.3): the racing line colored by a channel, sector
-/// and mini-sector boundary marks, and a cursor marker.
+/// The GPS track map (issue 4.3): the racing line coloured by lap or by a channel,
+/// sector and mini-sector boundary marks, and a position marker per selected lap.
 ///
 /// Thin: every geometric decision — the `GeoProjection` fit, the `TrackPath`
 /// polyline and nearest-point lookup, the `ChannelColorScale`, and the
@@ -10,9 +10,9 @@ import RaceStudioCore
 /// strokes the resulting path and dots into a `Canvas` and turns a click into a
 /// cursor index (the shared 4.7 cursor supplies/consumes `cursorIndex`).
 ///
-/// Zoom and pan (the buttons, a trackpad pinch, and ⌥-drag) are a
-/// `RaceStudioCore.MapViewport` applied on top of the automatic fit; a plain click
-/// or drag still moves the cursor.
+/// Zoom and pan — the mouse wheel (about the pointer), a middle-button drag, a
+/// trackpad pinch, ⌥-drag, and the buttons — are a `RaceStudioCore.MapViewport`
+/// applied on top of the automatic fit; a plain click or drag still moves the cursor.
 public struct TrackMapView: View {
     private let coords: [GPSCoord]
     private let distances: [Double]
@@ -22,29 +22,33 @@ public struct TrackMapView: View {
     private let sectorSplits: Int
     /// Indices where a separately drawn run (one per selected lap) begins; no
     /// segment is stroked *into* one, so separate laps are never joined.
-    private let runStarts: Set<Int>
+    private let runStarts: [Int]
+    /// Each run's position in the lap selection — its colour (parallel to `runStarts`).
+    private let runSlots: [Int]
+    /// Each run's lap number, for the legend (parallel to `runStarts`).
+    private let runLapNumbers: [Int?]
+    /// `true` to draw each run in its lap's colour instead of the channel gradient.
+    private let colorsByLap: Bool
+    /// One position marker per selected lap (see `TrackMapModel.markers(atTime:)`).
+    private let markers: [TrackMapMarker]
     /// The map imagery drawn under the racing line, or ``TrackMapBackdrop/none``.
     private let backdrop: TrackMapBackdrop
     @Binding private var cursorIndex: Int?
 
     /// The user's zoom / pan on top of the fit.
     @State private var viewport = MapViewport()
-    /// The viewport when the current pinch or ⌥-drag began; each gesture applies
-    /// its whole translation / magnification to this, not incrementally.
+    /// The viewport when the current ⌥-drag began; the drag applies its whole
+    /// translation to this, not incrementally.
     @State private var gestureBase: MapViewport?
-    /// The closest the map imagery will show, in pixels per degree of latitude —
-    /// learned from what MapKit actually displays, `nil` until it has refused a
-    /// region. MapKit will not zoom past ~0.54 m/pt on satellite imagery and
-    /// silently shows a wider region instead, which drew a small circuit at about
-    /// twice the size of the ground under it. The line is drawn at this scale.
-    @State private var imageryScaleLimit: Double?
+    @StateObject private var imagery = TrackMapImageryLoader()
 
     /// Mini-sectors drawn per sector (they nest within the sector boundaries).
     private static let miniSectorsPerSector = 4
 
     public init(coords: [GPSCoord], distances: [Double], channelValues: [Double],
                 colorScale: ChannelColorScale, lapDistance: Double, sectorSplits: Int,
-                runStarts: [Int] = [0],
+                runStarts: [Int] = [0], runSlots: [Int] = [0], runLapNumbers: [Int?] = [nil],
+                colorsByLap: Bool = false, markers: [TrackMapMarker] = [],
                 backdrop: TrackMapBackdrop = .none,
                 cursorIndex: Binding<Int?>) {
         self.coords = coords
@@ -53,7 +57,11 @@ public struct TrackMapView: View {
         self.colorScale = colorScale
         self.lapDistance = lapDistance
         self.sectorSplits = sectorSplits
-        self.runStarts = Set(runStarts)
+        self.runStarts = runStarts
+        self.runSlots = runSlots
+        self.runLapNumbers = runLapNumbers
+        self.colorsByLap = colorsByLap
+        self.markers = markers
         self.backdrop = backdrop
         _cursorIndex = cursorIndex
     }
@@ -61,44 +69,55 @@ public struct TrackMapView: View {
     public var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
-            // Fit, apply the user's zoom/pan, cap at what the imagery can show —
-            // once per render; the Canvas, the drag and the backdrop all share it.
-            let requested = viewport.apply(to: projection(for: size), in: size)
-            let drawn = drawnProjection(requested, size: size)
-            let projected = coords.map(drawn.project)
+            // Fit, then apply the user's zoom/pan — once per render; the Canvas, the
+            // drag and the imagery all share it.
+            let projection = viewport.apply(to: fittedProjection(for: size), in: size)
+            let projected = coords.map(projection.project)
             Canvas { context, _ in
                 drawRacingLine(context, projected: projected)
                 drawBoundaries(context, projected: projected)
-                drawMarker(context, projected: projected)
+                drawMarkers(context, projected: projected)
             }
-            // Imagery goes *behind* the Canvas, covering exactly the ground the
-            // projection maps onto this view — see `TrackMapBackdropView`.
-            .background(mapBackdrop(size: size, projection: drawn, requested: requested))
+            .background(imageryLayers(projection: projection, size: size))
+            .background(MapPointerInput(
+                onZoom: { factor, anchor in viewport.zoom(by: factor, anchor: anchor, in: size) },
+                onPan: { translation in viewport.pan(by: translation, in: size) }))
             .contentShape(Rectangle())
             .gesture(pointerGesture(projected: projected, size: size))
-            .simultaneousGesture(pinchGesture(size: size))
+            .overlay(alignment: .topLeading) { legend.padding(8) }
             .overlay(alignment: .bottomTrailing) {
-                TrackMapControls(viewport: $viewport, size: size,
-                                 atImageryLimit: isAtImageryLimit(requested))
-                    .padding(8)
+                TrackMapControls(viewport: $viewport, size: size).padding(8)
             }
             .clipped()
         }
         .accessibilityLabel(L10n.string(.chartTrackMap))
-        .onChange(of: backdrop) { _ in imageryScaleLimit = nil }
+        .onAppear(perform: loadImagery)
+        .onChange(of: coords) { _ in loadImagery() }
+        .onChange(of: backdrop) { _ in loadImagery() }
     }
 
-    /// The projection the line is drawn with: the requested one, capped at the
-    /// imagery's limit while imagery is shown.
-    private func drawnProjection(_ requested: GeoProjection, size: CGSize) -> GeoProjection {
-        guard backdrop != .none, let limit = imageryScaleLimit else { return requested }
-        return requested.limited(toScale: limit, about: CGPoint(x: size.width / 2, y: size.height / 2))
+    /// Fetch imagery around the ground the map frames (or drop it for no map).
+    private func loadImagery() {
+        imagery.load(framing: GeoProjection.framedRegion(of: coords, trimmingFraction: Self.framingTrim),
+                     style: backdrop)
     }
 
-    /// Whether zooming in would only be refused by the imagery.
-    private func isAtImageryLimit(_ requested: GeoProjection) -> Bool {
-        guard backdrop != .none, let limit = imageryScaleLimit else { return false }
-        return requested.scale >= limit * 0.999
+    /// The snapshots, each scaled and placed so its ground lies under the line.
+    private func imageryLayers(projection: GeoProjection, size: CGSize) -> some View {
+        ZStack(alignment: .topLeading) {
+            if backdrop != .none {
+                ForEach(Array(imagery.layers.enumerated()), id: \.offset) { _, layer in
+                    if let frame = layer.tile.frame(in: projection) {
+                        Image(nsImage: layer.image)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: frame.width, height: frame.height)
+                            .offset(x: frame.minX, y: frame.minY)
+                    }
+                }
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     /// A plain click / drag moves the cursor to the nearest fix; ⌥-drag pans.
@@ -118,38 +137,28 @@ public struct TrackMapView: View {
             .onEnded { _ in gestureBase = nil }
     }
 
-    /// Trackpad pinch zooms about the view centre.
-    private func pinchGesture(size: CGSize) -> some Gesture {
-        MagnificationGesture()
-            .onChanged { magnification in
-                var next = gestureBase ?? viewport
-                gestureBase = next
-                next.zoom(by: Double(magnification), anchor: CGPoint(x: size.width / 2, y: size.height / 2),
-                          in: size)
-                viewport = next
+    /// Which colour is which lap, when more than one is drawn.
+    @ViewBuilder private var legend: some View {
+        let entries = legendEntries
+        if entries.count > 1 {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(entries, id: \.slot) { entry in
+                    HStack(spacing: 4) {
+                        Circle().fill(Color(PlotColor.selectionColor(at: entry.slot))).frame(width: 8, height: 8)
+                        Text(entry.number.map { "Lap \($0)" } ?? "Lap")
+                            .font(.caption)
+                            .monospacedDigit()
+                    }
+                }
             }
-            .onEnded { _ in gestureBase = nil }
-    }
-
-    /// The map under the line, or nothing when no imagery is wanted or the session
-    /// has no extent to frame.
-    @ViewBuilder
-    private func mapBackdrop(size: CGSize, projection: GeoProjection,
-                             requested: GeoProjection) -> some View {
-        if backdrop != .none, let region = GeoRegion.covering(projection, size: size) {
-            TrackMapBackdropView(region: region, style: backdrop) { shown in
-                imageryShowed(shown, size: size, requested: requested)
-            }
+            .padding(6)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .accessibilityElement(children: .combine)
         }
     }
 
-    /// MapKit reported the region it really shows. Wider than asked means it hit
-    /// its zoom limit: remember the limit so the line is drawn at the imagery's
-    /// scale, and pull the zoom back so the buttons stay honest.
-    private func imageryShowed(_ region: GeoRegion, size: CGSize, requested: GeoProjection) {
-        guard let shown = region.zoomLimit(forRequest: requested, in: size) else { return }
-        imageryScaleLimit = shown
-        viewport.limitZoom(to: viewport.zoom * shown / requested.scale)
+    private var legendEntries: [(slot: Int, number: Int?)] {
+        zip(runSlots, runLapNumbers).map { (slot: $0, number: $1) }.sorted { $0.slot < $1.slot }
     }
 
     /// The fraction of each axis's extremes excluded when framing the racing line.
@@ -172,34 +181,57 @@ public struct TrackMapView: View {
     /// real lap lost 8–10% per axis to the trim, clipping its hairpins.
     private static let framingTrim = 0.05
 
-    private func projection(for size: CGSize) -> GeoProjection {
+    private func fittedProjection(for size: CGSize) -> GeoProjection {
         // Clamp the inset to half the size so a small pane never yields a null rect.
         let inset = CGRect(origin: .zero, size: size)
             .insetBy(dx: min(12, size.width / 2), dy: min(12, size.height / 2))
         return GeoProjection.fit(to: coords, in: inset, trimmingFraction: Self.framingTrim)
     }
 
-    /// Strokes each racing-line segment in the color of its start sample; a
-    /// segment with no aligned channel value is drawn neutral.
+    /// Strokes each lap's run — whole, in its lap's colour, or segment by segment
+    /// in the colour of each segment's start sample on the channel gradient
+    /// (neutral with no aligned value). Runs draw in time order, so where two laps
+    /// share a line the later one is on top.
     private func drawRacingLine(_ context: GraphicsContext, projected: [CGPoint]) {
-        guard projected.count > 1 else { return }
-        for i in 1..<projected.count where !runStarts.contains(i) {
-            let start = projected[i - 1], end = projected[i]
-            guard start.x.isFinite, start.y.isFinite, end.x.isFinite, end.y.isFinite else { continue }
-            let color = channelValues.indices.contains(i - 1)
-                ? Color(colorScale.color(for: channelValues[i - 1]))
-                : Color.gray
-            var segment = Path()
-            segment.move(to: start)
-            segment.addLine(to: end)
-            // Over satellite imagery the channel colours lose contrast against grass
-            // and tarmac, so the line gets a dark casing — omitted on the plain
-            // background, where it would only muddy the colour.
+        for run in runStarts.indices {
+            let start = runStarts[run]
+            let end = run + 1 < runStarts.count ? runStarts[run + 1] : projected.count
+            guard end - start > 1, end <= projected.count else { continue }
+            let points = projected[start..<end]
+            // Over map imagery the colours lose contrast against grass and tarmac,
+            // so each run gets a dark casing, stroked as one path — per segment,
+            // each casing would cut a dark notch into the joint before it. Omitted
+            // on the plain background, where it would only muddy the colour.
             if backdrop != .none {
-                context.stroke(segment, with: .color(.black.opacity(0.55)), lineWidth: 5)
+                context.stroke(polyline(points), with: .color(.black.opacity(0.55)), style: Self.casingStyle)
             }
-            context.stroke(segment, with: .color(color), lineWidth: 2.5)
+            if colorsByLap, runSlots.indices.contains(run) {
+                context.stroke(polyline(points), with: .color(Color(PlotColor.selectionColor(at: runSlots[run]))),
+                               style: Self.lineStyle)
+                continue
+            }
+            for i in (start + 1)..<end {
+                let color = channelValues.indices.contains(i - 1)
+                    ? Color(colorScale.color(for: channelValues[i - 1])) : Color.gray
+                context.stroke(polyline(projected[(i - 1)...i]), with: .color(color), style: Self.lineStyle)
+            }
         }
+    }
+
+    private static let lineStyle = StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
+    private static let casingStyle = StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+
+    /// The finite points joined in order; a non-finite point (a dropped fix) breaks
+    /// the line rather than drawing it to infinity.
+    private func polyline(_ points: ArraySlice<CGPoint>) -> Path {
+        var path = Path()
+        var drawing = false
+        for point in points {
+            guard point.x.isFinite, point.y.isFinite else { drawing = false; continue }
+            if drawing { path.addLine(to: point) } else { path.move(to: point) }
+            drawing = true
+        }
+        return path
     }
 
     /// Dots each interior sector boundary (prominent) and mini-sector boundary
@@ -222,10 +254,21 @@ public struct TrackMapView: View {
         }
     }
 
-    /// Draws the cursor marker on the track, when the shared cursor is set.
-    private func drawMarker(_ context: GraphicsContext, projected: [CGPoint]) {
-        guard let index = cursorIndex, let point = TrackPath.point(on: projected, at: index) else { return }
-        context.fill(dot(at: point, radius: 5), with: .color(.red))
+    /// Draws each lap's position marker, the cursor's own lap last (on top) and
+    /// largest. A marker in its lap's colour, ringed so it reads over any line
+    /// colour or imagery; a lap that had already finished gets a white centre.
+    private func drawMarkers(_ context: GraphicsContext, projected: [CGPoint]) {
+        for marker in markers.sorted(by: { !$0.isCursorLap && $1.isCursorLap }) {
+            guard let point = TrackPath.point(on: projected, at: marker.index) else { continue }
+            let radius: CGFloat = marker.isCursorLap ? 7 : 5.5
+            let color = marker.slot.map { Color(PlotColor.selectionColor(at: $0)) } ?? .red
+            context.fill(dot(at: point, radius: radius + 2), with: .color(.black.opacity(0.6)))
+            context.fill(dot(at: point, radius: radius + 1), with: .color(.white))
+            context.fill(dot(at: point, radius: radius), with: .color(color))
+            if marker.isBeyondLap {
+                context.fill(dot(at: point, radius: radius * 0.45), with: .color(.white))
+            }
+        }
     }
 
     private func dot(at point: CGPoint, radius: CGFloat) -> Path {

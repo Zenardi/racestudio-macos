@@ -38,8 +38,20 @@ public struct TrackMapModel: Sendable {
     /// so two laps are never joined by a line across the gap between them.
     public let runStarts: [Int]
 
+    /// Each run's position in the lap selection (parallel to ``runStarts``) — the
+    /// slot ``PlotColor/selectionColor(at:)`` colours it by, so a lap is the same
+    /// colour on the map as in every other panel. `[0]` for the whole track.
+    public let runSlots: [Int]
+
+    /// Each run's lap number as the user knows it (parallel to ``runStarts``), or
+    /// `nil` when the whole track is shown or the caller gave no numbers.
+    public let runLapNumbers: [Int?]
+
     /// The selected laps' time windows, or `nil` when the whole track is shown.
     private let windows: [ClosedRange<Double>]?
+
+    /// Each run's time window (parallel to ``runStarts``); empty for the whole track.
+    private let runWindows: [ClosedRange<Double>]
 
     /// The first run's distances rebased to start at `0` — the axis the sector
     /// marks are placed along. It is a prefix of the fixes (the first run starts
@@ -60,16 +72,20 @@ public struct TrackMapModel: Sendable {
     ///   - track: the GPS fixes forming the racing line.
     ///   - colorSeries: the channel whose value colours the line, or `nil` for a
     ///     neutral line.
-    ///   - laps: the selected laps' time windows (any order) — only fixes inside
-    ///     one are kept, each lap its own run — or `nil` for the whole track.
+    ///   - laps: the selected laps' time windows, in selection order — only fixes
+    ///     inside one are kept, each lap its own run (drawn in time order) — or
+    ///     `nil` for the whole track.
+    ///   - lapNumbers: the number of the lap each window belongs to (parallel to
+    ///     `laps`), for the map's legend; missing entries read as unnumbered.
     ///   - low: the gradient colour at the channel minimum.
     ///   - high: the gradient colour at the channel maximum.
     public init(track: [GPSTrackPoint], colorSeries: ChannelSeries? = nil,
                 laps: [ClosedRange<Double>]? = nil,
+                lapNumbers: [Int] = [],
                 low: PlotColor = TrackMapModel.defaultLow,
                 high: PlotColor = TrackMapModel.defaultHigh) {
         let runs = Self.runs(of: track, in: laps)
-        let kept = runs.flatMap { $0 }
+        let kept = runs.flatMap(\.fixes)
         self.coordinates = kept.map(\.coordinate)
         self.distances = kept.map(\.distance)
         self.times = kept.map(\.time)
@@ -78,9 +94,14 @@ public struct TrackMapModel: Sendable {
         var offset = 0
         for run in runs {
             starts.append(offset)
-            offset += run.count
+            offset += run.fixes.count
         }
         self.runStarts = starts
+        self.runSlots = runs.map(\.slot)
+        self.runWindows = laps == nil ? [] : runs.map(\.window)
+        self.runLapNumbers = runs.map { run in
+            laps != nil && lapNumbers.indices.contains(run.slot) ? lapNumbers[run.slot] : nil
+        }
         let firstRunEnd = starts.count > 1 ? starts[1] : distances.count
         let base = distances.first ?? 0
         self.sectorDistances = distances[..<firstRunEnd].map { $0 - base }
@@ -134,20 +155,87 @@ public struct TrackMapModel: Sendable {
         times.indices.contains(index) ? times[index] : nil
     }
 
+    /// Where every selected lap was at the same time into the lap as the cursor —
+    /// one marker per lap, so the gap between them on the map *is* the time gap
+    /// between the laps at that moment. The cursor's own lap is flagged
+    /// ``TrackMapMarker/isCursorLap``.
+    ///
+    /// Empty when `time` is outside every selected lap (the car was not in any of
+    /// them then). A lap shorter than the offset has already finished: its marker
+    /// sits at its last fix, flagged ``TrackMapMarker/isBeyondLap``. With the whole
+    /// track shown there is one marker, at the fix nearest `time`.
+    public func markers(atTime time: Double) -> [TrackMapMarker] {
+        guard time.isFinite else { return [] }
+        guard windows != nil else {
+            return index(atTime: time).map {
+                [TrackMapMarker(index: $0, slot: nil, lapNumber: nil, isCursorLap: true, isBeyondLap: false)]
+            } ?? []
+        }
+        // On a boundary shared by two laps the cursor is at the *start* of the
+        // later one — offset 0 — not the end of the earlier.
+        guard let cursorRun = runWindows.indices
+            .filter({ runWindows[$0].contains(time) })
+            .max(by: { runWindows[$0].lowerBound < runWindows[$1].lowerBound }) else { return [] }
+        let offset = time - runWindows[cursorRun].lowerBound
+        return runWindows.indices.compactMap { run -> TrackMapMarker? in
+            let window = runWindows[run]
+            let target = window.lowerBound + offset
+            guard let index = nearestIndex(to: min(target, window.upperBound), inRun: run) else { return nil }
+            return TrackMapMarker(index: index, slot: runSlots[run], lapNumber: runLapNumbers[run],
+                                  isCursorLap: run == cursorRun, isBeyondLap: target > window.upperBound)
+        }
+    }
+
+    /// The fix in run `run` nearest `time`; a lap's run holds only finite times.
+    private func nearestIndex(to time: Double, inRun run: Int) -> Int? {
+        let start = runStarts[run]
+        let end = run + 1 < runStarts.count ? runStarts[run + 1] : times.count
+        return (start..<end).min { abs(times[$0] - time) < abs(times[$1] - time) }
+    }
+
+    /// One drawn run: its fixes, and — scoped to laps — the window it came from
+    /// and that lap's position in the selection.
+    private struct Run {
+        let fixes: [GPSTrackPoint]
+        let window: ClosedRange<Double>
+        let slot: Int
+    }
+
     /// The fixes to draw, grouped into runs: the whole track as one run, or one
     /// run per lap window in time order holding the finite-time fixes inside it.
     /// A window with no fixes contributes no run. Adjacent laps each keep their
     /// shared boundary fix, so each is drawn closed.
-    private static func runs(of track: [GPSTrackPoint],
-                             in laps: [ClosedRange<Double>]?) -> [[GPSTrackPoint]] {
-        guard let laps else { return track.isEmpty ? [] : [track] }
-        return laps.sorted { $0.lowerBound < $1.lowerBound }
-            .map { window in track.filter { $0.time.isFinite && window.contains($0.time) } }
-            .filter { !$0.isEmpty }
+    private static func runs(of track: [GPSTrackPoint], in laps: [ClosedRange<Double>]?) -> [Run] {
+        guard let laps else {
+            return track.isEmpty ? [] : [Run(fixes: track, window: 0...0, slot: 0)]
+        }
+        return laps.indices
+            .map { slot in
+                let window = laps[slot]
+                return Run(fixes: track.filter { $0.time.isFinite && window.contains($0.time) },
+                           window: window, slot: slot)
+            }
+            .sorted { $0.window.lowerBound < $1.window.lowerBound }
+            .filter { !$0.fixes.isEmpty }
     }
 
     /// The cool→hot default gradient endpoints (the shared palette's blue and
     /// orange) for colour-by-channel.
     public static let defaultLow = PlotColor.palette[0]
     public static let defaultHigh = PlotColor.palette[1]
+}
+
+/// One lap's position marker on the track map (see ``TrackMapModel/markers(atTime:)``).
+public struct TrackMapMarker: Equatable, Sendable {
+    /// The fix the marker sits on, an index into ``TrackMapModel/coordinates``.
+    public let index: Int
+    /// The lap's position in the selection — its colour — or `nil` for the whole
+    /// track, which has no lap to colour it by.
+    public let slot: Int?
+    /// The lap's number, when known.
+    public let lapNumber: Int?
+    /// `true` for the lap the cursor is actually in.
+    public let isCursorLap: Bool
+    /// `true` when this lap had already finished at the cursor's offset.
+    public let isBeyondLap: Bool
 }

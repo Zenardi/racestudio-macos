@@ -63,17 +63,9 @@ public struct GeoProjection: Equatable, Sendable {
                                  scale: 0, translateX: midX, translateY: midY)
         }
 
-        var latMin = first.latitude, latMax = first.latitude
-        var lonMin = first.longitude, lonMax = first.longitude
-        if let trimmed = trimmedBounds(coords, fraction: trimmingFraction) {
-            latMin = trimmed.latMin; latMax = trimmed.latMax
-            lonMin = trimmed.lonMin; lonMax = trimmed.lonMax
-        } else {
-            for coord in coords {
-                latMin = min(latMin, coord.latitude); latMax = max(latMax, coord.latitude)
-                lonMin = min(lonMin, coord.longitude); lonMax = max(lonMax, coord.longitude)
-            }
-        }
+        let bounds = framingBounds(coords, first: first, trimmingFraction: trimmingFraction)
+        let latMin = bounds.latMin, latMax = bounds.latMax
+        let lonMin = bounds.lonMin, lonMax = bounds.lonMax
 
         let centroidLat = (latMin + latMax) / 2
         let centroidLon = (lonMin + lonMax) / 2
@@ -99,6 +91,32 @@ public struct GeoProjection: Equatable, Sendable {
                              cosLatitude: cosLat, scale: scale,
                              translateX: originX - rawMinX * scale,
                              translateY: originY + rawMaxY * scale)
+    }
+
+    /// The region ``fit(to:in:trimmingFraction:)`` frames — the bounds of `coords`,
+    /// trimmed the same way — or `nil` for no coordinates. Map imagery is fetched
+    /// around it, so a logger's stray opening fixes don't widen the imagery any
+    /// more than they widen the view.
+    public static func framedRegion(of coords: [GPSCoord], trimmingFraction: Double = 0) -> GeoRegion? {
+        guard let first = coords.first else { return nil }
+        let bounds = framingBounds(coords, first: first, trimmingFraction: trimmingFraction)
+        return GeoRegion(center: GPSCoord(latitude: (bounds.latMin + bounds.latMax) / 2,
+                                          longitude: (bounds.lonMin + bounds.lonMax) / 2),
+                         latitudeDelta: bounds.latMax - bounds.latMin,
+                         longitudeDelta: bounds.lonMax - bounds.lonMin)
+    }
+
+    /// The trimmed bounds when trimming applies, else the plain min/max.
+    private static func framingBounds(_ coords: [GPSCoord], first: GPSCoord,
+                                      trimmingFraction: Double) -> Bounds {
+        if let trimmed = trimmedBounds(coords, fraction: trimmingFraction) { return trimmed }
+        var latMin = first.latitude, latMax = first.latitude
+        var lonMin = first.longitude, lonMax = first.longitude
+        for coord in coords {
+            latMin = min(latMin, coord.latitude); latMax = max(latMax, coord.latitude)
+            lonMin = min(lonMin, coord.longitude); lonMax = max(lonMax, coord.longitude)
+        }
+        return Bounds(latMin: latMin, latMax: latMax, lonMin: lonMin, lonMax: lonMax)
     }
 
     /// Below this many points there is no distribution to trim, so trimming is

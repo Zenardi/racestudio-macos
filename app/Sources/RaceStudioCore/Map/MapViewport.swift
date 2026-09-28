@@ -16,9 +16,9 @@ public struct MapViewport: Equatable, Sendable {
     /// How far out past the fit the user may zoom — a little context around the
     /// circuit, not a view of the whole region.
     public static let minimumZoom = 0.25
-    /// How far in the user may zoom without map imagery. With imagery the map's
-    /// own limit usually applies first (see ``limitZoom(to:)``).
-    public static let maximumZoom = 32.0
+    /// How far in the user may zoom — a hairpin's kerbs filling the pane. Closer
+    /// than this, GPS noise and the imagery's own resolution show nothing more.
+    public static let maximumZoom = 10.0
     /// One press of zoom in / out.
     public static let zoomStep = 1.5
     /// One press of a pan arrow, as a fraction of the view.
@@ -68,6 +68,22 @@ public struct MapViewport: Equatable, Sendable {
         clampOffset(in: size)
     }
 
+    /// A mouse-wheel notch (a line of scroll) zooms by this factor.
+    public static let wheelNotchZoom = 1.2
+    /// A trackpad's precise scroll zooms by `e^(points × this)` — about a doubling
+    /// for a 70-point swipe.
+    public static let preciseScrollZoomRate = 0.01
+
+    /// The zoom factor for one scroll event of `delta` (positive rolls the wheel
+    /// away from the user, which zooms in, as on a map). A wheel reports lines, a
+    /// trackpad points (`isPrecise`), so each has its own rate. A non-finite delta
+    /// zooms nothing; a flung wheel is capped so one event cannot jump the whole range.
+    public static func scrollZoomFactor(delta: Double, isPrecise: Bool) -> Double {
+        guard delta.isFinite else { return 1 }
+        if isPrecise { return exp(min(max(delta, -100), 100) * preciseScrollZoomRate) }
+        return pow(wheelNotchZoom, min(max(delta, -5), 5))
+    }
+
     /// Move the ground with a drag of `translation` view points.
     public mutating func pan(by translation: CGSize, in size: CGSize) {
         offset = CGSize(width: Double(offset.width) - Double(translation.width) / zoom,
@@ -92,13 +108,6 @@ public struct MapViewport: Equatable, Sendable {
     public mutating func reset() {
         zoom = 1
         offset = .zero
-    }
-
-    /// Lower the zoom to at most `limit` — used when the map imagery cannot show
-    /// anything closer, so the zoom buttons stay honest. Never zooms back in.
-    public mutating func limitZoom(to limit: Double) {
-        guard limit.isFinite, limit > 0 else { return }
-        zoom = min(zoom, max(limit, Self.minimumZoom))
     }
 
     /// `projection` (the automatic fit for a view of `size`) with this zoom and
@@ -126,56 +135,5 @@ public struct MapViewport: Equatable, Sendable {
 
     private static func center(of size: CGSize) -> CGPoint {
         CGPoint(x: size.width / 2, y: size.height / 2)
-    }
-}
-
-public extension GeoProjection {
-    /// This projection with its scale capped at `maximumScale` (pixels per degree
-    /// of latitude), shrinking about `center` — how a map that refuses to zoom any
-    /// closer widens its view. Unchanged when already within the limit, or when the
-    /// limit is not a positive finite number.
-    func limited(toScale maximumScale: Double, about center: CGPoint) -> GeoProjection {
-        guard maximumScale.isFinite, maximumScale > 0, scale > maximumScale else { return self }
-        let factor = maximumScale / scale
-        let centerX = Double(center.x), centerY = Double(center.y)
-        return GeoProjection(centroidLatitude: centroidLatitude, centroidLongitude: centroidLongitude,
-                             cosLatitude: cosLatitude, scale: maximumScale,
-                             translateX: (translateX - centerX) * factor + centerX,
-                             translateY: (translateY - centerY) * factor + centerY)
-    }
-}
-
-public extension GeoRegion {
-    /// The widest span (degrees of latitude) that can be a zoom *limit*. MapKit's
-    /// closest zoom is around half a metre per point, so a settled widening spans
-    /// metres to kilometres; a map not laid out yet reports tens of degrees.
-    static let maximumLimitSpan = 0.1
-
-    /// How far (as a fraction of the requested span) a widened region's centre may
-    /// sit from the request's — MapKit widens about the centre it was given.
-    static let limitCentreTolerance = 0.05
-
-    /// The scale (pixels per degree of latitude) at which this region fills a view
-    /// `height` points tall, or `nil` for a non-positive height.
-    func scale(forHeight height: Double) -> Double? {
-        guard height > 0, height.isFinite, latitudeDelta > 0 else { return nil }
-        return height / latitudeDelta
-    }
-
-    /// The imagery's zoom limit (pixels per degree of latitude) revealed by the map
-    /// showing this region when asked for `request` in a view of `size`, or `nil`
-    /// when it showed what was asked — or when this is not a settled widening of
-    /// the request at all (a whole-world region from a map not laid out yet, or a
-    /// stale region centred somewhere else), which must never be taken as a limit.
-    func zoomLimit(forRequest request: GeoProjection, in size: CGSize) -> Double? {
-        guard let shown = scale(forHeight: Double(size.height)),
-              let asked = GeoRegion.covering(request, size: size),
-              latitudeDelta < Self.maximumLimitSpan,
-              shown < request.scale * 0.995 else { return nil }
-        let tolerance = asked.latitudeDelta * Self.limitCentreTolerance
-        guard abs(center.latitude - asked.center.latitude) <= tolerance,
-              abs(center.longitude - asked.center.longitude) <= asked.longitudeDelta * Self.limitCentreTolerance
-        else { return nil }
-        return shown
     }
 }

@@ -3,13 +3,8 @@ import Foundation
 import Testing
 @testable import RaceStudioCore
 
-/// Tests for the track map's user zoom / pan (`MapViewport`) and for capping a
-/// projection at the zoom the map imagery can actually show.
-///
-/// Why the cap exists: MapKit will not zoom in past roughly 0.54 m per point on
-/// satellite imagery. Asked for a tighter region it silently shows a wider one, so a
-/// ~200 m kart circuit filling a large pane was drawn about 2x larger than the
-/// ground under it. The line must be drawn at the scale the map really shows.
+/// Tests for the track map's user zoom / pan (`MapViewport`): the buttons, the
+/// mouse wheel, and the drags all go through it.
 @Suite struct MapViewportTests {
 
     private let size = CGSize(width: 400, height: 200)
@@ -132,97 +127,38 @@ import Testing
         #expect(viewport.isFitted)
     }
 
-    // MARK: - Capping at what the imagery can show
+    // MARK: - Scroll zoom
 
-    @Test func test_limit_zoom_lowers_but_never_raises_the_zoom() {
+    @Test func test_rolling_the_wheel_away_zooms_in_one_notch_at_a_time() {
+        #expect(MapViewport.scrollZoomFactor(delta: 1, isPrecise: false) == MapViewport.wheelNotchZoom)
+        #expect(abs(MapViewport.scrollZoomFactor(delta: -1, isPrecise: false) - 1 / MapViewport.wheelNotchZoom) < 1e-12)
+    }
+
+    @Test func test_a_trackpad_scroll_zooms_smoothly_by_points() {
+        let small = MapViewport.scrollZoomFactor(delta: 5, isPrecise: true)
+        #expect(small > 1 && small < 1.1, "5 points is a nudge, not a notch")
+        #expect(abs(MapViewport.scrollZoomFactor(delta: 70, isPrecise: true) - 2) < 0.02)
+    }
+
+    @Test func test_a_flung_wheel_cannot_jump_the_whole_zoom_range() {
+        #expect(MapViewport.scrollZoomFactor(delta: 500, isPrecise: false)
+                == MapViewport.scrollZoomFactor(delta: 5, isPrecise: false))
+        #expect(MapViewport.scrollZoomFactor(delta: -10_000, isPrecise: true)
+                == MapViewport.scrollZoomFactor(delta: -100, isPrecise: true))
+    }
+
+    @Test func test_a_non_finite_scroll_zooms_nothing() {
+        #expect(MapViewport.scrollZoomFactor(delta: .nan, isPrecise: false) == 1)
+        #expect(MapViewport.scrollZoomFactor(delta: .infinity, isPrecise: true) == 1)
+    }
+
+    /// Zooming with the wheel keeps the ground under the pointer where it is, so
+    /// the user can zoom straight into the corner they are pointing at.
+    @Test func test_wheel_zoom_keeps_the_ground_under_the_pointer() {
         var viewport = MapViewport()
-        viewport.zoom(by: 4, anchor: center, in: size)
-        viewport.limitZoom(to: 2.5)
-        #expect(viewport.zoom == 2.5)
-        viewport.limitZoom(to: 8)
-        #expect(viewport.zoom == 2.5, "a looser limit does not zoom back in")
-    }
-
-    @Test func test_a_projection_under_the_limit_is_unchanged() {
-        #expect(fitted().limited(toScale: 5000, about: center) == fitted())
-    }
-
-    @Test func test_a_projection_over_the_limit_is_scaled_down_about_the_centre() {
-        let limited = fitted().limited(toScale: 400, about: center)
-        #expect(limited.scale == 400)
-        let centroid = GPSCoord(latitude: 10, longitude: 20)
-        #expect(close(limited.project(centroid), center), "the map keeps its centre when it widens")
-    }
-
-    @Test func test_a_non_finite_or_non_positive_limit_is_ignored() {
-        #expect(fitted().limited(toScale: .nan, about: center) == fitted())
-        #expect(fitted().limited(toScale: 0, about: center) == fitted())
-    }
-
-    @Test func test_a_regions_scale_is_the_view_height_per_degree_of_latitude() {
-        let region = GeoRegion(center: GPSCoord(latitude: 0, longitude: 0),
-                               latitudeDelta: 0.002, longitudeDelta: 0.004)
-        #expect(region.scale(forHeight: 200) == 100_000)
-        #expect(region.scale(forHeight: 0) == nil)
-    }
-
-    // MARK: - Reading the imagery's limit off what MapKit shows
-
-    private func request() -> GeoProjection {
-        // 0.24 m/pt at San Marino, centred in a 400x200 view.
-        GeoProjection(centroidLatitude: -22.777, centroidLongitude: -47.12,
-                      cosLatitude: cos(-22.777 * .pi / 180),
-                      scale: 111_320 / 0.24, translateX: 200, translateY: 100)
-    }
-
-    @Test func test_a_widened_region_reveals_the_limit() throws {
-        let shown = GeoRegion(center: GPSCoord(latitude: -22.777, longitude: -47.12),
-                              latitudeDelta: 200 * 0.54 / 111_320, longitudeDelta: 0.002)
-        let limit = try #require(shown.zoomLimit(forRequest: request(), in: size))
-        #expect(abs(limit - 111_320 / 0.54) < 1e-6)
-    }
-
-    @Test func test_the_region_that_was_asked_for_reveals_no_limit() throws {
-        let asked = try #require(GeoRegion.covering(request(), size: size))
-        #expect(asked.zoomLimit(forRequest: request(), in: size) == nil)
-    }
-
-    /// A map not laid out yet reports a whole-world region. Taken as a limit it
-    /// would shrink the line to nothing, so it must be ignored.
-    @Test func test_an_unsettled_whole_world_region_is_not_a_limit() {
-        let world = GeoRegion(center: GPSCoord(latitude: -22.777, longitude: -47.12),
-                              latitudeDelta: 90, longitudeDelta: 180)
-        #expect(world.zoomLimit(forRequest: request(), in: size) == nil)
-    }
-
-    /// MapKit widens about the centre it was given; a region somewhere else is a
-    /// stale report from before the last request, not a limit.
-    @Test func test_an_off_centre_region_is_not_a_limit() {
-        let stale = GeoRegion(center: GPSCoord(latitude: -22.770, longitude: -47.12),
-                              latitudeDelta: 200 * 0.54 / 111_320, longitudeDelta: 0.002)
-        #expect(stale.zoomLimit(forRequest: request(), in: size) == nil)
-    }
-
-    @Test func test_no_limit_is_read_off_an_empty_view() {
-        let shown = GeoRegion(center: GPSCoord(latitude: -22.777, longitude: -47.12),
-                              latitudeDelta: 0.001, longitudeDelta: 0.002)
-        #expect(shown.zoomLimit(forRequest: request(), in: .zero) == nil)
-    }
-
-    /// The real case: the fit asks for 0.24 m/pt, MapKit shows 0.54 m/pt. Drawn
-    /// through the limit, a 200 m circuit spans the pixels the imagery gives it.
-    @Test func test_drawing_through_the_maps_limit_matches_the_imagery_scale() throws {
-        let metresPerDegree = 111_320.0
-        let fit = GeoProjection(centroidLatitude: -22.777, centroidLongitude: -47.12,
-                                cosLatitude: cos(-22.777 * .pi / 180),
-                                scale: metresPerDegree / 0.24, translateX: 200, translateY: 100)
-        let mapRegion = GeoRegion(center: GPSCoord(latitude: -22.777, longitude: -47.12),
-                                  latitudeDelta: 200 * 0.54 / metresPerDegree, longitudeDelta: 0.002)
-        let limit = try #require(mapRegion.scale(forHeight: 200))
-
-        let drawn = fit.limited(toScale: limit, about: center)
-        let north = drawn.project(GPSCoord(latitude: -22.777 + 200 / metresPerDegree, longitude: -47.12))
-        let south = drawn.project(GPSCoord(latitude: -22.777, longitude: -47.12))
-        #expect(abs(abs(north.y - south.y) - 200 / 0.54) < 1e-6, "200 m at 0.54 m/pt")
+        let pointer = CGPoint(x: 300, y: 50)
+        let before = fitted().unproject(pointer)
+        viewport.zoom(by: MapViewport.scrollZoomFactor(delta: 3, isPrecise: false), anchor: pointer, in: size)
+        #expect(close(viewport.apply(to: fitted(), in: size).project(before), pointer))
     }
 }

@@ -90,6 +90,10 @@ public final class AnalysisWindowModel: ObservableObject {
     /// ``trackMap`` is a plain cache.
     @Published var colorChannelOverride: ChannelID?
 
+    /// Whether the user chose to colour the track map by lap (`true`) or by channel
+    /// (`false`); `nil` follows ``trackMapColoring``'s automatic choice.
+    @Published var trackMapColorsByLap: Bool?
+
     private struct SelectionEntry {
         let channel: ChannelID
         let trace: ChannelTrace
@@ -333,10 +337,10 @@ public final class AnalysisWindowModel: ObservableObject {
         let colorSeries = colorChannel.flatMap { id in
             selectionData.first { $0.channel == id }?.series
         }
-        let windows = lapByID.isEmpty ? nil : selection.laps.selected.compactMap { id in
-            lapByID[id].map { $0.startTimeS...max($0.startTimeS, $0.endTimeS) }
-        }
-        trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries, laps: windows)
+        let laps = selection.laps.selected.compactMap { lapByID[$0] }
+        let windows = lapByID.isEmpty ? nil : laps.map { $0.startTimeS...max($0.startTimeS, $0.endTimeS) }
+        trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries, laps: windows,
+                                      lapNumbers: laps.map { Int($0.index) + 1 })
     }
 
     /// Rebuild the lap overlay (issue 8.7): a distance-aligned ``OverlayLap`` per
