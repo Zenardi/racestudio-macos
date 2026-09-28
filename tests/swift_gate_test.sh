@@ -24,13 +24,37 @@ ok()  { printf '  ok   - %s\n' "$1"; PASS=$((PASS + 1)); }
 bad() { printf '  FAIL - %s: %s\n' "$1" "${2:-}"; FAIL=$((FAIL + 1)); }
 
 # Build the Swift coverage data exactly once, lazily, for the scoping tests.
-SWIFT_BUILT=0
+#
+# The attempt and its outcome are tracked separately. Conflating them — a single
+# flag where 0 meant both "not built yet" and "the build failed" — made a failed
+# build look unattempted, so the *next* test rebuilt and could report a different
+# result from the same condition. A real CI run failed
+# `test_swift_gate_measures_core_only` and then passed
+# `test_shell_target_excluded_from_metric` seven seconds later, from one tree.
+SWIFT_BUILD_STATE="unattempted" # unattempted | ok | failed
 ensure_swift_built() {
-  if [[ "$SWIFT_BUILT" -eq 0 ]]; then
-    bash "$GATE" --swift-build >/dev/null 2>&1
-    SWIFT_BUILT=$?
-    [[ "$SWIFT_BUILT" -eq 0 ]] && SWIFT_BUILT=1 || SWIFT_BUILT=0
+  [[ "$SWIFT_BUILD_STATE" == "unattempted" ]] || return 0
+  local log
+  log="$(mktemp)"
+  if bash "$GATE" --swift-build >"$log" 2>&1; then
+    SWIFT_BUILD_STATE="ok"
+  else
+    SWIFT_BUILD_STATE="failed"
+    # Surface the cause. Discarding this output is why the CI failure above said
+    # only "swift build/coverage failed" and nothing about why. The tail is enough
+    # to diagnose in a CI log; the full log is left on disk and its path printed,
+    # so a developer can read the rest.
+    echo "  --- coverage.sh --swift-build failed; last 25 lines ---"
+    tail -25 "$log" | sed 's/^/      /'
+    echo "  --- end (full log: $log) ---"
+    return 0
   fi
+  rm -f "$log"
+}
+
+# Whether the shared Swift build is usable by a scoping test.
+swift_build_ok() {
+  [[ "$SWIFT_BUILD_STATE" == "ok" ]]
 }
 
 # Extract the measured filenames (repo-relative) from an llvm-cov export JSON on
@@ -117,7 +141,7 @@ test_swift_gate_measures_core_only() {
   # Given a real coverage run, When scoped to Sources/RaceStudioCore, Then the
   # measured file set is exactly the Core library (no tests/runner/shell).
   ensure_swift_built
-  if [[ "$SWIFT_BUILT" -ne 1 ]]; then
+  if ! swift_build_ok; then
     bad "test_swift_gate_measures_core_only" "swift build/coverage failed"
     return
   fi
@@ -136,7 +160,7 @@ test_shell_target_excluded_from_metric() {
   # coverage data (it is not linked into the test binary), so it cannot fail
   # the gate however uncovered it is.
   ensure_swift_built
-  if [[ "$SWIFT_BUILT" -ne 1 ]]; then
+  if ! swift_build_ok; then
     bad "test_shell_target_excluded_from_metric" "swift build/coverage failed"
     return
   fi
