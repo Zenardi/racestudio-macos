@@ -47,7 +47,8 @@ public struct LapScrubTime: Equatable, Sendable {
 /// no lap boundaries, and a single absolute cursor said nothing about where in each
 /// selected lap it landed — which is the entire reason to select several.
 ///
-/// This adds a second way to address time. **Session** keeps the old sweep, now with
+/// This adds a second way to address time. **Session** sweeps only the selected laps,
+/// joined end to end in time order (the whole recording when none is selected), with
 /// lap boundaries marked on the track and a readout that names the lap. **Lap**
 /// scrubs an offset *within* a lap and reports the equivalent point in every
 /// selected lap, so the channel readouts above are comparing like with like.
@@ -118,12 +119,41 @@ public struct LapScrub: Equatable, Sendable {
         return low...high
     }
 
+    /// The selected valid laps' time windows in time order — what session mode
+    /// scrubs when anything is selected. Selection order is irrelevant here.
+    private var selectedSegments: [ClosedRange<Double>] {
+        let chosen = Set(selected)
+        return laps
+            .filter { $0.hasValidDuration && chosen.contains(Int($0.index)) && $0.endTimeS > $0.startTimeS }
+            .sorted { $0.startTimeS < $1.startTimeS }
+            .map { $0.startTimeS...$0.endTimeS }
+    }
+
+    /// The stretches of session time the session-mode slider covers, joined end to
+    /// end: the selected laps, or — with none selected — the whole session, so the
+    /// control is never inert.
+    private var segments: [ClosedRange<Double>] {
+        let picked = selectedSegments
+        if !picked.isEmpty { return picked }
+        return sessionRange.map { [$0] } ?? []
+    }
+
+    /// The slider length in session mode: the segments' summed widths.
+    private var timelineLength: Double {
+        segments.reduce(0) { $0 + ($1.upperBound - $1.lowerBound) }
+    }
+
     /// The slider's value range in the active mode, or `nil` when there is nothing to
     /// scrub (a session with no valid laps).
+    ///
+    /// In session mode it spans only the selected laps: selecting laps 1 and 3
+    /// gives a slider of lap 1 followed directly by lap 3, with the rest of the
+    /// recording — lap 2 included — off the track entirely.
     public var range: ClosedRange<Double>? {
         switch mode {
         case .session:
-            return sessionRange
+            let length = timelineLength
+            return length > 0 ? 0...length : nil
         case .lap:
             guard let anchor else { return nil }
             return 0...anchor.durationS
@@ -131,10 +161,11 @@ public struct LapScrub: Equatable, Sendable {
     }
 
     /// The slider's value for the current cursor time, in the active mode's terms.
+    /// A session-mode cursor outside every segment sits at the nearest segment edge.
     public var value: Double {
         switch mode {
         case .session:
-            return time
+            return timelineValue(at: time)
         case .lap:
             guard let anchor else { return time }
             return time - anchor.startTimeS
@@ -146,11 +177,41 @@ public struct LapScrub: Equatable, Sendable {
     public func time(for value: Double) -> Double {
         switch mode {
         case .session:
-            return value
+            return sessionTime(atTimelineValue: value)
         case .lap:
             guard let anchor else { return value }
             return anchor.startTimeS + value
         }
+    }
+
+    /// Session time → position along the joined segments; a time between or
+    /// outside them maps to the nearest segment edge.
+    private func timelineValue(at time: Double) -> Double {
+        var before = 0.0
+        var nearest = (gap: Double.infinity, value: 0.0)
+        for segment in segments {
+            let width = segment.upperBound - segment.lowerBound
+            if segment.contains(time) { return before + time - segment.lowerBound }
+            let gapBefore = segment.lowerBound - time, gapAfter = time - segment.upperBound
+            if gapBefore > 0, gapBefore < nearest.gap { nearest = (gapBefore, before) }
+            if gapAfter > 0, gapAfter < nearest.gap { nearest = (gapAfter, before + width) }
+            before += width
+        }
+        return nearest.value
+    }
+
+    /// Position along the joined segments → session time, clamped to their ends.
+    /// A join resolves to the earlier segment's end.
+    private func sessionTime(atTimelineValue value: Double) -> Double {
+        guard let first = segments.first, let last = segments.last else { return value }
+        guard value > 0 else { return first.lowerBound }
+        var before = 0.0
+        for segment in segments {
+            let width = segment.upperBound - segment.lowerBound
+            if value <= before + width { return segment.lowerBound + (value - before) }
+            before += width
+        }
+        return last.upperBound
     }
 
     /// The lap the cursor currently sits in, or `nil` when it is between/outside laps.
@@ -159,10 +220,21 @@ public struct LapScrub: Equatable, Sendable {
     }
 
     /// Normalised (`0...1`) positions of the interior lap boundaries along the slider
-    /// track — the marks that make the control legible. Empty in lap mode, where the
-    /// whole track *is* one lap.
+    /// track — the marks that make the control legible. With laps selected they are
+    /// the joins between them. Empty in lap mode, where the whole track *is* one lap.
     public var lapTicks: [Double] {
-        guard mode == .session, let range = sessionRange else { return [] }
+        guard mode == .session else { return [] }
+        let picked = selectedSegments
+        if !picked.isEmpty {
+            let length = timelineLength
+            guard length > 0 else { return [] }
+            var before = 0.0
+            return picked.dropLast().map { segment in
+                before += segment.upperBound - segment.lowerBound
+                return before / length
+            }
+        }
+        guard let range = sessionRange else { return [] }
         let span = range.upperBound - range.lowerBound
         return laps.filter(\.hasValidDuration)
             .map(\.startTimeS)
@@ -205,6 +277,9 @@ public struct LapScrub: Equatable, Sendable {
     /// A one-line explanation of what dragging the scrubber does right now.
     public var help: String {
         switch mode {
+        case .session where !selectedSegments.isEmpty:
+            return "Drag to move the cursor through the selected laps, joined end to end. "
+                + "Marks show where each lap begins."
         case .session:
             return "Drag to move the cursor through the whole session. "
                 + "Marks show where each lap begins."
@@ -229,5 +304,19 @@ public extension AnalysisWindowModel {
                  reference: selection.laps.reference?.index,
                  mode: mode,
                  time: linkedCursor.timePosition)
+    }
+
+    /// Bring the shared cursor into the selected laps after the selection changes:
+    /// when it sits outside every selected lap, move it to the earliest one's start.
+    /// Otherwise the scrubber — which spans only the selected laps — would pin its
+    /// thumb to an edge, and the track map would hide its marker, until the user
+    /// happened to drag into a lap. A cursor already in a selected lap stays put,
+    /// and with nothing selected it is left alone.
+    internal func keepCursorInSelectedLaps() {
+        let selectedLaps = selection.laps.selected.compactMap { lapByID[$0] }.filter(\.hasValidDuration)
+        let time = linkedCursor.timePosition
+        guard !selectedLaps.contains(where: { time >= $0.startTimeS && time <= $0.endTimeS }),
+              let earliest = selectedLaps.min(by: { $0.startTimeS < $1.startTimeS }) else { return }
+        linkedCursor.moveTime(earliest.startTimeS)
     }
 }

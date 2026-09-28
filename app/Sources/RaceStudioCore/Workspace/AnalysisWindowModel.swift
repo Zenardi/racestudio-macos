@@ -180,6 +180,7 @@ public final class AnalysisWindowModel: ObservableObject {
     /// lap overlay (which laps are overlaid, issue 8.7).
     public func toggleLap(_ lap: LapID) {
         selection.toggleLap(lap)
+        keepCursorInSelectedLaps()
         rebuildReadoutTable()
         rebuildTrackMap()
         rebuildOverlay()
@@ -190,6 +191,7 @@ public final class AnalysisWindowModel: ObservableObject {
     /// newly-added reference adds a column) and the overlay deltas.
     public func setReferenceLap(_ lap: LapID) {
         selection.setReferenceLap(lap)
+        keepCursorInSelectedLaps()
         rebuildReadoutTable()
         rebuildTrackMap()
         rebuildOverlay()
