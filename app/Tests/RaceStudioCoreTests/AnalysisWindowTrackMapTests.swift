@@ -44,7 +44,12 @@ import Foundation
                               dataSource: FakeSessionDataSource(banks: [bank(11, scale: 2), bank(11, scale: 10)],
                                                                 gps: gps()))
             : nil
-        return AnalysisWindowModel(session: sess, analysis: analysis)
+        let model = AnalysisWindowModel(session: sess, analysis: analysis)
+        // The map shows only selected laps; select the one lap so these tests see
+        // the whole fixture track (lap scoping is covered in
+        // AnalysisWindowTrackMapLapTests).
+        model.toggleLap(LapID(0))
+        return model
     }
 
     // MARK: - Racing line

@@ -71,12 +71,11 @@ public final class AnalysisWindowModel: ObservableObject {
 
     /// The session's GPS racing line, read once from the pump (it is constant for
     /// the session; only its colour-by-channel changes) — issue 8.6.
-    private let gpsTrackPoints: [GPSTrackPoint]
+    let gpsTrackPoints: [GPSTrackPoint]
 
-    /// The assembled track-map inputs, rebuilt when the selection or colour channel
-    /// changes (issue 8.6). The line is constant; the rebuild only re-aligns the
-    /// colour channel onto the fixes.
-    private var trackMapCache = TrackMapModel(track: [])
+    /// The assembled track-map inputs, rebuilt when the channel or lap selection or
+    /// the colour channel changes (issue 8.6): only the selected laps are kept.
+    private(set) var trackMapCache = TrackMapModel(track: [])
 
     /// The distance-aligned overlay laps + delta-t strips keyed by `(reference,
     /// other lap)` (8.7). The overlay channel's whole distance read is cached (by
@@ -182,6 +181,7 @@ public final class AnalysisWindowModel: ObservableObject {
     public func toggleLap(_ lap: LapID) {
         selection.toggleLap(lap)
         rebuildReadoutTable()
+        rebuildTrackMap()
         rebuildOverlay()
     }
 
@@ -191,6 +191,7 @@ public final class AnalysisWindowModel: ObservableObject {
     public func setReferenceLap(_ lap: LapID) {
         selection.setReferenceLap(lap)
         rebuildReadoutTable()
+        rebuildTrackMap()
         rebuildOverlay()
     }
 
@@ -259,47 +260,12 @@ public final class AnalysisWindowModel: ObservableObject {
     public var channelFormatters: [ChannelID: ChannelFormatter] { channelFormattersCache }
 
     // MARK: - Track map (issue 8.6)
-
-    /// The assembled racing line, colour-by-channel values, colour scale, and
-    /// cursor↔fix mapping feeding the reused `TrackMapView`. Empty when the session
-    /// has no GPS track (or no analysis pump).
-    public var trackMap: TrackMapModel { trackMapCache }
-
-    /// The channel currently colouring the racing line (issue 8.6): the explicit
-    /// override while it stays selected, else the first selected channel. `nil`
-    /// when nothing is selected.
-    public var colorChannel: ChannelID? {
-        if let override = colorChannelOverride, selection.channels.contains(override) { return override }
-        return selection.channels.first
-    }
-
-    /// The GPS fix index under the shared cursor — the marker position on the map
-    /// (issue 8.6). Reads the live cursor, so it follows every cursor move; `nil`
-    /// when the session has no GPS track.
-    public var gpsCursorIndex: Int? {
-        trackMapCache.index(atTime: linkedCursor.timePosition)
-    }
-
-    /// Colour the racing line by `channel` (issue 8.6); ignored when it is not a
-    /// selected channel (only a plotted channel can colour the line).
-    public func setColorChannel(_ channel: ChannelID) {
-        guard selection.channels.contains(channel) else { return }
-        colorChannelOverride = channel
-        rebuildTrackMap()
-    }
+    // The panel's accessors live in AnalysisWindowModel+TrackMap.swift.
 
     /// Set how many sectors the track map splits the lap into (issue 8.6); clamped
     /// to be non-negative (`0` hides the markers).
     public func setSectorSplits(_ splits: Int) {
         sectorSplits = max(0, splits)
-    }
-
-    /// Move the shared cursor to GPS fix `index` — a hover / click on the map
-    /// drives the window's cursor (issue 8.6). A no-op for an out-of-range index or
-    /// a dropped fix with no finite time.
-    public func moveTrackCursor(toFix index: Int) {
-        guard let time = trackMapCache.time(atIndex: index), time.isFinite else { return }
-        linkedCursor.moveTime(time)
     }
 
     // MARK: - Lap overlay (issue 8.7)
@@ -358,15 +324,17 @@ public final class AnalysisWindowModel: ObservableObject {
         readoutTableCache = ReadoutTableModel(rows: rows, columns: columns, series: series)
     }
 
-    /// Rebuild the track map: fold the current colour channel's cached series into
-    /// the (constant) GPS racing line (issue 8.6). The line follows the trajectory;
-    /// only the colour-by-channel re-aligns when the selection or colour channel
-    /// changes.
-    private func rebuildTrackMap() {
+    /// Rebuild the track map: the selected laps of the (constant) GPS racing line,
+    /// coloured by the current colour channel's cached series (issue 8.6). A
+    /// session with no laps has nothing to select, so it shows the whole line.
+    func rebuildTrackMap() {
         let colorSeries = colorChannel.flatMap { id in
             selectionData.first { $0.channel == id }?.series
         }
-        trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries)
+        let windows = lapByID.isEmpty ? nil : selection.laps.selected.compactMap { id in
+            lapByID[id].map { $0.startTimeS...max($0.startTimeS, $0.endTimeS) }
+        }
+        trackMapCache = TrackMapModel(track: gpsTrackPoints, colorSeries: colorSeries, laps: windows)
     }
 
     /// Rebuild the lap overlay (issue 8.7): a distance-aligned ``OverlayLap`` per

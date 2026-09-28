@@ -232,18 +232,23 @@ private struct TrackMapPanel: View {
 
     var body: some View {
         let map = model.trackMap
-        if map.coordinates.isEmpty {
-            ContentUnavailableHint(text: "No GPS data for this session")
+        if model.trackMapNeedsLapSelection {
+            ContentUnavailableHint(text: "Select one or more laps to show them on the map",
+                                   symbol: "flag.checkered")
+        } else if map.coordinates.isEmpty {
+            ContentUnavailableHint(text: model.hasGPSTrack ? "No GPS data in the selected laps"
+                                                           : "No GPS data for this session")
         } else {
             VStack(spacing: 0) {
                 controls
                 Divider()
                 TrackMapView(coords: map.coordinates,
-                             distances: map.distances,
+                             distances: map.sectorDistances,
                              channelValues: map.channelValues,
                              colorScale: map.colorScale,
                              lapDistance: map.lapDistance,
                              sectorSplits: model.sectorSplits,
+                             runStarts: map.runStarts,
                              backdrop: backdrop,
                              cursorIndex: Binding(
                                 get: { model.gpsCursorIndex },

@@ -16,6 +16,9 @@ public struct TrackMapView: View {
     private let colorScale: ChannelColorScale
     private let lapDistance: Double
     private let sectorSplits: Int
+    /// Indices where a separately drawn run (one per selected lap) begins; no
+    /// segment is stroked *into* one, so separate laps are never joined.
+    private let runStarts: Set<Int>
     /// The map imagery drawn under the racing line, or ``TrackMapBackdrop/none``.
     private let backdrop: TrackMapBackdrop
     @Binding private var cursorIndex: Int?
@@ -25,6 +28,7 @@ public struct TrackMapView: View {
 
     public init(coords: [GPSCoord], distances: [Double], channelValues: [Double],
                 colorScale: ChannelColorScale, lapDistance: Double, sectorSplits: Int,
+                runStarts: [Int] = [0],
                 backdrop: TrackMapBackdrop = .none,
                 cursorIndex: Binding<Int?>) {
         self.coords = coords
@@ -33,6 +37,7 @@ public struct TrackMapView: View {
         self.colorScale = colorScale
         self.lapDistance = lapDistance
         self.sectorSplits = sectorSplits
+        self.runStarts = Set(runStarts)
         self.backdrop = backdrop
         _cursorIndex = cursorIndex
     }
@@ -98,7 +103,7 @@ public struct TrackMapView: View {
     /// segment with no aligned channel value is drawn neutral.
     private func drawRacingLine(_ context: GraphicsContext, projected: [CGPoint]) {
         guard projected.count > 1 else { return }
-        for i in 1..<projected.count {
+        for i in 1..<projected.count where !runStarts.contains(i) {
             let start = projected[i - 1], end = projected[i]
             guard start.x.isFinite, start.y.isFinite, end.x.isFinite, end.y.isFinite else { continue }
             let color = channelValues.indices.contains(i - 1)
