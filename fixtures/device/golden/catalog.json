@@ -1,0 +1,139 @@
+{
+  "source": "client/catalog_response.bin",
+  "note": "issue #179: the typed parse of the de-identified download-summary CSV",
+  "skipped_rows": 0,
+  "sessions": [
+    {
+      "file_name": "a_0062.xrz",
+      "size_bytes": 4881221,
+      "date": {
+        "year": 2026,
+        "month": 7,
+        "day": 14,
+        "hour": 17,
+        "minute": 34,
+        "second": 54
+      },
+      "lap_count": 24,
+      "best_lap_number": 4,
+      "best_lap_ms": 60026,
+      "driver": "FIXTURE DRIVER",
+      "track_name": "FIXTURE TRACK A",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 1630506,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    },
+    {
+      "file_name": "a_0061.xrz",
+      "size_bytes": 3866208,
+      "date": {
+        "year": 2025,
+        "month": 7,
+        "day": 11,
+        "hour": 17,
+        "minute": 45,
+        "second": 28
+      },
+      "lap_count": 23,
+      "best_lap_number": 2,
+      "best_lap_ms": 53951,
+      "driver": "",
+      "track_name": "FIXTURE TRACK B",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 1294498,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    },
+    {
+      "file_name": "a_0060.xrz",
+      "size_bytes": 62329,
+      "date": {
+        "year": 2025,
+        "month": 7,
+        "day": 11,
+        "hour": 17,
+        "minute": 44,
+        "second": 27
+      },
+      "lap_count": 2,
+      "best_lap_number": null,
+      "best_lap_ms": null,
+      "driver": "",
+      "track_name": "FIXTURE TRACK B",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 20333,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    },
+    {
+      "file_name": "a_0059.xrz",
+      "size_bytes": 1166547,
+      "date": {
+        "year": 2025,
+        "month": 7,
+        "day": 11,
+        "hour": 17,
+        "minute": 37,
+        "second": 44
+      },
+      "lap_count": 7,
+      "best_lap_number": 2,
+      "best_lap_ms": 53994,
+      "driver": "",
+      "track_name": "FIXTURE TRACK B",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 391547,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    },
+    {
+      "file_name": "a_0058.xrz",
+      "size_bytes": 3748019,
+      "date": {
+        "year": 2025,
+        "month": 7,
+        "day": 6,
+        "hour": 12,
+        "minute": 22,
+        "second": 13
+      },
+      "lap_count": 22,
+      "best_lap_number": 2,
+      "best_lap_ms": 53715,
+      "driver": "",
+      "track_name": "FIXTURE TRACK B",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 1250418,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    },
+    {
+      "file_name": "a_0057.xrz",
+      "size_bytes": 75302,
+      "date": {
+        "year": 2025,
+        "month": 7,
+        "day": 6,
+        "hour": 12,
+        "minute": 20,
+        "second": 19
+      },
+      "lap_count": 2,
+      "best_lap_number": null,
+      "best_lap_ms": null,
+      "driver": "",
+      "track_name": "FIXTURE TRACK B",
+      "vehicle": "",
+      "championship": "",
+      "duration_ms": 25042,
+      "track_latitude": 12.3456789,
+      "track_longitude": -12.3456789
+    }
+  ]
+}

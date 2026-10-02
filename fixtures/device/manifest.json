@@ -215,6 +215,170 @@
       "inflated_len": 477793,
       "inflated_sha256": "2273c345b16ea045e9cf9e82479a47ee32f280d161ee59916b754cd3786e16f3",
       "note": "issue #133: a whole captured session download (1:/mem/a_0053.xrz) as consecutive STCP chunk frames. The device's 4-byte identity word was replaced with 0x00000000 inside the session before it was re-deflated and re-framed, so the payload bytes are de-identified and the per-frame checksums are recomputed; every protocol field (framing, 0xFFC0 stride, offsets, short-final-chunk end-of-stream) is as observed. Originally 215325 B compressed."
+    },
+    {
+      "file": "client/hello_request.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 28,
+      "sha256": "5689972a71e6ff9d37f0eac37894e9109532595662dc91e914927bce3c0b3c5d",
+      "deidentified": false,
+      "checksum": 14,
+      "checksum_observed": true,
+      "frame_length": 8,
+      "note": "client hello: payload 00000000 06 08 0000 (the device answers with control/hello.bin, 06 09)"
+    },
+    {
+      "file": "client/open_echo.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "17f004b0a78338c00134ed7e900a1eda17e2c71fdd2e3294416f64b25e3f7838",
+      "deidentified": false,
+      "checksum": 541,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "device echo of the session-open command 0x0110 with tag 0x0a01 (ready to receive the client upload) and stride 0xFFC0 at payload[20..24]"
+    },
+    {
+      "file": "client/clock_upload.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 88,
+      "sha256": "05725e9f1eee2f739e0758ee66095ae5ce5f52ba5b90c88d80e2a06d23ca4d26",
+      "deidentified": false,
+      "checksum": 595,
+      "checksum_observed": true,
+      "frame_length": 68,
+      "note": "client upload for 0x0110: offset(u32)=0, then 64 bytes = 8 zero bytes, local year/month/day/hour/minute/second (u32 LE each), 8 zero bytes, UTC year..second. Captured 2026-07-21 14:16:00 local / 11:16:00 UTC"
+    },
+    {
+      "file": "client/upload_ack.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 24,
+      "sha256": "53aa6791808302ba18fb8db201886ce5eb20aa1006abf4ea08cd7ab84c5b87b6",
+      "deidentified": false,
+      "checksum": 0,
+      "checksum_observed": true,
+      "frame_length": 4,
+      "note": "device ack of the client upload: a bare u32 LE (observed 0)"
+    },
+    {
+      "file": "client/open_header.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "b9d4e09c834cae695220fca5595c0035082e7c981407eb21d81ec5c745f1f496",
+      "deidentified": false,
+      "checksum": 681,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "device response header for 0x0110 (tag 0x0a11): payload[16..20] = 4268, the identity/path-table reply that follows (sessions/list_response.bin is that reply, de-identified)"
+    },
+    {
+      "file": "client/info_0202_request.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "085c22a97acc61607418510ddd91c4708353d317129ff48de4de3a4ca9503baf",
+      "deidentified": false,
+      "checksum": 15,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client info read (cmd 0x0002) the AiM app issues after session-open; its reply is read and discarded"
+    },
+    {
+      "file": "client/info_0208_request.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "de6a4e92d3ab1ed159fb96ccc4fb02100b95081f2d72ea2483a97d2c96d4014c",
+      "deidentified": false,
+      "checksum": 21,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client info read (cmd 0x0008) the AiM app issues after session-open; its reply is read and discarded"
+    },
+    {
+      "file": "client/info_0203_request.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "b80543386ec33be4efd5261c378f1926cf6394ce4bbbfa642c75f1055e56aafd",
+      "deidentified": false,
+      "checksum": 16,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client info read (cmd 0x0003) the AiM app issues after session-open; its reply is read and discarded"
+    },
+    {
+      "file": "client/catalog_request.bin",
+      "phase": "catalog",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "c74532768db1cd0a74ebf584f460ca9cc38d49f695d2f82ef7e89316990313ca",
+      "deidentified": false,
+      "checksum": 49,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client catalog request (cmd 0x0224): the device answers with the download-summary CSV (1:/mem/dwnsm)"
+    },
+    {
+      "file": "client/catalog_echo.bin",
+      "phase": "catalog",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "c8f3b8a520d9866f058e0d5298f61ad57b08bd494f1a0a5569c957d98f1558bb",
+      "deidentified": false,
+      "checksum": 504,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "device echo of 0x0224 with tag 0x0a09"
+    },
+    {
+      "file": "client/catalog_header.bin",
+      "phase": "catalog",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "c616b385bfa281195126cbf59dde49eed406f92676f6d1d05a8dfff779d1f607",
+      "deidentified": true,
+      "checksum": 748,
+      "checksum_observed": false,
+      "frame_length": 64,
+      "note": "device response header for 0x0224 (tag 0x0a11): payload[16..20] = CSV length, re-stated for the de-identified CSV",
+      "scrubbed": [
+        "declared length re-stated for the de-identified catalog"
+      ]
+    },
+    {
+      "file": "client/catalog_response.bin",
+      "phase": "catalog",
+      "kind": "stcp_frame",
+      "bytes": 1025,
+      "sha256": "7e50880efd8e09a04aefe8c06bf1dff37f7c025b5d02b3d4e782b4f6b8e4d3ee",
+      "deidentified": true,
+      "checksum": 2091,
+      "checksum_observed": false,
+      "frame_length": 1005,
+      "note": "the catalog reply: offset(u32)=0 + the download-summary CSV (header + one row per stored session). Cut to the 6 newest rows; track names, coordinates and driver replaced with FIXTURE placeholders",
+      "scrubbed": [
+        "track names",
+        "track coordinates",
+        "driver"
+      ]
+    },
+    {
+      "file": "client/close_request.bin",
+      "phase": "handshake",
+      "kind": "stcp_frame",
+      "bytes": 84,
+      "sha256": "2aff0b9161f70d732f3e5bc75bec8558ef3bd2176675a98d3b6aad858ed1fd4e",
+      "deidentified": false,
+      "checksum": 11,
+      "checksum_observed": true,
+      "frame_length": 64,
+      "note": "client close (cmd 0x0001, tag 0x0a00) sent when the AiM app disconnects; no reply observed"
     }
   ],
   "pending": [

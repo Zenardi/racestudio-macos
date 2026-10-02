@@ -1,6 +1,13 @@
 //! On-device session enumeration (issue 6.4): build the catalog/session-list
 //! request the MyChron answers, and parse its response into typed [`SessionInfo`].
 //!
+//! > **Superseded for live use (issue #179).** The #133 capture showed that the
+//! > request below is the *session-open* command (`0x0110`), whose reply is the
+//! > device's identity and path table, and that the real catalog is a CSV read
+//! > with opcode `0x0224` — see [`crate::catalog`] and [`crate::DeviceClient`].
+//! > This module is kept because the guarded delete (6.6) and its FFI surface
+//! > still name [`SessionInfo`]; the binary record layout remains a hypothesis.
+//!
 //! # What is verified vs hypothesized
 //!
 //! - [`build_session_list_request`] reproduces the **captured** catalog request
@@ -18,20 +25,7 @@
 //!   (DMCA §1201(f); EU 2009/24/EC Art. 6).
 
 use crate::error::DeviceError;
-use crate::framing::{encode_frame, verified_frame};
-
-/// The catalog/get-list command code, at `payload[8..12]` of the request
-/// (`docs/device/PROTOCOL.md` §5, `command_info.bin`; command `0x0110`).
-const CATALOG_COMMAND_CODE: [u8; 4] = [0x10, 0x00, 0x01, 0x00];
-/// Observed catalog-command parameter at `payload[16..20]` (semantics uncertain;
-/// reproduced verbatim from the captured request so the bytes match exactly).
-const CATALOG_PARAM_LEN: [u8; 4] = [0x40, 0x00, 0x00, 0x00];
-/// Observed catalog-command parameter at `payload[24..28]` (semantics uncertain).
-const CATALOG_PARAM_A: [u8; 4] = [0x01, 0x0a, 0x00, 0x00];
-/// Observed catalog-command parameter at `payload[32..36]` (semantics uncertain).
-const CATALOG_PARAM_B: [u8; 4] = [0x02, 0x00, 0x00, 0x00];
-/// The captured request's payload is 64 bytes (`command_info.bin`).
-const REQUEST_PAYLOAD_LEN: usize = 64;
+use crate::framing::verified_frame;
 
 /// The leading `u32` LE session count at the head of the response payload.
 const COUNT_PREFIX_LEN: usize = 4;
@@ -88,12 +82,7 @@ pub struct SessionInfo {
 /// `test_request_bytes_match_captured_fixture`.
 #[must_use]
 pub fn build_session_list_request() -> Vec<u8> {
-    let mut payload = [0u8; REQUEST_PAYLOAD_LEN];
-    payload[8..12].copy_from_slice(&CATALOG_COMMAND_CODE);
-    payload[16..20].copy_from_slice(&CATALOG_PARAM_LEN);
-    payload[24..28].copy_from_slice(&CATALOG_PARAM_A);
-    payload[32..36].copy_from_slice(&CATALOG_PARAM_B);
-    encode_frame(&payload)
+    crate::command::build_session_open()
 }
 
 /// Parse a catalog/session-list response into typed [`SessionInfo`]s.

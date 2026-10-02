@@ -120,7 +120,7 @@ fn plan_for(bytes: &[u8], session_id: u32) -> DownloadPlan {
     DownloadPlan {
         session_id,
         total_len: bytes.len() as u64,
-        whole_file_checksum: stcp_checksum(bytes),
+        whole_file_checksum: Some(stcp_checksum(bytes)),
     }
 }
 
@@ -178,7 +178,7 @@ fn captured_plan() -> DownloadPlan {
     DownloadPlan {
         session_id: 53,
         total_len: DECLARED_LEN,
-        whole_file_checksum: XRZ_CHECKSUM,
+        whole_file_checksum: Some(XRZ_CHECKSUM),
     }
 }
 
@@ -546,12 +546,31 @@ fn test_whole_file_checksum_mismatch_is_error() {
     let plan = DownloadPlan {
         session_id: 1,
         total_len: payload.len() as u64,
-        whole_file_checksum: stcp_checksum(&payload).wrapping_add(1),
+        whole_file_checksum: Some(stcp_checksum(&payload).wrapping_add(1)),
     };
     let err = download_session(&plan, &mut transport, &mut progress)
         .expect_err("a whole-file checksum mismatch fails the download");
 
     assert_eq!(err, DeviceError::ChecksumMismatch);
+}
+
+/// The device sends no whole-file checksum (#133), so a plan without one relies
+/// on the per-chunk trailers and the declared length alone.
+#[test]
+fn test_plan_without_whole_file_checksum_skips_the_gate() {
+    let payload: Vec<u8> = (0..200u32).map(|i| i as u8).collect();
+    let mut transport = RecordedTransport::new(split_into_frames(&payload, 100));
+    let mut progress = CollectingProgress::default();
+    let plan = DownloadPlan {
+        session_id: 1,
+        total_len: payload.len() as u64,
+        whole_file_checksum: None,
+    };
+
+    let out = download_session(&plan, &mut transport, &mut progress)
+        .expect("per-chunk checksums and the declared length are enough");
+
+    assert_eq!(out, payload);
 }
 
 #[test]
@@ -565,7 +584,7 @@ fn test_chunk_overrunning_total_len_is_malformed() {
     let plan = DownloadPlan {
         session_id: 1,
         total_len: 50, // shorter than the chunk claims to fill
-        whole_file_checksum: 0,
+        whole_file_checksum: Some(0),
     };
     let err = download_session(&plan, &mut transport, &mut progress)
         .expect_err("a chunk that overruns the declared size is rejected");
@@ -580,7 +599,7 @@ fn test_oversize_total_len_is_rejected() {
     let plan = DownloadPlan {
         session_id: 1,
         total_len: u64::MAX, // hostile catalog size must not drive a huge allocation
-        whole_file_checksum: 0,
+        whole_file_checksum: Some(0),
     };
     let err = download_session(&plan, &mut transport, &mut progress)
         .expect_err("an implausible total length is rejected before allocating");
@@ -595,7 +614,7 @@ fn test_empty_session_downloads_to_empty() {
     let plan = DownloadPlan {
         session_id: 1,
         total_len: 0,
-        whole_file_checksum: 0,
+        whole_file_checksum: Some(0),
     };
     let out = download_session(&plan, &mut transport, &mut progress).expect("empty is ok");
     assert!(out.is_empty());
@@ -617,7 +636,7 @@ fn test_untrailered_chunk_frame_is_error() {
     let plan = DownloadPlan {
         session_id: 1,
         total_len: 4,
-        whole_file_checksum: 0,
+        whole_file_checksum: Some(0),
     };
     let err = download_session(&plan, &mut transport, &mut progress)
         .expect_err("an unverifiable frame aborts the download");

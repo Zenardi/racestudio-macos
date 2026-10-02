@@ -59,13 +59,14 @@ pub struct DownloadPlan {
     /// The session's total size in bytes (from the catalog); the reassembled
     /// output must cover exactly this many bytes.
     pub total_len: u64,
-    /// The expected whole-file STCP checksum, verified after reassembly.
+    /// The expected whole-file STCP checksum, verified after reassembly, or
+    /// `None` to rely on the per-chunk trailers and the exact declared length.
     ///
     /// **Caller-supplied.** The session-present capture (issue #133) showed the
     /// device reports no whole-file checksum — the transfer header carries only
-    /// the total length and the chunk stride — so this is the caller's own
-    /// expectation, not a device-reported value.
-    pub whole_file_checksum: u16,
+    /// the total length and the chunk stride — so the live client (issue #179)
+    /// passes `None`; a caller holding its own expectation passes `Some`.
+    pub whole_file_checksum: Option<u16>,
 }
 
 /// A source of session-download chunk frames.
@@ -177,9 +178,12 @@ pub fn download_session(
         }
     }
 
-    // Whole-file integrity gate before any success is surfaced.
-    if stcp_checksum(&out) != plan.whole_file_checksum {
-        return Err(DeviceError::ChecksumMismatch);
+    // Whole-file integrity gate before any success is surfaced, when the caller
+    // holds an expectation to check against.
+    if let Some(expected) = plan.whole_file_checksum {
+        if stcp_checksum(&out) != expected {
+            return Err(DeviceError::ChecksumMismatch);
+        }
     }
     Ok(out)
 }
