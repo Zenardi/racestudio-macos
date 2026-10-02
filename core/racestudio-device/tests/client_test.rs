@@ -516,7 +516,7 @@ fn test_probe_ignores_an_unreadable_reply() {
 
 #[test]
 fn test_live_discovery_always_offers_a_device() {
-    let devices = discover_live(Duration::from_millis(50)).expect("discovery");
+    let devices = discover_live(Duration::from_millis(50));
 
     assert!(!devices.is_empty());
 }

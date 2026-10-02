@@ -5467,10 +5467,10 @@ public func deleteSession(target: SessionInfo, confirmation: DeleteConfirmation?
  * Find MyChron devices on the network the Mac is joined to: send the AiM
  * discovery probe and collect the replies for `timeout_ms`. When nothing
  * answers, the access-point gateway (`10.0.0.1:2000`) is offered, so the list
- * is never empty.
+ * is never empty -- also when the probe itself cannot run.
  *
  * # Errors
- * [`DiscoveryError::ConnectionFailed`] when no UDP socket can be opened.
+ * None today; the `Result` keeps the binding stable.
  */
 public func discoverDevices(timeoutMs: UInt32)throws  -> [Device] {
     return try  FfiConverterSequenceTypeDevice.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
@@ -5618,7 +5618,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_delete_session() != 3178) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_func_discover_devices() != 44519) {
+    if (uniffi_racestudio_ffi_checksum_func_discover_devices() != 29967) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_download_session() != 42953) {
