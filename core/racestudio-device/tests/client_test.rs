@@ -155,10 +155,16 @@ fn test_read_frame_timeout_is_timeout() {
     assert_eq!(err, Err(DeviceError::Timeout));
 }
 
+/// `EHOSTUNREACH`, the errno macOS Local Network privacy refuses a connect with.
+#[cfg(target_os = "linux")]
+const NO_ROUTE_TO_HOST: i32 = 113;
+#[cfg(not(target_os = "linux"))]
+const NO_ROUTE_TO_HOST: i32 = 65;
+
 #[test]
 fn test_no_route_to_host_is_host_unreachable() {
     assert_eq!(
-        DeviceError::from(io::Error::from(io::ErrorKind::HostUnreachable)),
+        DeviceError::from(io::Error::from_raw_os_error(NO_ROUTE_TO_HOST)),
         DeviceError::HostUnreachable
     );
 }

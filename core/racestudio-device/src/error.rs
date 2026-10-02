@@ -119,11 +119,11 @@ impl From<std::io::Error> for DeviceError {
     /// dropped, or one that never opened (issue #179).
     fn from(err: std::io::Error) -> Self {
         use std::io::ErrorKind;
+        if err.raw_os_error().is_some_and(is_no_route) {
+            return DeviceError::HostUnreachable;
+        }
         match err.kind() {
             ErrorKind::TimedOut | ErrorKind::WouldBlock => DeviceError::Timeout,
-            ErrorKind::HostUnreachable | ErrorKind::NetworkUnreachable => {
-                DeviceError::HostUnreachable
-            }
             ErrorKind::UnexpectedEof
             | ErrorKind::ConnectionReset
             | ErrorKind::ConnectionAborted
@@ -132,4 +132,14 @@ impl From<std::io::Error> for DeviceError {
             _ => DeviceError::ConnectionFailed,
         }
     }
+}
+
+/// `EHOSTUNREACH` / `ENETUNREACH` ("No route to host"). Matched by number
+/// because `ErrorKind::HostUnreachable` is newer than the crate's MSRV.
+fn is_no_route(errno: i32) -> bool {
+    #[cfg(target_os = "linux")]
+    const NO_ROUTE: [i32; 2] = [113, 101];
+    #[cfg(not(target_os = "linux"))]
+    const NO_ROUTE: [i32; 2] = [65, 51];
+    NO_ROUTE.contains(&errno)
 }
