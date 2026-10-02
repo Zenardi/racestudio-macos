@@ -84,6 +84,10 @@ public final class LibraryBrowserModel: ObservableObject {
         self.sessions = index.summaries
     }
 
+    /// Where every user edit is written back, or `nil` for an in-memory library
+    /// (tests). Set when the library is loaded from a file.
+    private var autosave: (url: URL, store: LibraryStore)?
+
     /// Load the library at `url` via `store`, degrading to an empty library on a
     /// missing or corrupt file (the 5.3 ``LibraryStore/load(from:)`` semantics).
     public convenience init(loadingFrom url: URL,
@@ -91,6 +95,15 @@ public final class LibraryBrowserModel: ObservableObject {
                             loader: SessionLoading? = nil,
                             files: ManagedFileStore? = nil) {
         self.init(index: store.load(from: url), loader: loader, files: files)
+        autosave = (url, store)
+    }
+
+    /// Write the library back after a user edit, so a rename, a collection or a
+    /// kart is never lost on quit. Before this only an import saved. A failed
+    /// write is not fatal: the edit is in memory and the next save retries.
+    private func persist() {
+        guard let autosave else { return }
+        try? autosave.store.save(index, to: autosave.url)
     }
 
     /// The distinct vehicles present, sorted — the 8.14 vehicle facet's choices.
@@ -175,6 +188,7 @@ public final class LibraryBrowserModel: ObservableObject {
     public func addCollection(_ collection: SessionCollection) {
         index.upsertCollection(collection)
         refresh()
+        persist()
     }
 
     /// Remove a collection; if it was the active scope, fall back to "all".
@@ -182,6 +196,7 @@ public final class LibraryBrowserModel: ObservableObject {
         index.removeCollection(id: id)
         if scope == .collection(id) { scope = .all }
         refresh()
+        persist()
     }
 
     /// Drag a session into a manual collection (idempotent), persisting the
@@ -190,6 +205,7 @@ public final class LibraryBrowserModel: ObservableObject {
         guard let collection = index.collection(id: collectionID) else { return }
         index.upsertCollection(collection.adding(sessionID))
         refresh()
+        persist()
     }
 
     // MARK: - Naming and removal
@@ -200,6 +216,7 @@ public final class LibraryBrowserModel: ObservableObject {
     public func rename(id: String, to name: String) {
         index.rename(id: id, to: name)
         refresh()
+        persist()
     }
 
     /// Name the circuit with `id`, retitling every session recorded there. A blank
@@ -207,10 +224,64 @@ public final class LibraryBrowserModel: ObservableObject {
     public func renameTrack(id: String, to name: String) {
         index.renameTrack(id: id, to: name)
         refresh()
+        persist()
     }
 
     /// The name the user gave the circuit with `id`, or `nil`.
     public func trackName(id: String) -> String? { index.trackName(id: id) }
+
+    // MARK: - Garage
+
+    /// The garage, ordered by name.
+    public var karts: [Kart] { index.karts }
+
+    /// The kart with `id`, or `nil`.
+    public func kart(id: String) -> Kart? { index.kart(id: id) }
+
+    /// The kart assigned to the session with content id `sessionID`, or `nil`.
+    public func kart(forSession sessionID: String) -> Kart? {
+        index.summary(id: sessionID)?.kartID.flatMap(index.kart(id:))
+    }
+
+    /// The kart assigned to the library's entry for `session` (matched by
+    /// content), or `nil` — how the analysis view finds the kart of the session
+    /// it opened.
+    public func kart(for session: Session) -> Kart? {
+        kart(forSession: SessionIndex.contentID(for: session))
+    }
+
+    /// Add `kart` to the garage, or update the kart with its id.
+    public func saveKart(_ kart: Kart) {
+        index.upsertKart(kart)
+        refresh()
+        persist()
+    }
+
+    /// Remove the kart with `id`; its sessions become unassigned.
+    public func deleteKart(id: String) {
+        index.removeKart(id: id)
+        if facets.kartID == id { facets.kartID = nil }
+        refresh()
+        persist()
+    }
+
+    /// Assign the kart with `kartID` (or none) to the session with `sessionID`;
+    /// it becomes the default for new sessions from that session's track.
+    public func assignKart(_ kartID: String?, toSession sessionID: String) {
+        index.assignKart(kartID, toSession: sessionID)
+        refresh()
+        persist()
+    }
+
+    /// The kart filter: only sessions driven on the kart with `id`, or all with
+    /// `nil`.
+    public var kartFilter: String? { facets.kartID }
+
+    /// Filter the list to the kart with `id`, or clear the filter with `nil`.
+    public func setKartFilter(_ id: String?) {
+        facets.kartID = id
+        refresh()
+    }
 
     /// Whether RaceStudio owns a copy of this session's file, and can therefore
     /// offer to delete it. `false` for a row imported before adoption existed,
@@ -232,6 +303,7 @@ public final class LibraryBrowserModel: ObservableObject {
         index.remove(id: id)
         if selectedID == id { select(nil) }
         refresh()
+        persist()
         guard deletion == .discardingCopy else { return }
         guard let files else { throw ManagedFileStore.StorageError.notManaged }
         try files.discard(summary.sourceURL)

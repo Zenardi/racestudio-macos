@@ -40,6 +40,9 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     /// The direction the recognized layout is driven, or `nil` when no track matched
     /// or the database does not record it.
     public var trackDirection: TrackDirection?
+    /// The garage kart this session was driven on (``Kart/id``), or `nil` when
+    /// none is assigned. User-authored, so a re-import keeps it.
+    public var kartID: String?
     /// Session start, derived from the metadata's UTC timestamp.
     public let date: Date
     /// Vehicle identifier.
@@ -76,8 +79,9 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
         lapCount: Int, bestLap: Duration?, sourceURL: URL, importedAt: Date,
         isAvailable: Bool, championship: String = "", comment: String = "", logger: String = "",
         customName: String? = nil, trackID: String? = nil, trackNickname: String? = nil,
-        trackLabel: String? = nil, trackDirection: TrackDirection? = nil
+        trackLabel: String? = nil, trackDirection: TrackDirection? = nil, kartID: String? = nil
     ) {
+        self.kartID = kartID
         self.id = id
         self.venue = venue
         self.customName = customName
@@ -103,7 +107,7 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, venue, date, vehicle, driver, championship, comment, logger,
              lapCount, bestLap, sourceURL, importedAt, customName, trackID, trackNickname,
-             trackLabel, trackDirection
+             trackLabel, trackDirection, kartID
     }
 
     /// Custom decode so the 8.15 facet fields (``championship``/``comment``/
@@ -121,6 +125,7 @@ public struct SessionSummary: Codable, Equatable, Identifiable, Sendable {
         trackNickname = try container.decodeIfPresent(String.self, forKey: .trackNickname)
         trackLabel = try container.decodeIfPresent(String.self, forKey: .trackLabel)
         trackDirection = try container.decodeIfPresent(TrackDirection.self, forKey: .trackDirection)
+        kartID = try container.decodeIfPresent(String.self, forKey: .kartID)
         date = try container.decode(Date.self, forKey: .date)
         vehicle = try container.decode(String.self, forKey: .vehicle)
         driver = try container.decode(String.self, forKey: .driver)

@@ -38,12 +38,15 @@ public struct FilterSpec: Equatable, Sendable, Codable {
     public var dateRange: ClosedRange<Date>?
     /// Minimum lap count (inclusive).
     public var minLaps: Int?
+    /// Sessions driven on this garage kart (``Kart/id``).
+    public var kartID: String?
 
     public init(
         vehicle: String? = nil, racer: String? = nil, track: String? = nil,
         championship: String? = nil, comment: String? = nil, logger: String? = nil,
-        dateRange: ClosedRange<Date>? = nil, minLaps: Int? = nil
+        dateRange: ClosedRange<Date>? = nil, minLaps: Int? = nil, kartID: String? = nil
     ) {
+        self.kartID = kartID
         self.vehicle = vehicle
         self.racer = racer
         self.track = track
@@ -57,7 +60,7 @@ public struct FilterSpec: Equatable, Sendable, Codable {
     /// Whether no predicate is set (the spec matches every session).
     public var isEmpty: Bool {
         vehicle == nil && racer == nil && track == nil && championship == nil
-            && comment == nil && logger == nil && dateRange == nil && minLaps == nil
+            && comment == nil && logger == nil && dateRange == nil && minLaps == nil && kartID == nil
     }
 
     /// Whether `summary` satisfies every set predicate.
@@ -74,6 +77,7 @@ public struct FilterSpec: Equatable, Sendable, Codable {
               facet(logger, summary.logger) else { return false }
         if let dateRange, !dateRange.contains(summary.date) { return false }
         if let minLaps, summary.lapCount < minLaps { return false }
+        if let kartID, summary.kartID != kartID { return false }
         return true
     }
 }

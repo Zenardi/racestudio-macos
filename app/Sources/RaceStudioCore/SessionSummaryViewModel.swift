@@ -7,8 +7,16 @@ public struct MetadataPanelModel: Equatable, Sendable {
     public let track: String
     public let driver: String
     public let date: String
+    /// The garage kart the session was driven on, e.g.
+    /// `"Race kart — F4 · Thunder · RBC Honda · 18 HP"`, or `nil` when none is
+    /// assigned (the row is then hidden).
+    public let kart: String?
 
-    init(_ metadata: SessionMetadata) {
+    init(_ metadata: SessionMetadata, kart: Kart? = nil) {
+        self.kart = kart.map { kart in
+            let spec = kart.specification
+            return spec.isEmpty || spec == kart.displayName ? kart.displayName : "\(kart.displayName) — \(spec)"
+        }
         self.vehicle = ChannelFormatting.orEmDash(metadata.vehicle)
         self.track = ChannelFormatting.orEmDash(metadata.track)
         self.driver = ChannelFormatting.orEmDash(metadata.driver)
@@ -59,8 +67,9 @@ public struct SessionSummaryViewModel: Equatable, Sendable {
     public let channels: [ChannelRowModel]
     public let laps: [LapRowModel]
 
-    public init(session: Session) {
-        self.metadata = MetadataPanelModel(session.metadata)
+    /// - Parameter kart: the garage kart assigned to this session in the library.
+    public init(session: Session, kart: Kart? = nil) {
+        self.metadata = MetadataPanelModel(session.metadata, kart: kart)
         self.channels = session.channels.enumerated().map { index, channel in
             ChannelRowModel(
                 id: index,
