@@ -56,6 +56,12 @@ jobs:
       - name: Install SwiftLint
         run: brew install swiftlint
 
+      # Keyed by rustc version: see ci.yml — an older toolchain's cached build
+      # carries profiles the new llvm-profdata cannot merge.
+      - name: Rust version for the cache key
+        id: rustc
+        run: echo "version=$(rustc -V | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Cache cargo & SwiftPM build
         uses: actions/cache@v4
         with:
@@ -64,8 +70,8 @@ jobs:
             ~/.cargo/git
             target
             app/.build
-          key: ${{ runner.os }}-ci-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
-          restore-keys: ${{ runner.os }}-ci-
+          key: ${{ runner.os }}-ci-rustc${{ steps.rustc.outputs.version }}-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-ci-rustc${{ steps.rustc.outputs.version }}-
 
       - name: Fetch .xrk fixtures
         run: bash scripts/fetch_fixtures.sh --no-goldens
@@ -90,6 +96,12 @@ jobs:
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
 
+      # Keyed by rustc version: see ci.yml — an older toolchain's cached build
+      # carries profiles the new llvm-profdata cannot merge.
+      - name: Rust version for the cache key
+        id: rustc
+        run: echo "version=$(rustc -V | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Cache cargo & SwiftPM build
         uses: actions/cache@v4
         with:
@@ -98,8 +110,8 @@ jobs:
             ~/.cargo/git
             target
             app/.build
-          key: ${{ runner.os }}-release-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
-          restore-keys: ${{ runner.os }}-release-
+          key: ${{ runner.os }}-release-rustc${{ steps.rustc.outputs.version }}-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-release-rustc${{ steps.rustc.outputs.version }}-
 
       # Which version, and does this run publish? See scripts/next_version.sh --
       # a tag push uses its tag, a push to main bumps the patch, a manual run
