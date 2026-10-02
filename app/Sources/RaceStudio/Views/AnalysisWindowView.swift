@@ -171,13 +171,25 @@ private struct PanelHost: View {
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
-                SessionSummaryView(viewModel: SessionSummaryViewModel(
-                    session: model.session, kart: app.library.kart(for: model.session)))
+                SummaryPanel(library: app.library, session: model.session, contentID: model.contentID)
             case .logSheet:
                 LogSheetPanel(model: logSheet)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The Summary panel, observing the library so the session's kart row follows
+/// an assignment made while the window is open.
+private struct SummaryPanel: View {
+    @ObservedObject var library: LibraryBrowserModel
+    let session: Session
+    let contentID: String
+
+    var body: some View {
+        SessionSummaryView(viewModel: SessionSummaryViewModel(
+            session: session, kart: library.kart(forSession: contentID)))
     }
 }
 

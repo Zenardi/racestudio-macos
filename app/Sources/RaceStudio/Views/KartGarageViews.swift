@@ -105,11 +105,22 @@ struct KartEditorSheet: View {
     let target: KartEditTarget
     @Environment(\.dismiss) private var dismiss
 
-    @State private var name = ""
-    @State private var category = ""
-    @State private var chassis = ""
-    @State private var engine = ""
-    @State private var power = ""
+    @State private var name: String
+    @State private var category: String
+    @State private var chassis: String
+    @State private var engine: String
+    @State private var power: String
+
+    init(library: LibraryBrowserModel, target: KartEditTarget) {
+        self.library = library
+        self.target = target
+        // Seeded here, not in onAppear, so the first frame already shows the kart.
+        _name = State(initialValue: target.kart.name)
+        _category = State(initialValue: target.kart.category)
+        _chassis = State(initialValue: target.kart.chassis)
+        _engine = State(initialValue: target.kart.engine)
+        _power = State(initialValue: target.kart.powerHP.map { String(format: "%g", $0) } ?? "")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -121,6 +132,11 @@ struct KartEditorSheet: View {
                 TextField("Chassis", text: $chassis, prompt: Text("e.g. Thunder"))
                 TextField("Engine", text: $engine, prompt: Text("e.g. RBC Honda"))
                 TextField("Power (HP)", text: $power, prompt: Text("e.g. 18"))
+                if !powerIsValid {
+                    Text("Enter the power as a number, e.g. 18")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
             HStack {
                 Spacer()
@@ -128,26 +144,28 @@ struct KartEditorSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button(target.isNew ? "Add" : "Save") { save() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(edited.displayName == "Unnamed kart")
+                    .disabled(edited.displayName == "Unnamed kart" || !powerIsValid)
             }
         }
         .padding(20)
         .frame(width: 360)
-        .onAppear {
-            name = target.kart.name
-            category = target.kart.category
-            chassis = target.kart.chassis
-            engine = target.kart.engine
-            power = target.kart.powerText.map { String($0.dropLast(3)) } ?? ""
-        }
     }
 
-    /// The kart as typed; power accepts a decimal point or comma.
+    /// The power as typed (decimal point or comma), or `nil` when blank.
+    private var parsedPower: Double? {
+        Double(power.replacingOccurrences(of: ",", with: ".").trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Blank, or a positive number — text that isn't a number never silently
+    /// clears the power.
+    private var powerIsValid: Bool {
+        power.trimmingCharacters(in: .whitespaces).isEmpty || (parsedPower.map { $0 > 0 && $0.isFinite } ?? false)
+    }
+
+    /// The kart as typed.
     private var edited: Kart {
-        let hp = Double(power.replacingOccurrences(of: ",", with: ".")
-            .trimmingCharacters(in: .whitespaces))
-        return Kart(id: target.kart.id, name: name, category: category, chassis: chassis,
-                    engine: engine, powerHP: hp)
+        Kart(id: target.kart.id, name: name, category: category, chassis: chassis,
+             engine: engine, powerHP: parsedPower)
     }
 
     private func save() {

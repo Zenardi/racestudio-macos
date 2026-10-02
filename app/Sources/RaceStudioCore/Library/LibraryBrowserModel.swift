@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// What the browser is currently showing (issue 8.15): the whole library, the
 /// Recent collection, or a saved ``SessionCollection`` — narrowed further by the
@@ -103,8 +104,14 @@ public final class LibraryBrowserModel: ObservableObject {
     /// write is not fatal: the edit is in memory and the next save retries.
     private func persist() {
         guard let autosave else { return }
-        try? autosave.store.save(index, to: autosave.url)
+        do {
+            try autosave.store.save(index, to: autosave.url)
+        } catch {
+            Self.logger.error("library autosave failed: \(String(describing: error), privacy: .public)")
+        }
     }
+
+    private static let logger = Logger(subsystem: "com.racestudio.core", category: "library")
 
     /// The distinct vehicles present, sorted — the 8.14 vehicle facet's choices.
     /// Defined in terms of ``facetValues(_:)`` so it cannot drift from the generic

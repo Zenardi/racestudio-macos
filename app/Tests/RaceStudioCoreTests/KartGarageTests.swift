@@ -302,3 +302,54 @@ import Testing
         #expect(SessionSummaryViewModel(session: SessionFixture.make()).metadata.kart == nil)
     }
 }
+
+/// Review follow-ups: clearing a kart stops its track default, and the garage
+/// survives a re-index that drops the cached sessions.
+@Suite struct KartGarageEdgeTests {
+
+    private static let f4 = Kart(id: "f4", name: "F4")
+    private static let url = URL(fileURLWithPath: "/tmp/s.xrk")
+
+    @Test func test_clearing_a_kart_stops_it_pre_filling_the_track() {
+        let index = SessionIndex()
+        index.upsertKart(Self.f4)
+        let first = index.add(SessionFixture.make(datetimeUtc: 1), sourceURL: Self.url)
+        index.assignKart("f4", toSession: first.id)
+
+        index.assignKart(nil, toSession: first.id)
+        let next = index.add(SessionFixture.make(datetimeUtc: 2), sourceURL: Self.url)
+
+        #expect(next.kartID == nil)
+    }
+
+    @Test func test_clearing_an_old_session_keeps_another_kart_as_default() {
+        let index = SessionIndex()
+        index.upsertKart(Self.f4)
+        index.upsertKart(Kart(id: "spare", name: "Spare"))
+        let old = index.add(SessionFixture.make(datetimeUtc: 1), sourceURL: Self.url)
+        index.assignKart("spare", toSession: old.id)
+        let recent = index.add(SessionFixture.make(datetimeUtc: 2), sourceURL: Self.url)
+        index.assignKart("f4", toSession: recent.id)
+
+        index.assignKart(nil, toSession: old.id)
+
+        #expect(index.defaultKart(forTrackOf: recent) == Self.f4)
+    }
+
+    @Test func test_garage_survives_a_stale_library_reindex() throws {
+        let index = SessionIndex()
+        index.upsertKart(Self.f4)
+        let summary = index.add(SessionFixture.make(), sourceURL: Self.url)
+        index.assignKart("f4", toSession: summary.id)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(index)) as? [String: Any] ?? [:]
+        json["decoderGeneration"] = 1 // written by a superseded decoder
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("stale-\(UUID().uuidString).json")
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+
+        let reloaded = LibraryStore().load(from: url)
+
+        #expect(reloaded.summaries.isEmpty)
+        #expect(reloaded.karts == [Self.f4])
+        #expect(reloaded.defaultKart(forTrackOf: summary) == Self.f4)
+    }
+}

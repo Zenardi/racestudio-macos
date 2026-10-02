@@ -16,6 +16,11 @@ public final class AnalysisWindowModel: ObservableObject {
     /// The decoded session presented by the window.
     public let session: Session
 
+    /// The session's library content id (``SessionIndex/contentID(for:)``),
+    /// hashed once on first use — how the window finds the session's library
+    /// entry (its kart) without re-hashing every channel on each redraw.
+    public private(set) lazy var contentID = SessionIndex.contentID(for: session)
+
     /// The layouts the rail offers, in display order.
     public let layouts: [WindowLayout]
 

@@ -155,13 +155,16 @@ public final class SessionIndex: Codable, Equatable {
 
     /// Assign the kart with `kartID` to the session with `sessionID`, or clear the
     /// assignment with `nil`. Assigning also makes it the kart pre-filled for the
-    /// next session imported from the same track. An unknown session or kart
-    /// changes nothing.
+    /// next session imported from the same track; clearing it stops pre-filling
+    /// that kart there. An unknown session or kart changes nothing.
     public func assignKart(_ kartID: String?, toSession sessionID: String) {
         guard var summary = storage[sessionID] else { return }
+        let key = Self.trackKey(of: summary)
         if let kartID {
             guard kartStorage[kartID] != nil else { return }
-            trackKarts[Self.trackKey(of: summary)] = kartID
+            trackKarts[key] = kartID
+        } else if trackKarts[key] == summary.kartID {
+            trackKarts[key] = nil
         }
         summary.kartID = kartID
         storage[sessionID] = summary
