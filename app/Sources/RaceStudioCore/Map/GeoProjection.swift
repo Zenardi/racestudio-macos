@@ -124,6 +124,11 @@ public struct GeoProjection: Equatable, Sendable {
     /// real data.
     public static let minimumPointsToTrim = 20
 
+    /// The trim every map view frames with: the track map and the library
+    /// thumbnail pass it so they frame a session the same way. Applied only to
+    /// a real excursion (``outlierExtentRatio``), never to the circuit's corners.
+    public static let framingTrim = 0.05
+
     /// Per-axis quantile bounds, or `nil` when trimming does not apply (a
     /// non-positive fraction, or too few points). Each axis is trimmed
     /// independently, and only when it has outliers (``trimmedAxis``).
