@@ -77,7 +77,7 @@ pub fn connect(
 ) -> Result<(DeviceClient<TcpStream>, Canceller), DeviceError> {
     let stream = TcpStream::connect_timeout(&address, timeouts.connect).map_err(|err| {
         match DeviceError::from(err) {
-            DeviceError::Timeout => DeviceError::Timeout,
+            kind @ (DeviceError::Timeout | DeviceError::HostUnreachable) => kind,
             _ => DeviceError::ConnectionFailed,
         }
     })?;

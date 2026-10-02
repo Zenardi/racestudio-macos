@@ -5,7 +5,7 @@
 # The real tag build spends nearly all its wall-clock in `swift build`, which
 # says nothing about whether the *packaging* is correct. This runs the genuine
 # scripts/build_app.sh + scripts/package_dmg.sh code over a throwaway universal
-# stub executable, so bundle layout, plist rewriting, ad-hoc signing, the DMG,
+# stub executable, so bundle layout, plist rewriting, self-signed signing, the DMG,
 # and the checksums are all exercised in seconds -- in CI, on every PR, with no
 # secrets and no full build.
 #

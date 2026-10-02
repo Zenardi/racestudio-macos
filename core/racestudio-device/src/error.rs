@@ -59,6 +59,10 @@ pub enum DeviceError {
     Timeout,
     /// The connection to the device could not be opened (issue #179).
     ConnectionFailed,
+    /// The system reported no route to the device ("No route to host"). On
+    /// macOS this is how Local Network privacy refuses an app the user has not
+    /// allowed — or the Mac is not on the device's network.
+    HostUnreachable,
     /// The device closed or reset the connection mid-exchange (issue #179).
     ConnectionClosed,
     /// The caller cancelled the exchange; nothing partial is surfaced (#179).
@@ -101,6 +105,7 @@ impl fmt::Display for DeviceError {
             DeviceError::InvalidPath => write!(f, "the on-device file name is not valid"),
             DeviceError::Timeout => write!(f, "the device did not respond in time"),
             DeviceError::ConnectionFailed => write!(f, "could not connect to the device"),
+            DeviceError::HostUnreachable => write!(f, "no route to the device"),
             DeviceError::ConnectionClosed => write!(f, "the device closed the connection"),
             DeviceError::Cancelled => write!(f, "the transfer was cancelled"),
         }
@@ -114,6 +119,9 @@ impl From<std::io::Error> for DeviceError {
     /// dropped, or one that never opened (issue #179).
     fn from(err: std::io::Error) -> Self {
         use std::io::ErrorKind;
+        if err.raw_os_error().is_some_and(is_no_route) {
+            return DeviceError::HostUnreachable;
+        }
         match err.kind() {
             ErrorKind::TimedOut | ErrorKind::WouldBlock => DeviceError::Timeout,
             ErrorKind::UnexpectedEof
@@ -124,4 +132,14 @@ impl From<std::io::Error> for DeviceError {
             _ => DeviceError::ConnectionFailed,
         }
     }
+}
+
+/// `EHOSTUNREACH` / `ENETUNREACH` ("No route to host"). Matched by number
+/// because `ErrorKind::HostUnreachable` is newer than the crate's MSRV.
+fn is_no_route(errno: i32) -> bool {
+    #[cfg(target_os = "linux")]
+    const NO_ROUTE: [i32; 2] = [113, 101];
+    #[cfg(not(target_os = "linux"))]
+    const NO_ROUTE: [i32; 2] = [65, 51];
+    NO_ROUTE.contains(&errno)
 }

@@ -4,8 +4,9 @@ name: Release
 #
 # This project ships **unsigned** artifacts on purpose: there is no paid Apple
 # signing certificate behind it, so the pipeline deliberately consumes no
-# secrets at all and performs no notarization. The app is ad-hoc signed and
-# packaged into a `.dmg` that is attached to the GitHub Release. Users clear the
+# secrets at all and performs no notarization. The app is signed with a
+# certificate generated for the build (scripts/self_sign.sh -- ad-hoc apps are
+# silently blocked from the local network on macOS 26) and packaged into a `.dmg` that is attached to the GitHub Release. Users clear the
 # download quarantine themselves once -- docs/RELEASE.md documents how, and the
 # release notes below repeat it. `tests/release_test.sh` pins that decision.
 #
@@ -182,7 +183,7 @@ jobs:
             Download **`RaceStudio-${{ steps.version.outputs.version }}.dmg`**, open it, and drag
             **RaceStudio** to **Applications**. Universal: Apple Silicon + Intel, macOS 13 or later.
 
-            > **First launch.** This build is ad-hoc signed and **not** notarized (the project has
+            > **First launch.** This build is self-signed and **not** notarized (the project has
             > no paid Apple signing certificate), so macOS quarantines the download. Open it once
             > with **right-click -> Open -> Open**, or clear the quarantine flag yourself:
             >
@@ -190,7 +191,9 @@ jobs:
             > xattr -dr com.apple.quarantine /Applications/RaceStudio.app
             > ```
             >
-            > After that it launches normally. See
+            > After that it launches normally. The first time you open **File > MyChron Device...**,
+            > macOS asks to let RaceStudio use the local network: choose **Allow** (it asks again
+            > after each update). See
             > [docs/RELEASE.md](https://github.com/Zenardi/racestudio-macos/blob/main/docs/RELEASE.md).
 
             Verify your download against `SHA256SUMS.txt`:

@@ -13,10 +13,11 @@
 # so the shipped bundle can never drift from the source-of-truth document-type
 # and UTI declarations.
 #
-# Signing: this project has no Apple Developer ID, so the bundle is **ad-hoc**
-# signed (`codesign --sign -`). That is the strongest signature available
-# without a paid certificate: it makes the bundle launchable and keeps the
-# sandbox entitlements attached, but it is not notarized, so Gatekeeper will
+# Signing: this project has no Apple Developer ID, so the bundle is signed with
+# a **self-signed certificate generated for this build** (scripts/self_sign.sh)
+# -- not ad-hoc, because macOS 26 silently blocks an ad-hoc-signed app from the
+# local network, which the MyChron download needs. It keeps the sandbox
+# entitlements attached, but the build is not notarized, so Gatekeeper will
 # quarantine a downloaded copy -- see docs/RELEASE.md.
 #
 # Usage:
@@ -147,8 +148,7 @@ done
 CATALOG="$APP/Contents/Resources/$RESOURCE_BUNDLE_NAME/Localizable.xcstrings"
 [ -f "$CATALOG" ] || { echo "FAIL: $CATALOG missing from the bundle" >&2; exit 1; }
 
-echo "==> [5/5] ad-hoc signing (no Developer ID -- see docs/RELEASE.md)"
-codesign --force --sign - --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"
-codesign --verify --strict "$APP"
+echo "==> [5/5] self-signed signing (no Developer ID -- see docs/RELEASE.md)"
+bash "$SCRIPT_DIR/self_sign.sh" "$APP" "$ENTITLEMENTS" "RaceStudio $VERSION (self-signed)"
 
-echo "PASS: $APP  (version $VERSION, archs: $ARCHS, signature: ad-hoc)"
+echo "PASS: $APP  (version $VERSION, archs: $ARCHS, signature: self-signed)"

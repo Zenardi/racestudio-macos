@@ -57,5 +57,10 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 mkdir -p "$APP/Contents/Resources"
 cp AppIcon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# Sign with a self-signed certificate: macOS 26 silently blocks an ad-hoc
+# (linker-signed) app from the local network, so the MyChron download would
+# fail. No entitlements -- the dev bundle stays unsandboxed.
+bash ../scripts/self_sign.sh "$APP" "" "RaceStudio dev (self-signed)"
+
 open "$APP"
 echo "Launched $(cd "$(dirname "$APP")" && pwd)/$(basename "$APP")"
