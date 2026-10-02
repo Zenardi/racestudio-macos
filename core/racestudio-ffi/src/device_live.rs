@@ -9,7 +9,7 @@
 //! app reconnects instead of talking to a device that is out of step.
 
 use std::net::{IpAddr, SocketAddr, TcpStream};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::Duration;
 
 use racestudio_device::{
@@ -173,19 +173,32 @@ impl DeviceConnection {
         with_client(self, |client| client.download(&file_name, &mut sink))
     }
 
-    /// Stop the call in progress (from any thread). The connection is closed;
-    /// the interrupted call reports `Cancelled`.
+    /// Stop the call in progress (from any thread). Cancelling is final: the
+    /// connection is closed even when no call is running, the interrupted call
+    /// reports `Cancelled`, and so does every later call — connect again.
     pub fn cancel(&self) {
         self.canceller.cancel();
     }
 
     /// End the conversation politely and close the connection.
+    ///
+    /// Never waits on a call in progress: that call is cancelled first.
     pub fn close(&self) {
-        if let Some(client) = lock(self).take() {
+        let mut slot = match self.client.try_lock() {
+            Ok(slot) => slot,
+            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(TryLockError::WouldBlock) => {
+                self.canceller.cancel();
+                lock(self)
+            }
+        };
+        if let Some(client) = slot.take() {
             // The device sends no reply to a close; a failure to send it only
             // means the link is already gone.
             let _ = client.close();
         }
+        drop(slot);
+        self.canceller.cancel();
     }
 }
 
@@ -198,8 +211,17 @@ fn with_client<T>(
     let mut slot = lock(conn);
     let client = slot.as_mut().ok_or(DiscoveryError::ConnectionClosed)?;
     let result = op(client);
-    if matches!(&result, Err(err) if *err != CoreDeviceError::InvalidPath) {
+    // A rejected name sends nothing, and an undecodable file arrives whole, so
+    // the conversation is still in step after either; anything else is not.
+    let in_step = matches!(
+        &result,
+        Ok(_) | Err(CoreDeviceError::InvalidPath | CoreDeviceError::CorruptArchive)
+    );
+    if !in_step {
         *slot = None;
+        // The canceller holds a duplicate of the socket: shut it, or the TCP
+        // connection outlives the client and keeps the logger's only slot.
+        conn.canceller.cancel();
     }
     result.map_err(DiscoveryError::from)
 }

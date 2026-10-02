@@ -72,9 +72,11 @@ final class FakeDeviceService: DeviceService, @unchecked Sendable {
 
     // Synchronous, lock-protected helpers.
 
+    /// Records a download; a new download starts uncancelled.
     private func record(_ fileName: String) {
         lock.lock(); defer { lock.unlock() }
         recordedDownloads.append(fileName)
+        cancelled = false
     }
 
     private func hold(_ continuation: CheckedContinuation<Void, Never>) {

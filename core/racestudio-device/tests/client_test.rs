@@ -351,8 +351,45 @@ fn test_cancelled_client_sends_nothing_more() {
     cancel.cancel();
 
     let err = client.list_sessions();
+    drop(client);
 
     assert_eq!(err, Err(DeviceError::Cancelled));
+    let catalog_reads = device
+        .client_payloads()
+        .iter()
+        .filter(|p| opcode_of(p) == Some(opcode::CATALOG))
+        .count();
+    assert_eq!(catalog_reads, 0);
+}
+
+#[test]
+fn test_oversized_reply_is_refused_before_allocating() {
+    let device = FakeMyChron::start(Fault::OversizedReply);
+
+    let err = connect(device.addr, &CLOCK, QUICK).map(|_| ());
+
+    assert_eq!(err, Err(DeviceError::MalformedRecord));
+}
+
+#[test]
+fn test_upload_ack_of_the_wrong_size_is_unexpected() {
+    let device = FakeMyChron::start(Fault::LongUploadAck);
+
+    let err = connect(device.addr, &CLOCK, QUICK).map(|_| ());
+
+    assert_eq!(err, Err(DeviceError::UnexpectedResponse));
+}
+
+#[test]
+fn test_empty_file_is_not_a_session() {
+    let mut files = std::collections::HashMap::new();
+    files.insert("1:/mem/a_0001.xrz".to_string(), Vec::new());
+    let device = FakeMyChron::start_with(Vec::new(), files, Fault::None);
+    let (mut client, _cancel) = connect(device.addr, &CLOCK, QUICK).expect("connects");
+
+    let err = client.download("a_0001.xrz", &mut CollectingProgress::default());
+
+    assert_eq!(err, Err(DeviceError::UnexpectedResponse));
 }
 
 #[test]

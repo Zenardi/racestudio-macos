@@ -13,6 +13,12 @@ import RaceStudioFFIBindings
 /// failed call drops the connection (the Rust side has already closed it), and
 /// the next call reconnects.
 ///
+/// The actor suspends while a connection opens, so every open is stamped with a
+/// generation: ``cancel()`` and ``disconnect()`` bump it, and an open that
+/// finishes under an older generation closes its link instead of keeping it.
+/// A cancel that arrives while nothing is running therefore never leaves a dead
+/// link cached, and one that arrives mid-connect still stops the download.
+///
 /// Logic-free glue over tested code (`DevicePanelModel`, the Rust client), so it
 /// lives in the coverage-excluded app target.
 actor LiveDeviceService: DeviceService {
@@ -22,6 +28,8 @@ actor LiveDeviceService: DeviceService {
 
     private var connection: DeviceConnection?
     private var connectedDevice: Device?
+    /// Bumped by every cancel and disconnect; see the type's notes.
+    private var generation = 0
 
     func discover() async throws -> [Device] {
         try await Self.offMain { try discoverDevices(timeoutMs: Self.discoveryTimeoutMs) }
@@ -43,14 +51,14 @@ actor LiveDeviceService: DeviceService {
     }
 
     func cancel() async {
-        connection?.cancel()
+        let link = forget()
+        // Cancelling is final on the Rust side; the link is never reused.
+        link?.cancel()
+        if let link { await Self.offMain { link.close() } }
     }
 
     func disconnect() async {
-        let link = connection
-        connection = nil
-        connectedDevice = nil
-        if let link { await Self.offMain { link.close() } }
+        if let link = forget() { await Self.offMain { link.close() } }
     }
 
     // MARK: - Private
@@ -59,10 +67,25 @@ actor LiveDeviceService: DeviceService {
     private func open(_ device: Device) async throws -> DeviceConnection {
         if let connection, connectedDevice == device { return connection }
         await disconnect()
+        let stamp = generation
         let clock = DeviceClock(date: Date(), timeZone: .current)
         let link = try await Self.offMain { try DeviceConnection.connect(device: device, clock: clock) }
+        guard generation == stamp, connection == nil else {
+            // Cancelled, disconnected or superseded while connecting.
+            await Self.offMain { link.close() }
+            throw DiscoveryError.Cancelled(message: "the transfer was cancelled")
+        }
         connection = link
         connectedDevice = device
+        return link
+    }
+
+    /// Drop the cached link and bump the generation; returns the link to close.
+    private func forget() -> DeviceConnection? {
+        generation += 1
+        let link = connection
+        connection = nil
+        connectedDevice = nil
         return link
     }
 

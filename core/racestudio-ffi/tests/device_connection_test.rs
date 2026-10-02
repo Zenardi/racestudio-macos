@@ -9,6 +9,8 @@ mod fake_mychron;
 use std::collections::HashMap;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use fake_mychron::{catalog_csv, golden_xrk, stored_session, FakeMyChron, Fault};
 use racestudio_ffi::{
@@ -115,6 +117,55 @@ fn test_failed_exchange_closes_the_connection() {
 
     assert!(matches!(first, Err(DiscoveryError::UnexpectedResponse)));
     assert!(matches!(second, Err(DiscoveryError::ConnectionClosed)));
+}
+
+#[test]
+fn test_failed_exchange_ends_the_tcp_connection() {
+    let fake = FakeMyChron::start(Fault::WrongEcho);
+    let conn = connect_to(&fake);
+    let _ = conn.list_sessions();
+    let started = Instant::now();
+
+    fake.client_payloads();
+
+    // The fake waits up to 10 s for a frame; an open socket would hold it there.
+    assert!(started.elapsed() < Duration::from_secs(5));
+}
+
+#[test]
+fn test_undecodable_file_keeps_the_connection_open() {
+    let mut files = HashMap::new();
+    files.insert(
+        "1:/mem/a_0001.xrz".to_string(),
+        vec![0x78, 0x9c, 0xff, 0xff, 0xff, 0xff],
+    );
+    let fake = FakeMyChron::start_with(catalog_csv(), files, Fault::None);
+    let conn = connect_to(&fake);
+
+    let err = conn.download("a_0001.xrz".to_string(), Box::new(Recorder::default()));
+
+    assert!(matches!(err, Err(DiscoveryError::CorruptArchive)));
+    assert!(conn.list_sessions().is_ok());
+}
+
+#[test]
+fn test_close_does_not_wait_for_a_stalled_download() {
+    let fake = FakeMyChron::start(Fault::StallBeforeChunk(Duration::from_secs(3)));
+    let conn = connect_to(&fake);
+    let worker = {
+        let conn = Arc::clone(&conn);
+        thread::spawn(move || {
+            conn.download("a_0053.xrz".to_string(), Box::new(Recorder::default()))
+        })
+    };
+    thread::sleep(Duration::from_millis(200));
+    let started = Instant::now();
+
+    conn.close();
+
+    let result = worker.join().expect("download thread");
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(matches!(result, Err(DiscoveryError::Cancelled)));
 }
 
 #[test]

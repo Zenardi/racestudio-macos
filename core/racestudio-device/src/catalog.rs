@@ -212,7 +212,7 @@ fn parse_date_time(date: &str, time: &str) -> Option<SessionDate> {
     if d.next().is_some() || t.next().is_some() {
         return None;
     }
-    let valid = (1..=31).contains(&day)
+    let valid = (1..=days_in_month(month, year)).contains(&day)
         && (1..=12).contains(&month)
         && (1900..=2999).contains(&year)
         && hour < 24
@@ -226,4 +226,15 @@ fn parse_date_time(date: &str, time: &str) -> Option<SessionDate> {
         minute,
         second,
     })
+}
+
+/// Days in `month` of `year` (Gregorian); 0 for a month outside 1–12.
+fn days_in_month(month: u8, year: u16) -> u8 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+        2 => 28,
+        _ => 0,
+    }
 }

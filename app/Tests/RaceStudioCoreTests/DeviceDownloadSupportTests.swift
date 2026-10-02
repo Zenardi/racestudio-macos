@@ -79,6 +79,17 @@ private func session(
             == "2025-07-11 17-45-28 A-B-C.xrk")
     }
 
+    @Test func test_library_name_replaces_control_characters() {
+        #expect(DeviceSessionText.libraryFileName(session(track: "A\u{0}B\nC"))
+            == "2025-07-11 17-45-28 A-B-C.xrk")
+    }
+
+    @Test func test_library_name_caps_a_long_track() {
+        let name = DeviceSessionText.libraryFileName(session(track: String(repeating: "x", count: 300)))
+
+        #expect(name == "2025-07-11 17-45-28 \(String(repeating: "x", count: 100)).xrk")
+    }
+
     @Test func test_library_name_without_a_track_uses_the_device_name() {
         #expect(DeviceSessionText.libraryFileName(session(track: ""))
             == "2025-07-11 17-45-28 a_0061.xrk")

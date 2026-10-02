@@ -2,6 +2,7 @@
 //! connection the [`DeviceClient`] runs over. `std::net` only — no new
 //! dependencies, nothing asynchronous; the app calls these off the main thread.
 
+use std::io::ErrorKind;
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpStream, UdpSocket};
 use std::time::{Duration, Instant};
 
@@ -44,6 +45,11 @@ impl Default for Timeouts {
 
 /// Stops a connection from another thread: sets the [`CancelToken`] and shuts
 /// the socket so a blocked read returns at once.
+///
+/// Cancelling is final: the connection is closed whether or not a call was in
+/// flight, and every later call reports [`DeviceError::Cancelled`]. It is also
+/// how the owner closes the socket for good — the canceller holds a duplicate of
+/// it, so dropping the client alone does not end the TCP connection.
 #[derive(Debug)]
 pub struct Canceller {
     token: CancelToken,
@@ -116,8 +122,16 @@ pub fn probe(targets: &[SocketAddr], timeout: Duration) -> Result<Vec<Device>, D
     let mut devices: Vec<Device> = Vec::new();
     let mut buf = [0u8; MAX_DATAGRAM];
     while Instant::now() < deadline {
-        let Ok((len, _from)) = socket.recv_from(&mut buf) else {
-            continue; // timed-out slice, or a transient error; keep listening
+        let (len, _from) = match socket.recv_from(&mut buf) {
+            Ok(received) => received,
+            Err(err) if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+                continue
+            }
+            Err(_) => {
+                // A socket error that returns at once must not spin the loop.
+                std::thread::sleep(RECEIVE_SLICE);
+                continue;
+            }
         };
         for device in parse_discovery(&buf[..len]).unwrap_or_default() {
             if !devices.contains(&device) {

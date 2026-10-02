@@ -52,8 +52,8 @@ pub enum DeviceError {
     /// conversation is out of step and is abandoned (issue #179).
     UnexpectedResponse,
     /// A requested on-device file name is not one the client will send: empty,
-    /// too long for the command's path field, or containing a character outside
-    /// the catalog's `[A-Za-z0-9_.-]` set (issue #179).
+    /// too long for the command's path field, or not a `[A-Za-z0-9_-]` stem with
+    /// an `.xrz`/`.xrk` extension (issue #179).
     InvalidPath,
     /// The device did not answer within the read timeout (issue #179).
     Timeout,

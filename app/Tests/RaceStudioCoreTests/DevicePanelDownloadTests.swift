@@ -88,15 +88,45 @@ import RaceStudioFFIBindings
             DownloadReport(imported: [], failed: [], notDownloaded: chosen)))
     }
 
-    @Test func test_device_cancellation_stops_the_queue() async throws {
+    @Test func test_device_cancellation_nobody_asked_for_is_a_failure() async throws {
         let harness = try await DevicePanelFixtures.atSessions(
             failures: ["a_0062.xrz": DiscoveryError.Cancelled(message: "cancelled")])
         let chosen = Array(harness.sessions.prefix(2))
 
         await harness.model.download(chosen)
 
-        #expect(harness.model.state == .finished(harness.device, harness.sessions,
-            DownloadReport(imported: [], failed: [], notDownloaded: chosen)))
+        #expect(harness.model.state == .finished(harness.device, harness.sessions, DownloadReport(
+            imported: [chosen[1]],
+            failed: [DownloadFailure(session: chosen[0], message: "The transfer was cancelled.")],
+            notDownloaded: [])))
+    }
+
+    @Test func test_progress_never_goes_backwards() async throws {
+        let harness = try await DevicePanelFixtures.atSessions(progress: [0.6, 0.3, 1.0])
+        var seen: [Double] = []
+        let watch = harness.model.$state.sink { state in
+            if case let .downloading(_, _, progress) = state { seen.append(progress.fraction) }
+        }
+
+        await harness.model.download([harness.sessions[0]])
+        watch.cancel()
+
+        #expect(seen == [0, 0.6, 0.6, 1])
+    }
+
+    @Test func test_retry_after_cancel_downloads_again() async throws {
+        let harness = try await DevicePanelFixtures.atSessions(holdsDownloads: true)
+        let queue = Task { await harness.model.download([harness.sessions[0]]) }
+        await DevicePanelFixtures.untilDownloading(harness.model)
+        await harness.model.cancelDownload()
+        await queue.value
+        let retry = Task { await harness.model.retry() }
+        await DevicePanelFixtures.untilDownloading(harness.model)
+
+        await harness.model.cancelDownload()
+        await retry.value
+
+        #expect(harness.service.downloadCalls == ["a_0062.xrz", "a_0062.xrz"])
     }
 
     @Test func test_task_cancellation_stops_the_queue() async throws {

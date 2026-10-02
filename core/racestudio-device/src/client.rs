@@ -65,6 +65,17 @@ impl CancelToken {
     }
 }
 
+/// The largest reply accepted for the session-open and info reads (observed:
+/// 4268, 12816, 2728 and 500 bytes). A hostile header must not drive a large
+/// reassembly allocation.
+const SMALL_REPLY_LIMIT: u32 = 1024 * 1024;
+
+/// The largest catalog accepted (observed: 7698 bytes for 60 sessions).
+const CATALOG_LIMIT: u32 = 8 * 1024 * 1024;
+
+/// The largest session file accepted; [`download_session`] bounds it again.
+const FILE_LIMIT: u32 = u32::MAX;
+
 /// A progress sink that ignores every sample (the handshake and catalog reads).
 struct NoProgress;
 
@@ -101,10 +112,17 @@ impl<S: Read + Write> DeviceClient<S> {
             &build_session_open(),
             opcode::SESSION_OPEN,
             Some(&upload),
+            SMALL_REPLY_LIMIT,
             &mut NoProgress,
         )?;
         for code in opcode::INFO {
-            client.transact(&build_read_request(code), code, None, &mut NoProgress)?;
+            client.transact(
+                &build_read_request(code),
+                code,
+                None,
+                SMALL_REPLY_LIMIT,
+                &mut NoProgress,
+            )?;
         }
         Ok(client)
     }
@@ -119,6 +137,7 @@ impl<S: Read + Write> DeviceClient<S> {
             &build_catalog_request(),
             opcode::CATALOG,
             None,
+            CATALOG_LIMIT,
             &mut NoProgress,
         )?;
         parse_catalog(&csv)
@@ -129,15 +148,20 @@ impl<S: Read + Write> DeviceClient<S> {
     ///
     /// # Errors
     /// [`DeviceError::InvalidPath`] for a file name the catalog could not have
-    /// listed; any exchange error; [`DeviceError::CorruptArchive`] when the
-    /// download does not inflate. No partial file is ever returned.
+    /// listed; [`DeviceError::UnexpectedResponse`] when the device answers with
+    /// an empty file (no session is empty); any exchange error;
+    /// [`DeviceError::CorruptArchive`] when the download does not inflate. No
+    /// partial file is ever returned.
     pub fn download(
         &mut self,
         file_name: &str,
         progress: &mut dyn ProgressSink,
     ) -> Result<Vec<u8>, DeviceError> {
         let request = build_read_file(&session_path(file_name)?)?;
-        let stored = self.transact(&request, opcode::READ_FILE, None, progress)?;
+        let stored = self.transact(&request, opcode::READ_FILE, None, FILE_LIMIT, progress)?;
+        if stored.is_empty() {
+            return Err(DeviceError::UnexpectedResponse);
+        }
         inflate_session(&stored)
     }
 
@@ -149,12 +173,14 @@ impl<S: Read + Write> DeviceClient<S> {
         self.send(&build_close())
     }
 
-    /// Run one command transaction and return the response bytes.
+    /// Run one command transaction and return the response bytes, refusing a
+    /// declared response longer than `limit` before anything is allocated.
     fn transact(
         &mut self,
         request: &[u8],
         code: u32,
         upload: Option<&[u8]>,
+        limit: u32,
         progress: &mut dyn ProgressSink,
     ) -> Result<Vec<u8>, DeviceError> {
         self.send(request)?;
@@ -163,13 +189,18 @@ impl<S: Read + Write> DeviceClient<S> {
                 self.expect_echo(code, tag::REQUEST)?;
                 self.send(data)?;
                 // The device acknowledges the upload with a bare u32.
-                verified_frame(&self.receive()?)?;
+                if verified_frame(&self.receive()?)?.payload.len() != 4 {
+                    return Err(DeviceError::UnexpectedResponse);
+                }
             }
             None => {
                 self.expect_echo(code, tag::ACCEPTED)?;
             }
         }
         let header = self.expect_echo(code, tag::RESPONSE_HEADER)?;
+        if header.length > limit {
+            return Err(DeviceError::MalformedRecord);
+        }
         let plan = DownloadPlan {
             session_id: code,
             total_len: u64::from(header.length),

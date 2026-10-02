@@ -202,6 +202,33 @@ fn test_row_with_impossible_date_is_skipped() {
 }
 
 #[test]
+fn test_row_with_a_day_the_month_lacks_is_skipped() {
+    let bad = ROW.replacen("02/03/2025", "31/04/2025", 1);
+
+    let catalog = parse_catalog(&csv(&[HEADER, &bad])).expect("parses");
+
+    assert_eq!(catalog.skipped_rows, 1);
+}
+
+#[test]
+fn test_leap_day_is_accepted() {
+    let leap = ROW.replacen("02/03/2025", "29/02/2024", 1);
+
+    let catalog = parse_catalog(&csv(&[HEADER, &leap])).expect("parses");
+
+    assert_eq!(catalog.sessions.len(), 1);
+}
+
+#[test]
+fn test_february_29_outside_a_leap_year_is_skipped() {
+    let bad = ROW.replacen("02/03/2025", "29/02/1900", 1);
+
+    let catalog = parse_catalog(&csv(&[HEADER, &bad])).expect("parses");
+
+    assert_eq!(catalog.skipped_rows, 1);
+}
+
+#[test]
 fn test_row_with_impossible_time_is_skipped() {
     let bad = ROW.replacen("04:05:06", "24:00:00", 1);
 

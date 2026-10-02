@@ -114,20 +114,22 @@ struct DevicePanelView: View {
                         .foregroundStyle(theme.palette.textSecondary.color(scheme))
                     Spacer()
                     Button("Select All") { selection = Set(sessions.map(\.id)) }
-                    Button(downloadLabel) {
-                        let chosen = sessions.filter { selection.contains($0.id) }
+                    // Only rows still in this table count: a selection can
+                    // outlive a Refresh or a switch of device.
+                    let chosen = sessions.filter { selection.contains($0.id) }
+                    Button(downloadLabel(count: chosen.count)) {
                         Task { await model.download(chosen) }
                     }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(selection.isEmpty)
+                    .disabled(chosen.isEmpty)
                 }
             }
         }
     }
 
-    private var downloadLabel: String {
+    private func downloadLabel(count: Int) -> String {
         let base = ControlLabel.downloadSession.label(locale: locale)
-        return selection.count > 1 ? "\(base) (\(selection.count))" : base
+        return count > 1 ? "\(base) (\(count))" : base
     }
 
     private func reportView(_ report: DownloadReport) -> some View {

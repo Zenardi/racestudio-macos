@@ -48,13 +48,19 @@ public final class DownloadedSessionImporter: DownloadedSessionImporting {
 
     public func importDownloaded(_ data: Data, for session: DeviceSession) async throws {
         let staging = scratchDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? fileManager.removeItem(at: staging) }
         let staged = staging.appendingPathComponent(DeviceSessionText.libraryFileName(session))
-        try data.write(to: staged)
+        let fileManager = fileManager
+        defer { try? fileManager.removeItem(at: staging) }
+        // Multi-megabyte writes and the content hash in `adopt` stay off the
+        // main actor; only the library is touched here.
+        try await Task.detached {
+            try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+            try data.write(to: staged)
+        }.value
 
         let loaded = try await loader.load(staged, onProgress: { _ in })
-        let owned = try files.adopt(staged)
+        let files = files
+        let owned = try await Task.detached { try files.adopt(staged) }.value
         library.add(loaded.session, sourceURL: owned, track: loaded.dataSource?.detectTrack())
         // As for the Open panel, a failed save is not fatal: the session is in
         // the in-memory library and the index is rewritten on the next import.

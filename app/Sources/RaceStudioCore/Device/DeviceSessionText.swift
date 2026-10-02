@@ -28,6 +28,10 @@ extension DeviceClock {
 /// and the name a downloaded copy gets in the library.
 public enum DeviceSessionText {
 
+    /// The longest track label kept in a library file name, so the name stays
+    /// well inside the file system's 255-byte limit.
+    static let maxLabelLength = 100
+
     /// Shown when a field is empty or was not recorded.
     public static let placeholder = LapTimeFormatter.placeholder
 
@@ -72,7 +76,9 @@ public enum DeviceSessionText {
     /// The file name a downloaded copy is imported under:
     /// `2025-07-11 17-45-28 Track.xrk`, falling back to the device's own name
     /// when the logger recorded no track. Path separators and colons are
-    /// replaced so the name is always a single, Finder-safe component.
+    /// replaced, control characters too, and the label is capped at
+    /// ``maxLabelLength`` characters, so the name is always a single,
+    /// Finder-safe component.
     public static func libraryFileName(_ session: DeviceSession) -> String {
         let d = session.date
         let stamp = String(format: "%04d-%02d-%02d %02d-%02d-%02d",
@@ -80,7 +86,11 @@ public enum DeviceSessionText {
         let label = session.trackName.isEmpty
             ? (session.fileName as NSString).deletingPathExtension
             : session.trackName
-        let safe = label.map { "/:\\".contains($0) ? "-" : $0 }
+        let safe = label.prefix(maxLabelLength).map { character -> Character in
+            let unsafe = "/:\\".contains(character)
+                || character.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+            return unsafe ? "-" : character
+        }
         return "\(stamp) \(String(safe)).xrk"
     }
 }

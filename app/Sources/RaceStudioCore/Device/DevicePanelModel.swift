@@ -188,7 +188,7 @@ public final class DevicePanelModel: ObservableObject {
                 }
                 try await importer.importDownloaded(data, for: session)
                 imported.append(session)
-            } catch where cancelRequested || Self.isCancellation(error) {
+            } catch where cancelRequested || error is CancellationError {
                 break
             } catch {
                 failed.append(DownloadFailure(session: session, message: message(for: error)))
@@ -199,8 +199,9 @@ public final class DevicePanelModel: ObservableObject {
             imported: imported, failed: failed, notDownloaded: Array(remaining)))
     }
 
-    /// Stop the running download queue. The session in flight is not imported;
-    /// it and the rest of the queue are reported as not downloaded.
+    /// Stop the running download queue. A session still downloading is not
+    /// imported and is reported, with the rest of the queue, as not downloaded;
+    /// one already importing finishes its import.
     public func cancelDownload() async {
         guard case .downloading = state else { return }
         cancelRequested = true
@@ -257,13 +258,7 @@ public final class DevicePanelModel: ObservableObject {
               progress.session == session else { return }
         state = .downloading(device, table, DownloadProgressState(
             session: session, position: progress.position, count: progress.count,
-            fraction: min(max(fraction, 0), 1)))
-    }
-
-    private static func isCancellation(_ error: Error) -> Bool {
-        if error is CancellationError { return true }
-        if case .Cancelled = error as? DiscoveryError { return true }
-        return false
+            fraction: max(progress.fraction, min(max(fraction, 0), 1))))
     }
 
     /// A user-facing message for a failure. A link that failed while the Mac is

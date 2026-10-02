@@ -51,6 +51,10 @@ pub enum Fault {
     WrongHello,
     /// Echo the catalog command with a different opcode.
     WrongEcho,
+    /// Declare a 4 GiB reply to the first info read.
+    OversizedReply,
+    /// Acknowledge the clock upload with an 8-byte frame instead of a u32.
+    LongUploadAck,
 }
 
 /// A running fake device.
@@ -196,12 +200,21 @@ impl Conversation {
                 SESSION_OPEN => {
                     self.send(&echo(code, TAG_REQUEST, 0))?;
                     self.read()?; // the clock upload
-                    self.send(&frame(&0u32.to_le_bytes()))?;
+                    let ack: &[u8] = if self.fault == Fault::LongUploadAck {
+                        &[0; 8]
+                    } else {
+                        &[0; 4]
+                    };
+                    self.send(&frame(ack))?;
                     let identity = payload_of(&fixture("sessions/list_response.bin"))[4..].to_vec();
                     self.serve(code, &identity, false)?;
                 }
                 c if INFO.contains(&c) => {
                     self.send(&echo(code, TAG_ACCEPTED, 0))?;
+                    if self.fault == Fault::OversizedReply {
+                        self.send(&echo(code, TAG_RESPONSE_HEADER, u32::MAX))?;
+                        return self.read().map(|_| ());
+                    }
                     self.serve(code, &[0x5a; 100], false)?;
                 }
                 CATALOG => {

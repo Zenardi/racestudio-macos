@@ -76,10 +76,12 @@ enum DevicePanelFixtures {
 
     /// Wait until `model` is downloading (for tests that cancel mid-queue).
     static func untilDownloading(_ model: DevicePanelModel) async {
-        while true {
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
             if case .downloading = model.state { return }
             await Task.yield()
         }
+        Issue.record("the model never started downloading")
     }
 }
 #endif
