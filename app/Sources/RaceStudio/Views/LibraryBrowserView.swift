@@ -262,9 +262,12 @@ private struct LibraryPreviewPane: View {
                     .disabled(!summary.isAvailable)
             }
 
-            MapThumbnail(map: preview.map)
+            MapThumbnail(map: preview.map, label: summary.displayTitle)
                 .frame(height: 180)
                 .frame(maxWidth: .infinity)
+                // A stray trail (fixes recorded off the circuit) runs past the
+                // framed circuit; keep it inside the card.
+                .clipShape(RoundedRectangle(cornerRadius: theme.radius.md))
                 .background(theme.palette.surfaceElevated.color(scheme),
                             in: RoundedRectangle(cornerRadius: theme.radius.md))
                 .overlay(
@@ -295,12 +298,21 @@ private struct LibraryPreviewPane: View {
     }
 }
 
-/// Strokes the ``MapPreviewModel`` unit-box points as a racing line, scaled to the
-/// view with a little inset. An empty preview shows a "no GPS" placeholder.
+/// Strokes the ``MapPreviewModel`` racing line fitted **uniformly** into the view
+/// (``MapPreviewModel/fitted(in:inset:)``), so the circuit keeps its real shape
+/// and sits centred however wide the pane is. An empty preview shows a
+/// "no GPS" placeholder.
 private struct MapThumbnail: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
     let map: MapPreviewModel
+    /// Spoken by VoiceOver, e.g. the session's title.
+    let label: String
+
+    /// A dark casing under the line keeps it crisp where the circuit doubles back.
+    private static let casing = StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+    private static let casingOpacity = 0.9
+    private static let line = StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
 
     var body: some View {
         GeometryReader { geo in
@@ -310,20 +322,25 @@ private struct MapThumbnail: View {
                     .foregroundStyle(theme.palette.textSecondary.color(scheme))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Path { path in
-                    let inset: CGFloat = 12
-                    let width = max(geo.size.width - inset * 2, 1)
-                    let height = max(geo.size.height - inset * 2, 1)
-                    let scaled = map.points.map { point in
-                        CGPoint(x: inset + point.x * width, y: inset + point.y * height)
+                // Only the runs inside the framed circuit: a trail recorded off
+                // the circuit is left out rather than cutting in from the edge.
+                let racingLine = Path { path in
+                    for run in map.visibleRuns(in: CGRect(origin: .zero, size: geo.size),
+                                               inset: CGFloat(theme.spacing.md)) {
+                        path.addLines(run)
                     }
-                    path.addLines(scaled)
                 }
-                // Brand accent — not the user's macOS system accent — so the racing
-                // line stays the brand red and never collides with the green
-                // `positive` best-lap marker.
-                .stroke(theme.palette.accent.color(scheme),
-                        style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+                ZStack {
+                    racingLine.stroke(theme.palette.surface.color(scheme).opacity(Self.casingOpacity),
+                                      style: Self.casing)
+                    // Brand accent — not the user's macOS system accent — so the
+                    // racing line stays the brand red and never collides with the
+                    // green `positive` best-lap marker.
+                    racingLine.stroke(theme.palette.accent.color(scheme), style: Self.line)
+                }
+                .accessibilityElement()
+                .accessibilityLabel("Track map: \(label)")
+                .accessibilityAddTraits(.isImage)
             }
         }
     }

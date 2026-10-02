@@ -179,7 +179,7 @@ public struct TrackMapView: View {
     /// nothing is hidden, it simply falls outside the pane. An axis is only trimmed
     /// when it actually has outliers (`GeoProjection.outlierExtentRatio`): a clean
     /// real lap lost 8–10% per axis to the trim, clipping its hairpins.
-    private static let framingTrim = 0.05
+    private static let framingTrim = GeoProjection.framingTrim
 
     private func fittedProjection(for size: CGSize) -> GeoProjection {
         // Clamp the inset to half the size so a small pane never yields a null rect.
