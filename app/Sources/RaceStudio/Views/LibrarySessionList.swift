@@ -34,7 +34,7 @@ struct LibrarySessionList: View {
     var body: some View {
         List(selection: idSelection) {
             ForEach(library.sessions) { summary in
-                SessionListRow(summary: summary)
+                SessionListRow(summary: summary, kart: library.kart(forSession: summary.id))
                     .tag(summary.id)
                     .draggable(summary.id)  // drag into a manual collection to curate it
                     // A simultaneous gesture so the double-click does not swallow
@@ -130,6 +130,9 @@ private struct SessionListRow: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
     let summary: SessionSummary
+    /// The garage kart assigned to the session, shown in place of the logger's
+    /// free-text vehicle.
+    let kart: Kart?
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.xs / 2) {
@@ -149,7 +152,7 @@ private struct SessionListRow: View {
                 .font(.token(theme.typography.caption))
                 .foregroundStyle(theme.palette.textSecondary.color(scheme))
             HStack(spacing: theme.spacing.xs + 2) {
-                Text(summary.vehicle)
+                Text(kart?.displayName ?? summary.vehicle)
                     .font(.token(theme.typography.caption))
                     .foregroundStyle(theme.palette.textPrimary.color(scheme))
                 if !summary.driver.isEmpty {

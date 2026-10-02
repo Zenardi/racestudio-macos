@@ -29,6 +29,7 @@ struct MetadataPanelView: View {
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: theme.spacing.lg, verticalSpacing: theme.spacing.xs) {
+            if let kart = model.kart { row("Kart", kart) }
             row("Vehicle", model.vehicle)
             row("Track", model.track)
             row("Driver", model.driver)

@@ -122,6 +122,8 @@ private struct LayoutRail: View {
 /// Swaps the central panel for the active layout, preserving the surrounding
 /// selection/cursor state (owned by the model).
 private struct PanelHost: View {
+    /// The app model, for the library entry of the open session (its kart).
+    @EnvironmentObject private var app: AppModel
     @ObservedObject var model: AnalysisWindowModel
     @ObservedObject var mathManager: MathChannelsManagerModel
     @ObservedObject var stats: StatsPanelsModel
@@ -169,12 +171,25 @@ private struct PanelHost: View {
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
-                SessionSummaryView(viewModel: SessionSummaryViewModel(session: model.session))
+                SummaryPanel(library: app.library, session: model.session, contentID: model.contentID)
             case .logSheet:
                 LogSheetPanel(model: logSheet)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The Summary panel, observing the library so the session's kart row follows
+/// an assignment made while the window is open.
+private struct SummaryPanel: View {
+    @ObservedObject var library: LibraryBrowserModel
+    let session: Session
+    let contentID: String
+
+    var body: some View {
+        SessionSummaryView(viewModel: SessionSummaryViewModel(
+            session: session, kart: library.kart(forSession: contentID)))
     }
 }
 

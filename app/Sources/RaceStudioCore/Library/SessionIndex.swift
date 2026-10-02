@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// An in-memory index of decoded/imported sessions, keyed by a stable content id
@@ -18,6 +17,11 @@ public final class SessionIndex: Codable, Equatable {
     /// than copied per session so naming a circuit once covers every session
     /// recorded there, including ones imported later.
     private var trackNames: [String: String] = [:]
+    /// The user's garage, by ``Kart/id``.
+    private var kartStorage: [String: Kart] = [:]
+    /// Track key (``trackKey(of:)``) → the kart last assigned to a session there,
+    /// pre-filled on the next session imported from that track.
+    private var trackKarts: [String: String] = [:]
     private let now: () -> Date
 
     /// - Parameter now: clock used to stamp ``SessionSummary/importedAt``
@@ -51,6 +55,9 @@ public final class SessionIndex: Codable, Equatable {
         summary.trackNickname = summary.trackID.flatMap { trackNames[$0] }
         summary.trackLabel = track?.displayName ?? storage[summary.id]?.trackLabel
         summary.trackDirection = track?.direction ?? storage[summary.id]?.trackDirection
+        // Keep the kart the user chose; a new session gets the track's last kart.
+        let chosen = storage[summary.id]?.kartID ?? trackKarts[Self.trackKey(of: summary)]
+        summary.kartID = chosen.flatMap { kartStorage[$0] == nil ? nil : $0 }
         storage[summary.id] = summary
         return summary
     }
@@ -112,6 +119,67 @@ public final class SessionIndex: Codable, Equatable {
     /// spec returns every summary. Results are date-descending.
     public func filter(_ spec: FilterSpec) -> [SessionSummary] {
         Self.byDateDescending(storage.values.filter(spec.matches))
+    }
+
+    // MARK: - Garage
+
+    /// Every kart, ordered by name (case-insensitive), tie-broken by id.
+    public var karts: [Kart] {
+        kartStorage.values.sorted { lhs, rhs in
+            let order = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+            return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
+        }
+    }
+
+    /// The kart with `id`, or `nil`.
+    public func kart(id: String) -> Kart? {
+        kartStorage[id]
+    }
+
+    /// Add `kart` to the garage, or update the kart with its id. Stored
+    /// ``Kart/normalized``.
+    public func upsertKart(_ kart: Kart) {
+        kartStorage[kart.id] = kart.normalized
+    }
+
+    /// Remove the kart with `id`: its sessions become unassigned and no track
+    /// pre-fills it any more.
+    public func removeKart(id: String) {
+        guard kartStorage.removeValue(forKey: id) != nil else { return }
+        for (key, var summary) in storage where summary.kartID == id {
+            summary.kartID = nil
+            storage[key] = summary
+        }
+        trackKarts = trackKarts.filter { $0.value != id }
+    }
+
+    /// Assign the kart with `kartID` to the session with `sessionID`, or clear the
+    /// assignment with `nil`. Assigning also makes it the kart pre-filled for the
+    /// next session imported from the same track; clearing it stops pre-filling
+    /// that kart there. An unknown session or kart changes nothing.
+    public func assignKart(_ kartID: String?, toSession sessionID: String) {
+        guard var summary = storage[sessionID] else { return }
+        let key = Self.trackKey(of: summary)
+        if let kartID {
+            guard kartStorage[kartID] != nil else { return }
+            trackKarts[key] = kartID
+        } else if trackKarts[key] == summary.kartID {
+            trackKarts[key] = nil
+        }
+        summary.kartID = kartID
+        storage[sessionID] = summary
+    }
+
+    /// The kart pre-filled for new sessions at `summary`'s track, or `nil`.
+    public func defaultKart(forTrackOf summary: SessionSummary) -> Kart? {
+        trackKarts[Self.trackKey(of: summary)].flatMap { kartStorage[$0] }
+    }
+
+    /// What "the same track" means for the kart default: the recognized circuit
+    /// when there is one, else the logger's venue name.
+    static func trackKey(of summary: SessionSummary) -> String {
+        if let trackID = summary.trackID { return "track:\(trackID)" }
+        return "venue:\(summary.venue.lowercased())"
     }
 
     // MARK: - Recent (issue 8.15)
@@ -214,41 +282,6 @@ public final class SessionIndex: Codable, Equatable {
             championship: metadata.series)
     }
 
-    /// A stable, deterministic content id for `session` — a SHA-256 over its
-    /// metadata, laps, and channel listing. Two decodes of the same file hash
-    /// identically (so re-adding updates rather than duplicates); different
-    /// content hashes differently. Deterministic across process runs, unlike
-    /// `Hashable`, so it is safe to persist as a key.
-    ///
-    /// Every field is **length-prefixed** into the hash so the encoding is
-    /// injective: a `|`/`:`/newline inside a value (e.g. a track named `"A|B"`)
-    /// can never forge the field boundaries of a genuinely different session.
-    public static func contentID(for session: Session) -> String {
-        var hasher = SHA256()
-        func feed(_ value: String) {
-            var length = UInt64(value.utf8.count).littleEndian
-            withUnsafeBytes(of: &length) { hasher.update(bufferPointer: $0) }
-            hasher.update(data: Data(value.utf8))
-        }
-        let metadata = session.metadata
-        for field in [metadata.vehicle, metadata.track, metadata.driver,
-                      metadata.session, metadata.series, metadata.logDate,
-                      metadata.logTime, String(metadata.datetimeUtc)] {
-            feed(field)
-        }
-        feed(String(session.laps.count))
-        for lap in session.laps {
-            feed(String(lap.index)); feed(String(lap.startTimeS))
-            feed(String(lap.durationS)); feed(String(lap.endTimeS))
-        }
-        feed(String(session.channels.count))
-        for channel in session.channels {
-            feed(channel.name); feed(channel.unit); feed(String(channel.sampleRateHz))
-            feed(String(channel.decimals)); feed(String(channel.sampleCount))
-        }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
-    }
-
     /// Recompute ``SessionSummary/isAvailable`` for every summary against disk —
     /// a dangling reference (moved/deleted source) is flagged, never dropped.
     func refreshAvailability(fileManager: FileManager = .default) {
@@ -291,7 +324,7 @@ public final class SessionIndex: Codable, Equatable {
     public private(set) var decoderGeneration = SessionIndex.decoderGeneration
 
     private enum CodingKeys: String, CodingKey {
-        case summaries, collections, decoderGeneration, trackNames
+        case summaries, collections, decoderGeneration, trackNames, karts, trackKarts
     }
 
     public convenience init(from decoder: Decoder) throws {
@@ -310,6 +343,13 @@ public final class SessionIndex: Codable, Equatable {
             [FailableDecodable<SessionCollection>].self, forKey: .collections)) ?? nil
         trackNames = ((try? container.decodeIfPresent(
             [String: String].self, forKey: .trackNames)) ?? nil) ?? [:]
+        // The garage is optional on disk (libraries before it existed) and, like
+        // collections, lenient: one unreadable kart is skipped, not fatal.
+        let savedKarts = ((try? container.decodeIfPresent(
+            [FailableDecodable<Kart>].self, forKey: .karts)) ?? nil)?.compactMap(\.value) ?? []
+        kartStorage = Dictionary(savedKarts.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        trackKarts = ((try? container.decodeIfPresent(
+            [String: String].self, forKey: .trackKarts)) ?? nil) ?? [:]
         let savedCollections = wrapped?.compactMap(\.value) ?? []
         collectionStorage = Dictionary(
             savedCollections.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
@@ -322,6 +362,8 @@ public final class SessionIndex: Codable, Equatable {
         try container.encode(collectionStorage.values.sorted { $0.id < $1.id }, forKey: .collections)
         try container.encode(SessionIndex.decoderGeneration, forKey: .decoderGeneration)
         try container.encode(trackNames, forKey: .trackNames)
+        try container.encode(kartStorage.values.sorted { $0.id < $1.id }, forKey: .karts)
+        try container.encode(trackKarts, forKey: .trackKarts)
     }
 
     /// Drop every cached summary, keeping user-authored collections. Used when a
@@ -336,7 +378,8 @@ public final class SessionIndex: Codable, Equatable {
 
     public static func == (lhs: SessionIndex, rhs: SessionIndex) -> Bool {
         lhs.storage == rhs.storage && lhs.collectionStorage == rhs.collectionStorage
-            && lhs.trackNames == rhs.trackNames
+            && lhs.trackNames == rhs.trackNames && lhs.kartStorage == rhs.kartStorage
+            && lhs.trackKarts == rhs.trackKarts
     }
 }
 

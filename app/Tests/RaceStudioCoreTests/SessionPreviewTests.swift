@@ -44,4 +44,46 @@ import Testing
         #expect(preview.map.isEmpty)
         #expect(preview.summary.laps.count == 2)
     }
+
+    // MARK: - The map is the best lap (not the whole session)
+
+    /// A fix at `time` seconds, a distinct point per time so counts are exact.
+    private static func fix(_ time: Double) -> GPSTrackPoint {
+        GPSTrackPoint(coordinate: GPSCoord(latitude: 45 + time / 10_000, longitude: 10 + time / 5_000),
+                      distance: time, time: time)
+    }
+
+    @Test func test_map_draws_only_the_best_laps_fixes() {
+        // Laps: 0–120 s, 120–220 s (best, 100 s), 220–330 s.
+        let session = SessionFixture.make(lapDurations: [120, 100, 110])
+        let track = [10, 130, 150, 200, 250, 300].map(Self.fix)
+
+        let preview = SessionPreview(session: session, track: track)
+
+        #expect(preview.map.points.count == 3) // 130, 150, 200
+    }
+
+    @Test func test_map_falls_back_to_the_whole_track_without_laps() {
+        let session = SessionFixture.make(lapDurations: [])
+        let track = [10, 20, 30].map(Self.fix)
+
+        let preview = SessionPreview(session: session, track: track)
+
+        #expect(preview.map.points.count == 3)
+    }
+
+    @Test func test_map_falls_back_when_the_best_lap_has_no_gps() {
+        let session = SessionFixture.make(lapDurations: [120, 100, 110])
+        let track = [10, 20, 250, 260].map(Self.fix) // nothing inside 120–220 s
+
+        let preview = SessionPreview(session: session, track: track)
+
+        #expect(preview.map.points.count == 4)
+    }
+
+    @Test func test_map_is_empty_without_gps() {
+        let preview = SessionPreview(session: SessionFixture.make(), track: [])
+
+        #expect(preview.map.isEmpty)
+    }
 }

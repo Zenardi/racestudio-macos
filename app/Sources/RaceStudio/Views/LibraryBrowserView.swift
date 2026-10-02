@@ -17,6 +17,9 @@ struct LibraryBrowserView: View {
     /// What is being renamed — a session or a track. Owned here so the list's
     /// context menu and the preview pane's buttons present one sheet, not several.
     @State private var renaming: RenameTarget?
+    /// The kart being added or edited — from the sidebar's garage or a session's
+    /// kart picker — presented as one sheet.
+    @State private var editingKart: KartEditTarget?
 
     var body: some View {
         NavigationSplitView {
@@ -48,6 +51,7 @@ struct LibraryBrowserView: View {
             }
         }
         .task(id: library.selectedID) { await library.loadPreview() }
+        .sheet(item: $editingKart) { KartEditorSheet(library: library, target: $0) }
         .sheet(item: $renaming) { target in
             SessionRenameSheet(
                 target: target,
@@ -84,6 +88,8 @@ struct LibraryBrowserView: View {
                     }
                 }
             }
+
+            GarageSection(library: library, editing: $editingKart)
 
             Section("Search") {
                 TextField("Venue, vehicle, driver", text: searchBinding)
@@ -174,7 +180,8 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private var previewPane: some View {
         if let summary = library.selectedSummary, let preview = library.preview {
-            LibraryPreviewPane(summary: summary, preview: preview,
+            LibraryPreviewPane(library: library, summary: summary, preview: preview,
+                               editingKart: $editingKart,
                                onOpen: { onOpen(summary) },
                                onRename: { renaming = $0 })
         } else if library.previewFailed {
@@ -203,8 +210,10 @@ struct LibraryBrowserView: View {
 private struct LibraryPreviewPane: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject var library: LibraryBrowserModel
     let summary: SessionSummary
     let preview: SessionPreview
+    @Binding var editingKart: KartEditTarget?
     let onOpen: () -> Void
     let onRename: (RenameTarget) -> Void
 
@@ -239,6 +248,7 @@ private struct LibraryPreviewPane: View {
                     }
                 }
                 Spacer()
+                KartPicker(library: library, summary: summary, editing: $editingKart)
                 // Visible rename affordances: the venue a logger stamps is often
                 // wrong, so fixing it must not be hidden behind a right-click.
                 // Naming the *track* fixes every session recorded there at once.
