@@ -76,7 +76,7 @@ responder is present, `ap_mode_fallback()` returns the well-known gateway
 is injected behind the `DeviceBrowser` trait, so discovery is fixture-replayable
 with no live device; the golden oracle is
 [`../../fixtures/device/golden/discovery.json`](../../fixtures/device/golden/discovery.json).
-**No networking client** lands here — enumeration/download/delete are 6.4–6.6.
+The live client that uses these devices is §10 (issue #179).
 
 > **Caveat — Bonjour service type is unverified.** The only discovery mechanism
 > proven by the 6.2 capture is the UDP-36002 `aim-ka` exchange above; **no capture
@@ -86,6 +86,14 @@ with no live device; the golden oracle is
 > falling back to AP mode; the type must be confirmed against a live LAN capture
 > (or the live path rewired to the verified UDP-36002 exchange). The
 > fixture-tested `parse_discovery`/`ap_mode_fallback` path is the verified one.
+
+### Live discovery (issue #179)
+
+The Bonjour browser is gone. The app now runs the **verified** exchange:
+`racestudio_device::discover_live` (FFI `discover_devices`) sends `aim-ka` to the
+multicast group **and** straight to `10.0.0.1:36002`, collects replies for 1.5 s,
+parses each with `parse_discovery`, and falls back to `ap_mode_fallback()` when
+nothing answers, so the list is never empty.
 
 ---
 
@@ -124,10 +132,23 @@ Worked example (`control/hello.bin`): payload `00 00 00 00 06 09 00 00` →
 
 The connection opens with an 8-byte hello each way (`control/hello.bin` is the
 device side, payload `00000000 06 09 0000`, checksum 15; the client side is
-`… 06 08 …`, checksum 14). The `06 08`/`06 09` pair is **uncertain** (likely a
-protocol/version id). The client then sends a time-sync frame (68-B payload
-carrying the current date/time as consecutive **u32-LE** fields, e.g.
-`ea 07 00 00`=2026 (year), `07`=month, `15`=21 (day)).
+`client/hello_request.bin`, `… 06 08 …`, checksum 14). The `06 08`/`06 09` pair is
+**uncertain** (likely a protocol/version id).
+
+The client then runs **session-open**, opcode `0x0110` (`control/command_info.bin`):
+its payload announces a 64-byte upload at `payload[16..20]`, the device echoes it
+with tag `0x0a01` ("send it", `client/open_echo.bin`), and the client uploads its
+clock (`client/clock_upload.bin`): a zero offset, then 8 zero bytes, the **local**
+year/month/day/hour/minute/second as u32 LE, 8 zero bytes, and the same instant in
+**UTC**. The device acks the upload with a bare u32 (`client/upload_ack.bin`), then
+answers like any read (§6) with its identity and path table — the 4268-byte reply
+in `sessions/list_response.bin` (`client/open_header.bin` declares the length).
+
+The AiM app follows with three info reads, opcodes `0x0202`, `0x0208`, `0x0203`
+(`client/info_*_request.bin`); the live client sends them too and discards the
+replies, so its conversation matches the recorded one. The app ends a conversation
+with opcode `0x0001`, tag `0x0a00` (`client/close_request.bin`), which gets no
+reply.
 
 ---
 
@@ -161,7 +182,38 @@ a container of records:
 `test_session_list_offsets_parse_from_fixture` asserts the `<hiMST` header at
 payload `0x04` and the presence of `idn` records.
 
+### The catalog is a CSV (issue #179)
+
+The #133 capture answered what the caveat above could not. `0x0110` is the
+**session-open** command (§4), and its reply is the device's identity and **path
+table** (`dwnsm=1:/mem/dwnsm,…|`, `recorded=1:/mem,…|`). The session catalog is a
+separate read, opcode **`0x0224`** (`client/catalog_request.bin`), answered like any
+read (§6) with the download-summary **CSV** stored on the device as `1:/mem/dwnsm`
+(`client/catalog_response.bin`, de-identified, cut to six rows):
+
+```
+name,size,date,hour,nlap,nbest,best,pilota,track_name,veicolo,campionato,venue_type,mode,trk_type,motivolap,maxvel,device,track_lat,track_lon,test_dur,pname,ptype,ptime,pdist,pmaxv,valid,
+a_0061.xrz,3866208,11/07/2025,17:45:28,23,2,53951,,FIXTURE TRACK B,,,,speed,closed,stop,1079269785,,123456789,-123456789,1294498,,,,,,,
+```
+
+Rows are `\r\n`-separated and end in a comma. `size` is the **stored
+(compressed) size** — exactly the length the file's read declares (§6); `date` is
+`dd/mm/yyyy`, `hour` `hh:mm:ss` (device-local); `best` is the best lap in ms and
+`nbest` its lap number; `test_dur` is the session length in ms; `track_lat` /
+`track_lon` are degrees × 10⁷; `pilota`/`veicolo`/`campionato` are the driver,
+vehicle and championship set on the logger. `maxvel` looks like an f32 bit pattern
+and is not decoded.
+
+`racestudio_device::parse_catalog` reads it into `SessionEntry` values (golden:
+`golden/catalog.json`). Columns are found **by name**; a row with the wrong column
+count or an unreadable required field (name, size, date, time) is skipped and
+counted, never fatal; a file name outside `[A-Za-z0-9_-]` + `.xrz`/`.xrk` is
+rejected, so a hostile catalog cannot steer a read outside `1:/mem/`.
+
 ### Typed session enumeration (issue 6.4)
+
+> **Superseded by the CSV catalog above (issue #179).** Kept for the guarded
+> delete's `SessionInfo`; the binary record layout below was never observed.
 
 `build_session_list_request()` reproduces the captured catalog request
 (`control/command_info.bin`, command `0x0110`) **byte-for-byte** — a 64-byte
@@ -298,6 +350,25 @@ via a [`ProgressSink`] for the 6.7 progress bar.
 
 ---
 
+### Every command is the same transaction (issue #179)
+
+The read-file exchange above is one instance of the transaction every command
+runs (`racestudio_device::command`):
+
+```
+client  command, 64-byte payload: opcode [8..12], upload length [16..20],
+        tag 0x0a01 [24..28], NUL-terminated path [32..64]
+device  echo, tag 0x0a01 "send it"         ── only when an upload follows
+client  upload: offset(u32) = 0, then the data
+device  bare u32 ack
+device  echo, tag 0x0a09 "accepted"        ── when there is no upload
+device  echo, tag 0x0a11: response length [16..20], stride 0xFFC0 [20..24]
+client  ACK(next offset) / device chunk(offset + data) … until the length is covered
+```
+
+A response of length 0 ends at the header. Every frame in the capture (1536
+client, 1593 device) carries the checksum trailer.
+
 ## 7. Delete (guarded write — opcode NOT yet observed)
 
 The real delete opcode is **not** in any capture: the device held 0 on-board
@@ -365,4 +436,37 @@ fixture. Raw `.pcap`/`.pcapng` are never committed (git-ignored).
 | **6.4 enumeration** | ✅ byte-exact request + checksum-gated framing → typed `SessionInfo`; **per-session date/size/name layout hypothesized, to be confirmed with a session-present capture (#130)** |
 | **6.5 download** | ✅ checksum-gated chunk reassembly by offset → decodable `.xrk` (validated via M1 decode); **multi-chunk stream / whole-file-checksum source / retry handshake hypothesized, to be confirmed with a session-present capture (#133)** |
 | **6.6 delete** | ✅ guarded delete: arm + typed confirmation ⇒ 0 bytes on refusal, one frame, no blind retry, over verified STCP framing; **delete opcode + ack/reject response synthetic, to be confirmed with a real capture (#130)** (§7) |
+| **#179 live client** | ✅ hello + session-open with clock + info reads (§4), CSV catalog via `0x0224` (§5), per-file `0x0402` reads paced by ACKs (§6), close; every request pinned byte-for-byte to a captured frame, end-to-end against a fake device that replays the fixtures; **read-only** (§10) |
 | **6.7 UI** | ✅ device panel: a tested `DevicePanelModel` state machine over an injected `DeviceService` (discovery → session table → 0→100% download progress → guarded, name-confirmed delete); logic in `RaceStudioCore`, SwiftUI shell excluded from coverage; fixture-driven, no live device |
+
+---
+
+## 10. The live download client (issue #179)
+
+`racestudio_device::net::connect` opens TCP 2000 (5 s connect, 10 s per read or
+write), runs the handshake (§4) and returns a `DeviceClient`:
+
+| Call | Exchange | Result |
+| --- | --- | --- |
+| `list_sessions()` | `0x0224` read | `Catalog { sessions, skipped_rows }` (§5) |
+| `download(file_name, progress)` | `0x0402` read of `1:/mem/<file_name>` | the inflated `.xrk` (§6) |
+| `close()` | `0x0001` | — |
+
+- **Read-only.** The client can send only the commands above. Nothing it sends
+  modifies the device; the delete of §7 is not reachable from it or from the app.
+- **Integrity.** Each chunk's trailer is verified and the chunks must cover exactly
+  the declared length (`download_session`, whose whole-file checksum is optional
+  because the device sends none). A corrupt chunk is asked for again by re-sending
+  the ACK for the same offset — the presumed retry, still unobserved on the wire.
+- **Failures** are typed: `Timeout`, `ConnectionFailed`, `ConnectionClosed`,
+  `UnexpectedResponse` (a wrong hello or echo), `InvalidPath`, `Cancelled`. A
+  `Canceller` stops a call from another thread by shutting the socket.
+- **Verification.** `tests/command_test.rs` pins every request to a captured frame;
+  `tests/client_test.rs` runs connect → list → download against an in-process fake
+  MyChron that replays the fixtures (`tests/support/fake_mychron.rs`), checks the
+  download equals `golden/transfer_reassembled.xrk`, checks the command order and
+  that only read opcodes are ever sent, and injects drops, corrupt chunks, silence
+  and cancellation.
+- **FFI.** `discover_devices(timeout_ms)` and the `DeviceConnection` object
+  (`connect`, `list_sessions`, `download`, `cancel`, `close`); the app's device
+  window drives them through `LiveDeviceService`.

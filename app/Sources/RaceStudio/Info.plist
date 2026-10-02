@@ -91,5 +91,7 @@
 			</dict>
 		</dict>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RaceStudio looks for your MyChron on the local network to download your sessions.</string>
 </dict>
 </plist>

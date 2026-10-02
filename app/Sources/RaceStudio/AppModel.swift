@@ -2,6 +2,9 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 import RaceStudioCore
+#if canImport(RaceStudioFFIBindings)
+import RaceStudioFFIBindings
+#endif
 
 /// Wires the Core import + library stack for the shell (issues 2.3 + 8.14): a
 /// `SessionStore`, a `RecentFilesStore` (UserDefaults + security-scoped
@@ -33,6 +36,12 @@ final class AppModel: ObservableObject {
     /// The running build's version, shown on the Home footer and in About.
     let version = AppVersion.current
 
+    #if canImport(RaceStudioFFIBindings)
+    /// The MyChron device window's model (issue #179); downloads are imported
+    /// into ``library`` through the same adopt → decode → index steps as Open.
+    let devicePanel: DevicePanelModel
+    #endif
+
     private let coordinator: ImportCoordinator
     private let loader: SessionLoading
     private let libraryURL: URL
@@ -55,8 +64,16 @@ final class AppModel: ObservableObject {
         self.libraryURL = libraryURL
         self.files = files
         self.followUpPolicy = ImportFollowUpPolicy(store: UserDefaultsKeyValueStore())
-        self.library = LibraryBrowserModel(loadingFrom: libraryURL, loader: loader, files: files)
+        let library = LibraryBrowserModel(loadingFrom: libraryURL, loader: loader, files: files)
+        self.library = library
         self.coordinator = ImportCoordinator(store: store, recents: recents)
+        #if canImport(RaceStudioFFIBindings)
+        self.devicePanel = DevicePanelModel(
+            service: LiveDeviceService(),
+            importer: DownloadedSessionImporter(
+                files: files, loader: loader, library: library, libraryURL: libraryURL),
+            isOnDeviceNetwork: { DeviceNetwork.isJoined() })
+        #endif
     }
 
     /// Present the standard Open panel and import the chosen telemetry file(s)

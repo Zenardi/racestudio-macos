@@ -3,95 +3,134 @@ import Foundation
 @testable import RaceStudioCore
 import RaceStudioFFIBindings
 
-/// One recorded guarded-delete call, captured by ``FakeDeviceService`` so the
-/// refusal paths can assert **zero** device traffic and the confirm path can
-/// assert the guard arguments — including the *device* the delete was routed to,
-/// which pins the "confirmation is bound to the armed device" safety property
-/// (issue 6.6/6.7).
-struct DeleteCall {
-    let target: SessionInfo
-    let confirmation: DeleteConfirmation?
-    let armed: Bool
-    let device: Device
-}
-
-/// A `DeviceService` fake driving ``DevicePanelModel`` in tests (issue 6.7):
-/// immutable scripted results + lock-protected spies that record the
-/// download/delete calls. `@unchecked Sendable` with an `NSLock` matches the
-/// established fake pattern in this suite (`SpyChannel`, `RecordedChunkSource`);
-/// the lock is only ever taken inside **synchronous** helpers (never lexically
-/// across an `await`).
+/// A `DeviceService` fake driving ``DevicePanelModel`` in tests (issues 6.7,
+/// #179): scripted results plus lock-protected spies. `@unchecked Sendable` with
+/// an `NSLock` matches the established fake pattern in this suite; the lock is
+/// only ever taken inside **synchronous** helpers, never across an `await`.
+///
+/// With `holdsDownloads`, every download waits until ``cancel()`` and then
+/// throws the device's `Cancelled`, as the live client does when its socket is
+/// shut mid-transfer.
 final class FakeDeviceService: DeviceService, @unchecked Sendable {
     private let devicesResult: Result<[Device], Error>
-    private let sessionsResult: Result<[SessionInfo], Error>
-    private let downloadResult: Result<Data, Error>
+    private let catalogResult: Result<DeviceCatalog, Error>
+    private let failures: [String: Error]
     private let progressSequence: [Double]
-    private let deleteResult: Result<Void, Error>
+    private let holdsDownloads: Bool
 
     private let lock = NSLock()
-    private var recordedDownloads: [SessionInfo] = []
-    private var recordedDeletes: [DeleteCall] = []
+    private var recordedDownloads: [String] = []
+    private var cancels = 0
+    private var disconnects = 0
+    private var cancelled = false
+    private var waiter: CheckedContinuation<Void, Never>?
 
     init(
         devices: Result<[Device], Error> = .success([]),
-        sessions: Result<[SessionInfo], Error> = .success([]),
-        download: Result<Data, Error> = .success(Data()),
+        catalog: Result<DeviceCatalog, Error> = .success(DeviceCatalog(sessions: [], skippedRows: 0)),
+        failures: [String: Error] = [:],
         progress: [Double] = [1.0],
-        delete: Result<Void, Error> = .success(())
+        holdsDownloads: Bool = false
     ) {
         devicesResult = devices
-        sessionsResult = sessions
-        downloadResult = download
+        catalogResult = catalog
+        self.failures = failures
         progressSequence = progress
-        deleteResult = delete
+        self.holdsDownloads = holdsDownloads
     }
 
     func discover() async throws -> [Device] { try devicesResult.get() }
 
-    func enumerateSessions(on device: Device) async throws -> [SessionInfo] {
-        try sessionsResult.get()
+    func enumerateSessions(on device: Device) async throws -> DeviceCatalog {
+        try catalogResult.get()
     }
 
     func download(
-        _ session: SessionInfo,
+        _ session: DeviceSession,
         from device: Device,
-        onProgress: @Sendable (Double) async -> Void
+        onProgress: @escaping @Sendable (Double) async -> Void
     ) async throws -> Data {
-        recordDownload(session)
+        record(session.fileName)
         for fraction in progressSequence { await onProgress(fraction) }
-        return try downloadResult.get()
+        if holdsDownloads {
+            await withCheckedContinuation { hold($0) }
+            throw DiscoveryError.Cancelled(message: "the transfer was cancelled")
+        }
+        if let failure = failures[session.fileName] { throw failure }
+        return Data(session.fileName.utf8)
     }
 
-    func delete(
-        _ target: SessionInfo,
-        confirmation: DeleteConfirmation?,
-        armed: Bool,
-        from device: Device
-    ) async throws {
-        recordDelete(DeleteCall(target: target, confirmation: confirmation, armed: armed, device: device))
-        try deleteResult.get()
+    func cancel() async {
+        let waiting = markCancelled()
+        waiting?.resume()
     }
 
-    // Synchronous, lock-protected recorders — kept out of the `async` bodies so
-    // `NSLock` is never taken across a suspension point.
-    private func recordDownload(_ session: SessionInfo) {
+    func disconnect() async {
         lock.lock(); defer { lock.unlock() }
-        recordedDownloads.append(session)
+        disconnects += 1
     }
 
-    private func recordDelete(_ call: DeleteCall) {
+    // Synchronous, lock-protected helpers.
+
+    private func record(_ fileName: String) {
         lock.lock(); defer { lock.unlock() }
-        recordedDeletes.append(call)
+        recordedDownloads.append(fileName)
     }
 
-    var downloadCalls: [SessionInfo] {
+    private func hold(_ continuation: CheckedContinuation<Void, Never>) {
+        lock.lock()
+        if cancelled {
+            lock.unlock()
+            continuation.resume()
+        } else {
+            waiter = continuation
+            lock.unlock()
+        }
+    }
+
+    private func markCancelled() -> CheckedContinuation<Void, Never>? {
+        lock.lock(); defer { lock.unlock() }
+        cancels += 1
+        cancelled = true
+        let waiting = waiter
+        waiter = nil
+        return waiting
+    }
+
+    var downloadCalls: [String] {
         lock.lock(); defer { lock.unlock() }
         return recordedDownloads
     }
 
-    var deleteCalls: [DeleteCall] {
+    var cancelCount: Int {
         lock.lock(); defer { lock.unlock() }
-        return recordedDeletes
+        return cancels
+    }
+
+    var disconnectCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return disconnects
+    }
+}
+
+/// A ``DownloadedSessionImporting`` spy: records each import, and fails the
+/// sessions named in `failing`.
+@MainActor
+final class FakeSessionImporter: DownloadedSessionImporting {
+    struct ImportFailed: Error, LocalizedError {
+        var errorDescription: String? { "the session could not be decoded" }
+    }
+
+    private let failing: Set<String>
+    private(set) var imported: [(data: Data, session: DeviceSession)] = []
+
+    init(failing: Set<String> = []) {
+        self.failing = failing
+    }
+
+    func importDownloaded(_ data: Data, for session: DeviceSession) async throws {
+        if failing.contains(session.fileName) { throw ImportFailed() }
+        imported.append((data, session))
     }
 }
 #endif

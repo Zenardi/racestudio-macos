@@ -47,6 +47,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>NSLocalNetworkUsageDescription</key><string>RaceStudio looks for your MyChron on the local network to download your sessions.</string>
 </dict>
 </plist>
 PLIST
