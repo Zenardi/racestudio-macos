@@ -262,10 +262,17 @@ public final class DevicePanelModel: ObservableObject {
     }
 
     /// A user-facing message for a failure. A link that failed while the Mac is
-    /// not on a MyChron's Wi-Fi gets the instruction to join it.
+    /// not on a MyChron's Wi-Fi gets the instruction to join it; "no route"
+    /// while it *is* on that Wi-Fi is macOS Local Network privacy refusing the
+    /// app, so the message says where to allow it. The network is checked now,
+    /// not at the last search, since the Wi-Fi may have changed since.
     private func message(for error: Error) -> String {
         guard let discovery = error as? DiscoveryError else { return error.localizedDescription }
+        onDeviceNetwork = isOnDeviceNetwork()
         switch discovery {
+        case .HostUnreachable:
+            return onDeviceNetwork ? Self.localNetworkHint
+                : "Couldn’t reach the MyChron. \(Self.joinNetworkHint)"
         case .ConnectionFailed, .Timeout, .ConnectionClosed:
             let problem = Self.linkProblem(discovery)
             return onDeviceNetwork ? problem : "\(problem) \(Self.joinNetworkHint)"
@@ -286,6 +293,11 @@ public final class DevicePanelModel: ObservableObject {
         default: return "Couldn’t connect to the MyChron."
         }
     }
+
+    /// How to let RaceStudio through macOS Local Network privacy.
+    public static let localNetworkHint =
+        "macOS is blocking RaceStudio from your local network. Allow RaceStudio in "
+        + "System Settings ▸ Privacy & Security ▸ Local Network, then try again."
 
     /// How to get the Mac onto the logger's own network.
     public static let joinNetworkHint =

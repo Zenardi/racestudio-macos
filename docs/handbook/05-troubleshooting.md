@@ -24,9 +24,14 @@ state. This chapter maps the common symptoms to a check and a fix.
 1. **On the logger's Wi-Fi?** Join the network named `AiM-MYC…` from the Mac's
    Wi-Fi menu; the Mac should get a `10.0.0.x` address. The device window says so
    when it is not.
-2. **Local network allowed?** If you declined macOS's local-network prompt, allow
-   RaceStudio under System Settings ▸ Privacy & Security ▸ Local Network.
-3. **Search Again.** If nothing answers, RaceStudio still offers the logger's own
+2. **Local network allowed?** RaceStudio needs macOS's Local Network permission;
+   if the window says macOS is blocking it, allow RaceStudio under System
+   Settings ▸ Privacy & Security ▸ Local Network. Builds before 0.4.8 were
+   ad-hoc signed, which macOS 26 blocks without ever asking — update RaceStudio.
+3. **VPN off?** A VPN such as NordVPN can claim the logger's address (`10.0.0.1`)
+   and send the connection into its tunnel. Disconnect it, or allow local-network
+   traffic in its settings.
+4. **Search Again.** If nothing answers, RaceStudio still offers the logger's own
    address (`10.0.0.1`); selecting it connects directly. See
    [Downloading from a device](04-device-download.md) for the full flow.
 

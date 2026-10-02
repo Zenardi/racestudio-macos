@@ -156,6 +156,14 @@ fn test_read_frame_timeout_is_timeout() {
 }
 
 #[test]
+fn test_no_route_to_host_is_host_unreachable() {
+    assert_eq!(
+        DeviceError::from(io::Error::from(io::ErrorKind::HostUnreachable)),
+        DeviceError::HostUnreachable
+    );
+}
+
+#[test]
 fn test_refused_socket_is_connection_failed() {
     assert_eq!(
         DeviceError::from(io::Error::from(io::ErrorKind::ConnectionRefused)),
@@ -568,6 +576,7 @@ fn test_live_client_errors_have_messages() {
         DeviceError::InvalidPath,
         DeviceError::Timeout,
         DeviceError::ConnectionFailed,
+        DeviceError::HostUnreachable,
         DeviceError::ConnectionClosed,
         DeviceError::Cancelled,
     ];

@@ -229,6 +229,7 @@ fn test_new_errors_have_messages() {
         DiscoveryError::InvalidPath,
         DiscoveryError::Timeout,
         DiscoveryError::ConnectionFailed,
+        DiscoveryError::HostUnreachable,
         DiscoveryError::ConnectionClosed,
         DiscoveryError::Cancelled,
     ]

@@ -12,8 +12,9 @@ Apple Silicon and Intel, macOS 13 (Ventura) or later.
 
 ### Why the extra step (Gatekeeper)
 
-The build is *ad-hoc signed* but **not notarized**: this project has no paid Apple signing
-certificate, so Apple never sees the binary and cannot vouch for it. macOS therefore attaches a
+The build is signed with a **self-signed certificate generated for that build** but is **not
+notarized**: this project has no paid Apple signing certificate, so Apple never sees the binary
+and cannot vouch for it. macOS therefore attaches a
 quarantine flag to anything downloaded from the internet and refuses to launch it on a double
 click — typically *"RaceStudio can't be opened because Apple cannot check it for malicious
 software."*
@@ -31,6 +32,19 @@ a sign that anything is wrong with the build. Verify what you downloaded before 
 ```sh
 shasum -a 256 -c SHA256SUMS.txt
 ```
+
+### Local Network access (MyChron download)
+
+Downloading from a MyChron needs macOS's **Local Network** permission. The first time you open
+**File ▸ MyChron Device…**, macOS asks whether RaceStudio may find devices on your local network —
+choose **Allow**. You can change it later in System Settings ▸ Privacy & Security ▸ Local Network.
+
+Why the build is self-signed rather than ad-hoc: macOS 26 never shows that prompt to an
+*ad-hoc-signed* app; it silently blocks it, and the connection to the logger fails with "No route
+to host". A certificate signature gets the prompt. The certificate is generated during the build
+and thrown away, so the release pipeline still needs no secrets — but each release has a new
+identity, so **macOS asks again after every update**. A stable identity would need an Apple
+Developer ID (a paid certificate stored as a CI secret).
 
 ## For maintainers: cutting a release
 
@@ -97,7 +111,7 @@ That runs the same two scripts the workflow does, writing into the git-ignored `
 
 | Script | Responsibility |
 | --- | --- |
-| [`scripts/build_app.sh`](../scripts/build_app.sh) | Universal (`arm64` + `x86_64`) release build, bundle layout, `Info.plist` derived from `app/Sources/RaceStudio/Info.plist` with the version rewritten, app icon, ad-hoc signature with the sandbox entitlements. |
+| [`scripts/build_app.sh`](../scripts/build_app.sh) | Universal (`arm64` + `x86_64`) release build, bundle layout, `Info.plist` derived from `app/Sources/RaceStudio/Info.plist` with the version rewritten, app icon, and a self-signed signature (via [`scripts/self_sign.sh`](../scripts/self_sign.sh)) with the sandbox entitlements. |
 | [`scripts/package_dmg.sh`](../scripts/package_dmg.sh) | Stages the app beside an `/Applications` symlink with `ditto` (signature-preserving), builds a compressed read-only HFS+ image, writes `SHA256SUMS.txt`. |
 | [`scripts/release_smoke.sh`](../scripts/release_smoke.sh) | `--dry-run`: runs both of the above over a universal stub executable, so the packaging logic is verified in seconds without a Swift build. Exercised by `tests/release_test.sh` on every PR. |
 

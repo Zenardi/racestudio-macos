@@ -119,6 +119,51 @@ import RaceStudioFFIBindings
         #expect(model.state == .failed("The MyChron stopped responding."))
     }
 
+    @Test func test_no_route_on_the_device_network_points_to_local_network_privacy() async throws {
+        let device = try DevicePanelFixtures.goldenDevice()
+        let model = DevicePanelModel(
+            service: FakeDeviceService(
+                devices: .success([device]),
+                catalog: .failure(DiscoveryError.HostUnreachable(message: "no route"))),
+            importer: FakeSessionImporter())
+        await model.loadDevices()
+
+        await model.select(device)
+
+        #expect(model.state == .failed(DevicePanelModel.localNetworkHint))
+    }
+
+    @Test func test_no_route_off_the_device_network_says_how_to_join() async throws {
+        let device = try DevicePanelFixtures.goldenDevice()
+        let model = DevicePanelModel(
+            service: FakeDeviceService(
+                devices: .success([device]),
+                catalog: .failure(DiscoveryError.HostUnreachable(message: "no route"))),
+            importer: FakeSessionImporter(), isOnDeviceNetwork: { false })
+        await model.loadDevices()
+
+        await model.select(device)
+
+        #expect(model.state == .failed(
+            "Couldn’t reach the MyChron. \(DevicePanelModel.joinNetworkHint)"))
+    }
+
+    @Test func test_network_is_checked_again_when_an_error_happens() async throws {
+        let device = try DevicePanelFixtures.goldenDevice()
+        var joined = true
+        let model = DevicePanelModel(
+            service: FakeDeviceService(
+                devices: .success([device]),
+                catalog: .failure(DiscoveryError.Timeout(message: "t"))),
+            importer: FakeSessionImporter(), isOnDeviceNetwork: { joined })
+        await model.loadDevices()
+        joined = false
+
+        await model.select(device)
+
+        #expect(model.state == .failed("The MyChron stopped responding. \(DevicePanelModel.joinNetworkHint)"))
+    }
+
     @Test func test_closed_connection_is_explained() async throws {
         let device = try DevicePanelFixtures.goldenDevice()
         let model = DevicePanelModel(

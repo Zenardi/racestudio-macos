@@ -4,8 +4,9 @@
 #
 # Scope note: this project ships **unsigned** builds on purpose — no Apple
 # Developer ID certificate, no notarization. The pipeline must therefore need no
-# signing secrets at all, and the artifact it publishes is a plain, ad-hoc-signed
-# `.dmg` attached to a GitHub Release (Gatekeeper caveat documented in
+# signing secrets at all, and the artifact it publishes is a `.dmg` signed with a
+# certificate generated for that build (scripts/self_sign.sh) -- not ad-hoc,
+# which macOS 26 silently blocks from the local network -- attached to a GitHub Release (Gatekeeper caveat documented in
 # docs/RELEASE.md). `test_release_pipeline_needs_no_signing_secrets` pins that
 # decision so a future edit cannot quietly reintroduce a secrets dependency that
 # would make tag builds fail for anyone without the cert.
@@ -56,6 +57,7 @@ run_smoke_once() {
   [ -n "$SMOKE_OUT" ] && return 0
   SMOKE_OUT="$(mktemp -d)"
   SMOKE_LOG="$SMOKE_OUT/smoke.log"
+  KEYCHAINS_BEFORE_SMOKE="$(security list-keychains -d user)"
   if [ -f "$SMOKE" ]; then
     bash "$SMOKE" --dry-run --version "$SMOKE_VERSION" --out "$SMOKE_OUT" \
       >"$SMOKE_LOG" 2>&1
@@ -230,26 +232,45 @@ test_dry_run_dmg_offers_drag_to_applications() {
   fi
 }
 
-test_dry_run_bundle_is_universal_and_adhoc_signed() {
-  # Given the assembled bundle, Then it carries both architectures and an
-  # ad-hoc signature (the strongest signature available without a Developer ID),
-  # so it at least launches once the user clears quarantine.
+test_dry_run_bundle_is_universal_and_certificate_signed() {
+  # Given the assembled bundle, Then it carries both architectures and is signed
+  # by a certificate (self-signed, generated for the build) rather than ad-hoc:
+  # macOS 26 never offers an ad-hoc app the Local Network prompt, so it could
+  # not reach a MyChron. The sandbox entitlements must survive the signing.
   run_smoke_once
-  local app archs sig out=""
+  local app archs sig ents out=""
   app="$SMOKE_OUT/RaceStudio.app"
   if [ ! -d "$app" ]; then
-    bad "test_dry_run_bundle_is_universal_and_adhoc_signed" "no .app assembled"
+    bad "test_dry_run_bundle_is_universal_and_certificate_signed" "no .app assembled"
     return
   fi
   archs="$(lipo -archs "$app/Contents/MacOS/RaceStudio" 2>/dev/null)"
   grep -q 'arm64' <<<"$archs" || out="$out missing-arm64"
   grep -q 'x86_64' <<<"$archs" || out="$out missing-x86_64"
-  sig="$(codesign -dv "$app" 2>&1 || true)"
-  grep -q 'Signature=adhoc' <<<"$sig" || out="$out not-adhoc-signed"
+  sig="$(codesign -dvv "$app" 2>&1 || true)"
+  grep -q 'Signature=adhoc' <<<"$sig" && out="$out adhoc-signed"
+  grep -q 'Authority=RaceStudio .* (self-signed)' <<<"$sig" || out="$out no-certificate-authority"
+  codesign --verify --strict "$app" 2>/dev/null || out="$out signature-invalid"
+  ents="$(codesign -d --entitlements - "$app" 2>/dev/null || true)"
+  grep -q 'com.apple.security.app-sandbox' <<<"$ents" || out="$out sandbox-entitlement-lost"
+  grep -q 'com.apple.security.network.client' <<<"$ents" || out="$out network-entitlement-lost"
   if [ -z "$out" ]; then
-    ok "test_dry_run_bundle_is_universal_and_adhoc_signed"
+    ok "test_dry_run_bundle_is_universal_and_certificate_signed"
   else
-    bad "test_dry_run_bundle_is_universal_and_adhoc_signed" "$out (archs=$archs)"
+    bad "test_dry_run_bundle_is_universal_and_certificate_signed" "$out (archs=$archs)"
+  fi
+}
+
+test_self_signing_restores_the_keychain_search_list() {
+  # Given the throwaway signing keychain is added to the search list only for
+  # the signing step, Then the user's list is exactly as before afterwards.
+  run_smoke_once
+  local now
+  now="$(security list-keychains -d user)"
+  if [ "$now" = "$KEYCHAINS_BEFORE_SMOKE" ]; then
+    ok "test_self_signing_restores_the_keychain_search_list"
+  else
+    bad "test_self_signing_restores_the_keychain_search_list" "before=[$KEYCHAINS_BEFORE_SMOKE] after=[$now]"
   fi
 }
 
@@ -568,7 +589,8 @@ test_packaging_scripts_are_executable_and_strict
 test_dry_run_packages_dmg_and_checksums
 test_dry_run_checksums_match_the_dmg
 test_dry_run_dmg_offers_drag_to_applications
-test_dry_run_bundle_is_universal_and_adhoc_signed
+test_dry_run_bundle_is_universal_and_certificate_signed
+test_self_signing_restores_the_keychain_search_list
 test_dry_run_bundle_carries_the_requested_version_and_utis
 test_dry_run_bundle_ships_the_localization_catalog
 test_build_app_requires_the_resource_bundle

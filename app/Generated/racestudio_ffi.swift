@@ -584,13 +584,16 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 public protocol DeviceConnectionProtocol : AnyObject {
     
     /**
-     * Stop the call in progress (from any thread). The connection is closed;
-     * the interrupted call reports `Cancelled`.
+     * Stop the call in progress (from any thread). Cancelling is final: the
+     * connection is closed even when no call is running, the interrupted call
+     * reports `Cancelled`, and so does every later call — connect again.
      */
     func cancel() 
     
     /**
      * End the conversation politely and close the connection.
+     *
+     * Never waits on a call in progress: that call is cancelled first.
      */
     func close() 
     
@@ -685,8 +688,9 @@ public static func connect(device: Device, clock: DeviceClock)throws  -> DeviceC
 
     
     /**
-     * Stop the call in progress (from any thread). The connection is closed;
-     * the interrupted call reports `Cancelled`.
+     * Stop the call in progress (from any thread). Cancelling is final: the
+     * connection is closed even when no call is running, the interrupted call
+     * reports `Cancelled`, and so does every later call — connect again.
      */
 open func cancel() {try! rustCall() {
     uniffi_racestudio_ffi_fn_method_deviceconnection_cancel(self.uniffiClonePointer(),$0
@@ -696,6 +700,8 @@ open func cancel() {try! rustCall() {
     
     /**
      * End the conversation politely and close the connection.
+     *
+     * Never waits on a call in progress: that call is cancelled first.
      */
 open func close() {try! rustCall() {
     uniffi_racestudio_ffi_fn_method_deviceconnection_close(self.uniffiClonePointer(),$0
@@ -4064,6 +4070,12 @@ public enum DiscoveryError {
     case ConnectionFailed(message: String)
     
     /**
+     * No route to the device: macOS Local Network privacy refused the app, or
+     * the Mac is not on the device's network.
+     */
+    case HostUnreachable(message: String)
+    
+    /**
      * The device closed the connection mid-exchange (issue #179).
      */
     case ConnectionClosed(message: String)
@@ -4145,11 +4157,15 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .ConnectionClosed(
+        case 15: return .HostUnreachable(
             message: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .Cancelled(
+        case 16: return .ConnectionClosed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 17: return .Cancelled(
             message: try FfiConverterString.read(from: &buf)
         )
         
@@ -4192,10 +4208,12 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(13))
         case .ConnectionFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(14))
-        case .ConnectionClosed(_ /* message is ignored*/):
+        case .HostUnreachable(_ /* message is ignored*/):
             writeInt(&buf, Int32(15))
-        case .Cancelled(_ /* message is ignored*/):
+        case .ConnectionClosed(_ /* message is ignored*/):
             writeInt(&buf, Int32(16))
+        case .Cancelled(_ /* message is ignored*/):
+            writeInt(&buf, Int32(17))
 
         
         }
@@ -5618,10 +5636,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_validate_math_expression() != 44744) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_cancel() != 31307) {
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_cancel() != 43817) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_close() != 23010) {
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_close() != 11370) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_deviceconnection_download() != 50693) {

@@ -1237,6 +1237,9 @@ pub enum DiscoveryError {
     Timeout,
     /// The connection to the device could not be opened (issue #179).
     ConnectionFailed,
+    /// No route to the device: macOS Local Network privacy refused the app, or
+    /// the Mac is not on the device's network.
+    HostUnreachable,
     /// The device closed the connection mid-exchange (issue #179).
     ConnectionClosed,
     /// The caller cancelled the exchange (issue #179).
@@ -1273,6 +1276,7 @@ impl std::fmt::Display for DiscoveryError {
             DiscoveryError::InvalidPath => write!(f, "the on-device file name is not valid"),
             DiscoveryError::Timeout => write!(f, "the device did not respond in time"),
             DiscoveryError::ConnectionFailed => write!(f, "could not connect to the device"),
+            DiscoveryError::HostUnreachable => write!(f, "no route to the device"),
             DiscoveryError::ConnectionClosed => write!(f, "the device closed the connection"),
             DiscoveryError::Cancelled => write!(f, "the transfer was cancelled"),
         }
@@ -1298,6 +1302,7 @@ impl From<CoreDeviceError> for DiscoveryError {
             CoreDeviceError::InvalidPath => DiscoveryError::InvalidPath,
             CoreDeviceError::Timeout => DiscoveryError::Timeout,
             CoreDeviceError::ConnectionFailed => DiscoveryError::ConnectionFailed,
+            CoreDeviceError::HostUnreachable => DiscoveryError::HostUnreachable,
             CoreDeviceError::ConnectionClosed => DiscoveryError::ConnectionClosed,
             CoreDeviceError::Cancelled => DiscoveryError::Cancelled,
         }
