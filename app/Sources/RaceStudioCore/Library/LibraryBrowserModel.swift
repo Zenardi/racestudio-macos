@@ -326,10 +326,9 @@ public final class LibraryBrowserModel: ObservableObject {
         do {
             let loaded = try await loader.load(summary.sourceURL) { _ in }
             guard selectedID == id else { return }
-            let coordinates = loaded.dataSource
-                .map { AnalysisSession(session: loaded.session, dataSource: $0).gpsTrack().map(\.coordinate) }
-                ?? []
-            preview = SessionPreview(session: loaded.session, coordinates: coordinates)
+            let track = loaded.dataSource
+                .map { AnalysisSession(session: loaded.session, dataSource: $0).gpsTrack() } ?? []
+            preview = SessionPreview(session: loaded.session, track: track)
             previewFailed = false
         } catch {
             guard selectedID == id else { return }
