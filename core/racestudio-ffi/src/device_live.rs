@@ -104,13 +104,13 @@ impl From<Catalog> for DeviceCatalog {
 /// Find MyChron devices on the network the Mac is joined to: send the AiM
 /// discovery probe and collect the replies for `timeout_ms`. When nothing
 /// answers, the access-point gateway (`10.0.0.1:2000`) is offered, so the list
-/// is never empty.
+/// is never empty -- also when the probe itself cannot run.
 ///
 /// # Errors
-/// [`DiscoveryError::ConnectionFailed`] when no UDP socket can be opened.
+/// None today; the `Result` keeps the binding stable.
 #[uniffi::export]
 pub fn discover_devices(timeout_ms: u32) -> Result<Vec<Device>, DiscoveryError> {
-    let devices = discover_live(Duration::from_millis(u64::from(timeout_ms)))?;
+    let devices = discover_live(Duration::from_millis(u64::from(timeout_ms)));
     Ok(devices.into_iter().map(Device::from).collect())
 }
 

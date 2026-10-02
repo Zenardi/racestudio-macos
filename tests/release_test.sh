@@ -254,6 +254,9 @@ test_dry_run_bundle_is_universal_and_certificate_signed() {
   ents="$(codesign -d --entitlements - "$app" 2>/dev/null || true)"
   grep -q 'com.apple.security.app-sandbox' <<<"$ents" || out="$out sandbox-entitlement-lost"
   grep -q 'com.apple.security.network.client' <<<"$ents" || out="$out network-entitlement-lost"
+  # The MyChron discovery probe binds a UDP socket, which the sandbox only
+  # allows with network.server; without it discovery fails before any connect.
+  grep -q 'com.apple.security.network.server' <<<"$ents" || out="$out udp-bind-entitlement-missing"
   if [ -z "$out" ]; then
     ok "test_dry_run_bundle_is_universal_and_certificate_signed"
   else

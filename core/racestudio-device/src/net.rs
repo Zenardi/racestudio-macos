@@ -143,16 +143,14 @@ pub fn probe(targets: &[SocketAddr], timeout: Duration) -> Result<Vec<Device>, D
 }
 
 /// Discover devices on the live network: probe [`discovery_targets`], and when
-/// nothing answers offer the access-point gateway (the MyChron is its own AP),
-/// so the result is never empty.
-///
-/// # Errors
-/// [`DeviceError::ConnectionFailed`] when no UDP socket can be opened.
-pub fn discover_live(timeout: Duration) -> Result<Vec<Device>, DeviceError> {
-    let found = probe(&discovery_targets(), timeout)?;
-    Ok(if found.is_empty() {
-        vec![ap_mode_fallback()]
-    } else {
-        found
-    })
+/// nothing answers -- or the probe cannot run at all, e.g. a sandbox that
+/// refuses the UDP socket -- offer the access-point gateway (the MyChron is its
+/// own AP). The result is never empty, so a failed probe never stops the user
+/// from trying the connection itself.
+#[must_use]
+pub fn discover_live(timeout: Duration) -> Vec<Device> {
+    match probe(&discovery_targets(), timeout) {
+        Ok(found) if !found.is_empty() => found,
+        _ => vec![ap_mode_fallback()],
+    }
 }

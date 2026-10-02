@@ -93,7 +93,13 @@ The Bonjour browser is gone. The app now runs the **verified** exchange:
 `racestudio_device::discover_live` (FFI `discover_devices`) sends `aim-ka` to the
 multicast group **and** straight to `10.0.0.1:36002`, collects replies for 1.5 s,
 parses each with `parse_discovery`, and falls back to `ap_mode_fallback()` when
-nothing answers, so the list is never empty.
+nothing answers -- or when the probe cannot run -- so the list is never empty.
+
+On macOS the sandboxed app needs `com.apple.security.network.server` to bind the
+probe's UDP socket (`network.client` covers outgoing TCP only), and the bundle
+must be certificate-signed: macOS 26 silently refuses an ad-hoc-signed app's
+local-network traffic with "No route to host" and never shows it the Local
+Network prompt (`scripts/self_sign.sh`).
 
 ---
 
