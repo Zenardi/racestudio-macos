@@ -147,6 +147,10 @@ rust_gate() {
     echo "==> [rust 3/4] cargo test --workspace"
     cargo test --workspace
     echo "==> [rust 4/4] cargo llvm-cov --workspace --fail-under-lines ${THRESHOLD}"
+    # Start from a clean llvm-cov target: stale .profraw files (from a cached
+    # build, or one made by an older rustc whose LLVM wrote an older profile
+    # format) either fail the merge or under-count the workspace.
+    cargo llvm-cov clean --workspace
     cargo llvm-cov --workspace --no-report
     cargo llvm-cov report --fail-under-lines "${THRESHOLD}"
     if [[ "${EMIT_LCOV:-0}" == "1" ]]; then

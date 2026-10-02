@@ -1,8 +1,9 @@
 # Downloading from a connected device
 
-RaceStudio can import sessions **directly from an AiM logger over WiFi** — discover
-the device, list the sessions it holds, and download one into a decodable `.xrk`
-(milestone **M6**, issues 6.1–6.7).
+RaceStudio can import sessions **directly from an AiM logger over Wi-Fi**: find the
+logger, list the sessions it holds, and download them into your library
+(milestone **M6**, issues 6.1–6.7 and
+[#179](https://github.com/Zenardi/racestudio-macos/issues/179)).
 
 ![Device download over WiFi: discover, list sessions, download a checksum-verified file, decode, and it lands in the library.](img/device-download.svg)
 
@@ -20,42 +21,46 @@ reverse-engineering effort, gated by an explicit legal decision. Please read it:
 artifacts. The protocol details live in
 [CAPTURE.md](../device/CAPTURE.md) and [PROTOCOL.md](../device/PROTOCOL.md).
 
-## Download a session, step by step
+## Download sessions, step by step
 
-1. **Prepare the logger.** Put it on the **same WiFi** as your Mac (join the
-   logger's access point, or put both on the same network), and make sure it is
-   **holding sessions** (visible under its on-board Data tab).
-2. **Open the device panel** in RaceStudio.
-3. **Discover.** The panel scans and lists reachable devices by name and model.
-   Select yours.
-4. **Review the session list.** RaceStudio requests the catalog and shows each
-   session's id, date, lap count, and size. (An empty logger shows an explicit
-   empty state.)
-5. **Download.** Choose a session and start the download. RaceStudio reassembles
-   the transfer chunk-by-chunk with per-chunk **checksums** and a whole-file
-   verification, showing a 0→100% progress bar; it retries a bad chunk and handles
-   out-of-order/duplicate/missing chunks.
-6. **Decode & save.** The reassembled `.xrk` is decoded and added to your library,
-   exactly like a file [imported from disk](01-getting-started-import.md).
+1. **Join the logger's Wi-Fi.** A MyChron is its own access point: turn on its
+   Wi-Fi, then pick its network (named `AiM-MYC…`) from the Mac's Wi-Fi menu. The
+   Mac gets an address in `10.0.0.x`.
+2. **Open File ▸ MyChron Device…** RaceStudio sends AiM's discovery probe and lists
+   the loggers that answer. If none answers, it offers the access point's own
+   address (`10.0.0.1`). The first time, macOS asks to let RaceStudio use the
+   local network; allow it. If the Mac is not on a logger's network, the window
+   says so.
+3. **Select your logger.** RaceStudio connects and reads its catalog: one row per
+   stored session with its date, track, lap count, best lap, duration, size and
+   driver. A logger with no stored sessions shows an explicit empty state.
+4. **Choose sessions and click Download.** Pick one or several rows (or **Select
+   All**). They download one after another with a progress bar and an
+   "n of m" count. Every chunk is checksum-verified and its length checked; a
+   corrupt chunk is asked for again.
+5. **Find them in the library.** Each finished download is decoded and added to
+   your library exactly like a file [imported from disk](01-getting-started-import.md),
+   named after its date and track.
 
-## Deleting a session from the device (guarded)
+**Downloading never changes the logger.** RaceStudio only sends read commands: your
+sessions stay on the device until you remove them with AiM's own tools.
 
-Deleting is a **destructive** write and is guarded accordingly: RaceStudio sends
-**nothing** unless you explicitly arm the action **and** re-type the target
-session's exact name to confirm. Cancelling sends no traffic, and it never blindly
-retries a delete (no accidental double-delete).
+**When something goes wrong.** **Cancel** stops the queue at once and nothing
+partial is imported. If a session fails (the link drops, or the file doesn't
+decode), the queue moves on to the next one; the summary lists what failed and why,
+and **Retry** queues the failed and skipped sessions again.
 
-## Hardware-capture caveats
+## What is verified
 
-Some record layouts are **documented hypotheses** pending a re-capture against a
-logger that actually holds sessions (the reference capture's store was empty):
+Every command RaceStudio sends is reproduced byte-for-byte from a recorded
+conversation between AiM's app and a MyChron 6, and an in-process fake logger
+replays that conversation in the test suite. Two parts of the protocol are still
+unobserved and are called out in the code and tests:
 
-- the dated session-record layout (6.4, [#130](https://github.com/Zenardi/racestudio-macos/issues/130));
-- the multi-chunk download stream (only one real chunk was captured; 6.5,
-  [#133](https://github.com/Zenardi/racestudio-macos/issues/133));
-- the delete opcode and its ack/reject response (6.6, [#130](https://github.com/Zenardi/racestudio-macos/issues/130)).
-
-Each is built on **verified** STCP framing and is called out in the code and tests.
+- how the logger re-sends a chunk after a checksum failure (the recorded transfer
+  had none; RaceStudio asks for the same offset again);
+- deleting a session, which RaceStudio does not offer
+  ([#130](https://github.com/Zenardi/racestudio-macos/issues/130)).
 
 ## Next
 

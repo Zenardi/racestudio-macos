@@ -47,6 +47,22 @@ pub enum DeviceError {
     /// deflate stream could not be inflated, or it inflated implausibly far past
     /// its compressed size. No partial session is ever surfaced (issue #133).
     CorruptArchive,
+    /// The device answered with a frame the live client did not expect at that
+    /// point of the exchange — a wrong command echo, tag, or hello — so the
+    /// conversation is out of step and is abandoned (issue #179).
+    UnexpectedResponse,
+    /// A requested on-device file name is not one the client will send: empty,
+    /// too long for the command's path field, or not a `[A-Za-z0-9_-]` stem with
+    /// an `.xrz`/`.xrk` extension (issue #179).
+    InvalidPath,
+    /// The device did not answer within the read timeout (issue #179).
+    Timeout,
+    /// The connection to the device could not be opened (issue #179).
+    ConnectionFailed,
+    /// The device closed or reset the connection mid-exchange (issue #179).
+    ConnectionClosed,
+    /// The caller cancelled the exchange; nothing partial is surfaced (#179).
+    Cancelled,
 }
 
 impl fmt::Display for DeviceError {
@@ -79,8 +95,33 @@ impl fmt::Display for DeviceError {
                     "the downloaded session is not a readable compressed container"
                 )
             }
+            DeviceError::UnexpectedResponse => {
+                write!(f, "the device sent an unexpected response")
+            }
+            DeviceError::InvalidPath => write!(f, "the on-device file name is not valid"),
+            DeviceError::Timeout => write!(f, "the device did not respond in time"),
+            DeviceError::ConnectionFailed => write!(f, "could not connect to the device"),
+            DeviceError::ConnectionClosed => write!(f, "the device closed the connection"),
+            DeviceError::Cancelled => write!(f, "the transfer was cancelled"),
         }
     }
 }
 
 impl std::error::Error for DeviceError {}
+
+impl From<std::io::Error> for DeviceError {
+    /// Classify a socket failure: a read that timed out, a connection the device
+    /// dropped, or one that never opened (issue #179).
+    fn from(err: std::io::Error) -> Self {
+        use std::io::ErrorKind;
+        match err.kind() {
+            ErrorKind::TimedOut | ErrorKind::WouldBlock => DeviceError::Timeout,
+            ErrorKind::UnexpectedEof
+            | ErrorKind::ConnectionReset
+            | ErrorKind::ConnectionAborted
+            | ErrorKind::BrokenPipe
+            | ErrorKind::NotConnected => DeviceError::ConnectionClosed,
+            _ => DeviceError::ConnectionFailed,
+        }
+    }
+}

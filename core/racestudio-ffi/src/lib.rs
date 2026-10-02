@@ -41,6 +41,11 @@ use racestudio_device::{
 
 uniffi::setup_scaffolding!();
 
+mod device_live;
+pub use device_live::{
+    discover_devices, DeviceCatalog, DeviceClock, DeviceConnection, DeviceSession,
+};
+
 /// The GPS ground-speed channel integrated into the cumulative track distance
 /// axis — the same channel the analysis crate's `distance_axis` uses for the
 /// distance-domain accessors (issues 3.1 / 8.2).
@@ -1224,6 +1229,18 @@ pub enum DiscoveryError {
     /// A downloaded session's compressed (`.xrz`) container could not be inflated,
     /// so no session is surfaced (issue #133).
     CorruptArchive,
+    /// The device sent a frame the live client did not expect (issue #179).
+    UnexpectedResponse,
+    /// The requested on-device file name is not a plain session file name (#179).
+    InvalidPath,
+    /// The device did not answer in time (issue #179).
+    Timeout,
+    /// The connection to the device could not be opened (issue #179).
+    ConnectionFailed,
+    /// The device closed the connection mid-exchange (issue #179).
+    ConnectionClosed,
+    /// The caller cancelled the exchange (issue #179).
+    Cancelled,
 }
 
 impl std::fmt::Display for DiscoveryError {
@@ -1250,6 +1267,14 @@ impl std::fmt::Display for DiscoveryError {
                 f,
                 "the downloaded session is not a readable compressed container"
             ),
+            DiscoveryError::UnexpectedResponse => {
+                write!(f, "the device sent an unexpected response")
+            }
+            DiscoveryError::InvalidPath => write!(f, "the on-device file name is not valid"),
+            DiscoveryError::Timeout => write!(f, "the device did not respond in time"),
+            DiscoveryError::ConnectionFailed => write!(f, "could not connect to the device"),
+            DiscoveryError::ConnectionClosed => write!(f, "the device closed the connection"),
+            DiscoveryError::Cancelled => write!(f, "the transfer was cancelled"),
         }
     }
 }
@@ -1269,6 +1294,12 @@ impl From<CoreDeviceError> for DiscoveryError {
             CoreDeviceError::NotArmed => DiscoveryError::NotArmed,
             CoreDeviceError::DeleteRejected => DiscoveryError::DeleteRejected,
             CoreDeviceError::CorruptArchive => DiscoveryError::CorruptArchive,
+            CoreDeviceError::UnexpectedResponse => DiscoveryError::UnexpectedResponse,
+            CoreDeviceError::InvalidPath => DiscoveryError::InvalidPath,
+            CoreDeviceError::Timeout => DiscoveryError::Timeout,
+            CoreDeviceError::ConnectionFailed => DiscoveryError::ConnectionFailed,
+            CoreDeviceError::ConnectionClosed => DiscoveryError::ConnectionClosed,
+            CoreDeviceError::Cancelled => DiscoveryError::Cancelled,
         }
     }
 }
@@ -1475,7 +1506,7 @@ pub fn download_session(
     let core_plan = CoreDownloadPlan {
         session_id: plan.session_id,
         total_len: plan.total_len,
-        whole_file_checksum: plan.whole_file_checksum,
+        whole_file_checksum: Some(plan.whole_file_checksum),
     };
     let mut adapted_source = ChunkSourceAdapter(source);
     let mut adapted_progress = ProgressAdapter(progress);

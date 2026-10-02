@@ -21,20 +21,22 @@ state. This chapter maps the common symptoms to a check and a fix.
 
 ## The device isn't found
 
-1. **Same network?** Your Mac and the logger must be on the **same WiFi** (or your
-   Mac joined the logger's access point).
-2. **Sessions present?** Discovery/enumeration expects the logger to be **holding
-   sessions** (check its on-board Data tab).
-3. **Rejoin and retry** the discovery scan. See
+1. **On the logger's Wi-Fi?** Join the network named `AiM-MYC…` from the Mac's
+   Wi-Fi menu; the Mac should get a `10.0.0.x` address. The device window says so
+   when it is not.
+2. **Local network allowed?** If you declined macOS's local-network prompt, allow
+   RaceStudio under System Settings ▸ Privacy & Security ▸ Local Network.
+3. **Search Again.** If nothing answers, RaceStudio still offers the logger's own
+   address (`10.0.0.1`); selecting it connects directly. See
    [Downloading from a device](04-device-download.md) for the full flow.
 
 ## A download stalls or a session list is empty
 
 1. An **empty list** with a healthy connection usually means the logger currently
    holds no on-board sessions — an explicit empty state, not an error.
-2. A stalled download retries bad chunks automatically; if it can't verify the
-   whole-file checksum it stops rather than saving a corrupt file. Retry, and keep
-   the logger awake and in range.
+2. A stalled download asks for a bad chunk again automatically; if the logger
+   stops answering for 10 seconds the session is reported as failed and nothing
+   partial is saved. Keep the logger awake and in range, then use **Retry**.
 
 ## A math expression won't validate
 

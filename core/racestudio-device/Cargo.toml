@@ -1,6 +1,6 @@
 [package]
 name = "racestudio-device"
-description = "Clean-room observation of the MyChron5/6 WiFi download protocol (issue 6.2): STCP framing, checksum, discovery, and transfer chunking. No networking client lands here — that is 6.3–6.6."
+description = "Clean-room MyChron5/6 WiFi download protocol: STCP framing, checksum, discovery, transfer chunking, and the read-only live download client (issue #179)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

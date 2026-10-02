@@ -4,10 +4,10 @@
 //! the checksum below were derived **only** from observing on-the-wire bytes of an
 //! AiM iOS-app ↔ MyChron6 exchange (clean-room, interoperability-only RE — DMCA
 //! §1201(f), EU Software Directive Art. 6; see [ADR 0006] and [`PROTOCOL.md`]).
-//! No AiM firmware, DLL, or app binary was read. **No networking client lands
-//! here** — discovery/enumeration/download/delete are issues 6.3–6.6; this crate
-//! only decodes the observed framing so the notes are testable against the
-//! committed fixtures in `fixtures/device/`.
+//! No AiM firmware, DLL, or app binary was read. The decoders are testable
+//! against the committed fixtures in `fixtures/device/`; the live client (issue
+//! #179) — [`net::connect`], [`DeviceClient`], [`net::discover_live`] — runs the
+//! observed conversation over `std::net` and sends only read commands.
 //!
 //! The device speaks a length-prefixed, checksummed frame protocol ("STCP") over
 //! TCP port [`CONTROL_PORT`]; it is discovered by a UDP broadcast on
@@ -28,19 +28,27 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod catalog;
 pub mod checksum;
+pub mod client;
+pub mod command;
 pub mod delete;
 pub mod discovery;
 pub mod error;
 pub mod framing;
+pub mod net;
 pub mod session;
+pub mod stream;
 pub mod transfer;
 
+pub use catalog::{parse_catalog, session_path, Catalog, SessionEntry};
 pub use checksum::stcp_checksum;
+pub use client::{CancelToken, DeviceClient, DeviceClock};
 pub use delete::{build_delete_request, delete_session, DeleteConfirmation, DeleteTransport};
 pub use discovery::{ap_mode_fallback, discover, parse_discovery, Device, DeviceBrowser};
 pub use error::DeviceError;
 pub use framing::{parse_frame, verified_frame, Frame, HEADER_MAGIC, TRAILER_MAGIC};
+pub use net::{connect, discover_live, probe, Canceller, Timeouts};
 pub use session::{build_session_list_request, parse_session_list, SessionDate, SessionInfo};
 pub use transfer::{
     download_session, inflate_session, DownloadPlan, ProgressSink, Transport, MAX_CHUNK_RETRIES,

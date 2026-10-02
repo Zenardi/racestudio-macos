@@ -66,8 +66,9 @@ struct RaceStudioApp: App {
         // The device panel (issue 6.7) — a secondary single window, opened from
         // the File menu, driving the tested `DevicePanelModel` in RaceStudioCore.
         Window("MyChron Device", id: "device") {
-            DevicePanelView()
-                .frame(minWidth: 520, minHeight: 400)
+            DevicePanelView(model: model.devicePanel)
+                .environment(\.theme, .raceStudio)
+                .frame(minWidth: 760, minHeight: 420)
         }
         #endif
     }

@@ -579,6 +579,219 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 /**
+ * An open conversation with one MyChron.
+ */
+public protocol DeviceConnectionProtocol : AnyObject {
+    
+    /**
+     * Stop the call in progress (from any thread). The connection is closed;
+     * the interrupted call reports `Cancelled`.
+     */
+    func cancel() 
+    
+    /**
+     * End the conversation politely and close the connection.
+     */
+    func close() 
+    
+    /**
+     * Download the stored session `file_name` and return the `.xrk` bytes,
+     * reporting progress in stored bytes. Nothing on the device is changed.
+     *
+     * # Errors
+     * `InvalidPath` for a name the catalog could not have listed (the
+     * connection stays open); any other exchange failure closes it. No partial
+     * file is ever returned.
+     */
+    func download(fileName: String, progress: DownloadProgress) throws  -> Data
+    
+    /**
+     * Read the catalog of sessions stored on the device.
+     *
+     * # Errors
+     * Any exchange failure; the connection is then closed.
+     */
+    func listSessions() throws  -> DeviceCatalog
+    
+}
+
+/**
+ * An open conversation with one MyChron.
+ */
+open class DeviceConnection:
+    DeviceConnectionProtocol {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_racestudio_ffi_fn_clone_deviceconnection(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_racestudio_ffi_fn_free_deviceconnection(pointer, $0) }
+    }
+
+    
+    /**
+     * Connect to `device` and run the opening handshake, handing it `clock`.
+     *
+     * # Errors
+     * `ConnectionFailed` / `Timeout` when the device cannot be reached;
+     * `UnexpectedResponse` when it does not answer like a MyChron.
+     */
+public static func connect(device: Device, clock: DeviceClock)throws  -> DeviceConnection {
+    return try  FfiConverterTypeDeviceConnection.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_constructor_deviceconnection_connect(
+        FfiConverterTypeDevice.lower(device),
+        FfiConverterTypeDeviceClock.lower(clock),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * Stop the call in progress (from any thread). The connection is closed;
+     * the interrupted call reports `Cancelled`.
+     */
+open func cancel() {try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_deviceconnection_cancel(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+    /**
+     * End the conversation politely and close the connection.
+     */
+open func close() {try! rustCall() {
+    uniffi_racestudio_ffi_fn_method_deviceconnection_close(self.uniffiClonePointer(),$0
+    )
+}
+}
+    
+    /**
+     * Download the stored session `file_name` and return the `.xrk` bytes,
+     * reporting progress in stored bytes. Nothing on the device is changed.
+     *
+     * # Errors
+     * `InvalidPath` for a name the catalog could not have listed (the
+     * connection stays open); any other exchange failure closes it. No partial
+     * file is ever returned.
+     */
+open func download(fileName: String, progress: DownloadProgress)throws  -> Data {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_method_deviceconnection_download(self.uniffiClonePointer(),
+        FfiConverterString.lower(fileName),
+        FfiConverterCallbackInterfaceDownloadProgress.lower(progress),$0
+    )
+})
+}
+    
+    /**
+     * Read the catalog of sessions stored on the device.
+     *
+     * # Errors
+     * Any exchange failure; the connection is then closed.
+     */
+open func listSessions()throws  -> DeviceCatalog {
+    return try  FfiConverterTypeDeviceCatalog.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_method_deviceconnection_list_sessions(self.uniffiClonePointer(),$0
+    )
+})
+}
+    
+
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceConnection: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = DeviceConnection
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> DeviceConnection {
+        return DeviceConnection(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: DeviceConnection) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceConnection {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: DeviceConnection, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceConnection_lift(_ pointer: UnsafeMutableRawPointer) throws -> DeviceConnection {
+    return try FfiConverterTypeDeviceConnection.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceConnection_lower(_ value: DeviceConnection) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeDeviceConnection.lower(value)
+}
+
+
+
+
+/**
  * An opened decode session, exposed to Swift as an opaque, `Arc`-backed handle.
  *
  * The whole [`Session`](racestudio_decode::Session) is decoded once when the
@@ -1647,6 +1860,407 @@ public func FfiConverterTypeDevice_lift(_ buf: RustBuffer) throws -> Device {
 #endif
 public func FfiConverterTypeDevice_lower(_ value: Device) -> RustBuffer {
     return FfiConverterTypeDevice.lower(value)
+}
+
+
+/**
+ * The device's catalog: the stored sessions, plus how many unreadable rows
+ * were left out.
+ */
+public struct DeviceCatalog {
+    /**
+     * The stored sessions, in the device's order.
+     */
+    public var sessions: [DeviceSession]
+    /**
+     * Catalog rows that could not be read.
+     */
+    public var skippedRows: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The stored sessions, in the device's order.
+         */sessions: [DeviceSession], 
+        /**
+         * Catalog rows that could not be read.
+         */skippedRows: UInt32) {
+        self.sessions = sessions
+        self.skippedRows = skippedRows
+    }
+}
+
+
+
+extension DeviceCatalog: Equatable, Hashable {
+    public static func ==(lhs: DeviceCatalog, rhs: DeviceCatalog) -> Bool {
+        if lhs.sessions != rhs.sessions {
+            return false
+        }
+        if lhs.skippedRows != rhs.skippedRows {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sessions)
+        hasher.combine(skippedRows)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceCatalog: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceCatalog {
+        return
+            try DeviceCatalog(
+                sessions: FfiConverterSequenceTypeDeviceSession.read(from: &buf), 
+                skippedRows: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceCatalog, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeDeviceSession.write(value.sessions, into: &buf)
+        FfiConverterUInt32.write(value.skippedRows, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCatalog_lift(_ buf: RustBuffer) throws -> DeviceCatalog {
+    return try FfiConverterTypeDeviceCatalog.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCatalog_lower(_ value: DeviceCatalog) -> RustBuffer {
+    return FfiConverterTypeDeviceCatalog.lower(value)
+}
+
+
+/**
+ * The clock the app hands the device when it connects: the local time and the
+ * same instant in UTC.
+ */
+public struct DeviceClock {
+    /**
+     * The local wall-clock time.
+     */
+    public var local: SessionDate
+    /**
+     * The same instant in UTC.
+     */
+    public var utc: SessionDate
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The local wall-clock time.
+         */local: SessionDate, 
+        /**
+         * The same instant in UTC.
+         */utc: SessionDate) {
+        self.local = local
+        self.utc = utc
+    }
+}
+
+
+
+extension DeviceClock: Equatable, Hashable {
+    public static func ==(lhs: DeviceClock, rhs: DeviceClock) -> Bool {
+        if lhs.local != rhs.local {
+            return false
+        }
+        if lhs.utc != rhs.utc {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(local)
+        hasher.combine(utc)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceClock: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceClock {
+        return
+            try DeviceClock(
+                local: FfiConverterTypeSessionDate.read(from: &buf), 
+                utc: FfiConverterTypeSessionDate.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceClock, into buf: inout [UInt8]) {
+        FfiConverterTypeSessionDate.write(value.local, into: &buf)
+        FfiConverterTypeSessionDate.write(value.utc, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceClock_lift(_ buf: RustBuffer) throws -> DeviceClock {
+    return try FfiConverterTypeDeviceClock.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceClock_lower(_ value: DeviceClock) -> RustBuffer {
+    return FfiConverterTypeDeviceClock.lower(value)
+}
+
+
+/**
+ * One session stored on the device, as its catalog lists it.
+ */
+public struct DeviceSession {
+    /**
+     * The on-device file name (`a_0061.xrz`); pass it to
+     * [`DeviceConnection::download`].
+     */
+    public var fileName: String
+    /**
+     * The stored (compressed) size in bytes — what the download transfers.
+     */
+    public var sizeBytes: UInt32
+    /**
+     * When the session started (device-local time).
+     */
+    public var date: SessionDate
+    /**
+     * Number of recorded laps.
+     */
+    public var lapCount: UInt16
+    /**
+     * The best lap's number, when the logger timed one.
+     */
+    public var bestLapNumber: UInt16?
+    /**
+     * The best lap's time in milliseconds, when the logger timed one.
+     */
+    public var bestLapMs: UInt32?
+    /**
+     * The driver name configured on the logger (often empty).
+     */
+    public var driver: String
+    /**
+     * The track the logger matched.
+     */
+    public var trackName: String
+    /**
+     * The vehicle name configured on the logger.
+     */
+    public var vehicle: String
+    /**
+     * The championship name configured on the logger.
+     */
+    public var championship: String
+    /**
+     * The session's duration in milliseconds.
+     */
+    public var durationMs: UInt32?
+    /**
+     * The track's latitude in degrees.
+     */
+    public var trackLatitude: Double?
+    /**
+     * The track's longitude in degrees.
+     */
+    public var trackLongitude: Double?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The on-device file name (`a_0061.xrz`); pass it to
+         * [`DeviceConnection::download`].
+         */fileName: String, 
+        /**
+         * The stored (compressed) size in bytes — what the download transfers.
+         */sizeBytes: UInt32, 
+        /**
+         * When the session started (device-local time).
+         */date: SessionDate, 
+        /**
+         * Number of recorded laps.
+         */lapCount: UInt16, 
+        /**
+         * The best lap's number, when the logger timed one.
+         */bestLapNumber: UInt16?, 
+        /**
+         * The best lap's time in milliseconds, when the logger timed one.
+         */bestLapMs: UInt32?, 
+        /**
+         * The driver name configured on the logger (often empty).
+         */driver: String, 
+        /**
+         * The track the logger matched.
+         */trackName: String, 
+        /**
+         * The vehicle name configured on the logger.
+         */vehicle: String, 
+        /**
+         * The championship name configured on the logger.
+         */championship: String, 
+        /**
+         * The session's duration in milliseconds.
+         */durationMs: UInt32?, 
+        /**
+         * The track's latitude in degrees.
+         */trackLatitude: Double?, 
+        /**
+         * The track's longitude in degrees.
+         */trackLongitude: Double?) {
+        self.fileName = fileName
+        self.sizeBytes = sizeBytes
+        self.date = date
+        self.lapCount = lapCount
+        self.bestLapNumber = bestLapNumber
+        self.bestLapMs = bestLapMs
+        self.driver = driver
+        self.trackName = trackName
+        self.vehicle = vehicle
+        self.championship = championship
+        self.durationMs = durationMs
+        self.trackLatitude = trackLatitude
+        self.trackLongitude = trackLongitude
+    }
+}
+
+
+
+extension DeviceSession: Equatable, Hashable {
+    public static func ==(lhs: DeviceSession, rhs: DeviceSession) -> Bool {
+        if lhs.fileName != rhs.fileName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.date != rhs.date {
+            return false
+        }
+        if lhs.lapCount != rhs.lapCount {
+            return false
+        }
+        if lhs.bestLapNumber != rhs.bestLapNumber {
+            return false
+        }
+        if lhs.bestLapMs != rhs.bestLapMs {
+            return false
+        }
+        if lhs.driver != rhs.driver {
+            return false
+        }
+        if lhs.trackName != rhs.trackName {
+            return false
+        }
+        if lhs.vehicle != rhs.vehicle {
+            return false
+        }
+        if lhs.championship != rhs.championship {
+            return false
+        }
+        if lhs.durationMs != rhs.durationMs {
+            return false
+        }
+        if lhs.trackLatitude != rhs.trackLatitude {
+            return false
+        }
+        if lhs.trackLongitude != rhs.trackLongitude {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(fileName)
+        hasher.combine(sizeBytes)
+        hasher.combine(date)
+        hasher.combine(lapCount)
+        hasher.combine(bestLapNumber)
+        hasher.combine(bestLapMs)
+        hasher.combine(driver)
+        hasher.combine(trackName)
+        hasher.combine(vehicle)
+        hasher.combine(championship)
+        hasher.combine(durationMs)
+        hasher.combine(trackLatitude)
+        hasher.combine(trackLongitude)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceSession: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceSession {
+        return
+            try DeviceSession(
+                fileName: FfiConverterString.read(from: &buf), 
+                sizeBytes: FfiConverterUInt32.read(from: &buf), 
+                date: FfiConverterTypeSessionDate.read(from: &buf), 
+                lapCount: FfiConverterUInt16.read(from: &buf), 
+                bestLapNumber: FfiConverterOptionUInt16.read(from: &buf), 
+                bestLapMs: FfiConverterOptionUInt32.read(from: &buf), 
+                driver: FfiConverterString.read(from: &buf), 
+                trackName: FfiConverterString.read(from: &buf), 
+                vehicle: FfiConverterString.read(from: &buf), 
+                championship: FfiConverterString.read(from: &buf), 
+                durationMs: FfiConverterOptionUInt32.read(from: &buf), 
+                trackLatitude: FfiConverterOptionDouble.read(from: &buf), 
+                trackLongitude: FfiConverterOptionDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceSession, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.fileName, into: &buf)
+        FfiConverterUInt32.write(value.sizeBytes, into: &buf)
+        FfiConverterTypeSessionDate.write(value.date, into: &buf)
+        FfiConverterUInt16.write(value.lapCount, into: &buf)
+        FfiConverterOptionUInt16.write(value.bestLapNumber, into: &buf)
+        FfiConverterOptionUInt32.write(value.bestLapMs, into: &buf)
+        FfiConverterString.write(value.driver, into: &buf)
+        FfiConverterString.write(value.trackName, into: &buf)
+        FfiConverterString.write(value.vehicle, into: &buf)
+        FfiConverterString.write(value.championship, into: &buf)
+        FfiConverterOptionUInt32.write(value.durationMs, into: &buf)
+        FfiConverterOptionDouble.write(value.trackLatitude, into: &buf)
+        FfiConverterOptionDouble.write(value.trackLongitude, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceSession_lift(_ buf: RustBuffer) throws -> DeviceSession {
+    return try FfiConverterTypeDeviceSession.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceSession_lower(_ value: DeviceSession) -> RustBuffer {
+    return FfiConverterTypeDeviceSession.lower(value)
 }
 
 
@@ -3429,6 +4043,36 @@ public enum DiscoveryError {
      */
     case CorruptArchive(message: String)
     
+    /**
+     * The device sent a frame the live client did not expect (issue #179).
+     */
+    case UnexpectedResponse(message: String)
+    
+    /**
+     * The requested on-device file name is not a plain session file name (#179).
+     */
+    case InvalidPath(message: String)
+    
+    /**
+     * The device did not answer in time (issue #179).
+     */
+    case Timeout(message: String)
+    
+    /**
+     * The connection to the device could not be opened (issue #179).
+     */
+    case ConnectionFailed(message: String)
+    
+    /**
+     * The device closed the connection mid-exchange (issue #179).
+     */
+    case ConnectionClosed(message: String)
+    
+    /**
+     * The caller cancelled the exchange (issue #179).
+     */
+    case Cancelled(message: String)
+    
 }
 
 
@@ -3485,6 +4129,30 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 11: return .UnexpectedResponse(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .InvalidPath(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .Timeout(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 14: return .ConnectionFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 15: return .ConnectionClosed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 16: return .Cancelled(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3516,6 +4184,18 @@ public struct FfiConverterTypeDiscoveryError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(9))
         case .CorruptArchive(_ /* message is ignored*/):
             writeInt(&buf, Int32(10))
+        case .UnexpectedResponse(_ /* message is ignored*/):
+            writeInt(&buf, Int32(11))
+        case .InvalidPath(_ /* message is ignored*/):
+            writeInt(&buf, Int32(12))
+        case .Timeout(_ /* message is ignored*/):
+            writeInt(&buf, Int32(13))
+        case .ConnectionFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(14))
+        case .ConnectionClosed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(15))
+        case .Cancelled(_ /* message is ignored*/):
+            writeInt(&buf, Int32(16))
 
         
         }
@@ -4218,6 +4898,78 @@ extension FfiConverterCallbackInterfaceDownloadProgress : FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
+    typealias SwiftType = UInt16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
     typealias SwiftType = Data?
 
@@ -4430,6 +5182,31 @@ fileprivate struct FfiConverterSequenceTypeDevice: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDeviceSession: FfiConverterRustBuffer {
+    typealias SwiftType = [DeviceSession]
+
+    public static func write(_ value: [DeviceSession], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDeviceSession.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DeviceSession] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DeviceSession]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDeviceSession.read(from: &buf))
         }
         return seq
     }
@@ -4669,6 +5446,22 @@ public func deleteSession(target: SessionInfo, confirmation: DeleteConfirmation?
 }
 }
 /**
+ * Find MyChron devices on the network the Mac is joined to: send the AiM
+ * discovery probe and collect the replies for `timeout_ms`. When nothing
+ * answers, the access-point gateway (`10.0.0.1:2000`) is offered, so the list
+ * is never empty.
+ *
+ * # Errors
+ * [`DiscoveryError::ConnectionFailed`] when no UDP socket can be opened.
+ */
+public func discoverDevices(timeoutMs: UInt32)throws  -> [Device] {
+    return try  FfiConverterSequenceTypeDevice.lift(try rustCallWithError(FfiConverterTypeDiscoveryError.lift) {
+    uniffi_racestudio_ffi_fn_func_discover_devices(
+        FfiConverterUInt32.lower(timeoutMs),$0
+    )
+})
+}
+/**
  * Download a session by reassembling its chunk stream, verifying integrity
  * (issue 6.5).
  *
@@ -4807,6 +5600,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_racestudio_ffi_checksum_func_delete_session() != 3178) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_racestudio_ffi_checksum_func_discover_devices() != 44519) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_racestudio_ffi_checksum_func_download_session() != 42953) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4820,6 +5616,18 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_func_validate_math_expression() != 44744) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_cancel() != 31307) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_close() != 23010) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_download() != 50693) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_deviceconnection_list_sessions() != 52589) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_channel_stats() != 5142) {
@@ -4862,6 +5670,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_segment_times() != 29882) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_constructor_deviceconnection_connect() != 37144) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_chunksource_next_chunk() != 52970) {

@@ -34,6 +34,13 @@ jobs:
       - name: Install Trivy
         run: brew install trivy
 
+      # The rustc version is part of the key: a build cached by an older
+      # toolchain carries instrumented binaries and profiles in an older LLVM
+      # format that the new llvm-profdata cannot merge.
+      - name: Rust version for the cache key
+        id: rustc
+        run: echo "version=$(rustc -V | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
       - name: Cache cargo & SwiftPM build
         uses: actions/cache@v4
         with:
@@ -42,8 +49,8 @@ jobs:
             ~/.cargo/git
             target
             app/.build
-          key: ${{ runner.os }}-ci-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
-          restore-keys: ${{ runner.os }}-ci-
+          key: ${{ runner.os }}-ci-rustc${{ steps.rustc.outputs.version }}-${{ hashFiles('**/Cargo.lock', 'app/Package.swift') }}
+          restore-keys: ${{ runner.os }}-ci-rustc${{ steps.rustc.outputs.version }}-
 
       - name: Tooling self-tests
         run: |
