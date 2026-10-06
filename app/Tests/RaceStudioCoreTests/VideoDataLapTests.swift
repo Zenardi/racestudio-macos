@@ -153,6 +153,17 @@ import Foundation
         #expect(loaded.model.sectorMarks.isEmpty)
     }
 
+    /// A session with no lap has nothing to plot or map, track or not.
+    @Test func test_without_a_lap_there_is_nothing_to_plot_or_map() {
+        let model = VideoDataViewModel(review: VideoReviewModel())
+
+        model.setTrack(VideoDataFixture.track(TelemetryFixture.make()))
+
+        #expect(model.stripPlot == nil)
+        #expect(model.lapMap == nil)
+        #expect(model.sessionTime(atFix: 0) == nil)
+    }
+
     /// The window shares its GPS track, so the map needs no second read.
     @Test func test_the_window_shares_its_gps_track() {
         let built = TelemetryFixture.make()
