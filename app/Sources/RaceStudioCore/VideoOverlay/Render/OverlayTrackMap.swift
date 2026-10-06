@@ -13,9 +13,15 @@ public struct OverlayTrackMap: Equatable, Sendable {
     /// No track: the map draws the kart against the unit frame alone.
     public static let empty = OverlayTrackMap(racingLine: [], sectorTicks: [])
 
+    /// A point that is not a number (on either axis) has no place on the map
+    /// and is left out.
     public init(racingLine: [CGPoint], sectorTicks: [CGPoint] = []) {
-        self.racingLine = racingLine
-        self.sectorTicks = sectorTicks
+        self.racingLine = racingLine.filter(Self.isFinite)
+        self.sectorTicks = sectorTicks.filter(Self.isFinite)
+    }
+
+    private static func isFinite(_ point: CGPoint) -> Bool {
+        point.x.isFinite && point.y.isFinite
     }
 
     /// The map of `timeline`'s session: its racing line (the best lap, as the

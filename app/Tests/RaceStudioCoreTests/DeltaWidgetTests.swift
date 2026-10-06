@@ -94,6 +94,38 @@ import Testing
         #expect((filled.map(\.x).min() ?? -.infinity) > layout.bar.minX)
     }
 
+    /// An odd-width bar has no half pixel: each side fills exactly to its own end.
+    @Test(arguments: [5.0, -5.0])
+    func test_an_odd_width_bar_fills_each_side_exactly_to_its_end(_ delta: Double) {
+        let odd = CGRect(x: 0, y: 0, width: 421, height: 100)
+        let context = OverlayRenderFixture.context(.delta, rect: odd, options: OverlayWidgetOptions(deltaRange: 1))
+        let layout = widget.layout(in: context)
+        let bitmap = OverlayRenderFixture.render(widget, TelemetryFrame(time: 0, values: [:], delta: delta),
+                                                 context: context)
+        let color = delta > 0 ? theme.loss : theme.gain
+
+        let filled = bitmap.positions(in: CGRect(x: 0, y: layout.bar.midY.rounded(.down), width: odd.width,
+                                                 height: 1)) { $0.matches(color) }
+
+        #expect(layout.bar.width.truncatingRemainder(dividingBy: 2) == 1)
+        #expect((filled.map(\.x).min() ?? 0) > layout.bar.minX)
+        #expect((filled.map(\.x).max() ?? .infinity) < layout.bar.maxX)
+        #expect(filled.count == Int(delta > 0 ? layout.bar.maxX - layout.centre : layout.centre - layout.bar.minX))
+    }
+
+    /// The bar never shows a sign the number does not: a delta that is written
+    /// `0.00` fills nothing.
+    @Test func test_a_delta_written_as_zero_fills_nothing() {
+        let context = OverlayRenderFixture.context(.delta, rect: rect, options: OverlayWidgetOptions(deltaRange: 0.1))
+        let frame = TelemetryFrame(time: 0, values: [:], delta: 0.004)
+        let layout = widget.layout(in: context)
+
+        let bitmap = OverlayRenderFixture.render(widget, frame, context: context)
+
+        #expect(widget.readouts(frame, context: context) == ["0.00"])
+        #expect(bitmap.count(in: layout.bar) { $0.matches(self.theme.loss) || $0.matches(self.theme.gain) } == 0)
+    }
+
     @Test func test_the_number_takes_the_colour_of_the_sign() {
         let (losing, layout) = render(0.3)
         let (gaining, _) = render(-0.3)

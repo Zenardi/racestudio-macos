@@ -35,6 +35,20 @@ import Testing
         #expect(widget.readouts(OverlayRenderFixture.gap, context: context(track: square)) == ["—"])
     }
 
+    @Test func test_a_position_that_is_not_a_number_reads_an_em_dash() {
+        let frame = frame(at: CGPoint(x: Double.nan, y: 0.5))
+
+        #expect(widget.readouts(frame, context: context(track: square)) == ["—"])
+    }
+
+    @Test func test_racing_line_points_that_are_not_numbers_are_left_out() {
+        let map = OverlayTrackMap(racingLine: [CGPoint(x: 0, y: 0), CGPoint(x: Double.nan, y: 1), CGPoint(x: 1, y: 1)],
+                                  sectorTicks: [CGPoint(x: 0.5, y: Double.infinity), CGPoint(x: 0.5, y: 0.5)])
+
+        #expect(map.racingLine == [CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 1)])
+        #expect(map.sectorTicks == [CGPoint(x: 0.5, y: 0.5)])
+    }
+
     // MARK: - The dot
 
     @Test func test_the_dot_sits_at_its_projected_pixel() throws {

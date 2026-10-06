@@ -69,14 +69,16 @@ made-up session (no footage, no session file) and compares it with these PNGs
 after a PNG round trip. A pixel differs when any channel is off by more than
 2/255, and a render matches when at most 0.5% of its pixels differ. That
 leaves room for CoreText anti-aliasing differences between macOS versions, but
-not for a moved widget or a changed number. The renderer's font-independent
-guarantees are asserted structurally by the widget suites: alpha 0 outside the
-widgets, the delta bar's side and colour, the shift light, and the G-ball and
-map dots.
+not for a moved, resized, recoloured or missing widget. One changed digit (a
+few hundred pixels) can slip through, so the numbers are asserted exactly by the
+widget suites' readout tests. The font-independent guarantees are asserted
+structurally by those suites too: alpha 0 outside the widgets, the delta bar's
+side and colour, the shift light, and the G-ball and map dots.
 
 - **Re-record** after an intended change, from `app/`:
   `RECORD_OVERLAY_GOLDENS=1 swift test --filter OverlayRendererSnapshotTests`.
-  Images whose pixels are unchanged are not rewritten. Review the new PNGs in
+  An image is rewritten only when a pixel moved beyond the 2/255 tolerance, so
+  re-recording on another Mac does not churn the files. Review the new PNGs in
   the PR.
 - **CI** sets `OVERLAY_SNAPSHOT_ARTIFACTS`, so every render, plus a
   `*.diff.png` for any mismatch, is uploaded as the `overlay-snapshots`

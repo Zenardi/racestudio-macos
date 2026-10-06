@@ -36,7 +36,8 @@ import Testing
                       .pedals, .temperature, .sectorTimes, .channelValue(.role(.latG)),
                       .channelValue(.channel("Oil Temp")), .kartBadge, .sessionInfo])
     func test_every_widget_kind_paints_its_rect(_ kind: OverlayWidgetKind) throws {
-        let widget = OverlayWidget(kind: kind, frame: Self.box)
+        // No plate: what is painted is the drawer's own work.
+        let widget = OverlayWidget(kind: kind, frame: Self.box, plate: .none)
 
         let bitmap = try image(renderer(OverlayLayout(name: "One", widgets: [widget])))
 
@@ -94,6 +95,24 @@ import Testing
         let edge = CGPoint(x: pixels(of: opaque).midX, y: pixels(of: opaque).minY + 1)
         #expect(full.pixel(at: edge).alpha == 255)
         #expect(abs(Int(half.pixel(at: edge).alpha) - 128) <= 1)
+    }
+
+    /// The widget fades as one piece: its digits over its plate keep their own
+    /// colour at the widget's opacity, rather than letting the faded plate
+    /// show through faded digits.
+    @Test func test_a_faded_widget_fades_as_one_piece() throws {
+        let opaque = OverlayWidget(kind: .speed, frame: Self.box, plate: .solid)
+        var faded = opaque
+        faded.opacity = 0.5
+        let full = try image(renderer(OverlayLayout(name: "Full", widgets: [opaque])))
+        let half = try image(renderer(OverlayLayout(name: "Half", widgets: [faded])))
+
+        let digit = try #require(full.positions(in: pixels(of: opaque)) {
+            $0.matches(OverlayTheme.raceStudio.text, tolerance: 1)
+        }.first)
+
+        #expect(abs(Int(half.pixel(at: digit).alpha) - 128) <= 1)
+        #expect(half.pixel(at: digit).color.contrastRatio(against: OverlayTheme.raceStudio.text) < 1.05)
     }
 
     @Test func test_widget_opacity_fades_the_g_trail_too() throws {
@@ -179,25 +198,28 @@ import Testing
         #expect(renderer.staticLayerBuildCount == 1)
     }
 
-    /// Given many renderers building their static layers on as many threads at
-    /// once — plates being filled beside G-trails being drawn — then every
-    /// render matches one made alone. (Blending the translucent plates raced
-    /// inside CoreGraphics and corrupted a few of every 72 such renders.)
+    /// Given many renderers building their static layers and drawing frames on
+    /// as many threads at once — translucent plates, faded widgets, G-trails —
+    /// then every render matches one made alone. (Blending wide translucent
+    /// plates raced inside CoreGraphics and corrupted a few of every 72 such
+    /// renders; drawing is now serialized and plates are copied.)
     @Test func test_renderers_built_on_many_threads_at_once_match_a_render_made_alone() throws {
-        func make() -> OverlayRenderer {
-            renderer(OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en")))
-        }
+        var layout = OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en"))
+        for index in layout.widgets.indices where index.isMultiple(of: 3) { layout.widgets[index].opacity = 0.6 }
+        let faded = layout
+        func make() -> OverlayRenderer { renderer(faded) }
         let expected = try image(make()).bytes
         let results = ConcurrentResults()
+        let rounds = 4, workers = 12
 
-        for round in 0..<3 {
-            DispatchQueue.concurrentPerform(iterations: 12) { index in
+        for round in 0..<rounds {
+            DispatchQueue.concurrentPerform(iterations: workers) { index in
                 let image = make().makeImage(OverlayRenderFixture.midLap, size: Self.size)
-                results.store(round * 12 + index, image.map { OverlayBitmap(image: $0).bytes } ?? [])
+                results.store(round * workers + index, image.map { OverlayBitmap(image: $0).bytes } ?? [])
             }
         }
 
-        #expect(results.all.count == 36)
+        #expect(results.all.count == rounds * workers)
         #expect(results.all.filter { $0 != expected }.isEmpty)
     }
 

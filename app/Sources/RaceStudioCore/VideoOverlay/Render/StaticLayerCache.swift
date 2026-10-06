@@ -10,12 +10,13 @@ struct OverlayPixelSize: Hashable, Sendable {
     /// `size` rounded to whole pixels, or `nil` when the renderer does not draw
     /// it (not finite, under a pixel, or past ``OverlayRenderer/maximumDimension``).
     init?(_ size: CGSize) {
-        guard size.width.isFinite, size.height.isFinite else { return nil }
-        let width = Int(size.width.rounded()), height = Int(size.height.rounded())
-        let drawable = 1...OverlayRenderer.maximumDimension
+        // Range-checked as doubles first: converting a huge finite value to
+        // `Int` traps, and NaN is in no range.
+        let drawable = 1...Double(OverlayRenderer.maximumDimension)
+        let width = Double(size.width).rounded(), height = Double(size.height).rounded()
         guard drawable.contains(width), drawable.contains(height) else { return nil }
-        self.width = width
-        self.height = height
+        self.width = Int(width)
+        self.height = Int(height)
     }
 
     var rect: CGRect { CGRect(x: 0, y: 0, width: width, height: height) }
@@ -51,9 +52,11 @@ struct OverlayScene: Sendable {
 /// behind an `OSAllocatedUnfairLock`: a size's scene is built *under* the lock,
 /// so a second thread asking for the same size waits for the first build
 /// instead of repeating it, and is immutable afterwards (images, fonts, glyph
-/// outlines behind their own lock), so frames are drawn outside the lock. The
-/// most recent ``capacity`` sizes are kept, so a window being resized does not
-/// pile up layers.
+/// outlines behind their own lock), so frames are drawn outside the lock. (The
+/// renderer also serializes whole draws process-wide, working round a
+/// CoreGraphics race — see ``OverlayRenderer`` — but the cache does not rely on
+/// it.) The most recent ``capacity`` sizes are kept, so a window being resized
+/// does not pile up layers.
 final class StaticLayerCache: @unchecked Sendable {
 
     /// How many output sizes are kept.

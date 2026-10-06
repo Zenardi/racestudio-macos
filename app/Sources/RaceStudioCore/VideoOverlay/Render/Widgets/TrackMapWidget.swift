@@ -97,12 +97,12 @@ struct TrackMapWidget: OverlayWidgetDrawer {
     }
 
     func readouts(_ frame: TelemetryFrame, context: OverlayWidgetContext) -> [String] {
-        frame.position == nil ? [OverlayFormatter.missing] : []
+        Self.place(of: frame) == nil ? [OverlayFormatter.missing] : []
     }
 
     func drawDynamic(_ frame: TelemetryFrame, _ layout: Layout, in graphics: CGContext,
                      context: OverlayWidgetContext) {
-        guard let position = frame.position, position.point.x.isFinite, position.point.y.isFinite else {
+        guard let point = Self.place(of: frame) else {
             for text in readouts(frame, context: context) {
                 let slot = CGRect(x: context.content.minX, y: layout.area.midY - layout.area.height * 0.15,
                                   width: context.content.width, height: layout.area.height * 0.3)
@@ -110,13 +110,19 @@ struct TrackMapWidget: OverlayWidgetDrawer {
             }
             return
         }
-        let placed = layout.projection.place(position.point)
+        let placed = layout.projection.place(point)
         let held = CGPoint(x: min(max(placed.x, layout.area.minX), layout.area.maxX),
                            y: min(max(placed.y, layout.area.minY), layout.area.maxY))
         mark(held, radius: layout.dot, color: context.palette.accent, context: context, in: graphics)
     }
 
     // MARK: - Internals
+
+    /// The kart's place on the unit map, when the frame has a usable one.
+    private static func place(of frame: TelemetryFrame) -> CGPoint? {
+        guard let point = frame.position?.point, point.x.isFinite, point.y.isFinite else { return nil }
+        return point
+    }
 
     private func stroke(_ path: CGPath, width: CGFloat, color: CGColor, in graphics: CGContext) {
         graphics.addPath(path)

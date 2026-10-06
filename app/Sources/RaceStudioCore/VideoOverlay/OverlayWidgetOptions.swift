@@ -13,6 +13,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let defaultDeltaRange = 1.0
     /// The G-ball's default outer ring, in g.
     public static let defaultGForceMax = 2.0
+    /// A pedal's default full scale: a percentage of travel.
+    public static let defaultPedalFullScale = 100.0
 
     /// The RPM bar's full scales it can draw.
     public static let maxRPMLimits: ClosedRange<Double> = 1_000...30_000
@@ -20,6 +22,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let deltaRangeLimits: ClosedRange<Double> = 0.1...10
     /// The G-ball's outer rings it can draw, g.
     public static let gForceMaxLimits: ClosedRange<Double> = 0.5...5
+    /// The pedal full scales it can draw, in the pedal channel's unit.
+    public static let pedalFullScaleLimits: ClosedRange<Double> = 0.1...10_000
 
     /// RPM bar: the rpm at the full bar.
     public var maxRPM: Double
@@ -31,17 +35,27 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public var gForceMax: Double
     /// Track map: degrees clockwise from north-up, `0..<360`.
     public var trackMapRotation: Double
+    /// Pedals: the throttle reading at a full bar, in its channel's unit — `100`
+    /// for a percentage, the travel for a throttle logged in mm (issue 9.11).
+    public var throttleFullScale: Double
+    /// Pedals: the brake reading at a full bar, in its channel's unit — `100`
+    /// for a percentage, the pressure at full braking for one logged in bar.
+    public var brakeFullScale: Double
 
     public init(maxRPM: Double = OverlayWidgetOptions.defaultMaxRPM,
                 shiftLightRPM: Double = OverlayWidgetOptions.defaultShiftLightRPM,
                 deltaRange: Double = OverlayWidgetOptions.defaultDeltaRange,
                 gForceMax: Double = OverlayWidgetOptions.defaultGForceMax,
-                trackMapRotation: Double = 0) {
+                trackMapRotation: Double = 0,
+                throttleFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
+                brakeFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale) {
         self.maxRPM = maxRPM
         self.shiftLightRPM = shiftLightRPM
         self.deltaRange = deltaRange
         self.gForceMax = gForceMax
         self.trackMapRotation = trackMapRotation
+        self.throttleFullScale = throttleFullScale
+        self.brakeFullScale = brakeFullScale
     }
 
     /// These options with every value drawable: a non-finite value takes its
@@ -54,7 +68,11 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
             shiftLightRPM: Self.usable(shiftLightRPM, default: Self.defaultShiftLightRPM, in: 0...maxRPM),
             deltaRange: Self.usable(deltaRange, default: Self.defaultDeltaRange, in: Self.deltaRangeLimits),
             gForceMax: Self.usable(gForceMax, default: Self.defaultGForceMax, in: Self.gForceMaxLimits),
-            trackMapRotation: Self.oneTurn(trackMapRotation))
+            trackMapRotation: Self.oneTurn(trackMapRotation),
+            throttleFullScale: Self.usable(throttleFullScale, default: Self.defaultPedalFullScale,
+                                           in: Self.pedalFullScaleLimits),
+            brakeFullScale: Self.usable(brakeFullScale, default: Self.defaultPedalFullScale,
+                                        in: Self.pedalFullScaleLimits))
     }
 
     /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below
@@ -75,7 +93,7 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
 extension OverlayWidgetOptions: Codable {
 
     private enum CodingKeys: String, CodingKey {
-        case maxRPM, shiftLightRPM, deltaRange, gForceMax, trackMapRotation
+        case maxRPM, shiftLightRPM, deltaRange, gForceMax, trackMapRotation, throttleFullScale, brakeFullScale
     }
 
     /// Each option is read on its own — missing or malformed takes its default —
@@ -86,6 +104,9 @@ extension OverlayWidgetOptions: Codable {
                   shiftLightRPM: container.lenient(Double.self, forKey: .shiftLightRPM) ?? Self.defaultShiftLightRPM,
                   deltaRange: container.lenient(Double.self, forKey: .deltaRange) ?? Self.defaultDeltaRange,
                   gForceMax: container.lenient(Double.self, forKey: .gForceMax) ?? Self.defaultGForceMax,
-                  trackMapRotation: container.lenient(Double.self, forKey: .trackMapRotation) ?? 0)
+                  trackMapRotation: container.lenient(Double.self, forKey: .trackMapRotation) ?? 0,
+                  throttleFullScale: container.lenient(Double.self, forKey: .throttleFullScale)
+                    ?? Self.defaultPedalFullScale,
+                  brakeFullScale: container.lenient(Double.self, forKey: .brakeFullScale) ?? Self.defaultPedalFullScale)
     }
 }

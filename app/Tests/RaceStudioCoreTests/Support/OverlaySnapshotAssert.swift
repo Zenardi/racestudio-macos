@@ -10,11 +10,15 @@ import Testing
 /// through the same PNG encode/decode, pixel by pixel: a pixel *differs* when
 /// any channel is off by more than ``channelTolerance``, and the render matches
 /// when at most ``pixelTolerance`` of the pixels differ — slack for CoreText
-/// anti-aliasing differences between macOS versions, far below a moved widget
-/// or a changed number.
+/// anti-aliasing differences between macOS versions. That catches a moved,
+/// resized, recoloured or missing widget; it does *not* catch one changed
+/// digit (a few hundred pixels), which is why every readout's text is asserted
+/// exactly by the widget suites, and the font-independent geometry by pixel
+/// probes.
 ///
-/// - `RECORD_OVERLAY_GOLDENS=1` writes the render as the golden (unchanged
-///   pixels are not rewritten); recorded goldens are reviewed in the PR.
+/// - `RECORD_OVERLAY_GOLDENS=1` writes the render as the golden — unless no
+///   pixel differs beyond ``channelTolerance``, so re-recording on another Mac
+///   does not churn the files; recorded goldens are reviewed in the PR.
 /// - `OVERLAY_SNAPSHOT_ARTIFACTS=<dir>` also writes every render, and a diff
 ///   image for each mismatch, to `<dir>` — CI uploads it, so a golden that a
 ///   runner renders differently can be inspected (and, if need be, recorded
@@ -81,9 +85,8 @@ enum OverlaySnapshotAssert {
             return Comparison(differing: lhs.width * lhs.height, total: lhs.width * lhs.height, largestDelta: 255,
                               diff: nil)
         }
-        let leftBitmap = OverlayBitmap(image: lhs)
-        let left = leftBitmap.bytes, right = OverlayBitmap(image: rhs).bytes
-        let stride = leftBitmap.context.bytesPerRow
+        let left = OverlayBitmap(image: lhs).bytes, right = OverlayBitmap(image: rhs).bytes
+        let stride = lhs.width * 4
         let marks = OverlayBitmap(width: lhs.width, height: lhs.height)
         var differing = 0, largest = 0
         marks.context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 1, alpha: 1))

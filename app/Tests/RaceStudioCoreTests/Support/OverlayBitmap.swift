@@ -68,12 +68,17 @@ final class OverlayBitmap {
     /// The whole bitmap as a rect.
     var bounds: CGRect { CGRect(x: 0, y: 0, width: width, height: height) }
 
-    /// The bytes, row by row from the top.
+    /// The pixels' bytes, row by row from the top, without the rows' padding —
+    /// only what the image shows.
     var bytes: [UInt8] {
         guard let data = context.data else { return [] }
-        let buffer = UnsafeBufferPointer(start: data.assumingMemoryBound(to: UInt8.self),
-                                         count: context.bytesPerRow * height)
-        return Array(buffer)
+        let start = data.assumingMemoryBound(to: UInt8.self)
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(width * 4 * height)
+        for row in 0..<height {
+            bytes.append(contentsOf: UnsafeBufferPointer(start: start + row * context.bytesPerRow, count: width * 4))
+        }
+        return bytes
     }
 
     /// The pixel at `(x, y)` in drawing space.

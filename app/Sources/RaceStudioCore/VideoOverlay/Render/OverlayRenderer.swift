@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import os
 
 /// Draws a video overlay (issue 9.11): turns `(layout, frame, output size)` into
 /// pixels with CoreGraphics and CoreText alone — the one routine shared by the
@@ -13,13 +14,17 @@ import Foundation
 ///   first and paints only inside widget rects, so every other pixel has alpha 0
 ///   and the result is ready to alpha-blend over footage.
 /// - **Deterministic:** no clock, no locale or other global state — numbers are
-///   written by the injected ``formatter`` — and text is drawn as whole-pixel
-///   glyph outlines, so the same inputs give the same bytes, run after run.
+///   written by the injected ``formatter`` — and text is drawn as glyph
+///   outlines from whole-pixel line origins, so the same inputs give the same
+///   bytes, run after run.
 /// - **Fast:** plates, guides, the track map's line and labels are rendered once
 ///   per output size and cached (``StaticLayerCache``); a frame only blits them
 ///   and draws its values.
-/// - **Shareable:** a `Sendable` value; copies share one thread-safe cache, so a
-///   renderer can draw on several threads at once.
+/// - **Shareable:** a `Sendable` value, safe to call from any thread; copies
+///   share one cache. Drawing is serialized process-wide: CoreGraphics was seen
+///   (macOS 26) to corrupt a translucent fill drawn while another thread drew
+///   one, and a frame takes a few milliseconds, so serializing costs the HUD and
+///   the export nothing they would notice.
 public struct OverlayRenderer: Sendable {
 
     /// The largest output edge the renderer draws, in pixels (8K).
@@ -40,6 +45,9 @@ public struct OverlayRenderer: Sendable {
     public let sectors: LapSectorTimeline
 
     private let cache = StaticLayerCache()
+
+    /// Serializes every overlay draw in the process (see the type's doc).
+    private static let rasterLock = OSAllocatedUnfairLock()
 
     /// - Parameters:
     ///   - layout: the overlay to draw.
@@ -64,28 +72,16 @@ public struct OverlayRenderer: Sendable {
     }
 
     /// Draw `frame` into `context`, a bitmap of `size` pixels in its default
-    /// drawing space (origin bottom-left, one unit a pixel). The whole `size`
-    /// is cleared to transparent first, so a reused buffer never shows a
-    /// previous frame. A size the renderer does not draw (see
-    /// ``maximumDimension``) leaves the context untouched.
+    /// drawing space: origin bottom-left, one unit a pixel, no clip. The whole
+    /// `size` is cleared to transparent first, so a reused buffer never shows a
+    /// previous frame; the blend mode, alpha, shadow and dash the context was
+    /// left with are ignored. The pixels equal ``makeImage(_:size:)``'s when
+    /// the context is premultiplied BGRA in sRGB, like a `32BGRA` video
+    /// buffer's. A size the renderer does not draw (see ``maximumDimension``)
+    /// leaves the context untouched.
     public func draw(_ frame: TelemetryFrame, in context: CGContext, size: CGSize) {
         guard let pixels = OverlayPixelSize(size) else { return }
-        let scene = cache.scene(for: pixels) { prepare(pixels) }
-        context.saveGState()
-        defer { context.restoreGState() }
-        context.setBlendMode(.normal)
-        context.setAlpha(1)
-        context.setShouldAntialias(true)
-        context.interpolationQuality = .none
-        context.clear(pixels.rect)
-        for widget in scene.widgets where widget.opacity > 0 {
-            context.saveGState()
-            context.clip(to: widget.rect)
-            context.setAlpha(widget.opacity)
-            if let layer = widget.staticLayer { context.draw(layer, in: widget.rect) }
-            widget.drawDynamic(frame, context)
-            context.restoreGState()
-        }
+        Self.rasterLock.withLockUnchecked { render(frame, in: context, size: pixels) }
     }
 
     /// `frame` drawn into a new transparent image of `size` pixels —
@@ -103,9 +99,38 @@ public struct OverlayRenderer: Sendable {
     /// How many times the static layers have been built — once per output size.
     var staticLayerBuildCount: Int { cache.buildCount }
 
+    /// The body of ``draw(_:in:size:)``, under the raster lock.
+    private func render(_ frame: TelemetryFrame, in context: CGContext, size pixels: OverlayPixelSize) {
+        let scene = cache.scene(for: pixels) { prepare(pixels) }
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setBlendMode(.normal)
+        context.setAlpha(1)
+        context.setShadow(offset: .zero, blur: 0, color: nil)
+        context.setLineDash(phase: 0, lengths: [])
+        context.setShouldAntialias(true)
+        context.interpolationQuality = .none
+        context.clear(pixels.rect)
+        for widget in scene.widgets where widget.opacity > 0 {
+            context.saveGState()
+            context.clip(to: widget.rect)
+            // A faded widget fades as one piece: drawn whole into a layer that
+            // is then composited at its opacity.
+            let faded = widget.opacity < 1
+            if faded {
+                context.setAlpha(widget.opacity)
+                context.beginTransparencyLayer(in: widget.rect, auxiliaryInfo: nil)
+            }
+            if let layer = widget.staticLayer { context.draw(layer, in: widget.rect) }
+            widget.drawDynamic(frame, context)
+            if faded { context.endTransparencyLayer() }
+            context.restoreGState()
+        }
+    }
+
     /// A transparent bitmap in the renderer's format, or `nil` for a size it
     /// does not draw. Rows are padded to 64 bytes, the alignment CoreGraphics
-    /// and CoreVideo buffers use.
+    /// and CoreVideo buffers use, and every byte — padding too — starts at zero.
     static func makeBitmapContext(width: Int, height: Int) -> CGContext? {
         guard (1...maximumDimension).contains(width), (1...maximumDimension).contains(height),
               let space = CGColorSpace(name: CGColorSpace.sRGB),
@@ -114,7 +139,7 @@ public struct OverlayRenderer: Sendable {
                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue
                                         | CGBitmapInfo.byteOrder32Little.rawValue)
         else { return nil }
-        context.clear(CGRect(x: 0, y: 0, width: width, height: height))
+        if let data = context.data { memset(data, 0, context.bytesPerRow * height) }
         return context
     }
 

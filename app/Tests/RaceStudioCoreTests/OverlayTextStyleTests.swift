@@ -34,6 +34,16 @@ import Testing
         #expect(style.width(of: "1:11.111") == style.width(of: "0:58.093"))
     }
 
+    /// Every digit takes the same advance, so no number — whatever its digits —
+    /// changes width as it counts.
+    @Test func test_every_digit_takes_the_same_advance() {
+        let style = OverlayTextStyle(capHeight: 30, outline: 1)
+
+        let advances = Set((0...9).map { style.width(of: String($0)) })
+
+        #expect(advances.count == 1)
+    }
+
     @Test func test_capitals_fill_a_fixed_share_of_the_slot() {
         let style = OverlayTextStyle.fitting(height: 100, sizeClass: .medium, outline: 1)
 

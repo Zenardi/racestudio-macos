@@ -17,8 +17,9 @@ extension TelemetryTimeline {
     ///   - deltaSource: which delta the frames report.
     ///   - channelMap: a hand-edited role map; `nil` resolves one automatically.
     ///   - channels: session channels to sample by name as well (issue 9.11) —
-    ///     an overlay's channel readouts (``OverlayLayout/sessionChannelNames``).
-    ///     A name the session lacks is skipped and reads `nil`.
+    ///     an overlay's channel readouts (``OverlayLayout/sessionChannelNames``),
+    ///     in their own units, interpolated linearly between samples like every
+    ///     role but gear. A name the session lacks is skipped and reads `nil`.
     /// - Throws: `CancellationError` when the calling task is cancelled.
     public static func load(session: Session, source: any SessionDataSource,
                             sectors: LapSectorTimeline = .empty, reference: LapID? = nil,

@@ -39,6 +39,49 @@ import Testing
         #expect(bitmap.count(in: layout.brake) { $0.matches(self.theme.loss) } == 0)
     }
 
+    /// A brake logged in bar fills to the widget's brake full scale, not to 100.
+    @Test func test_a_pedal_fills_to_its_full_scale() {
+        let options = OverlayWidgetOptions(brakeFullScale: 40)
+        let context = OverlayRenderFixture.context(.pedals, rect: CGRect(x: 0, y: 0, width: 120, height: 200),
+                                                   plate: .none, options: options)
+        let layout = PedalsWidget().layout(in: context)
+        let frame = TelemetryFrame(time: 0, values: [.throttle: 0, .brake: 25])
+
+        let bitmap = OverlayRenderFixture.render(PedalsWidget(), frame, context: context)
+
+        let column = CGRect(x: layout.brake.midX.rounded(.down), y: 0, width: 1, height: 200)
+        let filled = bitmap.count(in: column) { $0.matches(self.theme.loss) }
+        #expect(abs(filled - Int((layout.brake.height * 25 / 40).rounded())) <= 1)
+    }
+
+    @Test func test_pedal_full_scales_default_to_a_percentage() {
+        let options = OverlayWidgetOptions()
+
+        #expect(options.throttleFullScale == 100)
+        #expect(options.brakeFullScale == 100)
+    }
+
+    @Test func test_unusable_pedal_full_scales_are_sanitized() {
+        let wild = OverlayWidgetOptions(throttleFullScale: .nan, brakeFullScale: 1e9).validated()
+        let tiny = OverlayWidgetOptions(throttleFullScale: 0, brakeFullScale: -3).validated()
+
+        #expect(wild.throttleFullScale == OverlayWidgetOptions.defaultPedalFullScale)
+        #expect(wild.brakeFullScale == OverlayWidgetOptions.pedalFullScaleLimits.upperBound)
+        #expect(tiny.throttleFullScale == OverlayWidgetOptions.pedalFullScaleLimits.lowerBound)
+        #expect(tiny.brakeFullScale == OverlayWidgetOptions.pedalFullScaleLimits.lowerBound)
+    }
+
+    @Test func test_pedal_full_scales_persist_and_default_when_missing() throws {
+        let options = OverlayWidgetOptions(throttleFullScale: 30, brakeFullScale: 60)
+
+        let decoded = try JSONDecoder().decode(OverlayWidgetOptions.self, from: JSONEncoder().encode(options))
+        let older = try JSONDecoder().decode(OverlayWidgetOptions.self, from: Data(#"{"maxRPM": 9000}"#.utf8))
+
+        #expect(decoded == options)
+        #expect(older.throttleFullScale == 100)
+        #expect(older.brakeFullScale == 100)
+    }
+
     @Test func test_the_pedal_labels_follow_the_export_language() {
         #expect(PedalsWidget.labels(OverlayRenderFixture.context(.pedals)) == ["T", "B"])
         #expect(PedalsWidget.labels(OverlayRenderFixture.context(.pedals, formatter: brazilian)) == ["A", "F"])

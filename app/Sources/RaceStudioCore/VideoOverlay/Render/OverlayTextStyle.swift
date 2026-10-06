@@ -13,9 +13,10 @@ enum OverlayTextAlignment: Sendable {
 /// How the video overlay draws text (issue 9.11).
 ///
 /// - **One face:** DIN Condensed Bold — compact, legible at a glance, and a
-///   font every Mac ships — with CoreText's *monospaced numbers* feature on, so
-///   `1:11.111` and `0:58.093` are the same width and a running time never
-///   jitters.
+///   font every Mac ships. Its digits all share one advance, so `1:11.111` and
+///   `0:58.093` are the same width and a running time never jitters; CoreText's
+///   *monospaced numbers* feature is requested too, for a face that falls back
+///   in its place.
 /// - **Sized from the slot:** capitals fill ``capHeightFraction`` of the slot's
 ///   height (scaled by the widget's size class), shrunk only if the widest text
 ///   the slot shows would not fit (``shrunk(toFit:width:)``) — decided once per
@@ -23,8 +24,12 @@ enum OverlayTextAlignment: Sendable {
 /// - **Outlined:** every glyph is drawn over a dark outline ``outline`` pixels
 ///   wide, so it reads over bright footage even without a plate.
 /// - **Deterministic:** glyphs are drawn as filled outlines (no font smoothing,
-///   no sub-pixel positioning) at whole-pixel origins, so the same text renders
-///   the same pixels every time, in the HUD and in the export alike.
+///   no glyph bitmaps) from a line origin on a whole pixel, each at the face's
+///   own advance, so the same text renders the same pixels every time, in the
+///   HUD and in the export alike. A character the face lacks is drawn in the
+///   face CoreText falls back to, which may differ between macOS versions; the
+///   formatter writes only characters the face has (digits, `:`, `.`, `,`,
+///   `+`, `−`, `—`, `·`, `°`).
 ///
 /// Safe to share between threads: the font is immutable and the glyph outlines
 /// are cached behind a lock.

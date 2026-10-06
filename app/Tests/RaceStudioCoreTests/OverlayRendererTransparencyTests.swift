@@ -66,6 +66,33 @@ import Testing
         #expect(bitmap.pixel(x: 320, y: 180).isTransparent)
     }
 
+    @Test func test_a_size_the_renderer_cannot_draw_leaves_the_context_untouched() {
+        let layout = OverlayPreset.minimal.layout(locale: Locale(identifier: "en"))
+        let bitmap = OverlayBitmap(width: 64, height: 64)
+        bitmap.context.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+        bitmap.context.fill(bitmap.bounds)
+
+        renderer(layout).draw(OverlayRenderFixture.midLap, in: bitmap.context, size: CGSize(width: 1e30, height: 64))
+
+        #expect(bitmap.pixel(x: 32, y: 32).matches(BrandColor(red: 1, green: 0, blue: 0)))
+    }
+
+    /// A shadow or a dash left set on the caller's context changes nothing.
+    @Test func test_drawing_ignores_shadow_and_dash_left_on_the_context() throws {
+        let layout = OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en"))
+        let clean = OverlayBitmap(width: 640, height: 360)
+        let dirty = OverlayBitmap(width: 640, height: 360)
+        dirty.context.setShadow(offset: CGSize(width: 4, height: -4), blur: 3,
+                                color: CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))
+        dirty.context.setLineDash(phase: 0, lengths: [2, 3])
+        let size = CGSize(width: 640, height: 360)
+
+        renderer(layout).draw(OverlayRenderFixture.midLap, in: clean.context, size: size)
+        renderer(layout).draw(OverlayRenderFixture.midLap, in: dirty.context, size: size)
+
+        #expect(clean.bytes == dirty.bytes)
+    }
+
     @Test func test_an_overlay_switched_off_draws_nothing() throws {
         var layout = OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en"))
         layout.isEnabled = false
@@ -94,7 +121,8 @@ import Testing
 
     @Test(arguments: [CGSize(width: 0, height: 720), CGSize(width: -5, height: 10),
                       CGSize(width: CGFloat.nan, height: 10), CGSize(width: 9_000, height: 100),
-                      CGSize(width: 0.4, height: 0.4)])
+                      CGSize(width: 0.4, height: 0.4), CGSize(width: 1e30, height: 10),
+                      CGSize(width: 10, height: -1e30)])
     func test_a_size_the_renderer_cannot_draw_makes_no_image(_ size: CGSize) {
         let layout = OverlayPreset.minimal.layout(locale: Locale(identifier: "en"))
 
