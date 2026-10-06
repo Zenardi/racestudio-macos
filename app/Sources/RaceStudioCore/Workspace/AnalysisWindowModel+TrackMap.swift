@@ -25,6 +25,10 @@ public extension AnalysisWindowModel {
     /// lap selected reads "no GPS in these laps" rather than "no GPS data".
     var hasGPSTrack: Bool { !gpsTrackPoints.isEmpty }
 
+    /// The session's whole GPS track, read once when the window opened — shared
+    /// with the Video + Data map (issue 9.12) so it needs no second read.
+    var gpsTrack: [GPSTrackPoint] { gpsTrackPoints }
+
     /// The channel currently colouring the racing line (issue 8.6): the explicit
     /// override while it stays selected, else the first selected channel. `nil`
     /// when nothing is selected.

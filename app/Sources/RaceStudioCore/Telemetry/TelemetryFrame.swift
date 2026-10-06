@@ -78,6 +78,15 @@ public struct TelemetryFrame: Equatable, Sendable {
         values[role]
     }
 
+    /// Whether `other` shows exactly what this frame shows — every value, the
+    /// lap, the delta, the position, the G trail and the named channels —
+    /// whatever instant each was sampled at (issue 9.12). The live HUD publishes
+    /// a new frame only when this is `false`.
+    public func hasSameReadings(as other: TelemetryFrame) -> Bool {
+        values == other.values && lap == other.lap && delta == other.delta && position == other.position
+            && gTrail == other.gTrail && channels == other.channels
+    }
+
     /// Speed (km/h).
     public var speed: Double? { self[.speed] }
     /// Engine speed (rpm).

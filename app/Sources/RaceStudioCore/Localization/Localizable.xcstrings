@@ -931,6 +931,125 @@
         }
       }
     },
+    "hud.summary.deltaLevel": {
+      "comment": "VoiceOver HUD summary: level with the reference lap. %1$@ = 0.00 in the reader's decimal mark.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.deltaMinus": {
+      "comment": "VoiceOver HUD summary: gaining on the reference lap. %1$@ = seconds, unsigned.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta minus %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta menos %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.deltaPlus": {
+      "comment": "VoiceOver HUD summary: losing to the reference lap. %1$@ = seconds, unsigned.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta plus %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta mais %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.lap": {
+      "comment": "VoiceOver HUD summary: the lap and its running time. %1$@ = lap number, %2$@ = running time (m:ss.d).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@, %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "hud.summary.lapNumber": {
+      "comment": "VoiceOver HUD summary: the lap when its running time is unknown. %1$@ = lap number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.noData": {
+      "comment": "VoiceOver value of the live telemetry HUD when the session says nothing at the cursor.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No telemetry here"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem telemetria aqui"
+          }
+        }
+      }
+    },
+    "hud.summary.speed": {
+      "comment": "VoiceOver HUD summary: the speed. %1$@ = value, %2$@ = unit (km/h or mph).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "speed %1$@ %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "velocidade %1$@ %2$@"
+          }
+        }
+      }
+    },
     "menu.file": {
       "localizations": {
         "en": {
@@ -1517,6 +1636,278 @@
           "stringUnit": {
             "state": "translated",
             "value": "temperatura da água"
+          }
+        }
+      }
+    },
+    "overlay.widget.delta": {
+      "comment": "Overlay editor widget list: the delta bar against the reference lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delta bar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barra de delta"
+          }
+        }
+      }
+    },
+    "overlay.widget.gForce": {
+      "comment": "Overlay editor widget list: the G-force ball with its trail.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G-ball"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bola de G"
+          }
+        }
+      }
+    },
+    "overlay.widget.gear": {
+      "comment": "Overlay editor widget list: the gear indicator.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gear"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcha"
+          }
+        }
+      }
+    },
+    "overlay.widget.kartBadge": {
+      "comment": "Overlay editor widget list: the kart's badge from the garage.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart badge"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identificação do kart"
+          }
+        }
+      }
+    },
+    "overlay.widget.lapInfo": {
+      "comment": "Overlay editor widget list: lap number, last and best lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap info"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dados da volta"
+          }
+        }
+      }
+    },
+    "overlay.widget.lapTimer": {
+      "comment": "Overlay editor widget list: the running lap time.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap timer"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cronômetro da volta"
+          }
+        }
+      }
+    },
+    "overlay.widget.pedals": {
+      "comment": "Overlay editor widget list: throttle and brake bars.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedals"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedais"
+          }
+        }
+      }
+    },
+    "overlay.widget.rpm": {
+      "comment": "Overlay editor widget list: the RPM bar with its shift light.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM bar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barra de RPM"
+          }
+        }
+      }
+    },
+    "overlay.widget.sectorTimes": {
+      "comment": "Overlay editor widget list: the current lap's sector times.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sector times"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempos dos setores"
+          }
+        }
+      }
+    },
+    "overlay.widget.sessionInfo": {
+      "comment": "Overlay editor widget list: venue, date and session name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session info"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dados da sessão"
+          }
+        }
+      }
+    },
+    "overlay.widget.speed": {
+      "comment": "Overlay editor widget list: the big speed readout.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidade"
+          }
+        }
+      }
+    },
+    "overlay.widget.temperature": {
+      "comment": "Overlay editor widget list: water and exhaust temperatures.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperatures"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperaturas"
+          }
+        }
+      }
+    },
+    "overlay.widget.trackMap": {
+      "comment": "Overlay editor widget list: the mini track map with the kart's position.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa da pista"
+          }
+        }
+      }
+    },
+    "project.notice.invalidMathChannel": {
+      "comment": "Project load warning: a saved math channel's expression no longer parses. %1$@ = the channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Math channel “%1$@” has an invalid expression"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O canal matemático “%1$@” tem uma expressão inválida"
+          }
+        }
+      }
+    },
+    "project.notice.one": {
+      "comment": "Workspace bar, after opening a project that loaded with one thing it could not read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opened with 1 warning"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aberto com 1 aviso"
+          }
+        }
+      }
+    },
+    "project.notice.other": {
+      "comment": "Workspace bar, after opening a project that loaded with several things it could not read. %1$@ = how many.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opened with %1$@ warnings"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aberto com %1$@ avisos"
           }
         }
       }
