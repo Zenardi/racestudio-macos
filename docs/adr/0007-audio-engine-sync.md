@@ -125,6 +125,7 @@ The study's rows:
 | a second kart 15 s behind in the audio | −90 s | 4.61 | 1.71 | confident, 9 ms |
 | ten-minute clip (ignored bench) | −80 s | 5.02 | 2.20 | confident, 3 ms |
 | audio vs another session, same track (×3) | — | 1.6–2.1 | **1.09–1.26** | not confident |
+| audio vs another engine and circuit (public RPM) | — | 0.54 | 1.03 | not confident |
 | noise only (×2) | — | 0.12–0.15 | 1.01–1.02 | not confident |
 | window excluding the truth | — | 1.64 | 0.34 | not confident |
 | **Real:** T1 (606 s) ↔ stint-1 | manual check | 3.09 | **3.59** | confident, k = 1/119.99 |
@@ -154,6 +155,17 @@ silent or engine-less clip whatever its ratio.
 - **No engine audio, or no RPM channel.** The button is disabled with the
   reason in its help text. Silent audio, constant RPM and overlaps under 20 s
   are typed errors, never a guess.
+- **Corrupt or hostile input.** The core never trusts what it is handed:
+  - RPM samples are filtered to finite, positive values and sorted; only the
+    longest run without a gap over 30 min is kept, so a stray timestamp
+    (`1e12` s) cannot stretch the trace into a giant allocation;
+  - the stall floor is set from the 99th percentile, not the maximum, so a
+    single glitch spike cannot mark the whole trace as stalled;
+  - audio over 3 h, an RPM trace spanning over 3 h, a sample rate over
+    384 kHz, or a NaN or inverted search window are refused as invalid input
+    (an infinite bound means "unbounded");
+  - a non-finite audio sample reads as silence, and the refined offset is
+    clamped back into the search window.
 
 ## Consequences
 
@@ -164,12 +176,19 @@ silent or engine-less clip whatever its ratio.
 - **Swift.**
   - `AVAssetAudioPCMSource` decodes with `AVAssetReader`, and `PCMDecimator`
     downmixes and decimates chunk by chunk through `vDSP_desamp`, zero-phase.
-    The source-rate track is never held; the ~8.8 kHz mono output costs about
-    2 MB per minute.
+    Its Blackman sinc is cut at 40 % of the output rate (24 taps per unit of
+    decimation factor): flat to 30 % of the output rate, past the sixth
+    harmonic of the 400 Hz band, and at least 55 dB down from the output
+    Nyquist. The source-rate track is never held; the 8–8.8 kHz mono output costs
+    about 2 MB per minute. Progress is reported in whole percents, at most a
+    hundred updates per clip.
   - `AudioSyncCoordinator` moves the result onto the video clock and checks
-    cancellation between steps.
-  - `VideoReviewModel` publishes `autoSyncState` and applies a proposal only
-    on `applyAudioSync`.
+    cancellation between steps; a cancelled run throws rather than reporting
+    a failure. A non-finite offset from the core becomes "could not estimate".
+  - `VideoReviewModel` owns the run (`startAutoSync`): the decode and match
+    run on a detached task, every stop cancels it, and a superseded run never
+    writes its progress or result. It publishes `autoSyncState` and applies a
+    proposal only on `applyAudioSync`.
 - **Performance** (release, Apple silicon): the real 606 s clip is decoded,
   decimated and matched in **0.87 s** (decode 0.31 s, match 0.63 s), well inside
   the 5 s budget.

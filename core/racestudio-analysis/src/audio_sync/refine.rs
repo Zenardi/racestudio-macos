@@ -12,7 +12,7 @@
 use std::ops::Range;
 
 use super::rpm::LogRpm;
-use super::salience::{row_stats, FrameAnalyzer, Harmonics, LogGrid};
+use super::salience::{row_stats, FrameAnalyzer, Harmonics, LogGrid, TapSet};
 use super::search::Coarse;
 use super::PitchConfig;
 use crate::audio_sync::pitch::parabolic_offset;
@@ -25,7 +25,7 @@ const FINE_DU: f64 = 0.005;
 const OFFSET_SPAN_S: f64 = 0.2;
 /// Spacing of the examined offsets (seconds).
 const OFFSET_STEP_S: f64 = 0.005;
-/// `ln k` values examined either side of the coarse ratio — 1½ coarse bins.
+/// `ln k` values examined either side of the coarse ratio — one coarse bin.
 const LOG_K_SPAN: f64 = 0.02;
 /// Step of the RPM lookup grid (seconds): the offset step, so every examined
 /// offset lands on it.
@@ -57,73 +57,112 @@ pub(crate) fn refine(
         score: coarse.peak,
         log_k: coarse.log_k,
     };
-    let Some(mut analyzer) = FrameAnalyzer::new(fs, cfg) else {
+    let (Some(mut analyzer), Some(fine_grid), Some(stats_grid)) = (
+        FrameAnalyzer::new(fs, cfg),
+        LogGrid::new(cfg.min_hz, cfg.max_hz, FINE_DU),
+        LogGrid::new(cfg.min_hz, cfg.max_hz, stats_du),
+    ) else {
         return fallback;
     };
-    let fine = analyzer.taps(
-        LogGrid::new(cfg.min_hz, cfg.max_hz, FINE_DU),
-        Harmonics::Flat,
-    );
-    let stats = analyzer.taps(
-        LogGrid::new(cfg.min_hz, cfg.max_hz, stats_du),
-        Harmonics::Flat,
-    );
-    let rpm = LogRpm::new(points, RPM_STEP_S);
+    let probe = Probe {
+        fine: analyzer.taps(fine_grid, Harmonics::Flat),
+        stats: analyzer.taps(stats_grid, Harmonics::Flat),
+        rpm: LogRpm::new(points, RPM_STEP_S),
+        offsets: around(coarse.offset_s, OFFSET_SPAN_S, OFFSET_STEP_S),
+        log_ks: around(coarse.log_k, LOG_K_SPAN, FINE_DU),
+    };
     let n = analyzer.frame_len();
     let hop = (FINE_HOP_S * fs).round().max(1.0) as usize;
-    let offsets = around(coarse.offset_s, OFFSET_SPAN_S, OFFSET_STEP_S);
-    let log_ks = around(coarse.log_k, LOG_K_SPAN, FINE_DU);
-    let (k_lo, k_hi) = (log_ks[0], log_ks[log_ks.len() - 1]);
-
-    let mut tally = Tally::new(offsets.len(), log_ks.len());
-    let mut stats_row = vec![0.0_f32; stats.grid.len];
-    let mut band_row = vec![0.0_f32; fine.grid.len];
-    let mut looked: Vec<Option<(f64, f64)>> = vec![None; offsets.len()];
+    let mut tally = Tally::new(probe.offsets.len(), probe.log_ks.len());
+    let mut scratch = Scratch::new(&probe);
     let Some(last_start) = pcm.len().checked_sub(n) else {
         return fallback;
     };
     for start in (0..=last_start).step_by(hop) {
         let t = (start as f64 + n as f64 / 2.0) / fs;
-        if !in_reach(&rpm, t, &offsets) || !analyzer.load(pcm, start) {
-            continue;
-        }
-        analyzer.score(&stats, &mut stats_row);
-        let Some((mean, std)) = row_stats(&stats_row) else {
-            continue;
-        };
-        // ln rpm (and its timing weight) under every examined offset; the
-        // band of fine candidates they can reach.
-        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
-        for (slot, &offset) in looked.iter_mut().zip(&offsets) {
-            let session_t = t - offset;
-            *slot = rpm.at(session_t).zip(rpm.weight_at(session_t));
-            if let Some((lr, _)) = *slot {
-                lo = lo.min(lr);
-                hi = hi.max(lr);
-            }
-        }
-        let band = band(&fine.grid, k_lo + lo, k_hi + hi);
-        if band.is_empty() {
-            continue;
-        }
-        let row = &mut band_row[..band.len()];
-        analyzer.score_band(&fine, band.clone(), row);
-        for v in row.iter_mut() {
-            *v = ((f64::from(*v) - mean) / std) as f32;
-        }
-        for (i, slot) in looked.iter().enumerate() {
-            if let Some((lr, weight)) = *slot {
-                let saliences = log_ks
-                    .iter()
-                    .map(|&log_k| sample(row, fine.grid.position(log_k + lr) - band.start as f64));
-                tally.add(i, weight, saliences);
-            }
+        if in_reach(&probe.rpm, t, &probe.offsets) && analyzer.load(pcm, start) {
+            accumulate(&analyzer, &probe, t, &mut scratch, &mut tally);
         }
     }
     let min_overlap = (min_overlap_s / FINE_HOP_S).ceil() as usize;
     tally
-        .best(&offsets, &log_ks, min_overlap)
+        .best(&probe.offsets, &probe.log_ks, min_overlap)
         .unwrap_or(fallback)
+}
+
+/// What the refinement examines: the offsets and `ln k` values around the
+/// coarse peak, the RPM they are read against, and the taps that score the
+/// fine pitch band and the coarse row statistics.
+struct Probe {
+    fine: TapSet,
+    stats: TapSet,
+    rpm: LogRpm,
+    offsets: Vec<f64>,
+    log_ks: Vec<f64>,
+}
+
+/// Per-frame buffers, reused across frames.
+struct Scratch {
+    stats_row: Vec<f32>,
+    band_row: Vec<f32>,
+    looked: Vec<Option<(f64, f64)>>,
+}
+
+impl Scratch {
+    fn new(probe: &Probe) -> Self {
+        Self {
+            stats_row: vec![0.0; probe.stats.grid.len],
+            band_row: vec![0.0; probe.fine.grid.len],
+            looked: vec![None; probe.offsets.len()],
+        }
+    }
+}
+
+/// Add the frame `analyzer` holds (centred at `t`) to `tally`: z-score its
+/// salience with the whole row's statistics, then, at every examined offset,
+/// read it along each examined `ln k` + `ln rpm(t − offset)` — scoring only the
+/// band of fine candidates those curves can reach.
+fn accumulate(
+    analyzer: &FrameAnalyzer,
+    probe: &Probe,
+    t: f64,
+    scratch: &mut Scratch,
+    tally: &mut Tally,
+) {
+    analyzer.score(&probe.stats, &mut scratch.stats_row);
+    let Some((mean, std)) = row_stats(&scratch.stats_row) else {
+        return;
+    };
+    let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+    for (slot, &offset) in scratch.looked.iter_mut().zip(&probe.offsets) {
+        let session_t = t - offset;
+        *slot = probe.rpm.at(session_t).zip(probe.rpm.weight_at(session_t));
+        if let Some((lr, _)) = *slot {
+            lo = lo.min(lr);
+            hi = hi.max(lr);
+        }
+    }
+    let (k_lo, k_hi) = (probe.log_ks[0], probe.log_ks[probe.log_ks.len() - 1]);
+    let band = band(&probe.fine.grid, k_lo + lo, k_hi + hi);
+    if band.is_empty() {
+        return;
+    }
+    let row = &mut scratch.band_row[..band.len()];
+    analyzer.score_band(&probe.fine, band.clone(), row);
+    for v in row.iter_mut() {
+        *v = ((f64::from(*v) - mean) / std) as f32;
+    }
+    let start = band.start as f64;
+    for (i, slot) in scratch.looked.iter().enumerate() {
+        if let Some((lr, weight)) = *slot {
+            let grid = &probe.fine.grid;
+            let saliences = probe
+                .log_ks
+                .iter()
+                .map(|&log_k| sample(row, grid.position(log_k + lr) - start));
+            tally.add(i, weight, saliences);
+        }
+    }
 }
 
 /// `center ± span` in steps of `step`, ascending.
@@ -195,17 +234,12 @@ impl Tally {
             }
         }
         let (i, j, peak) = top?;
-        let column: Vec<f32> = (0..offsets.len())
-            .map(|r| {
-                if enough(r) {
-                    self.score(r, j) as f32
-                } else {
-                    f32::NEG_INFINITY
-                }
-            })
-            .collect();
-        let shift = if column.iter().all(|v| v.is_finite()) {
-            parabolic_offset(&column, i)
+        // The vertex needs only the peak's two neighbours to be scored; a thin
+        // offset elsewhere does not matter.
+        let neighbours_scored = i > 0 && i + 1 < offsets.len() && enough(i - 1) && enough(i + 1);
+        let shift = if neighbours_scored {
+            let column = [i - 1, i, i + 1].map(|r| self.score(r, j) as f32);
+            parabolic_offset(&column, 1)
         } else {
             0.0
         };
@@ -217,7 +251,10 @@ impl Tally {
     }
 }
 
-/// Whether frame time `t` can meet the RPM trace at any examined offset.
+/// Whether frame time `t` meets the RPM trace at **every** examined offset —
+/// only such frames are scored, so all offsets are compared over the same
+/// frames (a frame near the trace's ends would otherwise favour the offsets
+/// that happen to reach it).
 fn in_reach(rpm: &LogRpm, t: f64, offsets: &[f64]) -> bool {
     let (Some(&first), Some(&last)) = (offsets.first(), offsets.last()) else {
         return false;
@@ -255,7 +292,7 @@ mod tests {
 
     #[test]
     fn band_covers_the_reachable_candidates_and_clips_to_the_grid() {
-        let grid = LogGrid::new(10.0, 100.0, 0.1); // 24 candidates
+        let grid = LogGrid::new(10.0, 100.0, 0.1).unwrap(); // 24 candidates
         let u = |i: f64| grid.u0 + i * grid.du;
         assert_eq!(band(&grid, u(3.2), u(5.5)), 3..8);
         assert_eq!(band(&grid, u(-4.0), u(0.5)), 0..3);

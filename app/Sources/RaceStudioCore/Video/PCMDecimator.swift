@@ -6,12 +6,15 @@ import Foundation
 /// pitch estimator reads, one decoded chunk at a time — so a ten-minute clip
 /// never holds its source-rate track, only one chunk plus the output.
 ///
-/// Channels are averaged; a Blackman-windowed sinc low-pass (cut at 45 % of the
-/// output rate, so harmonics up to ~3.6 kHz survive and nothing above Nyquist
-/// folds back) runs through Accelerate's `vDSP_desamp`, which filters and
-/// decimates in one pass. The filter is symmetric and centred — output sample
-/// `n` sits exactly on input frame `n·factor` — so decimation adds no delay for
-/// the offset estimate to trip on. Non-finite samples are read as silence.
+/// Channels are averaged; a Blackman-windowed sinc low-pass runs through
+/// Accelerate's `vDSP_desamp`, which filters and decimates in one pass. It is
+/// cut at 40 % of the output rate with 24 taps per unit of factor: flat
+/// (−0.02 dB) to 30 % of the output rate — 2.4 kHz at 8 kHz, past the sixth
+/// harmonic of the 400 Hz pitch band — and at least 55 dB down from the output
+/// Nyquist on, so what folds back is buried. The filter is symmetric and centred —
+/// output sample `n` sits exactly on input frame `n·factor` — so decimation
+/// adds no delay for the offset estimate to trip on. Non-finite samples are
+/// read as silence.
 public struct PCMDecimator: Sendable {
 
     /// Source frames per second.
@@ -21,13 +24,14 @@ public struct PCMDecimator: Sendable {
     /// Source frames per output sample — divides ``sourceRate`` exactly.
     public let factor: Int
 
-    /// Output samples per second: `sourceRate / factor`, never below the target.
+    /// Output samples per second: `sourceRate / factor` — at or above the
+    /// target, or the source rate itself when that is already lower.
     public var outputRate: Int { sourceRate / factor }
 
     /// Low-pass taps either side of the centre, per unit of ``factor``.
-    static let halfWidthPerFactor = 8
+    static let halfWidthPerFactor = 12
     /// The low-pass cut-off as a fraction of the output rate.
-    static let cutoffFraction = 0.45
+    static let cutoffFraction = 0.40
 
     private let taps: [Float]
     /// Mono samples from the first one the next output still needs.

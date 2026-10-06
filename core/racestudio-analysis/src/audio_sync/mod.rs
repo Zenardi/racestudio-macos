@@ -43,6 +43,16 @@ use search::{coarse_search, Bounds};
 /// have a shape.
 pub const MIN_OVERLAP_S: f64 = 20.0;
 
+/// The longest audio clip, and the longest RPM trace, matched (seconds): three
+/// hours — beyond any kart session — so the search's size (its FFT spans the
+/// clip plus the trace) stays bounded whatever the input.
+pub const MAX_DURATION_S: f64 = 10_800.0;
+
+/// The highest sample rate accepted (Hz) — above any real audio, so a garbage
+/// rate is rejected before it can size a frame (0.5 s of `u32::MAX` Hz would be
+/// a 2³⁰-sample FFT).
+pub const MAX_SAMPLE_RATE: u32 = 384_000;
+
 /// How far (seconds) the best rival peak must sit from the winner to count as a
 /// different alignment rather than the winner's own shoulder.
 pub const RIVAL_EXCLUSION_S: f64 = 2.0;
@@ -54,8 +64,8 @@ pub const MIN_CONFIDENT_SCORE: f64 = 0.5;
 
 /// The least ratio of the winning peak to the best rival for a confident
 /// proposal. Kart laps repeat, so the usual rival is the same RPM curve a lap
-/// off. In the fixture study every true match cleared 1.75 and no false one
-/// reached 1.2 (real footage: ≈ 3.5 against ≤ 1.07); 1.4 sits between.
+/// off. In the fixture study every true match cleared 1.68 and no false one
+/// passed 1.26 (real footage: ≈ 3.5 against ≤ 1.07); 1.4 sits between.
 pub const MIN_CONFIDENT_PEAK_RATIO: f64 = 1.4;
 
 /// Hop (seconds) of the coarse search's frames.
@@ -88,7 +98,9 @@ pub enum AudioSyncError {
     NoRpm,
     /// The RPM never changes, so there is no shape to align.
     FlatSignal,
-    /// A zero (or too low) sample rate, or a non-finite / inverted window.
+    /// A sample rate that is zero, too low for the pitch band or above
+    /// [`MAX_SAMPLE_RATE`]; a window with a `NaN` bound or inverted; or audio
+    /// or an RPM trace longer than [`MAX_DURATION_S`].
     InvalidInput,
 }
 
@@ -112,12 +124,16 @@ pub struct SyncEstimate {
     /// `video time = session time + offset_s` — the app's `VideoSyncModel`
     /// convention: positive when the footage leads the logger.
     pub offset_s: f64,
-    /// Mean z-scored salience along the matched pitch curve — how loudly the
-    /// audio agrees with the RPM there (≈ 0 for chance, 2–3 on clean footage).
+    /// Weighted mean z-scored salience along the matched pitch curve — how
+    /// loudly the audio agrees with the RPM there (≈ 0 for chance, 2–3 on clean
+    /// footage) — from the refinement pass, unshrunk. (Should the refinement
+    /// gather too few frames, the coarse peak's score stands in; it is shrunk
+    /// towards zero for short overlaps, so it can only err low.)
     pub score: f64,
     /// The winning coarse peak over the best rival at least
-    /// [`RIVAL_EXCLUSION_S`] away; `1` when the window holds no rival to
-    /// compare against.
+    /// [`RIVAL_EXCLUSION_S`] away — the rival taken from every lag with enough
+    /// overlap, inside the window or not; `1` when there is none to compare
+    /// against.
     pub peak_ratio: f64,
     /// The fitted `k` of `f0 = k·RPM` (e.g. `1/120` for a four-stroke single's
     /// firing rate) — diagnostic, and a sanity check on the match.
@@ -161,11 +177,15 @@ pub const FULL_CONFIDENCE_RATIO: f64 = 4.0;
 /// Estimate the offset between mono camera audio `pcm` (sampled at
 /// `sample_rate` Hz, ideally decimated to ~8 kHz) and the session's `rpm`
 /// trace (`(seconds, rpm)` on the session clock), searching offsets in the
-/// inclusive `search` window.
+/// inclusive `search` window — an infinite bound is unbounded — and returning
+/// an offset inside it. The RPM may be unsorted; a stray timestamp more than
+/// 30 min from the rest of the trace is ignored (the longest run is kept).
 ///
 /// # Errors
 /// - [`AudioSyncError::InvalidInput`] for a sample rate whose Nyquist does not
-///   clear the 400 Hz pitch band, or a non-finite / inverted window.
+///   clear the 400 Hz pitch band or that exceeds [`MAX_SAMPLE_RATE`], a window
+///   with a `NaN` bound or inverted, or audio or RPM longer than
+///   [`MAX_DURATION_S`].
 /// - [`AudioSyncError::TooShort`] when the audio, the RPM trace, or every
 ///   overlap the window allows is under [`MIN_OVERLAP_S`].
 /// - [`AudioSyncError::NoRpm`] when no RPM sample is usable.
@@ -184,24 +204,8 @@ pub fn estimate_offset(
         harmonics: SEARCH_HARMONICS,
         ..PitchConfig::default()
     };
-    let fs = f64::from(sample_rate);
-    let (lo, hi) = search;
-    if !(lo.is_finite() && hi.is_finite() && lo <= hi) || cfg.max_hz >= fs / 2.0 {
-        return Err(AudioSyncError::InvalidInput);
-    }
-    if (pcm.len() as f64) < MIN_OVERLAP_S * fs {
-        return Err(AudioSyncError::TooShort);
-    }
-    let points = rpm::usable(rpm);
-    if points.is_empty() {
-        return Err(AudioSyncError::NoRpm);
-    }
-    if rpm::span(&points) < MIN_OVERLAP_S {
-        return Err(AudioSyncError::TooShort);
-    }
-    if rpm::is_flat(&points) {
-        return Err(AudioSyncError::FlatSignal);
-    }
+    let fs = checked_input(pcm, sample_rate, search, &cfg)?;
+    let points = session_rpm(rpm)?;
     let map = SalienceMap::compute(pcm, fs, &cfg, COARSE_DU, COARSE_HOP_S)
         .ok_or(AudioSyncError::InvalidInput)?;
     if !map.voiced.iter().any(|&v| v) {
@@ -220,11 +224,58 @@ pub fn estimate_offset(
         .rival
         .map_or(1.0, |rival| coarse.peak / rival.max(RIVAL_FLOOR));
     Ok(SyncEstimate {
-        offset_s: fine.offset_s,
+        // The refinement may step up to ±0.2 s off the coarse lag; the window
+        // is a promise, so the answer stays inside it.
+        offset_s: fine.offset_s.clamp(search.0, search.1),
         score: fine.score,
         peak_ratio,
         pitch_per_rpm: fine.log_k.exp(),
     })
+}
+
+/// The sample rate as `f64`, once the rate, the window and the clip length are
+/// known to be workable: a rate within `(2·max_hz, MAX_SAMPLE_RATE]`, a window
+/// with no `NaN` and `lo ≤ hi` (infinite bounds mean unbounded), and audio
+/// between [`MIN_OVERLAP_S`] and [`MAX_DURATION_S`] long.
+fn checked_input(
+    pcm: &[f32],
+    sample_rate: u32,
+    (lo, hi): (f64, f64),
+    cfg: &PitchConfig,
+) -> Result<f64, AudioSyncError> {
+    let fs = f64::from(sample_rate);
+    let rate_ok = sample_rate <= MAX_SAMPLE_RATE && cfg.max_hz < fs / 2.0;
+    if lo.is_nan() || hi.is_nan() || lo > hi || !rate_ok {
+        return Err(AudioSyncError::InvalidInput);
+    }
+    let seconds = pcm.len() as f64 / fs;
+    if seconds < MIN_OVERLAP_S {
+        return Err(AudioSyncError::TooShort);
+    }
+    if seconds > MAX_DURATION_S {
+        return Err(AudioSyncError::InvalidInput);
+    }
+    Ok(fs)
+}
+
+/// The usable RPM readings (see `rpm::usable`), once there are some, they
+/// span between [`MIN_OVERLAP_S`] and [`MAX_DURATION_S`], and they vary.
+fn session_rpm(rpm: &[(f64, f64)]) -> Result<Vec<(f64, f64)>, AudioSyncError> {
+    let points = rpm::usable(rpm);
+    if points.is_empty() {
+        return Err(AudioSyncError::NoRpm);
+    }
+    let span = rpm::span(&points);
+    if span < MIN_OVERLAP_S {
+        return Err(AudioSyncError::TooShort);
+    }
+    if span > MAX_DURATION_S {
+        return Err(AudioSyncError::InvalidInput);
+    }
+    if rpm::is_flat(&points) {
+        return Err(AudioSyncError::FlatSignal);
+    }
+    Ok(points)
 }
 
 /// The pitch front end's framing and search band.

@@ -52,29 +52,43 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
         return !(tracks ?? []).isEmpty
     }
 
+    /// Decode, reporting progress in whole percents, each once — at most a
+    /// hundred updates however many chunks the decoder delivers.
     public func monoPCM(targetRate: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> MonoPCM {
         let asset = AVURLAsset(url: url)
         let track = try await audioTrack(of: asset)
-        let duration = (try? await asset.load(.duration).seconds) ?? 0
+        let seconds = (try? await asset.load(.duration).seconds) ?? 0
+        // An indefinite or absurd duration only drives progress and a capacity
+        // hint, never a trap.
+        let duration = seconds.isFinite && seconds > 0 ? seconds : 0
         try Task.checkCancellation()
         let (reader, output) = try Self.reader(for: asset, track: track)
         defer { if reader.status == .reading { reader.cancelReading() } }
         var decoding = Decoding(targetRate: targetRate, duration: duration)
+        var reported = -1
         while let buffer = output.copyNextSampleBuffer() {
             try Task.checkCancellation()
-            if let fraction = decoding.append(buffer) { progress(fraction) }
+            try autoreleasepool { try decoding.append(buffer) }
+            if let percent = decoding.percent, percent > reported {
+                reported = percent
+                progress(Double(percent) / 100)
+            }
         }
+        try Task.checkCancellation()
         guard reader.status == .completed, let pcm = decoding.finish() else {
             throw AudioSyncFailure.unreadableAudio
         }
         return pcm
     }
 
-    /// The asset's first audio track, or a typed failure.
+    /// The asset's first audio track, or a typed failure. A cancellation stays
+    /// a cancellation.
     private func audioTrack(of asset: AVURLAsset) async throws -> AVAssetTrack {
         let tracks: [AVAssetTrack]
         do {
             tracks = try await asset.loadTracks(withMediaType: .audio)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw AudioSyncFailure.unreadableAudio
         }
@@ -103,43 +117,56 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
 }
 
 /// The running state of one decode: the decimator (built from the first
-/// chunk's format), the output so far, and where the audio starts.
+/// chunk's format), the output so far, where the audio starts, and how far
+/// through the clip the last chunk ended.
 private struct Decoding {
+    /// The longest clip the output's capacity is reserved for up front.
+    static let reservationCap: Double = 7_200
+
     let targetRate: Int
     let duration: Double
     var decimator: PCMDecimator?
     var samples: [Float] = []
     var startTime: Double?
-    var scratch: [Float] = []
+    /// Whole percent of the clip decoded so far, when the duration is known.
+    var percent: Int?
+    private var scratch: [Float] = []
 
     init(targetRate: Int, duration: Double) {
         self.targetRate = targetRate
         self.duration = duration
     }
 
-    /// Downmix and decimate one decoded chunk; returns the progress fraction,
-    /// or `nil` for a chunk with no usable audio.
-    mutating func append(_ buffer: CMSampleBuffer) -> Double? {
+    /// Downmix and decimate one decoded chunk. A chunk without audio data is
+    /// skipped; one whose data cannot be copied is a failure — dropping it
+    /// would silently shorten the clip and skew the offset.
+    mutating func append(_ buffer: CMSampleBuffer) throws {
         guard let format = CMSampleBufferGetFormatDescription(buffer),
               let description = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee,
-              let block = CMSampleBufferGetDataBuffer(buffer) else { return nil }
+              let block = CMSampleBufferGetDataBuffer(buffer) else { return }
         if decimator == nil {
             decimator = PCMDecimator(sourceRate: Int(description.mSampleRate),
                                      channels: Int(description.mChannelsPerFrame), targetRate: targetRate)
-            if let decimator { samples.reserveCapacity(Int(duration * Double(decimator.outputRate)) + 1) }
+            if let decimator {
+                let seconds = min(duration, Self.reservationCap)
+                samples.reserveCapacity(Int(seconds * Double(decimator.outputRate)) + 1)
+            }
         }
-        let start = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
-        if startTime == nil { startTime = start.isFinite ? start : 0 }
         let count = CMBlockBufferGetDataLength(block) / MemoryLayout<Float>.size
-        scratch = [Float](repeating: 0, count: count)
+        if scratch.count != count { scratch = [Float](repeating: 0, count: count) }
         let status = scratch.withUnsafeMutableBytes { bytes -> OSStatus in
-            guard let base = bytes.baseAddress else { return -1 }
+            guard let base = bytes.baseAddress else { return kCMBlockBufferNoErr }
             return CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: bytes.count, destination: base)
         }
-        guard status == kCMBlockBufferNoErr, decimator != nil else { return nil }
+        guard status == kCMBlockBufferNoErr else { throw AudioSyncFailure.unreadableAudio }
+        guard decimator != nil else { return }
+        let start = CMSampleBufferGetPresentationTimeStamp(buffer).seconds
+        if startTime == nil { startTime = start.isFinite ? start : 0 }
         scratch.withUnsafeBufferPointer { samples += decimator?.process($0) ?? [] }
         let end = start + CMSampleBufferGetDuration(buffer).seconds
-        return duration > 0 && end.isFinite ? min(1, max(0, end / duration)) : nil
+        if duration > 0, end.isFinite {
+            percent = Int((min(1, max(0, end / duration)) * 100).rounded(.down))
+        }
     }
 
     /// The decoded clip, or `nil` when no chunk carried audio.

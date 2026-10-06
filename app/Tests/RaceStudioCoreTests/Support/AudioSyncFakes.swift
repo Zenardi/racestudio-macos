@@ -24,6 +24,18 @@ struct FakeSource: AudioPCMSource {
     }
 }
 
+/// A read that ignores cancellation for 0.1 s, then reports progress and
+/// returns anyway — a run that outlives its retirement.
+struct LateReporter: AudioPCMSource {
+    func monoPCM(targetRate: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> MonoPCM {
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { done.resume() }
+        }
+        progress(0.7)
+        return MonoPCM(samples: [0.1], sampleRate: targetRate, startTime: 0)
+    }
+}
+
 /// What the fake estimator returns.
 enum FakeOutcome {
     case confident(offset: Double)
@@ -75,7 +87,7 @@ final class FakeEstimator: AudioSyncEstimating, @unchecked Sendable {
 }
 
 /// A coordinator over a ``FakeSource`` and a ``FakeEstimator``.
-func fakeCoordinator(_ source: FakeSource = FakeSource(),
+func fakeCoordinator(_ source: any AudioPCMSource = FakeSource(),
                      _ outcome: FakeOutcome = .confident(offset: -10)) -> AudioSyncCoordinator {
     AudioSyncCoordinator(source: source, estimator: FakeEstimator(result: .success(outcome)), rpmChannel: "RPM")
 }

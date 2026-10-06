@@ -37,6 +37,17 @@ const HARMONIC_DECAY: f64 = 0.84;
 /// Floor added to a magnitude before its logarithm.
 const MAGNITUDE_FLOOR: f32 = 1e-12;
 
+/// The most pitch candidates a grid may hold (a 15–400 Hz band at 0.5 % is
+/// 657).
+const MAX_CANDIDATES: usize = 100_000;
+
+/// The most harmonics summed per candidate.
+const MAX_HARMONICS: usize = 64;
+
+/// The longest analysis frame (seconds) — eight times the default, and a
+/// bound on every frame-sized allocation.
+const MAX_FRAME_S: f64 = 4.0;
+
 /// How a candidate's harmonics are weighted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Harmonics {
@@ -73,11 +84,22 @@ pub(crate) struct LogGrid {
 }
 
 impl LogGrid {
-    /// Candidates from `min_hz` up to (at most) `max_hz`, `du` apart in `ln f`.
-    pub fn new(min_hz: f64, max_hz: f64, du: f64) -> Self {
-        let u0 = min_hz.ln();
-        let len = ((max_hz / min_hz).ln() / du).floor() as usize + 1;
-        Self { u0, du, len }
+    /// Candidates from `min_hz` up to (at most) `max_hz`, `du` apart in `ln f` —
+    /// or `None` for a band or spacing that is not finite and positive, or that
+    /// would need more than [`MAX_CANDIDATES`].
+    pub fn new(min_hz: f64, max_hz: f64, du: f64) -> Option<Self> {
+        let valid = min_hz.is_finite()
+            && min_hz > 0.0
+            && max_hz.is_finite()
+            && max_hz > min_hz
+            && du.is_finite()
+            && du > 0.0;
+        let steps = ((max_hz / min_hz).ln() / du).floor();
+        (valid && steps < MAX_CANDIDATES as f64).then(|| Self {
+            u0: min_hz.ln(),
+            du,
+            len: steps as usize + 1,
+        })
     }
 
     /// The frequency (Hz) at fractional candidate index `i`.
@@ -108,6 +130,23 @@ pub(crate) struct TapSet {
     tap_start: Vec<usize>,
 }
 
+/// Whether `cfg` can be analysed at `fs`: a rate in `(0, MAX_SAMPLE_RATE]`, a
+/// frame in `(0, MAX_FRAME_S]`, a finite band `0 < min_hz < max_hz < fs/2`, and
+/// `1..=MAX_HARMONICS` harmonics. Checked before anything is allocated.
+pub(crate) fn config_is_workable(fs: f64, cfg: &PitchConfig) -> bool {
+    fs.is_finite()
+        && fs > 0.0
+        && fs <= f64::from(super::MAX_SAMPLE_RATE)
+        && cfg.frame_s.is_finite()
+        && cfg.frame_s > 0.0
+        && cfg.frame_s <= MAX_FRAME_S
+        && cfg.min_hz.is_finite()
+        && cfg.min_hz > 0.0
+        && cfg.max_hz > cfg.min_hz
+        && cfg.max_hz < fs / 2.0
+        && (1..=MAX_HARMONICS).contains(&cfg.harmonics)
+}
+
 /// The frame length (samples) for `frame_s` seconds at `fs`: the nearest power
 /// of two, for a fast transform. At 8 kHz a 0.5 s frame is 4096 samples.
 pub(crate) fn frame_len(frame_s: f64, fs: f64) -> usize {
@@ -136,20 +175,10 @@ pub(crate) struct FrameAnalyzer {
 
 impl FrameAnalyzer {
     /// An analyzer for `fs` Hz audio with `cfg`'s frame length, band and
-    /// harmonic count. `None` when the configuration cannot work: a
-    /// non-positive rate or frame, an empty or inverted band, no harmonics, or a
-    /// band reaching Nyquist.
+    /// harmonic count. `None` when the configuration cannot work (see
+    /// [`config_is_workable`]).
     pub fn new(fs: f64, cfg: &PitchConfig) -> Option<Self> {
-        let valid = fs.is_finite()
-            && fs > 0.0
-            && cfg.frame_s.is_finite()
-            && cfg.frame_s > 0.0
-            && cfg.min_hz.is_finite()
-            && cfg.min_hz > 0.0
-            && cfg.max_hz > cfg.min_hz
-            && cfg.max_hz < fs / 2.0
-            && cfg.harmonics > 0;
-        if !valid {
+        if !config_is_workable(fs, cfg) {
             return None;
         }
         let n = frame_len(cfg.frame_s, fs);
@@ -199,7 +228,10 @@ impl FrameAnalyzer {
             for h in 1..=self.harmonics {
                 let pos = h as f64 * f / self.bin_hz;
                 let k = pos.floor() as usize;
-                if k < 1 || k + 2 > self.kmax {
+                if k + 2 > self.kmax {
+                    break; // every higher harmonic sits higher still
+                }
+                if k < 1 {
                     continue;
                 }
                 let weight = weighting.weight(h);
@@ -303,13 +335,13 @@ impl SalienceMap {
     /// flat harmonic weights, or `None` when `cfg` cannot work at `fs` or the
     /// clip is shorter than a frame.
     pub fn compute(pcm: &[f32], fs: f64, cfg: &PitchConfig, du: f64, hop_s: f64) -> Option<Self> {
-        let grid = LogGrid::new(cfg.min_hz, cfg.max_hz, du);
+        if !config_is_workable(fs, cfg) || pcm.len() < frame_len(cfg.frame_s, fs) {
+            return None;
+        }
+        let grid = LogGrid::new(cfg.min_hz, cfg.max_hz, du)?;
         let mut analyzer = FrameAnalyzer::new(fs, cfg)?;
         let taps = analyzer.taps(grid, Harmonics::Flat);
         let n = analyzer.frame_len();
-        if pcm.len() < n {
-            return None;
-        }
         let hop = (hop_s * fs).round().max(1.0) as usize;
         let frames = (pcm.len() - n) / hop + 1;
         let mut rows = vec![0.0_f32; frames * grid.len];
@@ -416,6 +448,37 @@ mod tests {
     }
 
     #[test]
+    fn log_grid_rejects_degenerate_bands() {
+        assert!(LogGrid::new(15.0, 400.0, 0.01).is_some());
+        assert!(LogGrid::new(0.0, 400.0, 0.01).is_none());
+        assert!(
+            LogGrid::new(1e-320, 400.0, 0.01).is_none(),
+            "too many candidates"
+        );
+        assert!(LogGrid::new(15.0, f64::INFINITY, 0.01).is_none());
+        assert!(LogGrid::new(15.0, 10.0, 0.01).is_none());
+        assert!(LogGrid::new(15.0, 400.0, 0.0).is_none());
+    }
+
+    #[test]
+    fn harmonic_count_and_frame_length_are_bounded() {
+        let ok = PitchConfig::default();
+        assert!(config_is_workable(8000.0, &ok));
+        assert!(!config_is_workable(
+            8000.0,
+            &PitchConfig {
+                harmonics: MAX_HARMONICS + 1,
+                ..ok
+            }
+        ));
+        assert!(!config_is_workable(
+            8000.0,
+            &PitchConfig { frame_s: 1e6, ..ok }
+        ));
+        assert!(!config_is_workable(1e9, &ok), "rate above the cap");
+    }
+
+    #[test]
     fn analyzer_rejects_unworkable_configurations() {
         let ok = PitchConfig::default();
         assert!(FrameAnalyzer::new(8000.0, &ok).is_some());
@@ -438,7 +501,7 @@ mod tests {
     fn a_band_scores_exactly_like_the_full_row() {
         let cfg = PitchConfig::default();
         let mut analyzer = FrameAnalyzer::new(8000.0, &cfg).unwrap();
-        let taps = analyzer.taps(LogGrid::new(15.0, 400.0, 0.01), Harmonics::Flat);
+        let taps = analyzer.taps(LogGrid::new(15.0, 400.0, 0.01).unwrap(), Harmonics::Flat);
         let pcm: Vec<f32> = (0..4096)
             .map(|i| (2.0 * std::f32::consts::PI * 90.0 * i as f32 / 8000.0).sin())
             .collect();

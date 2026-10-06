@@ -1,7 +1,7 @@
 //! The engine pitch track (issue 9.8): one fundamental-frequency estimate per
 //! frame from the harmonic salience, with a voicing confidence.
 
-use super::salience::{FrameAnalyzer, Harmonics, LogGrid};
+use super::salience::{config_is_workable, frame_len, FrameAnalyzer, Harmonics, LogGrid};
 use super::PitchConfig;
 
 /// Candidate spacing of the pitch track: 0.5 % in `ln f`, refined between
@@ -41,15 +41,19 @@ pub struct PitchPoint {
 #[must_use]
 pub fn pitch_track(pcm: &[f32], sample_rate: u32, cfg: &PitchConfig) -> Vec<PitchPoint> {
     let fs = f64::from(sample_rate);
-    let grid = LogGrid::new(cfg.min_hz, cfg.max_hz, PITCH_DU);
-    let Some(mut analyzer) = FrameAnalyzer::new(fs, cfg) else {
+    // Validate everything before allocating anything frame-sized.
+    let hop_ok = cfg.hop_s.is_finite() && cfg.hop_s > 0.0;
+    if !hop_ok || !config_is_workable(fs, cfg) || pcm.len() < frame_len(cfg.frame_s, fs) {
+        return Vec::new();
+    }
+    let (Some(grid), Some(mut analyzer)) = (
+        LogGrid::new(cfg.min_hz, cfg.max_hz, PITCH_DU),
+        FrameAnalyzer::new(fs, cfg),
+    ) else {
         return Vec::new();
     };
     let taps = analyzer.taps(grid, Harmonics::Decaying);
     let n = analyzer.frame_len();
-    if pcm.len() < n || !(cfg.hop_s.is_finite() && cfg.hop_s > 0.0) {
-        return Vec::new();
-    }
     let hop = (cfg.hop_s * fs).round().max(1.0) as usize;
     let mut row = vec![0.0_f32; grid.len];
     (0..=pcm.len() - n)

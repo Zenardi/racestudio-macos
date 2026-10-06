@@ -583,28 +583,57 @@ fn test_estimate_audio_sync_recovers_the_offset() {
 }
 
 #[test]
-fn test_estimate_audio_sync_throws_typed_errors() {
+fn test_estimate_audio_sync_rejects_a_missing_channel() {
     let rpm = kart_rpm(240.0);
-    let session = rpm_session("audio_sync_errors.xrk", &rpm);
-    let pcm = engine_audio(&rpm, -50.0, 120.0);
-    let flat = rpm_session("audio_sync_flat.xrk", &vec![(0.0, 5000.0); 2400]);
-    let stalled = rpm_session("audio_sync_stalled.xrk", &vec![(0.0, 0.0); 2400]);
+    let session = rpm_session("audio_sync_missing.xrk", &rpm);
 
-    let missing = session.estimate_audio_sync("Speed".into(), pcm.clone(), AUDIO_FS, -300.0, 60.0);
-    let inverted = session.estimate_audio_sync("RPM".into(), pcm.clone(), AUDIO_FS, 60.0, -300.0);
-    let short =
-        session.estimate_audio_sync("RPM".into(), pcm[..80_000].to_vec(), AUDIO_FS, -300.0, 60.0);
-    let silent =
-        session.estimate_audio_sync("RPM".into(), vec![0.0; pcm.len()], AUDIO_FS, -300.0, 60.0);
-    let bad_rate = session.estimate_audio_sync("RPM".into(), pcm.clone(), 500, -300.0, 60.0);
-    let no_rpm = stalled.estimate_audio_sync("RPM".into(), pcm.clone(), AUDIO_FS, -300.0, 60.0);
-    let constant = flat.estimate_audio_sync("RPM".into(), pcm, AUDIO_FS, -300.0, 60.0);
+    let result = session.estimate_audio_sync(
+        "Speed".into(),
+        engine_audio(&rpm, -50.0, 30.0),
+        AUDIO_FS,
+        -300.0,
+        60.0,
+    );
 
-    assert!(matches!(missing, Err(AnalysisError::MissingChannel { .. })));
+    assert!(matches!(result, Err(AnalysisError::MissingChannel { .. })));
+}
+
+#[test]
+fn test_estimate_audio_sync_rejects_an_inverted_window() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_inverted.xrk", &rpm);
+
+    let result = session.estimate_audio_sync(
+        "RPM".into(),
+        engine_audio(&rpm, -50.0, 30.0),
+        AUDIO_FS,
+        60.0,
+        -300.0,
+    );
+
     assert!(matches!(
-        inverted,
+        result,
         Err(AnalysisError::WindowOutOfBounds { .. })
     ));
+}
+
+#[test]
+fn test_estimate_audio_sync_surfaces_the_core_refusals() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_errors.xrk", &rpm);
+    let pcm = engine_audio(&rpm, -50.0, 30.0);
+    let flat = rpm_session("audio_sync_flat.xrk", &vec![(0.0, 5000.0); 2400]);
+    let stalled = rpm_session("audio_sync_stalled.xrk", &vec![(0.0, 0.0); 2400]);
+    let estimate = |handle: &SessionHandle, pcm: Vec<f32>, rate: u32| {
+        handle.estimate_audio_sync("RPM".into(), pcm, rate, -300.0, 60.0)
+    };
+
+    let short = estimate(&session, pcm[..80_000].to_vec(), AUDIO_FS);
+    let silent = estimate(&session, vec![0.0; pcm.len()], AUDIO_FS);
+    let bad_rate = estimate(&session, pcm.clone(), 500);
+    let no_rpm = estimate(&stalled, pcm.clone(), AUDIO_FS);
+    let constant = estimate(&flat, pcm, AUDIO_FS);
+
     assert!(matches!(short, Err(AnalysisError::AudioTooShort)));
     assert!(matches!(silent, Err(AnalysisError::NoEnginePitch)));
     assert!(matches!(bad_rate, Err(AnalysisError::InvalidAudio)));

@@ -96,6 +96,21 @@ import Foundation
         #expect(rms(out[1_000..<7_000]) < 0.005)
     }
 
+    /// Content just above the output Nyquist (4.4 kHz into a 4 kHz band) is
+    /// held at least 55 dB down rather than folding back at 3.6 kHz.
+    @Test func test_tones_just_above_the_output_nyquist_are_held_down() {
+        let out = decimate(tone(4_400, rate: 48_000, seconds: 1, gains: [1]), rate: 48_000, channels: 1)
+
+        #expect(rms(out[1_000..<7_000]) < Float(0.5) / Float(2).squareRoot() * 0.002)
+    }
+
+    /// The harmonics the pitch search reads (up to 2.4 kHz) pass at full level.
+    @Test func test_the_pitch_band_passes_at_full_level() {
+        let out = decimate(tone(2_400, rate: 48_000, seconds: 1, gains: [1]), rate: 48_000, channels: 1)
+
+        #expect(abs(rms(out[1_000..<7_000]) - Float(0.5) / Float(2).squareRoot()) < 0.005)
+    }
+
     /// The filter is zero-phase: an impulse at input frame 600 (12.5 ms) peaks
     /// at output sample 100 — no delay for the estimator to trip on.
     @Test func test_decimation_adds_no_delay() {

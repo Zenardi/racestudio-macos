@@ -29,6 +29,18 @@ import Foundation
         #expect(proposal.offset == -9.25)
     }
 
+    /// A non-finite offset is no proposal at all, and a confidence outside
+    /// `0...1` is clamped so it always persists.
+    @Test func test_a_malformed_estimate_is_sanitised() {
+        let nanOffset = AudioSyncEstimate(offset: .nan, score: 3, peakRatio: 3, pitchPerRPM: 1.0 / 120,
+                                          isConfident: true, confidence: 0.9)
+        let overconfident = AudioSyncEstimate(offset: 2, score: 3, peakRatio: 9, pitchPerRPM: 1.0 / 120,
+                                              isConfident: true, confidence: 1.000_000_1)
+
+        #expect(AudioSyncProposal(estimate: nanOffset, audioStart: 0) == .unavailable(.estimationFailed))
+        #expect(AudioSyncProposal(estimate: overconfident, audioStart: 0) == .confident(offset: 2, confidence: 1))
+    }
+
     /// A weak estimate is reported, never offered for one-click apply.
     @Test func test_a_weak_estimate_is_not_applicable() {
         let proposal = AudioSyncProposal(estimate: estimate(confident: false, confidence: 0.3), audioStart: 0)

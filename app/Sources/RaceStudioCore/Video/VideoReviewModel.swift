@@ -67,8 +67,9 @@ public final class VideoReviewModel: ObservableObject {
     @Published public internal(set) var autoSyncState: AutoSyncState = .idle
 
     /// Bumped by every auto-sync start and stop, so a superseded run never
-    /// writes its late result.
+    /// writes its late result; the run in flight is cancelled by every stop.
     var autoSyncGeneration = 0
+    var autoSyncTask: Task<Void, Never>?
 
     public init(timeline: LapSectorTimeline = .empty,
                 sync: VideoSyncModel = VideoSyncModel(videoDuration: 0)) {
@@ -196,7 +197,7 @@ public final class VideoReviewModel: ObservableObject {
     /// ``SyncStatus/autoAudio(confidence:)``, which frame steps then refine.
     @discardableResult
     public func applyAudioSync(_ proposal: AudioSyncProposal) -> Bool {
-        guard hasVideo, case let .confident(offset, confidence) = proposal else { return false }
+        guard hasVideo, case let .confident(offset, confidence) = proposal, offset.isFinite else { return false }
         sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: offset)
         status = .autoAudio(confidence: confidence)
         stopAutoSync()

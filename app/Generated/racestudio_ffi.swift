@@ -4131,7 +4131,9 @@ public enum AnalysisError {
     case FlatRpm(message: String)
     
     /**
-     * Audio sync (9.8): the sample rate is too low for the pitch band.
+     * Audio sync (9.8): the sample rate is outside the supported range (too
+     * low for the pitch band, or above 384 kHz), or the audio or the RPM trace
+     * runs over three hours.
      */
     case InvalidAudio(message: String)
     

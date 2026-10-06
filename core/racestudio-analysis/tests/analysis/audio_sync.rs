@@ -136,6 +136,7 @@ fn pitch_track_is_empty_for_audio_shorter_than_a_frame() {
     assert!(pitch_track(&short, FS, &PitchConfig::default()).is_empty());
     assert!(pitch_track(&[], FS, &PitchConfig::default()).is_empty());
     assert!(pitch_track(&short, 0, &PitchConfig::default()).is_empty());
+    assert!(pitch_track(&short, u32::MAX, &PitchConfig::default()).is_empty());
 }
 
 // --------------------------------------------------------------------------- //
@@ -183,22 +184,66 @@ fn estimate_offset_rejects_flat_rpm() {
 
 #[test]
 fn estimate_offset_respects_search_window() {
-    let rpm = session();
-    let truth = -40.0;
-    let pcm = EngineAudio::default().render(&rpm, truth, 90.0, TEST_FS, 21);
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
 
-    let inside = estimate_offset(&pcm, TEST_FS, &rpm, (-50.0, -30.0)).expect("inside");
-    let outside = estimate_offset(&pcm, TEST_FS, &rpm, (0.0, 100.0)).expect("outside");
+    let inside = estimate_offset(&pcm, TEST_FS, &session(), (-50.0, -30.0)).expect("inside");
 
-    assert_within_frame(&inside, truth, "window around the truth");
+    assert_within_frame(&inside, -40.0, "window around the truth");
+}
+
+#[test]
+fn estimate_offset_stays_inside_a_window_without_the_truth() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+
+    let outside = estimate_offset(&pcm, TEST_FS, &session(), (0.0, 100.0)).expect("outside");
+
+    assert!((0.0..=100.0).contains(&outside.offset_s), "{outside:?}");
+}
+
+#[test]
+fn estimate_offset_is_not_confident_when_the_window_excludes_the_truth() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+
+    let outside = estimate_offset(&pcm, TEST_FS, &session(), (0.0, 100.0)).expect("outside");
+
+    assert!(!outside.is_confident(), "{outside:?}");
+}
+
+#[test]
+fn estimate_offset_handles_a_window_narrower_than_a_coarse_step() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    let window = (-40.002, -39.999);
+
+    let estimate = estimate_offset(&pcm, TEST_FS, &session(), window).expect("narrow window");
+
     assert!(
-        (0.0..=100.0).contains(&outside.offset_s),
-        "outside: {outside:?}"
+        (window.0..=window.1).contains(&estimate.offset_s),
+        "{estimate:?}"
     );
-    assert!(
-        !outside.is_confident(),
-        "a window without the truth must not be confident: {outside:?}"
-    );
+}
+
+#[test]
+fn estimate_offset_clamps_the_refined_offset_to_the_window() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+
+    let estimate = estimate_offset(&pcm, TEST_FS, &session(), (-0.05, 0.05)).expect("estimate");
+
+    assert!((-0.05..=0.05).contains(&estimate.offset_s), "{estimate:?}");
+}
+
+#[test]
+fn estimate_offset_treats_infinite_bounds_as_unbounded() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+
+    let estimate = estimate_offset(
+        &pcm,
+        TEST_FS,
+        &session(),
+        (f64::NEG_INFINITY, f64::INFINITY),
+    )
+    .expect("unbounded window");
+
+    assert_within_frame(&estimate, -40.0, "unbounded window");
 }
 
 #[test]
@@ -210,9 +255,86 @@ fn estimate_offset_never_confident_on_noise() {
     }
     .render(&rpm, 0.0, 90.0, TEST_FS, 5);
 
-    match estimate_offset(&noise, TEST_FS, &rpm, (-400.0, 200.0)) {
-        Ok(estimate) => assert!(!estimate.is_confident(), "noise: {estimate:?}"),
-        Err(error) => assert_eq!(error, AudioSyncError::NoPitch),
+    let estimate = estimate_offset(&noise, TEST_FS, &rpm, (-400.0, 200.0)).expect("noise is audio");
+
+    assert!(!estimate.is_confident(), "noise: {estimate:?}");
+}
+
+// --------------------------------------------------------------------------- //
+// Hostile input
+// --------------------------------------------------------------------------- //
+
+#[test]
+fn estimate_offset_ignores_a_stray_rpm_timestamp() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    for stray in [1e12, 1e300] {
+        let mut rpm = session();
+        rpm.push((stray, 4_000.0));
+
+        let estimate = estimate_offset(&pcm, TEST_FS, &rpm, (-400.0, 200.0)).expect("estimate");
+
+        assert_within_frame(&estimate, -40.0, &format!("stray sample at {stray} s"));
+    }
+}
+
+#[test]
+fn estimate_offset_tolerates_unsorted_and_duplicate_rpm_times() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    let mut rpm = session();
+    rpm.reverse();
+    rpm.push(rpm[10]);
+
+    let estimate = estimate_offset(&pcm, TEST_FS, &rpm, (-400.0, 200.0)).expect("estimate");
+
+    assert_within_frame(&estimate, -40.0, "unsorted RPM");
+}
+
+#[test]
+fn estimate_offset_reads_non_finite_samples_as_silence() {
+    let mut pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    for i in (0..pcm.len()).step_by(997) {
+        pcm[i] = if i % 2 == 0 { f32::NAN } else { f32::INFINITY };
+    }
+
+    let estimate = estimate_offset(&pcm, TEST_FS, &session(), (-400.0, 200.0)).expect("estimate");
+
+    assert_within_frame(&estimate, -40.0, "glitched audio");
+}
+
+#[test]
+fn estimate_offset_rejects_a_single_rpm_sample() {
+    let pcm = white_noise(TEST_FS, 30.0, 0.1, 2);
+
+    let result = estimate_offset(&pcm, TEST_FS, &[(5.0, 4_000.0)], (-100.0, 100.0));
+
+    assert_eq!(result.unwrap_err(), AudioSyncError::TooShort);
+}
+
+#[test]
+fn pitch_track_is_empty_for_a_degenerate_band() {
+    let pcm = tone(100.0, FS, 1.0, 0.5);
+    let base = PitchConfig::default();
+
+    for cfg in [
+        PitchConfig {
+            min_hz: 0.0,
+            ..base
+        },
+        PitchConfig {
+            min_hz: 1e-320,
+            ..base
+        },
+        PitchConfig {
+            max_hz: f64::INFINITY,
+            ..base
+        },
+        PitchConfig {
+            harmonics: usize::MAX,
+            ..base
+        },
+        PitchConfig { hop_s: 0.0, ..base },
+    ] {
+        assert!(pitch_track(&pcm, FS, &cfg).is_empty(), "{cfg:?}");
     }
 }
 
@@ -277,7 +399,9 @@ fn estimate_offset_rejects_invalid_input() {
         (0, (-10.0, 10.0)),
         (TEST_FS, (10.0, -10.0)),
         (TEST_FS, (f64::NAN, 10.0)),
-        (TEST_FS, (-10.0, f64::INFINITY)),
+        (TEST_FS, (-10.0, f64::NAN)),
+        // No audio is sampled this fast; a rate like this must not size a frame.
+        (u32::MAX, (-10.0, 10.0)),
     ] {
         let result = estimate_offset(&pcm, rate, &rpm, window);
 
@@ -287,6 +411,19 @@ fn estimate_offset_rejects_invalid_input() {
             "rate {rate}, window {window:?}"
         );
     }
+}
+
+#[test]
+fn estimate_offset_rejects_rpm_longer_than_three_hours() {
+    let pcm = white_noise(TEST_FS, 30.0, 0.1, 2);
+    // Four hours of RPM, one sample a second, with nothing over the run gap.
+    let rpm: Vec<(f64, f64)> = (0..14_400)
+        .map(|i| (f64::from(i), 3_000.0 + 1_000.0 * (f64::from(i) * 0.1).sin()))
+        .collect();
+
+    let result = estimate_offset(&pcm, TEST_FS, &rpm, (-100.0, 100.0));
+
+    assert_eq!(result.unwrap_err(), AudioSyncError::InvalidInput);
 }
 
 // --------------------------------------------------------------------------- //
@@ -377,6 +514,14 @@ fn study_cases() -> Vec<Case> {
         );
     }
     add("window without the truth", ours, &rpm, (-30.0, 200.0), None);
+    // A different engine on a different circuit: the public sample's car,
+    // matched against the kart session (when the sample has been fetched).
+    if let Some(car) = fixture_rpm() {
+        let pcm = EngineAudio::default()
+            .with_k(1.0 / 60.0)
+            .render(&car, -150.0, 90.0, TEST_FS, 61);
+        add("another engine and circuit", pcm, &rpm, wide, None);
+    }
     cases
 }
 
@@ -421,7 +566,7 @@ fn estimate_offset_recovers_random_offsets_across_the_window() {
     // proptest — see tests/analysis/fft.rs).
     let rpm = session();
     let mut rng = Lcg::new(2024);
-    for draw in 0..3 {
+    for draw in 0..5 {
         let offset = rng.range(-250.0, 60.0);
         let k = [1.0 / 120.0, 1.0 / 60.0, 2.0 / 60.0][draw % 3];
         let pcm =
@@ -476,26 +621,49 @@ fn ten_minute_clip_estimates_within_budget() {
 }
 
 #[test]
-fn confidence_level_is_half_at_the_threshold_and_full_at_four_to_one() {
-    let at = |score: f64, peak_ratio: f64| SyncEstimate {
+fn confidence_level_is_half_at_the_threshold() {
+    let threshold = estimate_with(2.0, MIN_CONFIDENT_PEAK_RATIO);
+
+    assert!((threshold.confidence() - 0.5).abs() < 1e-12);
+}
+
+#[test]
+fn confidence_level_saturates_at_four_to_one() {
+    assert_eq!(estimate_with(2.0, 4.0).confidence(), 1.0);
+    assert_eq!(estimate_with(2.0, 9.0).confidence(), 1.0);
+}
+
+#[test]
+fn confidence_level_is_zero_when_no_better_than_the_rival() {
+    assert_eq!(estimate_with(2.0, 1.0).confidence(), 0.0);
+    assert_eq!(estimate_with(2.0, 0.5).confidence(), 0.0);
+}
+
+#[test]
+fn confidence_level_grows_with_the_ratio_on_either_side_of_the_threshold() {
+    let below = estimate_with(2.0, 1.2).confidence();
+    let above = estimate_with(2.0, 2.0).confidence();
+
+    assert!(below > 0.0 && below < 0.5, "below the threshold: {below}");
+    assert!(above > 0.5 && above < 1.0, "above the threshold: {above}");
+}
+
+#[test]
+fn confidence_level_of_a_rejected_estimate_stays_under_half() {
+    let weak_score = estimate_with(MIN_CONFIDENT_SCORE / 2.0, 3.0);
+
+    assert!(!weak_score.is_confident());
+    assert!(weak_score.confidence() < 0.5);
+}
+
+/// An estimate with only its evidence set.
+fn estimate_with(score: f64, peak_ratio: f64) -> SyncEstimate {
+    SyncEstimate {
         offset_s: 0.0,
         score,
         peak_ratio,
         pitch_per_rpm: 1.0 / 120.0,
-    };
-    let threshold = at(2.0, MIN_CONFIDENT_PEAK_RATIO);
-
-    assert!((threshold.confidence() - 0.5).abs() < 1e-12);
-    assert_eq!(at(2.0, 4.0).confidence(), 1.0);
-    assert_eq!(at(2.0, 9.0).confidence(), 1.0, "saturates");
-    assert_eq!(at(2.0, 1.0).confidence(), 0.0, "no better than its rival");
-    assert_eq!(at(2.0, 0.5).confidence(), 0.0, "worse than its rival");
-    assert!(at(2.0, 2.0).confidence() > 0.5 && at(2.0, 2.0).confidence() < 1.0);
-    assert!(at(2.0, 1.2).confidence() > 0.0 && at(2.0, 1.2).confidence() < 0.5);
-    // A rejected estimate never reads as confident, whatever its ratio.
-    let weak_score = at(MIN_CONFIDENT_SCORE / 2.0, 3.0);
-    assert!(!weak_score.is_confident());
-    assert!(weak_score.confidence() < 0.5);
+    }
 }
 
 #[test]

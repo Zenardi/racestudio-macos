@@ -35,6 +35,40 @@ import Foundation
         #expect(progress.values == progress.values.sorted())
     }
 
+    /// Progress is reported in whole percents, each once — at most a hundred
+    /// updates however many chunks the decoder delivers.
+    @Test func test_progress_is_reported_in_whole_distinct_percents() async throws {
+        let dir = try MediaFixtures.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("tone.wav")
+        try MediaFixtures.writeTone(to: url, freq: 100, seconds: 20)
+        let progress = ProgressLog()
+
+        _ = try await AVAssetAudioPCMSource(url: url).monoPCM(targetRate: 8_000) { progress.record($0) }
+
+        let percents = progress.values.map { $0 * 100 }
+        #expect(!percents.isEmpty && percents.count <= 101)
+        #expect(percents.allSatisfy { abs($0 - $0.rounded()) < 1e-9 })
+        #expect(zip(percents, percents.dropFirst()).allSatisfy { $0 < $1 })
+    }
+
+    /// A clip short enough to decode in one chunk still honours a cancel made
+    /// while it was read.
+    @Test func test_cancelling_during_a_one_chunk_read_throws_cancellation() async throws {
+        let dir = try MediaFixtures.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("blip.wav")
+        try MediaFixtures.writeTone(to: url, freq: 100, seconds: 0.05)
+
+        let read = Task {
+            try await AVAssetAudioPCMSource(url: url).monoPCM(targetRate: 8_000) { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            }
+        }
+
+        await #expect(throws: CancellationError.self) { _ = try await read.value }
+    }
+
     /// Compressed audio (AAC, as cameras record it) decodes the same way.
     @Test func test_aac_audio_decodes_to_the_same_tone() async throws {
         let dir = try MediaFixtures.tempDirectory()

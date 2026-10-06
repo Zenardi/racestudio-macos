@@ -53,3 +53,26 @@ public extension AnalysisSession {
         (dataSource as? AudioSyncEstimatorProviding)?.audioSyncEstimator
     }
 }
+
+/// A session's RPM channel name, resolved once per session (issue 9.8). The
+/// auto-sync button asks on every render, and resolving walks every channel
+/// name for every telemetry role — the session's channels never change, so one
+/// walk is enough.
+@MainActor
+public final class RPMChannelMemo {
+    private weak var session: AnalysisSession?
+    private var name: String?
+
+    public init() {}
+
+    /// The RPM channel of `analysis`, or `nil` without a session or an RPM
+    /// channel — resolved again only when asked about a different session.
+    public func channelName(in analysis: AnalysisSession?) -> String? {
+        guard let analysis else { return nil }
+        if session !== analysis {
+            session = analysis
+            name = analysis.rpmChannel?.channelName
+        }
+        return name
+    }
+}

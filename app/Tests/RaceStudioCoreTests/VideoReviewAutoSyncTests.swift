@@ -13,9 +13,12 @@ import Foundation
 
     private func stint() -> VideoReviewModel { VideoReviewFixture.stint(videoDuration: 1_000) }
 
-    /// Yield until `condition` holds (bounded), for state hopping off the main actor.
-    private func eventually(_ condition: () -> Bool) async {
-        for _ in 0..<1_000 where !condition() {
+    /// Wait until `condition` holds or `seconds` of wall time pass, for state
+    /// hopping off the main actor — a deadline, so a loaded CI runner waits as
+    /// long as it needs to, not a fixed number of polls.
+    private func eventually(within seconds: Int = 10, _ condition: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(seconds)
+        while !condition(), ContinuousClock.now < deadline {
             try? await Task.sleep(nanoseconds: 1_000_000)
         }
     }
@@ -46,6 +49,52 @@ import Foundation
         #expect(review.autoSyncState.isRunning)
         run.cancel()
         await run.value
+    }
+
+    /// A started run is the review's: it is running at once, and Cancel stops
+    /// the task itself, not just the display.
+    @Test func test_a_started_run_is_owned_and_cancelled_by_the_review() async {
+        let review = stint()
+        review.setOffset(7)
+
+        let run = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
+        #expect(review.autoSyncState.isRunning)
+        await eventually { review.autoSyncState == .running(.reading(0.5)) }
+        review.cancelAutoSync()
+
+        #expect(run.isCancelled)
+        await run.value
+        #expect(review.autoSyncState == .idle)
+        #expect(review.sync.offset == 7)
+    }
+
+    /// Starting again cancels the run in flight; the new one finishes.
+    @Test func test_starting_again_retires_the_previous_run() async {
+        let review = stint()
+        let first = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
+
+        let second = review.startAutoSync(fakeCoordinator(FakeSource(startTime: 0.5)), searchRange: -400...200)
+        await second.value
+
+        #expect(first.isCancelled)
+        await first.value
+        #expect(review.autoSyncState == .finished(.confident(offset: -9.5, confidence: 0.9)))
+    }
+
+    /// Progress a retired run reports late never overwrites the run after it.
+    @Test func test_a_retired_runs_late_progress_is_ignored() async {
+        let review = stint()
+        let stale = review.startAutoSync(fakeCoordinator(LateReporter()), searchRange: -9...9)
+        review.cancelAutoSync()
+        let current = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
+        await eventually { review.autoSyncState == .running(.reading(0.5)) }
+
+        await stale.value
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(review.autoSyncState == .running(.reading(0.5)))
+        review.cancelAutoSync()
+        await current.value
     }
 
     /// Only a finished run carries a proposal.
@@ -84,6 +133,8 @@ import Foundation
 
         #expect(!review.applyAudioSync(.weak(offset: -9, confidence: 0.3)))
         #expect(!review.applyAudioSync(.unavailable(.flatRPM)))
+        #expect(!review.applyAudioSync(.confident(offset: .nan, confidence: 0.9)))
+        #expect(!review.applyAudioSync(.confident(offset: .infinity, confidence: 0.9)))
         #expect(!empty.applyAudioSync(.confident(offset: -9, confidence: 0.9)))
         #expect(review.sync.offset == 4)
         #expect(review.status == .anchored(lap: nil))

@@ -7,6 +7,15 @@ use crate::resample::resample_uniform_max_gap;
 /// or a sensor glitch, never a running engine's pitch, so they are masked.
 const RPM_FLOOR_FRACTION: f64 = 0.1;
 
+/// The quantile taken as the session's "top" RPM — robust to a glitch spike,
+/// which an absolute maximum is not.
+const TOP_QUANTILE: f64 = 0.99;
+
+/// A gap (seconds) between readings longer than this splits the trace; only
+/// the longest run is kept, so a stray timestamp (a corrupt sample stamped days
+/// or years away) cannot stretch the search over its whole span.
+const MAX_RUN_GAP_S: f64 = 1_800.0;
+
 /// Logging gaps wider than this (seconds) are holes, not interpolated across.
 const MAX_GAP_S: f64 = 1.0;
 
@@ -22,22 +31,46 @@ const SLOPE_FLOOR: f64 = 0.05;
 /// Half-width (seconds) of the central difference the RPM slope is taken over.
 const SLOPE_HALF_WINDOW_S: f64 = 0.25;
 
-/// The usable readings of `rpm`: finite, positive, above the stall floor, and
-/// sorted by time.
+/// The usable readings of `rpm`, sorted by time: finite and positive, from the
+/// longest run without a gap over [`MAX_RUN_GAP_S`], and above the stall floor
+/// ([`RPM_FLOOR_FRACTION`] of that run's [`TOP_QUANTILE`] reading).
 pub(crate) fn usable(rpm: &[(f64, f64)]) -> Vec<(f64, f64)> {
-    let top = rpm
-        .iter()
-        .filter(|&&(t, v)| t.is_finite() && v.is_finite())
-        .map(|&(_, v)| v)
-        .fold(0.0_f64, f64::max);
-    let floor = top * RPM_FLOOR_FRACTION;
     let mut points: Vec<(f64, f64)> = rpm
         .iter()
         .copied()
-        .filter(|&(t, v)| t.is_finite() && v.is_finite() && v > 0.0 && v >= floor)
+        .filter(|&(t, v)| t.is_finite() && v.is_finite() && v > 0.0)
         .collect();
     points.sort_by(|a, b| a.0.total_cmp(&b.0));
-    points
+    let run = longest_run(&points);
+    let mut values: Vec<f64> = run.iter().map(|&(_, v)| v).collect();
+    values.sort_by(f64::total_cmp);
+    let top = values
+        .get(
+            ((values.len() as f64 - 1.0) * TOP_QUANTILE)
+                .round()
+                .max(0.0) as usize,
+        )
+        .copied()
+        .unwrap_or(0.0);
+    let floor = top * RPM_FLOOR_FRACTION;
+    run.iter().copied().filter(|&(_, v)| v >= floor).collect()
+}
+
+/// The longest stretch (by sample count) of time-sorted `points` in which no
+/// two neighbours are more than [`MAX_RUN_GAP_S`] apart.
+fn longest_run(points: &[(f64, f64)]) -> &[(f64, f64)] {
+    let mut best = 0..0;
+    let mut start = 0;
+    for i in 1..=points.len() {
+        let split = i == points.len() || points[i].0 - points[i - 1].0 > MAX_RUN_GAP_S;
+        if split {
+            if i - start > best.len() {
+                best = start..i;
+            }
+            start = i;
+        }
+    }
+    &points[best]
 }
 
 /// The time span (seconds) the usable readings cover.
@@ -120,6 +153,25 @@ impl LogRpm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usable_keeps_the_longest_run_and_drops_stray_timestamps() {
+        let mut raw: Vec<(f64, f64)> = (0..20).map(|i| (f64::from(i), 4_000.0)).collect();
+        raw.push((1e12, 4_000.0));
+        raw.push((-1e9, 4_000.0));
+        let kept = usable(&raw);
+        assert_eq!(kept.len(), 20);
+        assert_eq!(kept.first().map(|p| p.0), Some(0.0));
+        assert_eq!(kept.last().map(|p| p.0), Some(19.0));
+        assert!(usable(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_glitch_spike_does_not_raise_the_stall_floor() {
+        let mut raw: Vec<(f64, f64)> = (0..200).map(|i| (f64::from(i) * 0.05, 3_000.0)).collect();
+        raw[100].1 = 1e9;
+        assert_eq!(usable(&raw).len(), 200);
+    }
 
     #[test]
     fn usable_drops_glitches_stalls_and_sorts() {

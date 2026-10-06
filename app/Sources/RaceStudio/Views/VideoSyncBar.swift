@@ -1,9 +1,10 @@
 import SwiftUI
 import RaceStudioCore
 
-/// The Video Review panel's sync controls (issues 9.6 + 9.7): single-section
-/// anchoring and two-point (offset + rate) sync on one row; the fine-trim slider
-/// with its frame / 0.1 s / 1 s nudges on `,` / `.` (bare, `⇧`, `⌥`) on the next;
+/// The Video Review panel's sync controls (issues 9.6 – 9.8): single-section
+/// anchoring and two-point (offset + rate) sync on one row; auto-sync from
+/// engine sound, with its progress, on its own row; the fine-trim slider with
+/// its frame / 0.1 s / 1 s nudges on `,` / `.` (bare, `⇧`, `⌥`) on the next;
 /// then the status line that says how the footage is aligned and how much of the
 /// session it covers.
 ///
@@ -21,6 +22,7 @@ struct VideoSyncBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             anchorControls
+            AutoSyncControl(review: review, controller: controller, analysis: analysis)
             trimControls
             Text(review.statusLine())
                 .font(.caption)
@@ -53,8 +55,6 @@ struct VideoSyncBar: View {
             Button(L10n.string(.controlTwoPointSync)) { controller.applyTwoPointSync() }
                 .disabled(!review.hasVideo || !hasBothAnchors)
                 .help(hasBothAnchors ? L10n.string(.videoHelpTwoPointSync) : TwoPointSyncError.missingAnchor.message())
-            Divider().frame(height: 16)
-            AutoSyncControl(review: review, controller: controller, analysis: analysis)
         }
     }
 

@@ -87,6 +87,21 @@ import Foundation
         #expect(estimator.calls.isEmpty)
     }
 
+    /// A cancelled run never reports a failure as its result, even when the
+    /// source refuses rather than noticing the cancel itself.
+    @Test func test_a_cancelled_run_throws_instead_of_reporting_a_failure() async throws {
+        let coordinator = AudioSyncCoordinator(source: FakeSource(failure: AudioSyncFailure.noAudioTrack),
+                                               estimator: FakeEstimator(result: .success(.weak(offset: 0))),
+                                               rpmChannel: "RPM")
+
+        let run = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await coordinator.run(searchRange: -1...1) { _ in }
+        }
+
+        await #expect(throws: CancellationError.self) { _ = try await run.value }
+    }
+
     // MARK: - Search range
 
     /// Every offset that puts some of the session on the footage is searched:

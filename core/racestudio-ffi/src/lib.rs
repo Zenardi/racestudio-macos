@@ -437,7 +437,9 @@ pub enum AnalysisError {
     NoUsableRpm,
     /// Audio sync (9.8): the RPM never changes, so there is nothing to align.
     FlatRpm,
-    /// Audio sync (9.8): the sample rate is too low for the pitch band.
+    /// Audio sync (9.8): the sample rate is outside the supported range (too
+    /// low for the pitch band, or above 384 kHz), or the audio or the RPM trace
+    /// runs over three hours.
     InvalidAudio,
 }
 

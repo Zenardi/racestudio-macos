@@ -28,21 +28,30 @@ public enum AutoSyncState: Equatable, Sendable {
 /// ``VideoReviewModel/applyAudioSync(_:)`` does, on the operator's word.
 public extension VideoReviewModel {
 
-    /// Run `coordinator` over `searchRange`, publishing its phases and then its
-    /// proposal. The decoding and matching run off the main actor.
+    /// Start a run the review owns, retiring (and cancelling) any run in flight.
+    /// The state turns to running at once; ``cancelAutoSync()``,
+    /// ``dismissAutoSync()``, applying a proposal and detaching the footage all
+    /// cancel it.
+    ///
+    /// - Returns: the run, for a caller that wants to await it.
+    @discardableResult
+    func startAutoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>) -> Task<Void, Never> {
+        stopAutoSync()
+        let generation = beginAutoSync()
+        let task = Task { await self.autoSync(coordinator, searchRange: searchRange, generation: generation) }
+        autoSyncTask = task
+        return task
+    }
+
+    /// Run `coordinator` over `searchRange` in the calling task, publishing its
+    /// phases and then its proposal; any run in flight is retired first.
     ///
     /// Cancelling the calling task stops the run at its next check and returns to
     /// ``AutoSyncState/idle``; so does ``cancelAutoSync()`` at once, dropping
     /// whatever the run later returns. Either way the sync is left as it was.
     func runAutoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>) async {
-        autoSyncGeneration += 1
-        let generation = autoSyncGeneration
-        autoSyncState = .running(.reading(0))
-        let proposal = try? await coordinator.run(searchRange: searchRange) { phase in
-            Task { @MainActor [weak self] in self?.report(phase, generation: generation) }
-        }
-        guard generation == autoSyncGeneration else { return }
-        autoSyncState = proposal.map(AutoSyncState.finished) ?? .idle
+        stopAutoSync()
+        await autoSync(coordinator, searchRange: searchRange, generation: beginAutoSync())
     }
 
     /// The Cancel button: back to idle now; a late result is dropped.
@@ -55,10 +64,40 @@ public extension VideoReviewModel {
         stopAutoSync()
     }
 
-    /// Return to idle and retire the run in flight.
+    /// Return to idle, cancel the run the review owns, and retire whichever run
+    /// is in flight.
     internal func stopAutoSync() {
+        autoSyncTask?.cancel()
+        autoSyncTask = nil
         autoSyncGeneration += 1
         autoSyncState = .idle
+    }
+
+    /// Enter the running state under a new generation, and return it.
+    private func beginAutoSync() -> Int {
+        autoSyncGeneration += 1
+        autoSyncState = .running(.reading(0))
+        return autoSyncGeneration
+    }
+
+    /// Run `generation`: the decoding and matching go to a detached task, never
+    /// the main actor, and only a run still current writes its result.
+    private func autoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>,
+                          generation: Int) async {
+        let report: @Sendable (AudioSyncPhase) -> Void = { [weak self] phase in
+            Task { @MainActor in self?.report(phase, generation: generation) }
+        }
+        let work = Task.detached(priority: .userInitiated) {
+            try await coordinator.run(searchRange: searchRange, progress: report)
+        }
+        let proposal = try? await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
+        }
+        guard generation == autoSyncGeneration else { return }
+        autoSyncState = proposal.map(AutoSyncState.finished) ?? .idle
+        autoSyncTask = nil
     }
 
     /// A progress report from run `generation` — ignored once it was retired

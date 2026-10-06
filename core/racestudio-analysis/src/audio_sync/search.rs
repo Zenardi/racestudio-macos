@@ -63,80 +63,16 @@ pub(crate) fn coarse_search(
     rpm: &LogRpm,
     bounds: Bounds,
 ) -> Result<Coarse, AudioSyncError> {
-    let du = map.grid.du;
-    let (bins, lr_min) = bin_rpm(rpm, du);
-    let n_a = map.frames();
-    let n_b = bins.len();
-    let nfft = (n_a + n_b).next_power_of_two();
-    let mut fft = Spectra::new(nfft);
-
-    // Per lag: how many voiced frames meet a valid RPM sample (admissibility),
-    // and the total slope weight they carry (the score's denominator).
-    let voiced: Vec<f32> = map.voiced.iter().map(|&v| f32::from(u8::from(v))).collect();
-    let valid: Vec<f32> = bins
-        .iter()
-        .map(|b| f32::from(u8::from(b.is_some())))
-        .collect();
-    let weights: Vec<f32> = (0..n_b)
+    let (bins, lr_min) = bin_rpm(rpm, map.grid.du);
+    let weights: Vec<f32> = (0..bins.len())
         .map(|j| rpm.weight_at(rpm.t0 + j as f64 * rpm.step).unwrap_or(0.0) as f32)
         .collect();
-    let overlap = Overlap {
-        frames: fft.correlate(&voiced, &valid),
-        weight: fft.correlate(&voiced, &weights),
-    };
-    let lags = admissible_lags(map, rpm, n_b, &overlap, bounds);
+    let mut fft = Spectra::new((map.frames() + bins.len()).next_power_of_two());
+    let lags = admissible_lags(map, rpm, (&bins, &weights), &mut fft, bounds);
     if !lags.iter().any(|lag| lag.in_window) {
         return Err(AudioSyncError::TooShort);
     }
-
-    let u_len = map.grid.len;
-    let columns_a: Vec<Half> = (0..u_len)
-        .map(|u| {
-            let column: Vec<f32> = (0..n_a).map(|j| map.rows[j * u_len + u]).collect();
-            fft.forward(&column)
-        })
-        .collect();
-    let rpm_bins = bins.iter().flatten().max().map_or(0, |&b| b + 1);
-    let columns_b: Vec<Option<Half>> = (0..rpm_bins)
-        .map(|b| {
-            let column: Vec<f32> = bins
-                .iter()
-                .zip(&weights)
-                .map(|(&x, &w)| if x == Some(b) { w } else { 0.0 })
-                .collect();
-            column
-                .iter()
-                .any(|&v| v > 0.0)
-                .then(|| fft.forward(&column))
-        })
-        .collect();
-
-    // For each shift d (column u = b + d), correlate over time; keep, per lag,
-    // the best score over d.
-    let mut best = vec![(f64::NEG_INFINITY, 0_i64); lags.len()];
-    let mut product = Half::zeros(nfft / 2 + 1);
-    for d in -(rpm_bins as i64 - 1)..u_len as i64 {
-        product.clear();
-        let mut any = false;
-        for (b, column_b) in columns_b.iter().enumerate() {
-            let u = b as i64 + d;
-            let (Some(column_b), true) = (column_b, (0..u_len as i64).contains(&u)) else {
-                continue;
-            };
-            any = true;
-            product.add_cross(&columns_a[u as usize], column_b);
-        }
-        if !any {
-            continue;
-        }
-        let sums = fft.inverse_half(&product);
-        for (slot, lag) in best.iter_mut().zip(&lags) {
-            let score = f64::from(sums[lag.lag.rem_euclid(nfft as i64) as usize]) / lag.denominator;
-            if score > slot.0 {
-                *slot = (score, d);
-            }
-        }
-    }
+    let best = best_shift_per_lag(map, (&bins, &weights), &lags, &mut fft);
 
     // The winner must lie in the window; the rival may lie anywhere. A window
     // that excludes the true alignment then finds it as a rival stronger than
@@ -156,10 +92,73 @@ pub(crate) fn coarse_search(
         });
     Ok(Coarse {
         offset_s: map.t0 - rpm.t0 + lag * map.hop,
-        log_k: map.grid.u0 - lr_min + d as f64 * du,
+        log_k: map.grid.u0 - lr_min + d as f64 * map.grid.du,
         peak,
         rival,
     })
+}
+
+/// For every admissible lag, the best score over the shifts `d` (salience
+/// column `u = b + d` against RPM bin `b`) and the shift that scored it. Each
+/// shift is one FFT cross-correlation over time.
+fn best_shift_per_lag(
+    map: &SalienceMap,
+    (bins, weights): (&[Option<usize>], &[f32]),
+    lags: &[Lag],
+    fft: &mut Spectra,
+) -> Vec<(f64, i64)> {
+    let u_len = map.grid.len;
+    let columns_a: Vec<Half> = (0..u_len)
+        .map(|u| {
+            let column: Vec<f32> = (0..map.frames()).map(|j| map.rows[j * u_len + u]).collect();
+            fft.forward(&column)
+        })
+        .collect();
+    let columns_b = rpm_columns(bins, weights, fft);
+    let nfft = fft.nfft as i64;
+    let mut best = vec![(f64::NEG_INFINITY, 0_i64); lags.len()];
+    let mut product = Half::zeros(fft.nfft / 2 + 1);
+    for d in -(columns_b.len() as i64 - 1)..u_len as i64 {
+        product.clear();
+        let mut any = false;
+        for (b, column_b) in columns_b.iter().enumerate() {
+            let u = b as i64 + d;
+            if let (Some(column_b), true) = (column_b, (0..u_len as i64).contains(&u)) {
+                any = true;
+                product.add_cross(&columns_a[u as usize], column_b);
+            }
+        }
+        if !any {
+            continue;
+        }
+        let sums = fft.inverse_half(&product);
+        for (slot, lag) in best.iter_mut().zip(lags) {
+            let score = f64::from(sums[lag.lag.rem_euclid(nfft) as usize]) / lag.denominator;
+            if score > slot.0 {
+                *slot = (score, d);
+            }
+        }
+    }
+    best
+}
+
+/// The spectrum of each RPM bin's weighted indicator over time (`None` for a
+/// bin the trace never visits).
+fn rpm_columns(bins: &[Option<usize>], weights: &[f32], fft: &mut Spectra) -> Vec<Option<Half>> {
+    let rpm_bins = bins.iter().flatten().max().map_or(0, |&b| b + 1);
+    (0..rpm_bins)
+        .map(|b| {
+            let column: Vec<f32> = bins
+                .iter()
+                .zip(weights)
+                .map(|(&x, &w)| if x == Some(b) { w } else { 0.0 })
+                .collect();
+            column
+                .iter()
+                .any(|&v| v > 0.0)
+                .then(|| fft.forward(&column))
+        })
+        .collect()
 }
 
 /// A lag `ℓ` (audio frame `j + ℓ` against RPM sample `j`) with enough overlap
@@ -190,39 +189,43 @@ fn bin_rpm(rpm: &LogRpm, du: f64) -> (Vec<Option<usize>>, f64) {
     (bins, lr_min)
 }
 
-/// Per-lag overlap between the audio and the RPM, as circular correlations
-/// (lag `ℓ` at index `ℓ mod nfft`).
-struct Overlap {
-    /// Voiced frames meeting a valid RPM sample.
-    frames: Vec<f32>,
-    /// The slope weight those frames carry.
-    weight: Vec<f32>,
-}
-
 /// Every lag whose overlap reaches the minimum, with the denominator its
 /// weighted salience sum is divided by and whether it lies in the window.
 ///
-/// The denominator is the overlap's weight inflated by `(n + n₀)/n` — a
+/// The overlap — voiced frames meeting a valid RPM sample, and the slope
+/// weight they carry — is itself a circular correlation (lag `ℓ` at index
+/// `ℓ mod nfft`). The denominator is that weight inflated by `(n + n₀)/n` — a
 /// pseudo-count of `shrink_s` seconds of zero-score frames. That shrinks the
 /// mean of a short overlap towards zero: averaged over few frames, a chance
 /// alignment can score as high as the real one, and it would otherwise pose as
 /// a rival (or a winner) on noise alone.
+///
+/// A lag is in the window when its offset is within half a hop of it, so a
+/// window narrower than the coarse grid still holds the lag nearest to it.
 fn admissible_lags(
     map: &SalienceMap,
     rpm: &LogRpm,
-    n_b: usize,
-    overlap: &Overlap,
+    (bins, weights): (&[Option<usize>], &[f32]),
+    fft: &mut Spectra,
     bounds: Bounds,
 ) -> Vec<Lag> {
-    let nfft = overlap.frames.len() as i64;
-    let (lo, hi) = bounds.window;
+    let voiced: Vec<f32> = map.voiced.iter().map(|&v| f32::from(u8::from(v))).collect();
+    let valid: Vec<f32> = bins
+        .iter()
+        .map(|b| f32::from(u8::from(b.is_some())))
+        .collect();
+    let overlap_frames = fft.correlate(&voiced, &valid);
+    let overlap_weight = fft.correlate(&voiced, weights);
+    let nfft = fft.nfft as i64;
+    let slack = map.hop / 2.0;
+    let (lo, hi) = (bounds.window.0 - slack, bounds.window.1 + slack);
     let pseudo = bounds.shrink_s / map.hop;
-    (-(n_b as i64 - 1)..map.frames() as i64)
+    (-(bins.len() as i64 - 1)..map.frames() as i64)
         .filter_map(|lag| {
             let offset = map.t0 - rpm.t0 + lag as f64 * map.hop;
             let index = lag.rem_euclid(nfft) as usize;
-            let frames = f64::from(overlap.frames[index]).round();
-            let weight = f64::from(overlap.weight[index]).max(f64::EPSILON);
+            let frames = f64::from(overlap_frames[index]).round();
+            let weight = f64::from(overlap_weight[index]).max(f64::EPSILON);
             (frames >= bounds.min_overlap as f64).then(|| Lag {
                 lag,
                 denominator: weight * (frames + pseudo) / frames,

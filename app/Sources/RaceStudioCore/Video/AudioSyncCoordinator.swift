@@ -67,12 +67,12 @@ public struct AudioSyncCoordinator: Sendable {
         let pcm: MonoPCM
         do {
             pcm = try await source.monoPCM(targetRate: Self.targetRate) { progress(.reading($0)) }
-        } catch let failure as AudioSyncFailure {
-            return .unavailable(failure)
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
-            return .unavailable(.unreadableAudio)
+            // A read that failed because the run was cancelled under it is a
+            // cancellation, not a failure to report.
+            try Task.checkCancellation()
+            if error is CancellationError { throw error }
+            return .unavailable(error as? AudioSyncFailure ?? .unreadableAudio)
         }
         try Task.checkCancellation()
         progress(.matching)

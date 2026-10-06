@@ -62,6 +62,20 @@ import Foundation
         #expect(estimator.calls.first?.rpmChannel == "RPM")
     }
 
+    /// The memo resolves a session's RPM channel once, follows a change of
+    /// session, and answers `nil` for none.
+    @Test func test_the_rpm_memo_follows_the_session_it_is_asked_about() {
+        let withRPM = session(channels: [speed, rpm], banks: [speedSamples, rpmSamples])
+        let withoutRPM = session(channels: [speed], banks: [speedSamples])
+        let memo = RPMChannelMemo()
+
+        #expect(memo.channelName(in: withRPM) == "RPM")
+        #expect(memo.channelName(in: withRPM) == "RPM")
+        #expect(memo.channelName(in: withoutRPM) == nil)
+        #expect(memo.channelName(in: nil) == nil)
+        #expect(memo.channelName(in: withRPM) == "RPM")
+    }
+
     /// Without the Rust core there is no estimator, hence no coordinator.
     @Test func test_a_build_without_an_estimator_cannot_auto_sync() {
         let analysis = session(channels: [rpm], banks: [rpmSamples])

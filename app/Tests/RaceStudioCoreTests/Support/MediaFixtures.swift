@@ -21,7 +21,9 @@ enum MediaFixtures {
                                          channels: channels, interleaved: false) else {
             throw CocoaError(.featureUnsupported)
         }
+        // A WAV file stores its frames interleaved, whatever the buffer layout.
         var settings = format.settings
+        settings[AVLinearPCMIsNonInterleaved] = false
         if url.pathExtension == "m4a" {
             settings = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: rate,
                         AVNumberOfChannelsKey: channels, AVEncoderBitRateKey: 128_000]
@@ -53,7 +55,11 @@ enum MediaFixtures {
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
         for frame in 0..<frames {
-            while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 1_000_000) }
+            while !input.isReadyForMoreMediaData {
+                // A writer that failed never becomes ready again.
+                if writer.status == .failed { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+                try await Task.sleep(nanoseconds: 1_000_000)
+            }
             var pixels: CVPixelBuffer?
             CVPixelBufferCreate(nil, 64, 64, kCVPixelFormatType_32BGRA, nil, &pixels)
             guard let pixels else { throw CocoaError(.featureUnsupported) }

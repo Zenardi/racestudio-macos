@@ -81,12 +81,19 @@ public enum AudioSyncProposal: Equatable, Sendable {
     case unavailable(AudioSyncFailure)
 
     /// The proposal for `estimate`, its offset moved onto the video's clock by
-    /// `audioStart` — the video time of the first decoded audio sample.
+    /// `audioStart` — the video time of the first decoded audio sample. A
+    /// non-finite offset is no estimate at all, and the confidence is held to
+    /// `0...1` whatever the core reports.
     public init(estimate: AudioSyncEstimate, audioStart: Double) {
         let offset = estimate.offset + audioStart
+        guard offset.isFinite else {
+            self = .unavailable(.estimationFailed)
+            return
+        }
+        let confidence = estimate.confidence.isFinite ? min(1, max(0, estimate.confidence)) : 0
         self = estimate.isConfident
-            ? .confident(offset: offset, confidence: estimate.confidence)
-            : .weak(offset: offset, confidence: estimate.confidence)
+            ? .confident(offset: offset, confidence: confidence)
+            : .weak(offset: offset, confidence: confidence)
     }
 
     /// Whether the panel may offer one-click apply.
