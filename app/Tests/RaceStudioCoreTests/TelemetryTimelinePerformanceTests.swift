@@ -8,10 +8,15 @@ import Foundation
 ///
 /// The issue's budget — 18,000 sequential frames (10 min @ 30 fps) in ≤ 50 ms —
 /// is stated for a **release** build and is asserted only when the tests are
-/// compiled optimised (`swift test -c release`). The default debug run (CI's
-/// coverage build) asserts a generous ceiling that only an algorithmic
-/// regression (a per-frame linear scan, a per-frame core call) would break, so
-/// the gate is not flaky on a loaded runner.
+/// compiled optimised, which neither `make` nor CI does — run it by hand, from
+/// `app/` (`@testable import` needs `-enable-testing`):
+///
+///     swift build -c release --target RaceStudioCoreTests -Xswiftc -enable-testing
+///     swift test -c release --skip-build --filter TelemetryTimelinePerformanceTests
+///
+/// The default debug run (CI's coverage build) asserts a generous ceiling that
+/// only an algorithmic regression (a per-frame linear scan, a per-frame core
+/// call) would break, so the gate is not flaky on a loaded runner.
 @Suite struct TelemetryTimelinePerformanceTests {
 
     /// 10 minutes of footage at 30 fps.

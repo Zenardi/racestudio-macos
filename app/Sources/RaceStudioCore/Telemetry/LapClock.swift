@@ -60,7 +60,10 @@ public struct LapClockReading: Equatable, Sendable {
 /// binary search over the lap windows, or O(1) with a carried hint. Lap windows
 /// are ``LapSectorTimeline``'s (half-open, the session's last instant closing
 /// the final lap) and "best" is ``SessionSummaryViewModel``'s rule, so the
-/// overlay can never disagree with the review grid, the Summary or the library.
+/// overlay agrees with the review grid, the Summary and the library. The one
+/// exception is malformed input with overlapping laps (the decoder's laps are
+/// contiguous): the clock cuts an overlap at the next beacon, giving the later
+/// lap, where the review grid's lookup takes the first listed.
 public struct LapClock: Equatable, Sendable {
 
     /// The session's best lap (fastest valid, earliest on a tie), or `nil` when
