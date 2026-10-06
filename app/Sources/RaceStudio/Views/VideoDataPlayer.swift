@@ -45,7 +45,9 @@ struct VideoDataPlayer: View {
         .background(Color.black)
         .clipped()
         // VoiceOver turned on while paused gets the sentence at once.
-        .onReceive(NSWorkspace.shared.publisher(for: \.isVoiceOverEnabled)) { voiceOver = $0 }
+        .onReceive(NSWorkspace.shared.publisher(for: \.isVoiceOverEnabled).receive(on: DispatchQueue.main)) {
+            voiceOver = $0
+        }
     }
 
     /// The HUD's renderer: the layout as edited — shown while editing even with
@@ -62,7 +64,7 @@ struct VideoDataPlayer: View {
     /// The HUD's sentence for VoiceOver — built only while VoiceOver runs, as
     /// it would otherwise be formatted for every video frame for nobody.
     private var accessibilityValue: String {
-        voiceOver ? data.accessibilitySummary(units: editor.layout.units) : ""
+        voiceOver || NSWorkspace.shared.isVoiceOverEnabled ? data.accessibilitySummary(units: editor.layout.units) : ""
     }
 
     private var availability: [OverlayWidget.ID: WidgetAvailability] {

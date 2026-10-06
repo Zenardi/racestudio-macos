@@ -38,8 +38,12 @@ struct OverlayEditCanvas: View {
                 }
             }
         }
-        // A drag cut short (the editor closed mid-drag) still ends as one step.
-        .onDisappear { editor.endGesture() }
+        // A drag cut short — the editor closed, or the app deactivated before the
+        // mouse came up — still ends as one step, and the next click starts afresh.
+        .onDisappear(perform: abandonGesture)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            abandonGesture()
+        }
     }
 
     private func rect(_ frame: NormalizedRect, in size: CGSize) -> CGRect {
@@ -108,6 +112,12 @@ struct OverlayEditCanvas: View {
                 isDragging = false
                 editor.endGesture()
             }
+    }
+
+    private func abandonGesture() {
+        isDragging = false
+        resizing = nil
+        editor.endGesture()
     }
 
     private func normalized(_ translation: CGSize, in size: CGSize) -> CGSize {
