@@ -109,16 +109,20 @@ public extension OverlayEditorModel {
     }
 
     /// Move the selected widget `dx`, `dy` grid steps (``largeNudgeSteps`` each
-    /// with ⇧) — one arrow key, one step in the history.
-    func nudge(dx: Int, dy: Int, large: Bool) {
+    /// with ⇧) — one arrow key, one step in the history. Returns whether the
+    /// key was the editor's: `false` without a selection, and while a drag is
+    /// still open (a nudge then would make the dragged widget jump).
+    @discardableResult
+    func nudge(dx: Int, dy: Int, large: Bool) -> Bool {
         let step = Self.gridStep * Double(large ? Self.largeNudgeSteps : 1)
-        guard let index = selectedIndex else { return }
+        guard gestureStart == nil, let index = selectedIndex else { return false }
         commit { layout in
             let frame = layout.widgets[index].frame
             layout.widgets[index].frame = Self.placed(NormalizedRect(
                 x: Self.snap(frame.x + Double(dx) * step), y: Self.snap(frame.y + Double(dy) * step),
                 width: frame.width, height: frame.height))
         }
+        return true
     }
 
     // MARK: - Internals

@@ -18,6 +18,7 @@ struct VideoDataPlayer: View {
     let metadata: SessionMetadata
     @State private var videoRect: CGRect = .zero
     @State private var renderers = HUDRendererCache()
+    @State private var voiceOver = NSWorkspace.shared.isVoiceOverEnabled
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -36,17 +37,15 @@ struct VideoDataPlayer: View {
                                   availability: availability)
                     .frame(width: videoRect.width, height: videoRect.height)
                     .offset(x: videoRect.minX, y: videoRect.minY)
-                KeyNudgeMonitor { dx, dy, large in
-                    guard editor.selection != nil else { return false }
-                    editor.nudge(dx: dx, dy: dy, large: large)
-                    return true
-                }
+                KeyNudgeMonitor { dx, dy, large in editor.nudge(dx: dx, dy: dy, large: large) }
                 .frame(width: 0, height: 0)
             }
         }
         .frame(minWidth: 280, minHeight: 180)
         .background(Color.black)
         .clipped()
+        // VoiceOver turned on while paused gets the sentence at once.
+        .onReceive(NSWorkspace.shared.publisher(for: \.isVoiceOverEnabled)) { voiceOver = $0 }
     }
 
     /// The HUD's renderer: the layout as edited — shown while editing even with
@@ -63,7 +62,7 @@ struct VideoDataPlayer: View {
     /// The HUD's sentence for VoiceOver — built only while VoiceOver runs, as
     /// it would otherwise be formatted for every video frame for nobody.
     private var accessibilityValue: String {
-        NSWorkspace.shared.isVoiceOverEnabled ? data.accessibilitySummary(units: editor.layout.units) : ""
+        voiceOver ? data.accessibilitySummary(units: editor.layout.units) : ""
     }
 
     private var availability: [OverlayWidget.ID: WidgetAvailability] {
@@ -143,7 +142,7 @@ struct VideoDataTransport: View {
             Button { review.nextSector(); goToSelection() } label: { Image(systemName: "forward.end") }
                 .help(L10n.string(.controlNextSector))
             Divider().frame(height: 16)
-            PlayLapButton(data: data, controller: controller)
+            PlayLapButton(data: data, review: review, controller: controller)
             Toggle(L10n.string(.controlLoopLap), isOn: $review.loops)
                 .toggleStyle(.switch)
                 .fixedSize()
@@ -164,6 +163,9 @@ struct VideoDataTransport: View {
 /// the data model itself, so the rest of the transport doesn't redraw with it.
 private struct PlayLapButton: View {
     @ObservedObject var data: VideoDataViewModel
+    /// Observed too: attaching, removing or re-syncing the footage changes
+    /// what is on film without the data model publishing.
+    @ObservedObject var review: VideoReviewModel
     @ObservedObject var controller: VideoReviewController
 
     var body: some View {

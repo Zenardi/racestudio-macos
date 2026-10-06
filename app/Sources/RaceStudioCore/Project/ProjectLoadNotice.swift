@@ -8,13 +8,13 @@ import Foundation
 /// never silent, and a clean one says nothing.
 public struct ProjectLoadNotice: Equatable, Sendable {
 
-    private let warnings: [String]
+    private let warnings: [ProjectLoadWarning]
     private let diagnostics: [ProjectError]
 
     /// The notice for a loaded `document`, or `nil` when it loaded cleanly.
     public init?(document: ProjectDocument) {
-        guard !document.warnings.isEmpty || !document.diagnostics.isEmpty else { return nil }
-        self.warnings = document.warnings
+        guard !document.loadWarnings.isEmpty || !document.diagnostics.isEmpty else { return nil }
+        self.warnings = document.loadWarnings
         self.diagnostics = document.diagnostics
     }
 
@@ -26,11 +26,11 @@ public struct ProjectLoadNotice: Equatable, Sendable {
             : L10n.format(.projectNoticeOther, locale: locale, String(count))
     }
 
-    /// Each thing that could not be read, one line each: the warnings, then the
-    /// diagnostics — an invalid math channel by name, anything else in plain
-    /// words. The warnings are the store's own lines, passed through as written.
+    /// Each thing that could not be read, one line each, in `locale`: the
+    /// warnings, then the diagnostics — an invalid math channel by name,
+    /// anything else in plain words.
     public func details(locale: Locale = .current) -> [String] {
-        warnings + diagnostics.map { diagnostic in
+        warnings.map { $0.label(locale: locale) } + diagnostics.map { diagnostic in
             if case .invalidMathChannel(let name) = diagnostic {
                 return L10n.format(.projectNoticeInvalidMathChannel, locale: locale, name)
             }

@@ -136,7 +136,7 @@ public final class ProjectStore {
         let counter = SkippedElementCounter()
         var document = try shape(ProjectDocument.self, from: data, counting: counter)
         if counter.total > 0 {
-            document.warnings.append(ProjectDocument.skippedOverlayEntriesWarning(counter.total))
+            document.loadWarnings.append(.skippedOverlayEntries(counter.total))
         }
         document.schemaVersion = ProjectDocument.currentSchemaVersion
         if !keepingVideoData { document.videoData = .default }
@@ -268,7 +268,7 @@ public final class ProjectStore {
             for var reference in document.sessionRefs {
                 reference.resolved = library.lapCountsByID[reference.id] != nil
                 if !reference.resolved {
-                    document.warnings.append("unresolved session reference: \(reference.id)")
+                    document.loadWarnings.append(.unresolvedSession(reference.id))
                 }
                 resolvedRefs.append(reference)
             }
@@ -278,8 +278,7 @@ public final class ProjectStore {
                 guard let lapCount = library.lapCountsByID[selection.sessionID] else { return selection }
                 let clamped = selection.lapIndices.filter { $0 >= 0 && $0 < lapCount }
                 if clamped != selection.lapIndices {
-                    document.warnings.append(
-                        "clamped lap selection for session \(selection.sessionID)")
+                    document.loadWarnings.append(.clampedLapSelection(selection.sessionID))
                 }
                 var validated = selection
                 validated.lapIndices = clamped

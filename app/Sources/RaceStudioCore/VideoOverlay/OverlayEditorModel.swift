@@ -71,9 +71,10 @@ public final class OverlayEditorModel: ObservableObject {
 
     /// Forget the edit history — here and in the ``undoManager`` — keeping the
     /// layout: when the panel goes off screen, so ⌘Z in another panel never
-    /// edits a HUD out of sight.
+    /// edits a HUD out of sight. A drag still open is recorded first, so the
+    /// window hears it and a save keeps it.
     public func resetHistory() {
-        gestureStart = nil
+        closeOpenGesture()
         undoStack.removeAll()
         redoStack.removeAll()
         undoManager?.removeAllActions(withTarget: self)

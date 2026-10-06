@@ -199,7 +199,10 @@ session). Click one to select it.
   title-safe margin and can't be made smaller than 3% of the frame.
 - **Arrow keys** nudge the selected widget by 1%; with ⇧, by 5%.
 - **Undo** (⌘Z) and **Redo** (⇧⌘Z) in the Edit menu step through your edits —
-  a whole drag is one step. The last 100 edits are kept.
+  a whole drag is one step. The last 100 edits are kept, until you switch to
+  another view: leaving Video + Data clears the overlay's undo history, so ⌘Z
+  in another view never changes a HUD you can't see. The arrow keys don't
+  nudge while you are still dragging.
 - Every edit is saved with the workspace. Opening another workspace starts its
   overlay with a fresh undo history.
 

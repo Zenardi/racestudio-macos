@@ -2541,6 +2541,91 @@
         }
       }
     },
+    "project.warning.clampedLaps": {
+      "comment": "Project load warning: saved lap numbers beyond the session's laps were dropped. %1$@ = the session's content id.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some saved laps of session %1$@ no longer exist and were skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algumas voltas salvas da sessão %1$@ não existem mais e foram ignoradas"
+          }
+        }
+      }
+    },
+    "project.warning.skippedOverlayOne": {
+      "comment": "Project load warning: one widget or setting of the saved video overlay could not be read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video overlay: 1 unreadable entry skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição de vídeo: 1 item ilegível ignorado"
+          }
+        }
+      }
+    },
+    "project.warning.skippedOverlayOther": {
+      "comment": "Project load warning: several widgets or settings of the saved video overlay could not be read. %1$@ = how many.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video overlay: %1$@ unreadable entries skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição de vídeo: %1$@ itens ilegíveis ignorados"
+          }
+        }
+      }
+    },
+    "project.warning.unreadableOverlay": {
+      "comment": "Project load warning: the saved video overlay could not be read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video overlay couldn’t be read; it opened with the HUD off"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler a sobreposição de vídeo; ela abriu com o HUD desligado"
+          }
+        }
+      }
+    },
+    "project.warning.unresolvedSession": {
+      "comment": "Project load warning: a session the workspace references is not in the library. %1$@ = its content id.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A session this workspace uses isn’t in the library (%1$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma sessão usada por este espaço de trabalho não está na biblioteca (%1$@)"
+          }
+        }
+      }
+    },
     "unit.bar": {
       "comment": "Pressure unit (bar) — same symbol in pt-BR.",
       "localizations": {

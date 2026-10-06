@@ -100,6 +100,39 @@ import Foundation
         #expect(editor.layout == original)
     }
 
+    /// An arrow key while the mouse is still dragging is ignored — and not
+    /// claimed — so the widget never jumps when the drag goes on.
+    @Test func test_a_nudge_during_a_drag_is_ignored() {
+        let editor = OverlayEditorFixture.editor(selecting: "trackMap")
+        editor.beginGesture()
+        editor.drag(by: CGSize(width: -0.1, height: 0))
+        let dragged = editor.layout
+
+        #expect(!editor.nudge(dx: 1, dy: 0, large: false))
+        editor.drag(by: CGSize(width: -0.15, height: 0))
+        editor.endGesture()
+
+        #expect(editor.layout != dragged)
+        #expect(editor.layout.widgets.first { $0.id == "trackMap" }?.frame.x == 0.64)
+        #expect(editor.nudge(dx: 1, dy: 0, large: false), "after the drag the arrows nudge again")
+    }
+
+    /// Leaving the panel mid-drag keeps the drag: it is recorded and the window
+    /// is told, so a save doesn't lose it.
+    @Test func test_resetting_the_history_mid_drag_keeps_the_drag() {
+        let editor = OverlayEditorFixture.editor(selecting: "trackMap")
+        var heard: [OverlayLayout] = []
+        editor.onCommit = { heard.append($0) }
+        editor.beginGesture()
+        editor.drag(by: CGSize(width: -0.1, height: 0))
+
+        editor.resetHistory()
+
+        #expect(heard == [editor.layout])
+        #expect(editor.layout.widgets.first { $0.id == "trackMap" }?.frame.x == 0.69)
+        #expect(!editor.canUndo)
+    }
+
     /// A gesture's widget is found by its id, so a widget reordered during the
     /// gesture is still the one moved.
     @Test func test_the_dragged_widget_is_found_by_id() {

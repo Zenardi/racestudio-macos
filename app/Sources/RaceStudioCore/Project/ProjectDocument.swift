@@ -50,9 +50,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
     public var diagnostics: [ProjectError] = []
-    /// Human-readable load warnings — e.g. a clamped lap selection or an
-    /// unresolved session reference. Transient (not persisted).
-    public var warnings: [String] = []
+    /// What the load could not read in full — e.g. a clamped lap selection or
+    /// an unresolved session reference. Transient (not persisted).
+    public var loadWarnings: [ProjectLoadWarning] = []
+    /// ``loadWarnings`` as the log writes them, in English.
+    public var warnings: [String] { loadWarnings.map(\.text) }
 
     public init(
         schemaVersion: Int = currentSchemaVersion,
@@ -104,21 +106,12 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
 
 extension ProjectDocument {
 
-    /// The warning a load records when the overlay could not be read.
-    static let unreadableOverlayWarning = "unreadable video overlay; opened with the overlay off"
-
-    /// The warning a load records when `count` widgets or settings of the
-    /// overlay could not be read (skipped, or read as their default).
-    static func skippedOverlayEntriesWarning(_ count: Int) -> String {
-        "video overlay: \(count) unreadable \(count == 1 ? "entry" : "entries") skipped"
-    }
-
     /// Decodes every field exactly as the synthesized conformance would, except
     /// the cosmetic ones, which never make the whole project unopenable:
     ///
     /// - the 9.10 ``overlay``: a value that isn't a layout at all costs only the
     ///   overlay — the workspace opens with it off and records
-    ///   ``unreadableOverlayWarning``. (A layout's own fields are already read
+    ///   ``ProjectLoadWarning/unreadableOverlay``. (A layout's own fields are already read
     ///   leniently; see ``OverlayLayout``.)
     /// - the 9.12 ``videoData``: missing (a v7 file) or unreadable, the panel
     ///   opens at ``VideoDataPaneLayout/default``. Its fields are read leniently
@@ -136,7 +129,7 @@ extension ProjectDocument {
         do {
             overlay = try container.decodeIfPresent(OverlayLayout.self, forKey: .overlay)
         } catch {
-            warnings.append(Self.unreadableOverlayWarning)
+            loadWarnings.append(.unreadableOverlay)
         }
         if let panes = try? container.decodeIfPresent(VideoDataPaneLayout.self, forKey: .videoData) {
             videoData = panes

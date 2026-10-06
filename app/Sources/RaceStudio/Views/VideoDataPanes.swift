@@ -120,10 +120,12 @@ struct VideoDataMapPane: View {
 /// ``VideoDataPaneLayout`` fractions; either pane may be hidden, the other then
 /// taking the whole length. The drag arithmetic is ``VideoDataPaneLayout``'s.
 ///
-/// Both panes stay in one stack whether shown or not — a hidden one is only
-/// collapsed — so hiding the plot never tears down the player beside it. A
-/// drag is measured in window coordinates (the divider moves under the
-/// pointer), previewed locally, and written to the workspace when it ends.
+/// Each pane sits in its own fixed slot of one stack, so hiding the plot never
+/// tears down the player beside it, and a hidden pane is not built at all (it
+/// does no per-frame work). A drag is measured in window coordinates (the
+/// divider moves under the pointer), previewed through gesture state — which
+/// resets itself if the drag is cancelled — and written to the workspace when
+/// it ends.
 struct FractionSplit<Leading: View, Trailing: View>: View {
     let axis: Axis
     let divider: VideoDataDivider
@@ -132,9 +134,8 @@ struct FractionSplit<Leading: View, Trailing: View>: View {
     let showsTrailing: Bool
     @ViewBuilder let leading: () -> Leading
     @ViewBuilder let trailing: () -> Trailing
-    /// The layout as the drag in progress would leave it, or `nil`.
-    @State private var dragged: VideoDataPaneLayout?
-    @State private var dragStart: Double?
+    /// How far the divider has been dragged, in points along the split.
+    @GestureState private var dragTranslation: CGFloat = 0
     @State private var showsResizeCursor = false
 
     private static var handleThickness: CGFloat { 6 }
@@ -144,26 +145,31 @@ struct FractionSplit<Leading: View, Trailing: View>: View {
             let both = showsLeading && showsTrailing
             let total = axis == .horizontal ? geometry.size.width : geometry.size.height
             let length = max(0, total - (both ? Self.handleThickness : 0))
-            let sized = length * CGFloat((dragged ?? panes).fraction(divider))
+            let sized = length * CGFloat(layout(draggedBy: dragTranslation, across: length).fraction(divider))
             // The map divider sizes the pane before it; the others the pane after.
-            let leadingLength = !showsTrailing ? length : !showsLeading ? 0
-                : divider == .map ? sized : length - sized
+            let leadingLength = divider == .map ? sized : length - sized
             let stack = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
             stack {
-                leading()
-                    .frame(width: axis == .horizontal ? leadingLength : nil,
-                           height: axis == .vertical ? leadingLength : nil)
-                    .opacity(showsLeading ? 1 : 0)
-                    .allowsHitTesting(showsLeading)
-                    .accessibilityHidden(!showsLeading)
+                if showsLeading {
+                    leading()
+                        .frame(width: both && axis == .horizontal ? leadingLength : nil,
+                               height: both && axis == .vertical ? leadingLength : nil)
+                        .frame(maxWidth: both ? nil : .infinity, maxHeight: both ? nil : .infinity)
+                }
                 if both { handle(length: length) }
-                trailing()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(showsTrailing ? 1 : 0)
-                    .allowsHitTesting(showsTrailing)
-                    .accessibilityHidden(!showsTrailing)
+                if showsTrailing {
+                    trailing().frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
+    }
+
+    /// The pane layout with the divider moved `translation` points along a
+    /// `length`-point split.
+    private func layout(draggedBy translation: CGFloat, across length: CGFloat) -> VideoDataPaneLayout {
+        var dragged = panes
+        dragged.drag(divider, from: panes.fraction(divider), by: Double(translation), across: Double(length))
+        return dragged
     }
 
     private func handle(length: CGFloat) -> some View {
@@ -176,18 +182,14 @@ struct FractionSplit<Leading: View, Trailing: View>: View {
         .contentShape(Rectangle())
         .onHover { setResizeCursor($0) }
         .onDisappear { setResizeCursor(false) }
-        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global).onChanged { value in
-            let start = dragStart ?? panes.fraction(divider)
-            dragStart = start
-            let translation = axis == .horizontal ? value.translation.width : value.translation.height
-            var preview = panes
-            preview.drag(divider, from: start, by: Double(translation), across: Double(length))
-            dragged = preview
-        }.onEnded { _ in
-            if let dragged { panes = dragged }
-            dragged = nil
-            dragStart = nil
-        })
+        .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+            .updating($dragTranslation) { value, state, _ in
+                state = axis == .horizontal ? value.translation.width : value.translation.height
+            }
+            .onEnded { value in
+                panes = layout(draggedBy: axis == .horizontal ? value.translation.width : value.translation.height,
+                               across: length)
+            })
     }
 
     /// Show or restore the resize cursor, pushing and popping it in pairs.
