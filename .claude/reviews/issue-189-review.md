@@ -18,7 +18,8 @@ of them run on one clock. The same panel hosts an overlay editor.
   - `OverlayWidgetOption`;
   - `OverlayAccessibilitySummary`;
   - `VideoDataPaneLayout`;
-  - `ProjectDocument` v8, which adds `videoData` and migrates v7, v6 and v5 files;
+  - `ProjectDocument` v8, which adds `videoData`; every older file (v1–v7)
+    migrates to the default panes, with v7, v6 and v5 covered by tests;
   - `ProjectLoadNotice`;
   - `TelemetryFrame.hasSameReadings(as:)`.
 - **Shell.**
@@ -94,7 +95,8 @@ Self-review plus `swift-reviewer` over `origin/main...d6eec22`.
 ### LOW
 
 8. **Gesture bookkeeping.** **Fixed**, test-first in `OverlayEditorGestureTests`:
-   - an edit, an undo or a nudge made during an open drag first records the drag;
+   - an edit or an undo made during an open drag first records the drag (an
+     arrow-key nudge during a drag is ignored instead — see N3);
    - a click without movement changes nothing;
    - the gesture's widget is found by id;
    - resize begins explicitly;
@@ -161,9 +163,11 @@ regressions. Two LOW items were found:
   `.receive(on: DispatchQueue.main)`. The value also reads
   `isVoiceOverEnabled` directly, so it doesn't depend on KVO alone.
 
-## Fourth pass
+## Fourth pass — on 51a2908
 
-FOURTH_PASS_PENDING
+Both LOW items were confirmed fixed, and no new issue was found. The reviewer
+also checked this note against its reports. Its two wording corrections (on
+nudges during a drag, and on this section) are applied. **The pass is clean.**
 
 ## Validation
 
