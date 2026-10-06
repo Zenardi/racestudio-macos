@@ -92,8 +92,8 @@ public final class VideoReviewModel: ObservableObject {
         if status == .notSynced || status == .estimated { status = .anchored(lap: nil) }
     }
 
-    /// Move the offset `frames` frames along the ``frameGrid`` (issue 9.7) — the
-    /// result is always on the grid.
+    /// Move the offset by exactly `frames` frame durations of the ``frameGrid``
+    /// (issue 9.7), so a lap anchored on a frame stays on a frame.
     public func stepOffset(frames: Int) {
         setOffset(frameGrid.step(sync.offset, frames: frames))
     }
@@ -205,8 +205,11 @@ public final class VideoReviewModel: ObservableObject {
     /// 29.97 fps frame step reads as 0.033 s — plus the clock rate once a
     /// two-point sync solved one: `"+12.500 s ×1.000083"`.
     public func offsetReadout(locale: Locale = .current) -> String {
-        let sign = sync.offset < 0 ? "−" : "+"
-        let offset = sign + L10n.formattedNumber(abs(sync.offset), fractionDigits: 3, locale: locale) + " s"
+        // Sign the value as shown (to the millisecond), so a sub-millisecond
+        // negative offset reads "+0.000 s" rather than "−0.000 s".
+        let milliseconds = (sync.offset * 1_000).rounded()
+        let sign = milliseconds < 0 ? "−" : "+"
+        let offset = sign + L10n.formattedNumber(abs(milliseconds) / 1_000, fractionDigits: 3, locale: locale) + " s"
         guard sync.rate != 1 else { return offset }
         return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
     }

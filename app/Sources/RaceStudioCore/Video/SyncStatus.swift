@@ -69,18 +69,20 @@ extension SyncStatus: Codable {
         case .estimated:
             self = .estimated
         case .anchored:
-            self = .anchored(lap: try container.decodeIfPresent(Int.self, forKey: .lap) == nil
-                ? nil : Self.lap(forKey: .lap, in: container))
+            self = .anchored(lap: try container.decodeIfPresent(Int.self, forKey: .lap)
+                .map { try Self.lap($0, forKey: .lap, in: container) })
         case .twoPoint:
-            self = .twoPoint(lapA: try Self.lap(forKey: .lapA, in: container),
-                             lapB: try Self.lap(forKey: .lapB, in: container))
+            let lapA = try container.decode(Int.self, forKey: .lapA)
+            let lapB = try container.decode(Int.self, forKey: .lapB)
+            self = .twoPoint(lapA: try Self.lap(lapA, forKey: .lapA, in: container),
+                             lapB: try Self.lap(lapB, forKey: .lapB, in: container))
         }
     }
 
-    /// The lap index under `key`, refused unless it is in ``lapIndexRange``.
-    private static func lap(forKey key: CodingKeys,
+    /// The lap a decoded `index` under `key` names, refused unless it is in
+    /// ``lapIndexRange``.
+    private static func lap(_ index: Int, forKey key: CodingKeys,
                             in container: KeyedDecodingContainer<CodingKeys>) throws -> LapID {
-        let index = try container.decode(Int.self, forKey: key)
         guard lapIndexRange.contains(index) else {
             throw DecodingError.dataCorruptedError(forKey: key, in: container,
                                                    debugDescription: "lap index \(index) out of range")

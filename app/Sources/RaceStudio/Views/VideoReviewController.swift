@@ -263,8 +263,11 @@ final class VideoReviewController: ObservableObject {
     }
 
     /// Speak `message` to VoiceOver users, who cannot see the panel's notice.
+    /// Posted on the window (announcements on the application object are
+    /// sometimes dropped), falling back to the app.
     private func announce(_ message: String) {
-        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+        let element: Any = NSApp.mainWindow ?? NSApp as Any
+        NSAccessibility.post(element: element, notification: .announcementRequested,
                              userInfo: [.announcement: message,
                                         .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }

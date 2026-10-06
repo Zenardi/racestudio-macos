@@ -177,6 +177,15 @@ import Foundation
         #expect(review.offsetReadout(locale: en) == "+12.500 s ×1.000083")
     }
 
+    /// An offset that rounds to zero reads as zero — never a signed "−0.000 s".
+    @Test func test_offset_readout_never_shows_negative_zero() {
+        let review = VideoReviewFixture.stint()
+
+        review.setOffset(-0.0001)
+
+        #expect(review.offsetReadout(locale: en) == "+0.000 s")
+    }
+
     // MARK: - Persistence and reset
 
     /// Restoring a saved attachment brings back its offset, rate and status.
