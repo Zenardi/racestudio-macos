@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 6
+    public static let currentSchemaVersion = 7
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -37,6 +37,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// no attachment. Schema v6 (issue 9.7) adds the clock rate and the sync
     /// status; a migrated v5 attachment runs at rate `1`.
     public var video: VideoAttachment?
+    /// The video overlay drawn over the footage — the live HUD and the burned-in
+    /// export (issue 9.10), so a reopened workspace shows the layout it was left
+    /// with. Added in schema v7; a migrated pre-9.10 project has no overlay, so
+    /// the HUD is off until one is chosen.
+    public var overlay: OverlayLayout?
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -53,7 +58,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         mathChannels: [MathChannelDef] = [],
         activeLayout: WindowLayout = .timeDistance,
         logSheet: LogSheet = LogSheet(),
-        video: VideoAttachment? = nil
+        video: VideoAttachment? = nil,
+        overlay: OverlayLayout? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
@@ -63,12 +69,13 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.activeLayout = activeLayout
         self.logSheet = logSheet
         self.video = video
+        self.overlay = overlay
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet, video
+        case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet, video, overlay
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -83,5 +90,41 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.activeLayout == rhs.activeLayout
             && lhs.logSheet == rhs.logSheet
             && lhs.video == rhs.video
+            && lhs.overlay == rhs.overlay
+    }
+}
+
+extension ProjectDocument {
+
+    /// The warning a load records when the overlay could not be read.
+    static let unreadableOverlayWarning = "unreadable video overlay; opened with the overlay off"
+
+    /// The warning a load records when `count` widgets or settings of the
+    /// overlay could not be read (skipped, or read as their default).
+    static func skippedOverlayEntriesWarning(_ count: Int) -> String {
+        "video overlay: \(count) unreadable \(count == 1 ? "entry" : "entries") skipped"
+    }
+
+    /// Decodes every field exactly as the synthesized conformance would, except
+    /// the 9.10 ``overlay``: it is cosmetic next to the analysis it sits on, so a
+    /// value that isn't a layout at all costs only the overlay — the workspace
+    /// opens with it off and records ``unreadableOverlayWarning`` — rather than
+    /// making the whole project unopenable. (A layout's own fields are already
+    /// read leniently; see ``OverlayLayout``.)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
+                  sessionRefs: try container.decode([SessionRef].self, forKey: .sessionRefs),
+                  layout: try container.decode(AnalysisLayout.self, forKey: .layout),
+                  selectedLaps: try container.decode([LapSelection].self, forKey: .selectedLaps),
+                  mathChannels: try container.decode([MathChannelDef].self, forKey: .mathChannels),
+                  activeLayout: try container.decode(WindowLayout.self, forKey: .activeLayout),
+                  logSheet: try container.decode(LogSheet.self, forKey: .logSheet),
+                  video: try container.decodeIfPresent(VideoAttachment.self, forKey: .video))
+        do {
+            overlay = try container.decodeIfPresent(OverlayLayout.self, forKey: .overlay)
+        } catch {
+            warnings.append(Self.unreadableOverlayWarning)
+        }
     }
 }

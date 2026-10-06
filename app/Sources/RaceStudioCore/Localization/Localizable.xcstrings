@@ -943,6 +943,363 @@
         }
       }
     },
+    "overlay.preset.fullTelemetry": {
+      "comment": "Video overlay preset: every coaching widget plus pedals, temperatures, sector times and session info.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full telemetry"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telemetria completa"
+          }
+        }
+      }
+    },
+    "overlay.preset.kartCoaching": {
+      "comment": "Video overlay preset: speed, RPM, delta, lap info, G-ball, track map and kart badge.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart coaching"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treino de kart"
+          }
+        }
+      }
+    },
+    "overlay.preset.minimal": {
+      "comment": "Video overlay preset: speed, lap timer and delta only.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimal"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mínimo"
+          }
+        }
+      }
+    },
+    "overlay.reason.missingChannel": {
+      "comment": "Video overlay: a channel-value widget names a channel this session does not have. %1$@ = the channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No “%1$@” channel in this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não há canal “%1$@” nesta sessão"
+          }
+        }
+      }
+    },
+    "overlay.reason.missingRole": {
+      "comment": "Video overlay: why a widget is hidden. %1$@ = what the channel measures (e.g. RPM, speed).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No %1$@ channel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem canal de %1$@"
+          }
+        }
+      }
+    },
+    "overlay.reason.missingRoles": {
+      "comment": "Video overlay: why a widget is hidden. %1$@ and %2$@ = what the two missing channels measure.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No %1$@ or %2$@ channel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem canal de %1$@ ou de %2$@"
+          }
+        }
+      }
+    },
+    "overlay.reason.noKart": {
+      "comment": "Video overlay: why the kart badge is hidden.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No kart assigned to this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum kart atribuído a esta sessão"
+          }
+        }
+      }
+    },
+    "overlay.reason.noLaps": {
+      "comment": "Video overlay: why a lap widget is hidden.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No laps in this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma volta nesta sessão"
+          }
+        }
+      }
+    },
+    "overlay.reason.noSectors": {
+      "comment": "Video overlay: why the sector-times widget is hidden.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No sectors in this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhum setor nesta sessão"
+          }
+        }
+      }
+    },
+    "overlay.reason.noSessionInfo": {
+      "comment": "Video overlay: why the session-info widget is hidden.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No session details to show"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem detalhes da sessão para mostrar"
+          }
+        }
+      }
+    },
+    "overlay.reason.noTrackPosition": {
+      "comment": "Video overlay: why the track map (or delta) is hidden.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No GPS track in this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem trajeto de GPS nesta sessão"
+          }
+        }
+      }
+    },
+    "overlay.reason.partialRoles": {
+      "comment": "Video overlay: why a widget shows only part of its data. %1$@ = the missing measurement, %2$@ = the one shown.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No %1$@ channel; showing %2$@ only"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem canal de %1$@; mostrando apenas %2$@"
+          }
+        }
+      }
+    },
+    "overlay.role.brake": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "brake"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "freio"
+          }
+        }
+      }
+    },
+    "overlay.role.exhaustTemp": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "exhaust temperature"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "temperatura do escapamento"
+          }
+        }
+      }
+    },
+    "overlay.role.gear": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gear"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "marcha"
+          }
+        }
+      }
+    },
+    "overlay.role.latG": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lateral G"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G lateral"
+          }
+        }
+      }
+    },
+    "overlay.role.lonG": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "longitudinal G"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G longitudinal"
+          }
+        }
+      }
+    },
+    "overlay.role.rpm": {
+      "comment": "Video overlay: a measurement, used inside a sentence.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM"
+          }
+        }
+      }
+    },
+    "overlay.role.speed": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "speed"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "velocidade"
+          }
+        }
+      }
+    },
+    "overlay.role.throttle": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "throttle"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "acelerador"
+          }
+        }
+      }
+    },
+    "overlay.role.waterTemp": {
+      "comment": "Video overlay: a measurement, used inside a sentence (lower case).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "water temperature"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "temperatura da água"
+          }
+        }
+      }
+    },
     "unit.bar": {
       "comment": "Pressure unit (bar) — same symbol in pt-BR.",
       "localizations": {

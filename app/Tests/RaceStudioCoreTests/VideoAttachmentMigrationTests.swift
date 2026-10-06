@@ -6,7 +6,8 @@ import Foundation
 /// Tests for the issue 9.7 additions to the persisted video attachment: the clock
 /// ``VideoAttachment/rate`` and the ``SyncStatus`` are saved with the workspace
 /// (`.rsproj` schema **v6**), and a v5 project — saved before either existed —
-/// opens unchanged at `rate = 1`.
+/// opens unchanged at `rate = 1`. (The on-disk stamp moved on to v7 with the 9.10
+/// overlay; `ProjectDocumentOverlayMigrationTests` pins it.)
 ///
 /// Every fixture here is synthetic: the "bookmark" is the bytes of a made-up
 /// path, never real footage.
@@ -92,18 +93,6 @@ import Foundation
     /// A v5 project with no video stays without one.
     @Test func test_v5_project_without_a_video_migrates_without_one() throws {
         #expect(try load(v5Project(video: nil)).video == nil)
-    }
-
-    /// The schema was bumped for these fields: a save is stamped v6 on disk.
-    @Test func test_saved_projects_are_stamped_v6() throws {
-        let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let url = dir.appendingPathComponent("stamp.rsproj")
-        try store().save(ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time)), to: url)
-
-        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-
-        #expect(json?["schemaVersion"] as? Int == 6)
     }
 
     /// A corrupt sync status is cosmetic: the project still opens, the footage
