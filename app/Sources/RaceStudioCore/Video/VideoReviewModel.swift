@@ -62,6 +62,15 @@ public final class VideoReviewModel: ObservableObject {
     /// The two-point anchors set so far (issue 9.7).
     @Published public private(set) var anchors: [AnchorSlot: LapAnchor] = [:]
 
+    /// Where an auto-sync from engine sound stands (issue 9.8) — driven by
+    /// ``startAutoSync(_:searchRange:)``.
+    @Published public internal(set) var autoSyncState: AutoSyncState = .idle
+
+    /// Bumped by every auto-sync start and stop, so a superseded run never
+    /// writes its late result; the run in flight is cancelled by every stop.
+    var autoSyncGeneration = 0
+    var autoSyncTask: Task<Void, Never>?
+
     public init(timeline: LapSectorTimeline = .empty,
                 sync: VideoSyncModel = VideoSyncModel(videoDuration: 0)) {
         self.timeline = timeline
@@ -181,17 +190,23 @@ public final class VideoReviewModel: ObservableObject {
         return result
     }
 
-    // MARK: - Status + persistence (issue 9.7)
-
-    /// Which laps the aligned footage covers in full — the status line's second
-    /// half. Follows every sync action, since it reads the live ``sync``.
-    public var coverageSummary: CoverageSummary { CoverageSummary.make(timeline: timeline, sync: sync) }
-
-    /// The panel's status line, e.g. "Synced on lap 3 + lap 14 · footage covers
-    /// laps 2–15 (14 of 16)".
-    public func statusLine(locale: Locale = .current) -> String {
-        status.statusLine(coverage: coverageSummary, locale: locale)
+    /// Apply an auto-sync proposal the operator confirmed (issue 9.8): only a
+    /// ``AudioSyncProposal/confident(offset:confidence:)`` one, and only with
+    /// footage attached. The offset was matched at equal clocks, so any
+    /// two-point rate is dropped; the status becomes
+    /// ``SyncStatus/autoAudio(confidence:)``, which frame steps then refine.
+    @discardableResult
+    public func applyAudioSync(_ proposal: AudioSyncProposal) -> Bool {
+        guard hasVideo, case let .confident(offset, confidence) = proposal,
+              offset.isFinite, confidence.isFinite else { return false }
+        sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: offset)
+        // Held to the range a saved status decodes, so it survives a reload.
+        status = .autoAudio(confidence: min(1, max(0, confidence)))
+        stopAutoSync()
+        return true
     }
+
+    // MARK: - Status + persistence (issue 9.7)
 
     /// Bring back the alignment a saved workspace carries — offset, rate and
     /// status — keeping the footage length already loaded.
@@ -199,19 +214,6 @@ public final class VideoReviewModel: ObservableObject {
         sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: attachment.offset, rate: attachment.rate)
         status = attachment.status
         anchors = [:]
-    }
-
-    /// The offset readout, to the millisecond in the locale's digits — a
-    /// 29.97 fps frame step reads as 0.033 s — plus the clock rate once a
-    /// two-point sync solved one: `"+12.500 s ×1.000083"`.
-    public func offsetReadout(locale: Locale = .current) -> String {
-        // Sign the value as shown (to the millisecond), so a sub-millisecond
-        // negative offset reads "+0.000 s" rather than "−0.000 s".
-        let milliseconds = (sync.offset * 1_000).rounded()
-        let sign = milliseconds < 0 ? "−" : "+"
-        let offset = sign + L10n.formattedNumber(abs(milliseconds) / 1_000, fractionDigits: 3, locale: locale) + " s"
-        guard sync.rate != 1 else { return offset }
-        return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
     }
 
     /// `attachment` re-stamped with the sync in force, for saving.
@@ -226,6 +228,7 @@ public final class VideoReviewModel: ObservableObject {
         status = .notSynced
         frameGrid = .fallback
         anchors = [:]
+        stopAutoSync()
     }
 
     // MARK: - Selection
@@ -259,23 +262,6 @@ public final class VideoReviewModel: ObservableObject {
         guard let lap = selectedLap else { return nil }
         if let splitID = selectedSplitID { return timeline.sector(lap: lap, splitID: splitID)?.span }
         return timeline.lapSpan(lap)?.span
-    }
-
-    /// The section under review, named the way the readout names it —
-    /// `"Lap 2"` or `"Lap 2 · S1"`.
-    public var selectedLabel: String? {
-        guard let lap = selectedLap else { return nil }
-        if let splitID = selectedSplitID, let sector = timeline.sector(lap: lap, splitID: splitID) {
-            return Self.label(lap: lap, sector: sector.name)
-        }
-        return timeline.lapSpan(lap).map { Self.label(lap: $0.lap, sector: nil) }
-    }
-
-    /// The lap and sector the cursor is passing through at `time`, named for the
-    /// panel's readout, or `nil` outside every lap.
-    public func label(atSessionTime time: Double) -> String? {
-        guard let location = timeline.location(atSessionTime: time) else { return nil }
-        return Self.label(lap: location.lap, sector: location.sector?.name)
     }
 
     // MARK: - Seeking + playback
@@ -343,13 +329,6 @@ public final class VideoReviewModel: ObservableObject {
     }
 
     // MARK: - Internals
-
-    private static func label(lap: LapID, sector: String?) -> String {
-        // Laps read 1-based everywhere in the UI, matching the lap picker.
-        let base = "Lap \(lap.index + 1)"
-        guard let sector else { return base }
-        return "\(base) · \(sector)"
-    }
 
     private func apply(_ sector: SectorSpan) {
         selectedLap = sector.lap

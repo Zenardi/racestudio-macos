@@ -216,6 +216,16 @@ fn test_to_distance_grid_maps_values() {
 }
 
 #[test]
+fn test_unrepresentable_grid_is_empty_not_a_panic() {
+    // A span whose grid could never be allocated (1e300 s at 10 Hz) yields an
+    // empty grid rather than overflowing the point count (issue 9.8 review).
+    let series = [(0.0, 1.0), (1e300, 2.0)];
+
+    assert!(resample_uniform_max_gap(&series, 10.0, 1.0).is_empty());
+    assert!(resample_uniform(&series, 10.0).is_empty());
+}
+
+#[test]
 fn test_non_monotonic_distance_rejected() {
     let series = [(0.0, 1.0), (1.0, 2.0), (2.0, 3.0)];
     let dist = [0.0, 5.0, 3.0]; // 5 → 3 decreases

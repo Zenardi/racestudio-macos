@@ -21,13 +21,19 @@ use crate::math::{find_bracket, interp, is_monotonic, lerp};
 /// exactly uniform at `hz` resamples to the same count (idempotence).
 const LENGTH_EPSILON: f64 = 1e-9;
 
+/// The most grid points produced (10⁸, 1.6 GB of `(t, v)` pairs). A span too
+/// long for its rate — a corrupt timestamp years away — yields an empty grid
+/// instead of an unallocatable one.
+const MAX_GRID_POINTS: f64 = 1e8;
+
 /// Resample `series` onto a uniform grid at rate `hz`, interpolating across every
 /// gap. Equivalent to [`resample_uniform_max_gap`] with an infinite `max_gap`.
 ///
 /// The output has `floor((t_end − t_start) · hz) + 1` samples at
 /// `t_start, t_start + 1/hz, …`; the first and last samples equal the input
-/// endpoints exactly, and the time axis is strictly increasing. An empty series
-/// or a non-finite / non-positive `hz` yields an empty result.
+/// endpoints exactly, and the time axis is strictly increasing. An empty series,
+/// a non-finite / non-positive `hz`, or a grid of more than 10⁸ points yields an
+/// empty result.
 #[must_use]
 pub fn resample_uniform(series: &[(f64, f64)], hz: f64) -> Vec<(f64, f64)> {
     resample_uniform_max_gap(series, hz, f64::INFINITY)
@@ -47,8 +53,11 @@ pub fn resample_uniform_max_gap(series: &[(f64, f64)], hz: f64, max_gap: f64) ->
     let t_end = times[times.len() - 1];
     let span = t_end - t_start;
 
-    let count = (span * hz + LENGTH_EPSILON).floor().max(0.0) as usize;
-    let n = count + 1;
+    let count = (span * hz + LENGTH_EPSILON).floor().max(0.0);
+    if !count.is_finite() || count >= MAX_GRID_POINTS {
+        return Vec::new();
+    }
+    let n = count as usize + 1;
 
     (0..n)
         .map(|i| {

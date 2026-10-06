@@ -479,6 +479,22 @@ fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
+    typealias FfiType = Float
+    typealias SwiftType = Float
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Float {
+        return try lift(readFloat(&buf))
+    }
+
+    public static func write(_ value: Float, into buf: inout [UInt8]) {
+        writeFloat(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
     typealias FfiType = Double
     typealias SwiftType = Double
@@ -848,6 +864,27 @@ public protocol SessionHandleProtocol : AnyObject {
     func detectTrack()  -> DetectedTrack?
     
     /**
+     * Propose the offset between the camera audio `pcm` (mono, `sample_rate`
+     * Hz — decimate to ~8 kHz first) and this session, by matching the engine
+     * pitch against the `rpm_channel` (issue 9.8). Offsets are searched in
+     * `[min_offset_s, max_offset_s]`, in the `VideoSyncModel` convention:
+     * `video time = session time + offset`, the session clock being the
+     * channel's timecode in seconds.
+     *
+     * The estimate is a **proposal**: it carries its score, its ratio to the
+     * best rival alignment and whether it clears the confidence thresholds,
+     * and is never applied by the core.
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `rpm_channel` is not in the session.
+     * - [`AnalysisError::WindowOutOfBounds`] for a `NaN` or inverted window.
+     * - [`AnalysisError::AudioTooShort`], [`AnalysisError::NoEnginePitch`],
+     * [`AnalysisError::NoUsableRpm`], [`AnalysisError::FlatRpm`],
+     * [`AnalysisError::InvalidAudio`] — the estimator's typed refusals.
+     */
+    func estimateAudioSync(rpmChannel: String, pcm: [Float], sampleRate: UInt32, minOffsetS: Double, maxOffsetS: Double) throws  -> AudioSyncEstimate
+    
+    /**
      * Evaluate the math-channel `expr` over the timecode `window` (ms), one
      * [`Sample`] per point on the first referenced channel's in-window timebase;
      * other referenced channels are linearly resampled onto it (issues 3.3/3.5).
@@ -1080,6 +1117,37 @@ open func detectTrack() -> DetectedTrack? {
 }
     
     /**
+     * Propose the offset between the camera audio `pcm` (mono, `sample_rate`
+     * Hz — decimate to ~8 kHz first) and this session, by matching the engine
+     * pitch against the `rpm_channel` (issue 9.8). Offsets are searched in
+     * `[min_offset_s, max_offset_s]`, in the `VideoSyncModel` convention:
+     * `video time = session time + offset`, the session clock being the
+     * channel's timecode in seconds.
+     *
+     * The estimate is a **proposal**: it carries its score, its ratio to the
+     * best rival alignment and whether it clears the confidence thresholds,
+     * and is never applied by the core.
+     *
+     * # Errors
+     * - [`AnalysisError::MissingChannel`] if `rpm_channel` is not in the session.
+     * - [`AnalysisError::WindowOutOfBounds`] for a `NaN` or inverted window.
+     * - [`AnalysisError::AudioTooShort`], [`AnalysisError::NoEnginePitch`],
+     * [`AnalysisError::NoUsableRpm`], [`AnalysisError::FlatRpm`],
+     * [`AnalysisError::InvalidAudio`] — the estimator's typed refusals.
+     */
+open func estimateAudioSync(rpmChannel: String, pcm: [Float], sampleRate: UInt32, minOffsetS: Double, maxOffsetS: Double)throws  -> AudioSyncEstimate {
+    return try  FfiConverterTypeAudioSyncEstimate.lift(try rustCallWithError(FfiConverterTypeAnalysisError.lift) {
+    uniffi_racestudio_ffi_fn_method_sessionhandle_estimate_audio_sync(self.uniffiClonePointer(),
+        FfiConverterString.lower(rpmChannel),
+        FfiConverterSequenceFloat.lower(pcm),
+        FfiConverterUInt32.lower(sampleRate),
+        FfiConverterDouble.lower(minOffsetS),
+        FfiConverterDouble.lower(maxOffsetS),$0
+    )
+})
+}
+    
+    /**
      * Evaluate the math-channel `expr` over the timecode `window` (ms), one
      * [`Sample`] per point on the first referenced channel's in-window timebase;
      * other referenced channels are linearly resampled onto it (issues 3.3/3.5).
@@ -1303,6 +1371,151 @@ public func FfiConverterTypeSessionHandle_lift(_ pointer: UnsafeMutableRawPointe
 #endif
 public func FfiConverterTypeSessionHandle_lower(_ value: SessionHandle) -> UnsafeMutableRawPointer {
     return FfiConverterTypeSessionHandle.lower(value)
+}
+
+
+/**
+ * A proposed video↔session alignment from engine sound (issue 9.8) — the
+ * analysis crate's [`SyncEstimate`](racestudio_analysis::audio_sync::SyncEstimate)
+ * plus its confidence verdict, so Swift never re-derives the thresholds.
+ */
+public struct AudioSyncEstimate {
+    /**
+     * `video time = session time + offset_s` (seconds; the `VideoSyncModel`
+     * convention).
+     */
+    public var offsetS: Double
+    /**
+     * Mean salience along the matched pitch curve (≈ 0 for chance).
+     */
+    public var score: Double
+    /**
+     * The winning peak over the best rival alignment ≥ 2 s away.
+     */
+    public var peakRatio: Double
+    /**
+     * The fitted `k` of `pitch = k·RPM` (e.g. `1/120` for a four-stroke).
+     */
+    public var pitchPerRpm: Double
+    /**
+     * Whether the estimate clears both confidence thresholds — only then may
+     * the app offer it for one-click apply.
+     */
+    public var confident: Bool
+    /**
+     * The display confidence in `[0, 1]` — `0.5` at the threshold, `1` at a
+     * 4:1 peak ratio; never above one half when not `confident`.
+     */
+    public var confidence: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * `video time = session time + offset_s` (seconds; the `VideoSyncModel`
+         * convention).
+         */offsetS: Double, 
+        /**
+         * Mean salience along the matched pitch curve (≈ 0 for chance).
+         */score: Double, 
+        /**
+         * The winning peak over the best rival alignment ≥ 2 s away.
+         */peakRatio: Double, 
+        /**
+         * The fitted `k` of `pitch = k·RPM` (e.g. `1/120` for a four-stroke).
+         */pitchPerRpm: Double, 
+        /**
+         * Whether the estimate clears both confidence thresholds — only then may
+         * the app offer it for one-click apply.
+         */confident: Bool, 
+        /**
+         * The display confidence in `[0, 1]` — `0.5` at the threshold, `1` at a
+         * 4:1 peak ratio; never above one half when not `confident`.
+         */confidence: Double) {
+        self.offsetS = offsetS
+        self.score = score
+        self.peakRatio = peakRatio
+        self.pitchPerRpm = pitchPerRpm
+        self.confident = confident
+        self.confidence = confidence
+    }
+}
+
+
+
+extension AudioSyncEstimate: Equatable, Hashable {
+    public static func ==(lhs: AudioSyncEstimate, rhs: AudioSyncEstimate) -> Bool {
+        if lhs.offsetS != rhs.offsetS {
+            return false
+        }
+        if lhs.score != rhs.score {
+            return false
+        }
+        if lhs.peakRatio != rhs.peakRatio {
+            return false
+        }
+        if lhs.pitchPerRpm != rhs.pitchPerRpm {
+            return false
+        }
+        if lhs.confident != rhs.confident {
+            return false
+        }
+        if lhs.confidence != rhs.confidence {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(offsetS)
+        hasher.combine(score)
+        hasher.combine(peakRatio)
+        hasher.combine(pitchPerRpm)
+        hasher.combine(confident)
+        hasher.combine(confidence)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAudioSyncEstimate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AudioSyncEstimate {
+        return
+            try AudioSyncEstimate(
+                offsetS: FfiConverterDouble.read(from: &buf), 
+                score: FfiConverterDouble.read(from: &buf), 
+                peakRatio: FfiConverterDouble.read(from: &buf), 
+                pitchPerRpm: FfiConverterDouble.read(from: &buf), 
+                confident: FfiConverterBool.read(from: &buf), 
+                confidence: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AudioSyncEstimate, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.offsetS, into: &buf)
+        FfiConverterDouble.write(value.score, into: &buf)
+        FfiConverterDouble.write(value.peakRatio, into: &buf)
+        FfiConverterDouble.write(value.pitchPerRpm, into: &buf)
+        FfiConverterBool.write(value.confident, into: &buf)
+        FfiConverterDouble.write(value.confidence, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioSyncEstimate_lift(_ buf: RustBuffer) throws -> AudioSyncEstimate {
+    return try FfiConverterTypeAudioSyncEstimate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioSyncEstimate_lower(_ value: AudioSyncEstimate) -> RustBuffer {
+    return FfiConverterTypeAudioSyncEstimate.lower(value)
 }
 
 
@@ -3896,6 +4109,34 @@ public enum AnalysisError {
      */
     case WindowOutOfBounds(message: String)
     
+    /**
+     * Audio sync (9.8): the audio, the RPM trace, or every overlap the search
+     * window allows is under 20 s.
+     */
+    case AudioTooShort(message: String)
+    
+    /**
+     * Audio sync (9.8): the audio is silent throughout.
+     */
+    case NoEnginePitch(message: String)
+    
+    /**
+     * Audio sync (9.8): the RPM channel has no usable samples.
+     */
+    case NoUsableRpm(message: String)
+    
+    /**
+     * Audio sync (9.8): the RPM never changes, so there is nothing to align.
+     */
+    case FlatRpm(message: String)
+    
+    /**
+     * Audio sync (9.8): the sample rate is outside the supported range (too
+     * low for the pitch band, or above 96 kHz), or the audio or the RPM trace
+     * runs over three hours.
+     */
+    case InvalidAudio(message: String)
+    
 }
 
 
@@ -3940,6 +4181,26 @@ public struct FfiConverterTypeAnalysisError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 8: return .AudioTooShort(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .NoEnginePitch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .NoUsableRpm(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 11: return .FlatRpm(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .InvalidAudio(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -3965,6 +4226,16 @@ public struct FfiConverterTypeAnalysisError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(6))
         case .WindowOutOfBounds(_ /* message is ignored*/):
             writeInt(&buf, Int32(7))
+        case .AudioTooShort(_ /* message is ignored*/):
+            writeInt(&buf, Int32(8))
+        case .NoEnginePitch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(9))
+        case .NoUsableRpm(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
+        case .FlatRpm(_ /* message is ignored*/):
+            writeInt(&buf, Int32(11))
+        case .InvalidAudio(_ /* message is ignored*/):
+            writeInt(&buf, Int32(12))
 
         
         }
@@ -5108,6 +5379,31 @@ fileprivate struct FfiConverterOptionTypeTrackDirection: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceFloat: FfiConverterRustBuffer {
+    typealias SwiftType = [Float]
+
+    public static func write(_ value: [Float], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterFloat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Float] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Float]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterFloat.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
     typealias SwiftType = [Double]
 
@@ -5658,6 +5954,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_detect_track() != 3532) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_racestudio_ffi_checksum_method_sessionhandle_estimate_audio_sync() != 64418) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_racestudio_ffi_checksum_method_sessionhandle_eval_math_channel() != 22850) {

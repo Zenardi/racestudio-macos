@@ -481,6 +481,186 @@ fn test_analysis_error_display_and_mapping() {
 }
 
 // --------------------------------------------------------------------------- //
+// Audio sync from engine sound (issue 9.8)
+// --------------------------------------------------------------------------- //
+
+/// The decimated rate the app hands across the boundary.
+const AUDIO_FS: u32 = 8000;
+
+/// A kart-like RPM profile at 20 Hz: five straights and corners a lap, each
+/// jittered by a tiny LCG so no two laps are identical. `(seconds, rpm)`.
+fn kart_rpm(seconds: f64) -> Vec<(f64, f64)> {
+    let mut state = 0x5EED_u64;
+    let mut jitter = move |span: f64| {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        1.0 + span * (((state >> 11) as f64 / (1u64 << 53) as f64) - 0.5)
+    };
+    let corners = [
+        (7.0, 3300.0, 1.6),
+        (4.0, 4100.0, 1.2),
+        (9.5, 2900.0, 2.0),
+        (3.0, 4400.0, 0.9),
+        (6.0, 3600.0, 1.4),
+    ];
+    let (dt, mut t, mut rpm, mut out) = (0.05, 0.0, 3000.0, Vec::new());
+    'laps: loop {
+        for &(straight, min_rpm, corner) in &corners {
+            let (straight, min_rpm) = (straight * jitter(0.3), min_rpm * jitter(0.25));
+            let mut s = 0.0;
+            while s < straight + corner {
+                let target = if s < straight { 6300.0 } else { min_rpm };
+                let rate = if s < straight { 0.35 } else { 2.6 };
+                rpm += (target - rpm) * rate * dt;
+                out.push((t, rpm));
+                (t, s) = (t + dt, s + dt);
+                if t >= seconds {
+                    break 'laps;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Camera audio: harmonics of `rpm/120` heard at session time `t − offset`
+/// (the 20 Hz trace linearly interpolated), plus white noise.
+fn engine_audio(rpm: &[(f64, f64)], offset: f64, duration: f64) -> Vec<f32> {
+    let fs = f64::from(AUDIO_FS);
+    let mut phases = [0.0_f64; 4];
+    let mut noise = 0x0A0D_u64;
+    (0..(duration * fs) as usize)
+        .map(|i| {
+            let position = (i as f64 / fs - offset) / 0.05;
+            let index = position.floor() as usize;
+            let mut s = 0.0;
+            if position >= 0.0 && index + 1 < rpm.len() {
+                let w = position - index as f64;
+                let value = rpm[index].1 * (1.0 - w) + rpm[index + 1].1 * w;
+                for (h, phase) in phases.iter_mut().enumerate() {
+                    *phase += 2.0 * std::f64::consts::PI * value / 120.0 * (h + 1) as f64 / fs;
+                    s += 0.05 * phase.sin();
+                }
+            }
+            noise = noise
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            s += 0.05 * (((noise >> 40) as f64 / (1u64 << 24) as f64) - 0.5);
+            s as f32
+        })
+        .collect()
+}
+
+/// A synthetic session whose only channel is `rpm` (sampled every 50 ms).
+fn rpm_session(name: &str, rpm: &[(f64, f64)]) -> Arc<SessionHandle> {
+    let values: Vec<i32> = rpm.iter().map(|&(_, v)| v.round() as i32).collect();
+    let path = write_fixture(name, &synth::session_with_rpm(&values, 50));
+    open_session(path.to_string_lossy().into_owned()).expect("open the RPM session")
+}
+
+#[test]
+fn test_estimate_audio_sync_recovers_the_offset() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_ok.xrk", &rpm);
+    let pcm = engine_audio(&rpm, -50.0, 120.0);
+
+    let estimate = session
+        .estimate_audio_sync("RPM".into(), pcm, AUDIO_FS, -300.0, 60.0)
+        .expect("estimate");
+
+    assert!(
+        (estimate.offset_s + 50.0).abs() <= 1001.0 / 30000.0,
+        "{estimate:?}"
+    );
+    assert!(estimate.confident, "{estimate:?}");
+    assert!((0.5..=1.0).contains(&estimate.confidence), "{estimate:?}");
+    assert!(
+        (estimate.pitch_per_rpm * 120.0 - 1.0).abs() < 0.05,
+        "{estimate:?}"
+    );
+    assert!(estimate.score > 0.0 && estimate.peak_ratio > 1.0);
+}
+
+#[test]
+fn test_estimate_audio_sync_rejects_a_missing_channel() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_missing.xrk", &rpm);
+
+    let result = session.estimate_audio_sync(
+        "Speed".into(),
+        engine_audio(&rpm, -50.0, 30.0),
+        AUDIO_FS,
+        -300.0,
+        60.0,
+    );
+
+    assert!(matches!(result, Err(AnalysisError::MissingChannel { .. })));
+}
+
+#[test]
+fn test_estimate_audio_sync_rejects_an_inverted_or_nan_window() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_inverted.xrk", &rpm);
+    let pcm = engine_audio(&rpm, -50.0, 30.0);
+
+    for (min, max) in [(60.0, -300.0), (f64::NAN, 60.0), (-300.0, f64::NAN)] {
+        let result = session.estimate_audio_sync("RPM".into(), pcm.clone(), AUDIO_FS, min, max);
+
+        assert!(
+            matches!(result, Err(AnalysisError::WindowOutOfBounds { .. })),
+            "window ({min}, {max}): {result:?}"
+        );
+    }
+}
+
+#[test]
+fn test_estimate_audio_sync_surfaces_the_core_refusals() {
+    let rpm = kart_rpm(240.0);
+    let session = rpm_session("audio_sync_errors.xrk", &rpm);
+    let pcm = engine_audio(&rpm, -50.0, 30.0);
+    let flat = rpm_session("audio_sync_flat.xrk", &vec![(0.0, 5000.0); 2400]);
+    let stalled = rpm_session("audio_sync_stalled.xrk", &vec![(0.0, 0.0); 2400]);
+    let estimate = |handle: &SessionHandle, pcm: Vec<f32>, rate: u32| {
+        handle.estimate_audio_sync("RPM".into(), pcm, rate, -300.0, 60.0)
+    };
+
+    let short = estimate(&session, pcm[..80_000].to_vec(), AUDIO_FS);
+    let silent = estimate(&session, vec![0.0; pcm.len()], AUDIO_FS);
+    let bad_rate = estimate(&session, pcm.clone(), 500);
+    let too_fast = estimate(&session, pcm.clone(), 96_001);
+    // Just over three hours at the lowest rate that clears the pitch band.
+    let too_long = estimate(&session, vec![0.0; 801 * 10_801], 801);
+    let no_rpm = estimate(&stalled, pcm.clone(), AUDIO_FS);
+    let constant = estimate(&flat, pcm, AUDIO_FS);
+
+    assert!(matches!(short, Err(AnalysisError::AudioTooShort)));
+    assert!(matches!(silent, Err(AnalysisError::NoEnginePitch)));
+    assert!(matches!(bad_rate, Err(AnalysisError::InvalidAudio)));
+    assert!(matches!(too_fast, Err(AnalysisError::InvalidAudio)));
+    assert!(matches!(too_long, Err(AnalysisError::InvalidAudio)));
+    assert!(matches!(no_rpm, Err(AnalysisError::NoUsableRpm)));
+    assert!(matches!(constant, Err(AnalysisError::FlatRpm)));
+}
+
+#[test]
+fn test_audio_sync_errors_map_and_read() {
+    use racestudio_analysis::audio_sync::AudioSyncError as Core;
+
+    for (core, ffi) in [
+        (Core::TooShort, AnalysisError::AudioTooShort),
+        (Core::NoPitch, AnalysisError::NoEnginePitch),
+        (Core::NoRpm, AnalysisError::NoUsableRpm),
+        (Core::FlatSignal, AnalysisError::FlatRpm),
+        (Core::InvalidInput, AnalysisError::InvalidAudio),
+    ] {
+        let mapped = AnalysisError::from(core);
+        assert_eq!(mapped.to_string(), ffi.to_string());
+        assert_eq!(mapped.to_string(), core.to_string());
+    }
+}
+
+// --------------------------------------------------------------------------- //
 // FFT golden loader + generator
 // --------------------------------------------------------------------------- //
 
@@ -681,6 +861,19 @@ mod synth {
 
         file.extend(frame("LAP", &lap(0, 1, 60_000)));
         file.extend(frame("LAP", &lap(0, 2, 55_000)));
+        file
+    }
+
+    /// A synthetic session whose only channel is `RPM`, one sample of `values`
+    /// every `step_ms` milliseconds from timecode 0 (issue 9.8).
+    pub fn session_with_rpm(values: &[i32], step_ms: i32) -> Vec<u8> {
+        let period_us = u32::try_from(step_ms * 1000).expect("positive step");
+        let mut file = frame("CNF", &frame("CHS", &chs(0, "RPM", 6, 0, 4, period_us)));
+        file.extend(frame("RCR", b"SESSION DRIVER\0"));
+        for (i, value) in values.iter().enumerate() {
+            let tc = i32::try_from(i).expect("few samples") * step_ms;
+            file.extend(data_s(0, tc, &value.to_le_bytes()));
+        }
         file
     }
 }

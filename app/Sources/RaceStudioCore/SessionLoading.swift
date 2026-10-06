@@ -203,6 +203,11 @@ public struct FFISessionDataSource: SessionDataSource, @unchecked Sendable {
     }
 }
 
+extension FFISessionDataSource: AudioSyncEstimatorProviding {
+    /// The Rust audio-sync estimator over the same live handle (issue 9.8).
+    public var audioSyncEstimator: (any AudioSyncEstimating)? { FFIAudioSyncEstimator(session: handle) }
+}
+
 private extension TrackDirection {
     /// Map the generated binding's direction enum into Core's own.
     init(_ ffi: RaceStudioFFIBindings.TrackDirection) {

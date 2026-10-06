@@ -3,4 +3,5 @@
 // silence the resulting dead-code warnings.
 #![allow(dead_code)]
 
+pub mod engine_audio;
 pub mod fixtures;

@@ -13,6 +13,11 @@ public enum SyncStatus: Equatable, Sendable {
     case anchored(lap: LapID?)
     /// Both offset and clock rate were solved from two lap-start anchors.
     case twoPoint(lapA: LapID, lapB: LapID)
+    /// The offset was proposed from the engine sound (issue 9.8) and confirmed
+    /// by the operator; `confidence` (`0...1`) is how clearly the match stood
+    /// out. Added without a schema bump: builds from before 9.8 read it, through
+    /// the lenient status decode, as ``notSynced``.
+    case autoAudio(confidence: Double)
 
     /// The status as the panel shows it — `"Synced on lap 3 + lap 14"`, laps
     /// 1-based as everywhere in the UI.
@@ -28,7 +33,14 @@ public enum SyncStatus: Equatable, Sendable {
             return L10n.string(.videoStatusManual, locale: locale)
         case let .twoPoint(lapA, lapB):
             return L10n.format(.videoStatusTwoPoint, locale: locale, Self.number(lapA), Self.number(lapB))
+        case .autoAudio(let confidence):
+            return L10n.format(.videoStatusAutoAudio, locale: locale, Self.percent(confidence, locale: locale))
         }
+    }
+
+    /// A `0...1` fraction as a whole percentage — `"87%"`.
+    static func percent(_ fraction: Double, locale: Locale) -> String {
+        L10n.formattedNumber(fraction * 100, fractionDigits: 0, locale: locale) + "%"
     }
 
     /// The panel's whole status line: how the footage is synced, then how much
@@ -49,12 +61,15 @@ public enum SyncStatus: Equatable, Sendable {
 extension SyncStatus: Codable {
 
     private enum CodingKeys: String, CodingKey {
-        case kind, lap, lapA, lapB
+        case kind, lap, lapA, lapB, confidence
     }
 
     private enum Kind: String, Codable {
-        case notSynced, estimated, anchored, twoPoint
+        case notSynced, estimated, anchored, twoPoint, autoAudio
     }
+
+    /// The confidences a saved auto-audio status may carry.
+    static let confidenceRange = 0.0...1.0
 
     /// The lap indices a saved status may name. A hand-edited or corrupt file can
     /// carry any `Int`; one outside this range is a decode error, never a lap —
@@ -76,6 +91,13 @@ extension SyncStatus: Codable {
             let lapB = try container.decode(Int.self, forKey: .lapB)
             self = .twoPoint(lapA: try Self.lap(lapA, forKey: .lapA, in: container),
                              lapB: try Self.lap(lapB, forKey: .lapB, in: container))
+        case .autoAudio:
+            let confidence = try container.decode(Double.self, forKey: .confidence)
+            guard Self.confidenceRange.contains(confidence) else {
+                throw DecodingError.dataCorruptedError(forKey: .confidence, in: container,
+                                                       debugDescription: "confidence \(confidence) out of range")
+            }
+            self = .autoAudio(confidence: confidence)
         }
     }
 
@@ -104,6 +126,9 @@ extension SyncStatus: Codable {
             try container.encode(Kind.twoPoint, forKey: .kind)
             try container.encode(lapA.index, forKey: .lapA)
             try container.encode(lapB.index, forKey: .lapB)
+        case .autoAudio(let confidence):
+            try container.encode(Kind.autoAudio, forKey: .kind)
+            try container.encode(confidence, forKey: .confidence)
         }
     }
 }

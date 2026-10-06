@@ -98,6 +98,31 @@ seeking to a wrong frame.
   proposed. The panel says *"The video’s date doesn’t match this session — align
   it on a lap start"* instead, so align it on a lap as described above. A date
   never replaces an alignment you made yourself.
+- **Auto-sync from engine sound.** When the session has an `RPM` channel and the
+  video has sound, press **Auto-sync from Engine Sound**. RaceStudio listens to
+  the engine in the footage and lines its pitch up with the session's RPM. It
+  works for any engine (two- or four-stroke, any cylinder count), with nothing
+  to configure. The button has its own row under the anchor controls; a
+  progress bar shows beside it while it reads the audio and matches it.
+  **Cancel** stops it at any point and leaves your current sync exactly as it
+  was, and so does removing the video or closing the window. A ten-minute clip
+  takes about a second. Pressing the button again during a run starts over.
+  VoiceOver reads the result out when it arrives.
+  - When the match is clear, the result shows the proposed offset and a
+    confidence bar. Press **Apply** to use it, or **Dismiss** to keep what you
+    have. It is never applied on its own.
+  - When the engine sound does not line up clearly enough — wind or another
+    kart drowning the engine, or a clip that covers only a lap or two of
+    near-identical laps — it says *No confident match* and offers nothing to
+    apply; align on a lap start instead.
+  - The button is greyed out, with the reason in its tooltip, when the session
+    has no RPM channel or the video has no audio track. Clips or sessions
+    longer than three hours are not matched.
+  - An applied auto-sync can still be trimmed frame by frame or replaced by a
+    two-point sync. Check it once against a lap start line: scrub to the frame
+    where the kart crosses the line and compare it with the lap's start time.
+  - How it works, and when it cannot be trusted:
+    [ADR 0007 — video sync from engine sound](../adr/0007-audio-engine-sync.md).
 - **Frame stepping.** Trim the offset one frame at a time with `,` (back) and `.`
   (forward), or with the buttons beside the slider (their tooltips name the
   keys). A frame is one frame of *this* footage, at its own frame rate: at
@@ -117,7 +142,8 @@ seeking to a wrong frame.
   **Sync to Section** or trim moves the offset but keeps that rate.
 - **Sync status.** The line under the controls says how the footage is aligned:
   *Not synced*, *Estimated from file date*, *Synced by hand*, *Synced on lap 3*,
-  or *Synced on lap 3 + lap 14*. It also says how many laps the footage covers in
+  *Synced on lap 3 + lap 14*, or *Synced from engine sound (91%)*. It also says
+  how many laps the footage covers in
   full, for example *footage covers laps 2–15 (14 of 16)*. It updates after every
   sync action. Saving the workspace keeps the offset, the clock rate and the
   status.

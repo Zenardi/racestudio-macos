@@ -189,4 +189,12 @@ final class FakeSessionDataSource: SessionDataSource, @unchecked Sendable {
         }
         return value
     }
+
+    /// The estimator this fake vends for auto-sync (issue 9.8); `nil` models a
+    /// build without the Rust core.
+    var audioSyncEstimatorStub: (any AudioSyncEstimating)?
+}
+
+extension FakeSessionDataSource: AudioSyncEstimatorProviding {
+    var audioSyncEstimator: (any AudioSyncEstimating)? { audioSyncEstimatorStub }
 }

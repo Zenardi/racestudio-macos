@@ -49,7 +49,12 @@ extension ExpressionEngineError {
              let .DistanceNotMonotonic(message),
              let .EmptyRange(message),
              let .LapOutOfRange(message),
-             let .WindowOutOfBounds(message):
+             let .WindowOutOfBounds(message),
+             let .AudioTooShort(message),
+             let .NoEnginePitch(message),
+             let .NoUsableRpm(message),
+             let .FlatRpm(message),
+             let .InvalidAudio(message):
             self = .other(message: message)
         }
     }
