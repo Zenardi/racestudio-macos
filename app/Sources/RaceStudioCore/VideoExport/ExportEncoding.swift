@@ -1,0 +1,92 @@
+import AVFoundation
+import Foundation
+import VideoToolbox
+
+/// The encoder settings of an overlay export (issue 9.13): what the plan
+/// decided, spelled as `AVAssetWriterInput` and `AVAssetReaderOutput`
+/// dictionaries.
+enum ExportEncoding {
+
+    /// The video encoder's settings: the plan's codec, size and average bit
+    /// rate, a keyframe every two seconds, Rec. 709 tags, and the hardware
+    /// encoder preferred (VideoToolbox falls back to software without one).
+    static func video(for plan: ExportPlan) -> [String: Any] {
+        let fps = plan.footage.frameRate.framesPerSecond
+        let profile: String
+        switch plan.request.settings.codec {
+        case .h264: profile = AVVideoProfileLevelH264HighAutoLevel
+        case .hevc: profile = kVTProfileLevel_HEVC_Main_AutoLevel as String
+        }
+        return [
+            AVVideoCodecKey: plan.request.settings.codec == .hevc ? AVVideoCodecType.hevc : AVVideoCodecType.h264,
+            AVVideoWidthKey: plan.outputWidth,
+            AVVideoHeightKey: plan.outputHeight,
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: plan.videoBitRate,
+                AVVideoExpectedSourceFrameRateKey: fps,
+                AVVideoMaxKeyFrameIntervalKey: max(Int((fps * 2).rounded()), 1),
+                AVVideoProfileLevelKey: profile
+            ] as [String: Any],
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
+            ],
+            AVVideoEncoderSpecificationKey: [
+                kVTVideoEncoderSpecification_EnableHardwareAcceleratedVideoEncoder as String: true
+            ]
+        ]
+    }
+
+    /// The AAC encoder's settings for `audio`: its rate where AAC takes it
+    /// (44.1 or 48 kHz, else 48 kHz), mono or stereo, at `bitRate`.
+    static func audio(for audio: FootageAudio, bitRate: Int) -> [String: Any] {
+        [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: sampleRate(of: audio),
+            AVNumberOfChannelsKey: channels(of: audio),
+            AVChannelLayoutKey: channelLayout(channels(of: audio)),
+            AVEncoderBitRateKey: bitRate
+        ]
+    }
+
+    /// The decoded sound the encoder takes: 32-bit float PCM at the encoder's
+    /// rate and channel count (downmixed when the footage has more).
+    static func pcm(for audio: FootageAudio) -> [String: Any] {
+        [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: sampleRate(of: audio),
+            AVNumberOfChannelsKey: channels(of: audio),
+            AVChannelLayoutKey: channelLayout(channels(of: audio)),
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
+            AVLinearPCMIsNonInterleaved: false,
+            AVLinearPCMIsBigEndianKey: false
+        ]
+    }
+
+    private static func sampleRate(of audio: FootageAudio) -> Double {
+        [44_100, 48_000].contains(audio.sampleRate) ? audio.sampleRate : 48_000
+    }
+
+    private static func channels(of audio: FootageAudio) -> Int {
+        audio.channels >= 2 ? 2 : 1
+    }
+
+    private static func channelLayout(_ channels: Int) -> Data {
+        var layout = AudioChannelLayout()
+        layout.mChannelLayoutTag = channels == 1 ? kAudioChannelLayoutTag_Mono : kAudioChannelLayoutTag_Stereo
+        return Data(bytes: &layout, count: MemoryLayout<AudioChannelLayout>.size)
+    }
+}
+
+extension EncoderAvailability {
+    /// The encoders VideoToolbox lists on this Mac (hardware or software).
+    public static let system = EncoderAvailability(supportsHEVC: hasEncoder(for: kCMVideoCodecType_HEVC))
+
+    private static func hasEncoder(for codec: CMVideoCodecType) -> Bool {
+        var list: CFArray?
+        guard VTCopyVideoEncoderList(nil, &list) == noErr, let encoders = list as? [[String: Any]] else { return false }
+        return encoders.contains { ($0[kVTVideoEncoderList_CodecType as String] as? NSNumber)?.uint32Value == codec }
+    }
+}
