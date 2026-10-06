@@ -46,6 +46,24 @@ and thrown away, so the release pipeline still needs no secrets — but each rel
 identity, so **macOS asks again after every update**. A stable identity would need an Apple
 Developer ID (a paid certificate stored as a CI secret).
 
+### What the sandbox lets RaceStudio touch
+
+The app runs in the macOS App Sandbox
+([`RaceStudio.entitlements`](../app/Sources/RaceStudio/RaceStudio.entitlements)). It can read and
+write only:
+
+- its own container;
+- files and folders **you choose** in an Open or Save panel
+  (`com.apple.security.files.user-selected.read-write`), remembered across launches with
+  app-scoped bookmarks (`com.apple.security.files.bookmarks.app-scope`).
+
+The user-selected grant is **read-write** because *Export Video with Overlay* writes the finished
+MP4 into the folder you pick. Earlier builds only read sessions and footage, and had the read-only
+grant. An export is written to a temporary file on the same volume first, and moved into place
+only when it is complete, so a cancelled or failed export never leaves a partial file behind.
+
+Networking (`network.client`, `network.server`) is there for the MyChron download only.
+
 ## For maintainers: cutting a release
 
 Releases are produced entirely by `.github/workflows/release.yml`; nothing is built or uploaded

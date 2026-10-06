@@ -28,6 +28,7 @@ PACKAGE_DMG="$ROOT/scripts/package_dmg.sh"
 SMOKE="$ROOT/scripts/release_smoke.sh"
 NEXT_VERSION="$ROOT/scripts/next_version.sh"
 RELEASE_DOC="$ROOT/docs/RELEASE.md"
+ENTITLEMENTS="$ROOT/app/Sources/RaceStudio/RaceStudio.entitlements"
 
 PASS=0
 FAIL=0
@@ -257,6 +258,8 @@ test_dry_run_bundle_is_universal_and_certificate_signed() {
   # The MyChron discovery probe binds a UDP socket, which the sandbox only
   # allows with network.server; without it discovery fails before any connect.
   grep -q 'com.apple.security.network.server' <<<"$ents" || out="$out udp-bind-entitlement-missing"
+  # The overlay export (issue 9.13) writes MP4s to a folder the user picks.
+  grep -q 'com.apple.security.files.user-selected.read-write' <<<"$ents" || out="$out user-write-entitlement-lost"
   if [ -z "$out" ]; then
     ok "test_dry_run_bundle_is_universal_and_certificate_signed"
   else
@@ -563,6 +566,31 @@ test_release_doc_warns_about_gatekeeper() {
   fi
 }
 
+test_entitlements_let_the_user_choose_where_to_write() {
+  # Given the overlay export (issue 9.13) writes an MP4 to a folder the user
+  # picks in a save panel, Then the sandbox grants read-write access to
+  # user-selected files -- and the read-only grant it replaces is gone (both
+  # at once would be ambiguous).
+  local write
+  write="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.files.user-selected.read-write' \
+    "$ENTITLEMENTS" 2>/dev/null)"
+  if [ "$write" = "true" ] && ! grep -q 'user-selected.read-only' "$ENTITLEMENTS"; then
+    ok "test_entitlements_let_the_user_choose_where_to_write"
+  else
+    bad "test_entitlements_let_the_user_choose_where_to_write" "read-write=[$write] in $ENTITLEMENTS"
+  fi
+}
+
+test_release_doc_explains_the_write_entitlement() {
+  # Given the sandbox grant changed from read-only to read-write (issue 9.13),
+  # Then the release doc says what the app may write and why.
+  if [ -f "$RELEASE_DOC" ] && grep -q 'user-selected.read-write' "$RELEASE_DOC"; then
+    ok "test_release_doc_explains_the_write_entitlement"
+  else
+    bad "test_release_doc_explains_the_write_entitlement" "docs/RELEASE.md does not mention it"
+  fi
+}
+
 test_packaging_scripts_are_executable_and_strict() {
   # Given the packaging scripts, Then each is executable and fails fast.
   local f out=""
@@ -614,6 +642,8 @@ test_release_yml_delegates_version_choice_to_the_script
 test_publish_is_gated_on_the_publish_output
 test_make_dmg_builds_and_packages
 test_release_doc_warns_about_gatekeeper
+test_entitlements_let_the_user_choose_where_to_write
+test_release_doc_explains_the_write_entitlement
 
 echo
 echo "release tests: $PASS passed, $FAIL failed"
