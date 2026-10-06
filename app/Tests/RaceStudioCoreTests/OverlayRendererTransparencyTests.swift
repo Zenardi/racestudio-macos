@@ -31,13 +31,11 @@ import Testing
         let bitmap = OverlayBitmap(image: image)
         let rects = widgetRects(layout, width: 1280, height: 720)
 
-        let opaqueOutside = bitmap.positions { !$0.isTransparent }.filter { point in
-            !rects.contains { $0.contains(point) }
-        }
+        let paintedOutside = bitmap.paintedPixels(outside: rects)
 
         #expect(rects.reduce(0) { $0 + $1.width * $1.height } < 1280 * 720)
-        #expect(opaqueOutside.isEmpty, "\(opaqueOutside.count) painted pixels outside the widgets")
-        #expect(bitmap.count { !$0.isTransparent } > 0)
+        #expect(paintedOutside == 0, "\(paintedOutside) painted pixels outside the widgets")
+        #expect(bitmap.paintedPixels(outside: []) > 0)
     }
 
     @Test(arguments: [(1080, 1080), (1080, 1920), (1440, 1080)])
@@ -48,11 +46,7 @@ import Testing
         let bitmap = OverlayBitmap(image: image)
         let rects = widgetRects(layout, width: width, height: height)
 
-        let opaqueOutside = bitmap.positions { !$0.isTransparent }.filter { point in
-            !rects.contains { $0.contains(point) }
-        }
-
-        #expect(opaqueOutside.isEmpty)
+        #expect(bitmap.paintedPixels(outside: rects) == 0)
     }
 
     @Test func test_drawing_clears_what_the_context_held_before() {

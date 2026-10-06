@@ -115,20 +115,45 @@ final class OverlayBitmap {
 
     /// Every pixel position (drawing space) that satisfies `predicate`, inside `region`.
     func positions(in region: CGRect? = nil, where predicate: (Pixel) -> Bool) -> [CGPoint] {
-        let area = (region ?? bounds).intersection(bounds).integral
-        guard !area.isNull, !area.isEmpty else { return [] }
         var found: [CGPoint] = []
-        for y in Int(area.minY)..<Int(area.maxY) {
-            for x in Int(area.minX)..<Int(area.maxX) where predicate(pixel(x: x, y: y)) {
-                found.append(CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5))
-            }
+        scan(region) { x, y, pixel in
+            if predicate(pixel) { found.append(CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5)) }
         }
         return found
     }
 
     /// How many pixels in `region` satisfy `predicate`.
     func count(in region: CGRect? = nil, where predicate: (Pixel) -> Bool) -> Int {
-        positions(in: region, where: predicate).count
+        var count = 0
+        scan(region) { _, _, pixel in if predicate(pixel) { count += 1 } }
+        return count
+    }
+
+    /// The painted (not fully transparent) pixels that lie in none of `rects`.
+    func paintedPixels(outside rects: [CGRect]) -> Int {
+        var count = 0
+        scan(nil) { x, y, pixel in
+            guard !pixel.isTransparent else { return }
+            let centre = CGPoint(x: Double(x) + 0.5, y: Double(y) + 0.5)
+            if !rects.contains(where: { $0.contains(centre) }) { count += 1 }
+        }
+        return count
+    }
+
+    /// Visit every pixel of `region` (the whole bitmap by default), reading the
+    /// buffer once — the scans run over whole frames, so they stay cheap and
+    /// leave the CPU to the suites running beside them.
+    private func scan(_ region: CGRect?, _ visit: (Int, Int, Pixel) -> Void) {
+        let area = (region ?? bounds).intersection(bounds).integral
+        guard !area.isNull, !area.isEmpty, let data = context.data else { return }
+        let bytes = data.assumingMemoryBound(to: UInt8.self), stride = context.bytesPerRow
+        for y in Int(area.minY)..<Int(area.maxY) {
+            let row = bytes + (height - 1 - y) * stride
+            for x in Int(area.minX)..<Int(area.maxX) {
+                let pixel = row + x * 4
+                visit(x, y, Pixel(blue: pixel[0], green: pixel[1], red: pixel[2], alpha: pixel[3]))
+            }
+        }
     }
 
     /// The mean position of the pixels in `region` that satisfy `predicate`.

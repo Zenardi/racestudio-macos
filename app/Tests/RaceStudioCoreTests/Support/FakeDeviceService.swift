@@ -10,7 +10,10 @@ import RaceStudioFFIBindings
 ///
 /// With `holdsDownloads`, every download waits until ``cancel()`` and then
 /// throws the device's `Cancelled`, as the live client does when its socket is
-/// shut mid-transfer.
+/// shut mid-transfer. A cancel is *consumed* by the download it stops — one
+/// that arrives just before the download holds still stops it (it is never
+/// lost, which would leave the download waiting forever), and a later download
+/// (a retry) holds again.
 final class FakeDeviceService: DeviceService, @unchecked Sendable {
     private let devicesResult: Result<[Device], Error>
     private let catalogResult: Result<DeviceCatalog, Error>
@@ -72,16 +75,18 @@ final class FakeDeviceService: DeviceService, @unchecked Sendable {
 
     // Synchronous, lock-protected helpers.
 
-    /// Records a download; a new download starts uncancelled.
+    /// Records a download.
     private func record(_ fileName: String) {
         lock.lock(); defer { lock.unlock() }
         recordedDownloads.append(fileName)
-        cancelled = false
     }
 
+    /// Holds the download until a cancel, or ends it at once — consuming the
+    /// cancel — when one already arrived.
     private func hold(_ continuation: CheckedContinuation<Void, Never>) {
         lock.lock()
         if cancelled {
+            cancelled = false
             lock.unlock()
             continuation.resume()
         } else {
@@ -90,13 +95,22 @@ final class FakeDeviceService: DeviceService, @unchecked Sendable {
         }
     }
 
+    /// Counts a cancel and releases the held download, consuming the cancel;
+    /// with none held, the cancel waits for the next download.
     private func markCancelled() -> CheckedContinuation<Void, Never>? {
         lock.lock(); defer { lock.unlock() }
         cancels += 1
-        cancelled = true
         let waiting = waiter
         waiter = nil
+        cancelled = waiting == nil
         return waiting
+    }
+
+    /// Whether a download is being held — what a test waits for before it
+    /// cancels mid-transfer.
+    var isHolding: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return waiter != nil
     }
 
     var downloadCalls: [String] {

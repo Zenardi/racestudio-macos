@@ -74,14 +74,16 @@ enum DevicePanelFixtures {
         return Harness(model: model, service: service, importer: importer, device: device, sessions: sessions)
     }
 
-    /// Wait until `model` is downloading (for tests that cancel mid-queue).
-    static func untilDownloading(_ model: DevicePanelModel) async {
-        let deadline = Date().addingTimeInterval(2)
+    /// Wait until the harness's model is downloading **and** its fake service
+    /// holds that download — so a cancel lands mid-transfer, however loaded the
+    /// machine is (for tests that cancel mid-queue).
+    static func untilDownloading(_ harness: Harness) async {
+        let deadline = Date().addingTimeInterval(10)
         while Date() < deadline {
-            if case .downloading = model.state { return }
+            if case .downloading = harness.model.state, harness.service.isHolding { return }
             await Task.yield()
         }
-        Issue.record("the model never started downloading")
+        Issue.record("the model never started a held download")
     }
 }
 #endif

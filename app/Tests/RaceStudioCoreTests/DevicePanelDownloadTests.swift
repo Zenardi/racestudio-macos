@@ -77,7 +77,7 @@ import RaceStudioFFIBindings
         let harness = try await DevicePanelFixtures.atSessions(holdsDownloads: true)
         let chosen = Array(harness.sessions.prefix(3))
         let queue = Task { await harness.model.download(chosen) }
-        await DevicePanelFixtures.untilDownloading(harness.model)
+        await DevicePanelFixtures.untilDownloading(harness)
 
         await harness.model.cancelDownload()
         await queue.value
@@ -117,11 +117,11 @@ import RaceStudioFFIBindings
     @Test func test_retry_after_cancel_downloads_again() async throws {
         let harness = try await DevicePanelFixtures.atSessions(holdsDownloads: true)
         let queue = Task { await harness.model.download([harness.sessions[0]]) }
-        await DevicePanelFixtures.untilDownloading(harness.model)
+        await DevicePanelFixtures.untilDownloading(harness)
         await harness.model.cancelDownload()
         await queue.value
         let retry = Task { await harness.model.retry() }
-        await DevicePanelFixtures.untilDownloading(harness.model)
+        await DevicePanelFixtures.untilDownloading(harness)
 
         await harness.model.cancelDownload()
         await retry.value
