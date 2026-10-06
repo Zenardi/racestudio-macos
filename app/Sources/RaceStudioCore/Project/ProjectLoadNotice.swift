@@ -27,13 +27,14 @@ public struct ProjectLoadNotice: Equatable, Sendable {
     }
 
     /// Each thing that could not be read, one line each: the warnings, then the
-    /// invalid math channels.
+    /// diagnostics — an invalid math channel by name, anything else in plain
+    /// words. The warnings are the store's own lines, passed through as written.
     public func details(locale: Locale = .current) -> [String] {
         warnings + diagnostics.map { diagnostic in
             if case .invalidMathChannel(let name) = diagnostic {
                 return L10n.format(.projectNoticeInvalidMathChannel, locale: locale, name)
             }
-            return String(describing: diagnostic)
+            return L10n.string(.projectNoticeUnreadablePart, locale: locale)
         }
     }
 }

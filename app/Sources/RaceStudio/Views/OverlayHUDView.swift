@@ -8,9 +8,10 @@ import RaceStudioCore
 ///
 /// An `AVPlayerView` (no built-in controls — the panel's transport, the strip
 /// plot and the measures bar drive it) with two layer-backed views over it,
-/// both laid on the **visible video rect** (`AVPlayerView.videoBounds`), so the
-/// HUD sits on the picture, not the letterbox or pillarbox bars, and the
-/// preview's geometry is the export's:
+/// both laid on the **visible video rect** — the footage's presentation size
+/// fitted into the view, as the aspect-fit player draws it — so the HUD sits on
+/// the picture, not the letterbox or pillarbox bars, and the preview's
+/// geometry is the export's:
 ///
 /// - a dimming plate, shown while the footage doesn't cover the cursor;
 /// - the HUD, whose `CALayer.contents` is an image from the shared
@@ -55,7 +56,7 @@ final class PlayerHUDContainer: NSView {
     let dimView = NSView()
     let hudView = HUDLayerView()
     var onVideoRect: (CGRect) -> Void = { _ in }
-    private var boundsObservation: NSKeyValueObservation?
+    private var observations: [NSKeyValueObservation] = []
     private var reportedRect: CGRect = .null
 
     init(player: AVPlayer) {
@@ -67,17 +68,21 @@ final class PlayerHUDContainer: NSView {
         dimView.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
         dimView.isHidden = true
         for view in [playerView, dimView, hudView] as [NSView] { addSubview(view) }
-        boundsObservation = playerView.observe(\.videoBounds, options: [.new]) { [weak self] _, _ in
-            DispatchQueue.main.async { self?.needsLayout = true }
-        }
+        // The picture's size arrives once the item is ready (documented KVO);
+        // the player view's own video bounds are watched too.
+        let relayout: () -> Void = { [weak self] in DispatchQueue.main.async { self?.needsLayout = true } }
+        observations = [
+            player.observe(\.currentItem?.presentationSize, options: [.new]) { _, _ in relayout() },
+            playerView.observe(\.videoBounds, options: [.new]) { _, _ in relayout() }
+        ]
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
     func stopObserving() {
-        boundsObservation?.invalidate()
-        boundsObservation = nil
+        observations.forEach { $0.invalidate() }
+        observations = []
     }
 
     /// Clicks go to the SwiftUI overlays (the editor), never to the player.
@@ -99,9 +104,13 @@ final class PlayerHUDContainer: NSView {
         }
     }
 
-    /// Where the footage is drawn: the player's own `videoBounds`, or the whole
-    /// view until the footage has a size.
+    /// Where the footage is drawn: its presentation size fitted into the view
+    /// (the player's aspect-fit gravity), else the player's own video bounds,
+    /// else the whole view until the footage has a size.
     private var visibleVideoRect: CGRect {
+        if let size = playerView.player?.currentItem?.presentationSize, size.width > 0, size.height > 0 {
+            return AVMakeRect(aspectRatio: size, insideRect: bounds)
+        }
         let video = playerView.videoBounds
         guard video.width > 0, video.height > 0 else { return bounds }
         return playerView.convert(video, to: self)
@@ -111,16 +120,18 @@ final class PlayerHUDContainer: NSView {
 /// A layer-backed view showing the HUD image. Rendering runs on a private
 /// serial queue at the view's size in pixels; only the newest frame is drawn
 /// (frames arriving mid-render replace each other), and only the `contents`
-/// swap happens on the main thread.
+/// swap happens on the main thread. A render that finishes after the layout or
+/// the size changed is still shown — the newer one is already queued — so a
+/// fast drag never leaves the HUD frozen; only a cleared HUD drops it.
 final class HUDLayerView: NSView {
     private let renderQueue = DispatchQueue(label: "com.aim.racestudio.hud", qos: .userInteractive)
     private var renderer: OverlayRenderer?
     private var frameToShow: TelemetryFrame?
     private var isRendering = false
     private var needsAnotherRender = false
-    /// Bumped whenever what is drawn changes shape (renderer, size), so a render
-    /// begun for the old shape never lands.
-    private var generation = 0
+    /// Bumped whenever the HUD is cleared (no renderer or no frame), so a render
+    /// begun before never brings a hidden HUD back.
+    private var clearings = 0
     /// The pixel size the renderer's static layers were last prepared for.
     private var preparedSize: CGSize = .zero
 
@@ -143,7 +154,6 @@ final class HUDLayerView: NSView {
         let newRenderer = !Self.sameRenderer(renderer, self.renderer)
         if newRenderer {
             self.renderer = renderer
-            generation += 1
             preparedSize = .zero
         }
         guard newRenderer || frame != frameToShow else { return }
@@ -153,14 +163,12 @@ final class HUDLayerView: NSView {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        generation += 1
         scheduleRender()
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         layer?.contentsScale = window?.backingScaleFactor ?? 2
-        generation += 1
         scheduleRender()
     }
 
@@ -174,7 +182,7 @@ final class HUDLayerView: NSView {
 
     private func scheduleRender() {
         guard let renderer, let frame = frameToShow, bounds.width >= 1, bounds.height >= 1 else {
-            generation += 1
+            clearings += 1
             layer?.contents = nil
             return
         }
@@ -183,7 +191,7 @@ final class HUDLayerView: NSView {
             return
         }
         isRendering = true
-        let size = pixelSize, drawing = generation, prepare = preparedSize != size
+        let size = pixelSize, clearing = clearings, prepare = preparedSize != size
         preparedSize = size
         renderQueue.async { [weak self] in
             if prepare { renderer.prepare(for: size) }
@@ -191,13 +199,13 @@ final class HUDLayerView: NSView {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.isRendering = false
-                if drawing == self.generation {
+                if clearing == self.clearings {
                     CATransaction.begin()
                     CATransaction.setDisableActions(true)
                     self.layer?.contents = image
                     CATransaction.commit()
                 }
-                if self.needsAnotherRender || drawing != self.generation {
+                if self.needsAnotherRender {
                     self.needsAnotherRender = false
                     self.scheduleRender()
                 }

@@ -22,7 +22,7 @@ struct VideoSectorGrid: View {
                 Grid(alignment: .trailing, horizontalSpacing: 10, verticalSpacing: 4) {
                     ForEach(review.timeline.laps) { lap in
                         GridRow {
-                            Button("Lap \(lap.lap.index + 1)") { onSelectLap(lap.lap) }
+                            Button(L10n.format(.videoLapLabel, String(lap.lap.index + 1))) { onSelectLap(lap.lap) }
                                 .buttonStyle(.plain)
                                 .fontWeight(review.selectedLap == lap.lap ? .bold : .regular)
                             ForEach(lap.sectors) { sector in
@@ -69,7 +69,7 @@ struct VideoSectorGrid: View {
     }
 
     private func helpText(_ sector: SectorSpan) -> String {
-        let name = "Lap \(sector.lap.index + 1) · \(sector.name)"
+        let name = L10n.format(.videoLapLabel, String(sector.lap.index + 1)) + " · \(sector.name)"
         return review.sync.coverage(of: sector.span) == .none
             ? "\(name) — outside the attached footage"
             : "\(name) — review this section"

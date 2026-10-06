@@ -393,6 +393,23 @@
         }
       }
     },
+    "control.dismiss": {
+      "comment": "VoiceOver label of a button that dismisses a notice.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispensar"
+          }
+        }
+      }
+    },
     "control.dismissAutoSync": {
       "comment": "Auto-sync from engine sound (issue 9.8): closes the result without applying it.",
       "localizations": {
@@ -504,6 +521,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Importar vídeo…"
+          }
+        }
+      }
+    },
+    "control.lapMinus": {
+      "comment": "Video + Data transport: the same section on the previous lap (short button title).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap −"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta −"
+          }
+        }
+      }
+    },
+    "control.lapPlus": {
+      "comment": "Video + Data transport: the same section on the next lap (short button title).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap +"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta +"
           }
         }
       }
@@ -1487,6 +1538,23 @@
         }
       }
     },
+    "overlay.editor.unsaved": {
+      "comment": "Overlay editor: the overlay was edited since the workspace was last saved.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsaved overlay changes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alterações na sobreposição não salvas"
+          }
+        }
+      }
+    },
     "overlay.editor.widgets": {
       "comment": "Overlay editor: the list of widgets with their toggles.",
       "localizations": {
@@ -2422,6 +2490,57 @@
         }
       }
     },
+    "project.notice.unreadablePart": {
+      "comment": "Project load warning for a part of the workspace that could not be read, when no more specific reason is known.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part of the workspace could not be read"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parte do espaço de trabalho não pôde ser lida"
+          }
+        }
+      }
+    },
+    "project.saveFailed.message": {
+      "comment": "Alert message when a workspace could not be saved.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace could not be written there."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível gravar o espaço de trabalho nesse local."
+          }
+        }
+      }
+    },
+    "project.saveFailed.title": {
+      "comment": "Alert title when a workspace could not be saved. %1$@ = the file name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save “%1$@”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar “%1$@”"
+          }
+        }
+      }
+    },
     "unit.bar": {
       "comment": "Pressure unit (bar) — same symbol in pt-BR.",
       "localizations": {
@@ -3052,6 +3171,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Calcula o deslocamento e a taxa do relógio para que as duas âncoras caiam em seus quadros"
+          }
+        }
+      }
+    },
+    "video.help.workspaceButton": {
+      "comment": "Tooltip of the workspace bar's Video + Data button.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch the session video with its data — HUD, lap plot and track map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assista ao vídeo da sessão com os dados — HUD, gráfico da volta e mapa da pista"
+          }
+        }
+      }
+    },
+    "video.lapLabel": {
+      "comment": "A lap named in the Video + Data plot legend and lap grid. %1$@ = the 1-based lap number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@"
           }
         }
       }

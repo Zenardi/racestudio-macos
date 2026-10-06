@@ -89,7 +89,8 @@ final class VideoReviewController: ObservableObject {
     // MARK: - Attaching
 
     /// Bind the controller to the window's shared cursor and start observing the
-    /// playhead. Called once, when the panel appears.
+    /// playhead. Called each time the panel appears; re-attaching replaces the
+    /// previous observers, so it is safe to repeat.
     func start(driving cursor: LinkedCursor) {
         self.cursor = cursor
         attachObservers()
@@ -180,16 +181,21 @@ final class VideoReviewController: ObservableObject {
 
     /// *Play lap* (issue 9.12): play exactly the whole lap picked — or the lap at
     /// the cursor — from its first frame; the review's loop rule replays it.
-    func playLap() {
-        guard data.prepareLapPlayback() else { return }
+    /// Returns `false`, playing nothing, when there is no lap the footage holds.
+    @discardableResult
+    func playLap() -> Bool {
+        guard data.prepareLapPlayback() else { return false }
         playSelection()
+        return true
     }
 
     /// Stop playback at once — before a scrub of the plot or a click on the map —
     /// so the cursor move that follows seeks the footage (only a paused player
     /// follows the cursor) instead of being overridden by the next frame.
     func pauseForScrub() {
-        guard isPlaying else { return }
+        // Waiting to play (just after Play, or buffering) counts as playing: it
+        // is about to drive the cursor again.
+        guard isPlaying || player.timeControlStatus != .paused else { return }
         player.pause()
         isPlaying = false
     }
@@ -336,9 +342,12 @@ final class VideoReviewController: ObservableObject {
 
     private func attachObservers() {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
-        // One tick per frame of the footage (29.97 fps → 1001/30000 s).
+        // One tick per frame of the footage (29.97 fps → 1001/30000 s), but no
+        // more than 60 a second: high-speed footage is not shown faster than the
+        // display refreshes.
         let grid = review.frameGrid
-        let interval = CMTime(value: CMTimeValue(grid.denominator), timescale: CMTimeScale(grid.numerator))
+        let perFrame = CMTime(value: CMTimeValue(grid.denominator), timescale: CMTimeScale(grid.numerator))
+        let interval = CMTimeMaximum(perFrame, CMTime(value: 1, timescale: 60))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             // Delivered on .main; hop to the main actor so the cursor write is safe.
             Task { @MainActor [weak self] in self?.tick(at: time) }

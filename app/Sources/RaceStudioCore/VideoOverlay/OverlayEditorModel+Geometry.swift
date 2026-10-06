@@ -78,7 +78,9 @@ public extension OverlayEditorModel {
     /// none is in progress.
     func drag(by translation: CGSize) {
         updateSelected { start in
-            NormalizedRect(x: Self.snap(start.frame.x + Double(translation.width)),
+            // A click that doesn't move leaves the widget exactly where it is.
+            guard translation != .zero else { return start.frame }
+            return NormalizedRect(x: Self.snap(start.frame.x + Double(translation.width)),
                            y: Self.snap(start.frame.y + Double(translation.height)),
                            width: start.frame.width, height: start.frame.height)
         }
@@ -90,6 +92,7 @@ public extension OverlayEditorModel {
     /// progress.
     func resize(_ handle: OverlayResizeHandle, by translation: CGSize, aspect: OverlayAspect) {
         updateSelected { start in
+            guard translation != .zero else { return start.frame }
             let drawn = start.frame.resolved(in: aspect, anchor: start.anchor)
             let moved = Self.moving(handle, of: drawn, by: translation, minimum: Self.minimumDrawnSize(in: aspect))
             let stored = NormalizedRect.reference(from: moved, in: aspect, anchor: start.anchor)
@@ -126,11 +129,11 @@ public extension OverlayEditorModel {
 
     /// Re-place the selected widget from its rect at the gesture's start.
     private func updateSelected(_ place: (OverlayWidget) -> NormalizedRect) {
-        guard let index = selectedIndex else { return }
+        guard let index = selectedIndex, let id = selection else { return }
         if gestureStart == nil { beginGesture() }
-        guard let start = gestureStart, start.widgets.indices.contains(index) else { return }
+        guard let start = gestureStart?.widgets.first(where: { $0.id == id }) else { return }
         var edited = layout
-        edited.widgets[index].frame = Self.placed(place(start.widgets[index]))
+        edited.widgets[index].frame = Self.placed(place(start))
         layout = edited
     }
 

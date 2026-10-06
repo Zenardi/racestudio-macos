@@ -19,7 +19,7 @@ struct WorkspaceBar: View {
     @ObservedObject var video: VideoReviewController
     /// The overlay editor (issue 9.12): a save marks it clean, an open loads the
     /// project's overlay into it with a fresh history.
-    @ObservedObject var overlayEditor: OverlayEditorModel
+    let overlayEditor: OverlayEditorModel
     /// What the last project open could not read, until dismissed.
     @State private var notice: ProjectLoadNotice?
     @State private var showsNoticeDetails = false
@@ -36,7 +36,7 @@ struct WorkspaceBar: View {
             Divider().frame(height: 18)
             Button { model.select(layout: .videoReview) }
                 label: { Label(L10n.string(.featureVideoData), systemImage: "film") }
-                .help("Watch the session video with its data — HUD, lap plot and track map")
+                .help(L10n.string(.videoHelpWorkspaceButton))
             Divider().frame(height: 18)
             StoryBoardView(
                 board: StoryBoardModel(selection: model.selection.laps, laps: model.session.laps),
@@ -124,14 +124,14 @@ struct WorkspaceBar: View {
             Button { self.notice = nil } label: { Image(systemName: "xmark.circle.fill") }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("Dismiss")
+                .accessibilityLabel(L10n.string(.controlDismiss))
         }
     }
 
     private func presentSaveFailure(_ url: URL) {
         let alert = NSAlert()
-        alert.messageText = "Couldn’t save “\(url.lastPathComponent)”"
-        alert.informativeText = "The workspace could not be written there."
+        alert.messageText = L10n.format(.projectSaveFailedTitle, url.lastPathComponent)
+        alert.informativeText = L10n.string(.projectSaveFailedMessage)
         alert.alertStyle = .warning
         alert.runModal()
     }

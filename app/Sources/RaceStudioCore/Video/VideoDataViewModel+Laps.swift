@@ -24,18 +24,28 @@ public extension VideoDataViewModel {
     }
 
     /// Get ready for *Play lap*: put the whole lap under review — the one picked
-    /// (a sector widens to its lap), else the lap at the cursor, else the lap on
-    /// the plot. Returns whether the footage holds any of it; the shell then
-    /// plays from ``VideoReviewModel/seekTarget``, and the review's window rules
+    /// (a sector widens to its lap), else the lap on the plot (the cursor's).
+    /// Returns whether the footage holds any of it; the shell then plays from
+    /// ``VideoReviewModel/seekTarget``, and the review's window rules
     /// (``VideoReviewModel/loops``) stop or replay it at its end.
     func prepareLapPlayback() -> Bool {
-        let cursorLap = displayedTime.flatMap { review.timeline.location(atSessionTime: $0)?.lap }
-        guard let lap = review.selectedLap ?? cursorLap ?? plotLap, review.timeline.lapSpan(lap) != nil else {
-            return false
-        }
+        guard let lap = lapToPlay else { return false }
         review.select(lap: lap)
         setPlotLap(lap)
         return review.canPlaySelection
+    }
+
+    /// Whether *Play lap* has a lap to play that the footage holds any of — so
+    /// the button and the menu item are enabled only when it would play.
+    var canPlayLap: Bool {
+        guard let lap = lapToPlay, let span = review.timeline.lapSpan(lap)?.span else { return false }
+        return review.sync.coverage(of: span) != .none
+    }
+
+    /// The lap *Play lap* plays: the one picked, else the one on the plot.
+    private var lapToPlay: LapID? {
+        guard let lap = review.selectedLap ?? plotLap, review.timeline.lapSpan(lap) != nil else { return nil }
+        return lap
     }
 
     /// The session-time window the strip plot spans — ``plotLap``'s — or `nil`.

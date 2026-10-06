@@ -1,6 +1,12 @@
 import Combine
 import Foundation
 
+/// The inputs a telemetry load was made for (issue 9.12).
+struct TelemetryInputs: Equatable {
+    let sectors: LapSectorTimeline
+    let channels: [String]
+}
+
 /// What the shell applies after one displayed video frame (issue 9.12).
 public struct VideoDataTick: Equatable, Sendable {
     /// The session time to drive the shared cursor to, or `nil` when the
@@ -52,8 +58,9 @@ public final class VideoDataViewModel: ObservableObject {
     /// is the instant those readings were first seen.
     @Published public private(set) var currentFrame: TelemetryFrame?
 
-    /// The lap the strip plot and the map show: the one picked, else the one the
-    /// cursor is in (the last one, between laps).
+    /// The lap the strip plot and the map show: the lap the cursor is in (the
+    /// last one, between laps), or the one just picked until the cursor moves —
+    /// picking a lap sends the cursor to its start, so the two agree.
     @Published public private(set) var plotLap: LapID?
 
     /// Speed and RPM across ``plotLap``, or `nil` before the telemetry is in.
@@ -76,6 +83,9 @@ public final class VideoDataViewModel: ObservableObject {
     private var samplingCursor = SamplingCursor()
     private var track: [GPSTrackPoint] = []
     private var loadGeneration = 0
+    /// What the telemetry on show was loaded for — the sector timeline its lap
+    /// clock was cut by and the named channels it samples.
+    private var loadedInputs: TelemetryInputs?
     private var syncWatch: AnyCancellable?
 
     public init(review: VideoReviewModel) {
@@ -92,6 +102,7 @@ public final class VideoDataViewModel: ObservableObject {
     /// show and re-plotting the lap.
     public func setTelemetry(_ timeline: TelemetryTimeline?) {
         telemetry = timeline
+        loadedInputs = nil
         telemetryRevision += 1
         samplingCursor = SamplingCursor()
         currentFrame = nil
@@ -113,10 +124,21 @@ public final class VideoDataViewModel: ObservableObject {
     public func loadTelemetry(from analysis: AnalysisSession, channels: [String] = []) async {
         loadGeneration += 1
         let generation = loadGeneration
-        guard let timeline = try? await TelemetryTimeline.load(from: analysis, timeline: review.timeline,
+        let inputs = TelemetryInputs(sectors: review.timeline, channels: channels)
+        guard let timeline = try? await TelemetryTimeline.load(from: analysis, timeline: inputs.sectors,
                                                                channels: channels),
               generation == loadGeneration else { return }
         setTelemetry(timeline)
+        loadedInputs = inputs
+    }
+
+    /// Whether the telemetry must be (re)loaded to sample `channels` — the
+    /// overlay's named readouts: it is not in yet, or was loaded for other
+    /// channels or for sectors the review has since re-cut. Asked whenever the
+    /// panel appears, so a change made while it was off screen is caught.
+    public func needsTelemetryReload(channels: [String]) -> Bool {
+        guard telemetry != nil, let loaded = loadedInputs else { return true }
+        return loaded.channels != channels || loaded.sectors != review.timeline
     }
 
     // MARK: - The clock

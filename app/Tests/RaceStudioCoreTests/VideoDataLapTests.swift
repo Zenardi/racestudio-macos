@@ -85,6 +85,19 @@ import Foundation
         #expect(!loaded.model.prepareLapPlayback())
     }
 
+    /// *Play lap* is offered only for a lap the footage holds — the picked one,
+    /// else the one on the plot (the cursor's).
+    @Test func test_play_lap_is_offered_only_for_a_filmed_lap() async throws {
+        let loaded = try await VideoDataFixture.loaded(videoDuration: 30, offset: 0)
+
+        loaded.model.follow(cursorTime: 10, isPlaying: false)
+        #expect(loaded.model.canPlayLap, "lap 0 (0–21 s) is on film")
+        loaded.model.follow(cursorTime: 50, isPlaying: false)
+        #expect(!loaded.model.canPlayLap, "lap 2 (40–60.5 s) is past the footage")
+        loaded.model.selectLap(LapID(1))
+        #expect(loaded.model.canPlayLap, "lap 1 (21–40 s) is partly on film")
+    }
+
     /// With no lap at all there is nothing to play.
     @Test func test_play_lap_without_laps_does_nothing() {
         let model = VideoDataViewModel(review: VideoReviewModel())
@@ -226,6 +239,24 @@ import Foundation
         let frame = try #require(model.currentFrame)
         #expect(frame.speed != nil)
         #expect(frame.value(ofChannel: "Water Temp") == TelemetryFixture.water(30))
+    }
+
+    /// The telemetry needs loading until it is in, and again whenever the
+    /// overlay's named channels or the laps' sectors differ from the ones it was
+    /// loaded with — even if they changed while the panel was off screen.
+    @Test func test_the_telemetry_is_reloaded_when_its_inputs_change() async throws {
+        let built = TelemetryFixture.make()
+        let analysis = AnalysisSession(session: built.session, dataSource: built.source)
+        let review = VideoReviewModel(timeline: built.sectors)
+        let model = VideoDataViewModel(review: review)
+        #expect(model.needsTelemetryReload(channels: []))
+
+        await model.loadTelemetry(from: analysis, channels: ["Water Temp"])
+
+        #expect(!model.needsTelemetryReload(channels: ["Water Temp"]))
+        #expect(model.needsTelemetryReload(channels: ["Water Temp", "Oil Temp"]))
+        review.update(timeline: VideoReviewFixture.timeline())
+        #expect(model.needsTelemetryReload(channels: ["Water Temp"]))
     }
 
     /// Of two loads in flight, only the one asked for last is kept.

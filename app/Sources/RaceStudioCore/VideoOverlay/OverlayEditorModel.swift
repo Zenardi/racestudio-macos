@@ -8,7 +8,9 @@ import Foundation
 /// ``endGesture()``), a nudge, a preset, a toggle, an option — and ``undo()`` /
 /// ``redo()`` restore the exact layouts on either side of it. The history is
 /// bounded at ``historyLimit`` steps. Attach the window's ``undoManager`` and
-/// ⌘Z / ⇧⌘Z drive the same history, named for the Edit menu.
+/// ⌘Z / ⇧⌘Z drive the same history, named for the Edit menu — the only way the
+/// shell undoes, so the two never disagree. An edit or an undo made while a
+/// drag is still open first records that drag as its own step.
 ///
 /// The geometry — hit-testing in draw order, the 1% grid, the title-safe area
 /// and the minimum size — is in `OverlayEditorModel+Geometry.swift`. Pure:
@@ -67,6 +69,16 @@ public final class OverlayEditorModel: ObservableObject {
         isDirty = false
     }
 
+    /// Forget the edit history — here and in the ``undoManager`` — keeping the
+    /// layout: when the panel goes off screen, so ⌘Z in another panel never
+    /// edits a HUD out of sight.
+    public func resetHistory() {
+        gestureStart = nil
+        undoStack.removeAll()
+        redoStack.removeAll()
+        undoManager?.removeAllActions(withTarget: self)
+    }
+
     /// Record that the workspace was saved with the current layout.
     public func markSaved() {
         savedLayout = layout
@@ -88,18 +100,22 @@ public final class OverlayEditorModel: ObservableObject {
     /// Whether there is an undone edit to redo.
     public var canRedo: Bool { !redoStack.isEmpty }
 
-    /// Step back one edit. Returns `false` when there is none.
+    /// Step back one edit (closing an open drag first). Returns `false` when
+    /// there is none. Internal: the shell undoes through the ``undoManager``.
     @discardableResult
-    public func undo() -> Bool {
+    func undo() -> Bool {
+        closeOpenGesture()
         guard let previous = undoStack.popLast() else { return false }
         redoStack.append(layout)
         show(previous)
         return true
     }
 
-    /// Step forward one undone edit. Returns `false` when there is none.
+    /// Step forward one undone edit (closing an open drag first). Returns
+    /// `false` when there is none. Internal, like ``undo()``.
     @discardableResult
-    public func redo() -> Bool {
+    func redo() -> Bool {
+        closeOpenGesture()
         guard let next = redoStack.popLast() else { return false }
         undoStack.append(layout)
         show(next)
@@ -149,6 +165,7 @@ public final class OverlayEditorModel: ObservableObject {
     /// Apply `change` to the layout as one edit — recorded only if it changed
     /// anything.
     func commit(_ change: (inout OverlayLayout) -> Void) {
+        closeOpenGesture()
         var edited = layout
         change(&edited)
         guard edited != layout else { return }
@@ -166,6 +183,12 @@ public final class OverlayEditorModel: ObservableObject {
         redoStack.removeAll()
         registerUndo()
         didCommit()
+    }
+
+    /// Record a drag still in progress as its own step, so what follows lands
+    /// after it in the history.
+    private func closeOpenGesture() {
+        if gestureStart != nil { endGesture() }
     }
 
     /// Make `restored` the layout after an undo or redo.

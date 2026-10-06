@@ -17,7 +17,9 @@ import RaceStudioCore
 /// layout (``VideoDataPaneLayout``) all live in `RaceStudioCore`; this view lays
 /// the regions out, forwards clicks, and lets ``VideoReviewController`` apply
 /// the decisions to AVKit. It does not observe the data model or the cursor —
-/// they change every frame — only its children that draw them do.
+/// they change every frame — only its children that draw them do. It does
+/// observe the editor and the pane layout, so it redraws while a widget or a
+/// divider is dragged, not while the footage plays.
 struct VideoDataPanel: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.undoManager) private var undoManager
@@ -49,10 +51,16 @@ struct VideoDataPanel: View {
             }
         }
         .onAppear(perform: appear)
-        .onChange(of: splitReport.layout) { _ in
-            if rebuildTimeline() { reloadTelemetry() }
+        .onDisappear {
+            // Undo is scoped to the panel: ⌘Z elsewhere never edits a HUD out of sight.
+            editor.resetHistory()
         }
-        .onChange(of: editor.layout.sessionChannelNames) { _ in reloadTelemetry() }
+        .onChange(of: splitReport.layout) { _ in
+            rebuildTimeline()
+            reloadTelemetryIfNeeded()
+        }
+        .onChange(of: editor.layout.sessionChannelNames) { _ in reloadTelemetryIfNeeded() }
+        .onChange(of: undoManager) { editor.undoManager = $0 }
         .onReceive(cursor.$timePosition) { controller.seekFromCursor(to: $0) }
         .onReceive(data.$telemetry) { hasTelemetry = $0 != nil }
         .focusedSceneValue(\.videoDataActions, actions)
@@ -93,7 +101,7 @@ struct VideoDataPanel: View {
                                 kart: kart, metadata: model.session.metadata)
             }
             Divider()
-            VideoDataTransport(review: review, controller: controller, cursor: cursor,
+            VideoDataTransport(review: review, controller: controller, data: data, cursor: cursor,
                                goToSelection: controller.goToSelection)
         }
     }
@@ -173,7 +181,7 @@ struct VideoDataPanel: View {
     }
 
     private var actions: VideoDataActions {
-        VideoDataActions(playLap: controller.playLap,
+        VideoDataActions(playLap: { if !controller.playLap() { NSSound.beep() } },
                          toggleLoop: { review.loops.toggle() },
                          toggleHUD: { editor.setShowsHUD(!editor.layout.isEnabled) },
                          toggleEditing: { isEditing.toggle() },
@@ -187,7 +195,9 @@ struct VideoDataPanel: View {
         editor.undoManager = undoManager
         presets = OverlayPresetStore().presets()
         data.setTrack(model.gpsTrack)
-        if rebuildTimeline() || data.telemetry == nil { reloadTelemetry() }
+        rebuildTimeline()
+        // Catches a split or overlay change made while the panel was off screen.
+        reloadTelemetryIfNeeded()
         controller.seekFromCursor(to: cursor.timePosition)
     }
 
@@ -219,11 +229,12 @@ struct VideoDataPanel: View {
                                        sessionDuration: cursor.timeBounds?.upperBound ?? 0) }
     }
 
-    /// Load the telemetry the HUD, the plot and the map read — timed against the
-    /// review's laps and sectors, with the overlay's named channels.
-    private func reloadTelemetry() {
-        guard let analysis else { return }
+    /// (Re)load the telemetry the HUD, the plot and the map read — timed against
+    /// the review's laps and sectors, with the overlay's named channels — when
+    /// it is not in yet or was loaded for other ones.
+    private func reloadTelemetryIfNeeded() {
         let channels = editor.layout.sessionChannelNames
+        guard let analysis, data.needsTelemetryReload(channels: channels) else { return }
         Task { await data.loadTelemetry(from: analysis, channels: channels) }
     }
 

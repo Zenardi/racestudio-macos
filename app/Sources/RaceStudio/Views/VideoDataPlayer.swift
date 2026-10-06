@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVKit
 import RaceStudioCore
 
@@ -24,7 +25,7 @@ struct VideoDataPlayer: View {
                            dimsFootage: data.showsNoFootage, onVideoRect: { videoRect = $0 })
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.string(.hudAccessibilityLabel))
-                .accessibilityValue(data.accessibilitySummary(units: editor.layout.units))
+                .accessibilityValue(accessibilityValue)
             if data.showsNoFootage, videoRect.width > 0 {
                 noFootagePlate
                     .position(x: videoRect.midX, y: videoRect.midY)
@@ -59,6 +60,12 @@ struct VideoDataPlayer: View {
         }
     }
 
+    /// The HUD's sentence for VoiceOver — built only while VoiceOver runs, as
+    /// it would otherwise be formatted for every video frame for nobody.
+    private var accessibilityValue: String {
+        NSWorkspace.shared.isVoiceOverEnabled ? data.accessibilitySummary(units: editor.layout.units) : ""
+    }
+
     private var availability: [OverlayWidget.ID: WidgetAvailability] {
         data.overlayContext(kart: kart, metadata: metadata).map { editor.layout.availability(for: $0) } ?? [:]
     }
@@ -76,15 +83,15 @@ struct VideoDataPlayer: View {
 }
 
 /// Keeps the HUD's renderer across the per-frame redraws: a new one only when
-/// the layout, the telemetry or the kart changes, so its static layers stay
-/// warm.
+/// the layout, the telemetry or the kart (any of its details) changes, so its
+/// static layers stay warm.
 @MainActor
 final class HUDRendererCache {
     /// What a cached renderer was made for.
     private struct Key: Equatable {
         let layout: OverlayLayout
         let revision: Int
-        let kart: String?
+        let kart: Kart?
     }
 
     private var key: Key?
@@ -92,7 +99,7 @@ final class HUDRendererCache {
 
     func renderer(layout: OverlayLayout, revision: Int, kart: Kart?,
                   make: () -> OverlayRenderer?) -> OverlayRenderer? {
-        let wanted = Key(layout: layout, revision: revision, kart: kart?.id)
+        let wanted = Key(layout: layout, revision: revision, kart: kart)
         if wanted == key, let cached { return cached }
         key = wanted
         cached = make()
@@ -119,6 +126,7 @@ struct VideoDataReadout: View {
 struct VideoDataTransport: View {
     @ObservedObject var review: VideoReviewModel
     @ObservedObject var controller: VideoReviewController
+    let data: VideoDataViewModel
     let cursor: LinkedCursor
     let goToSelection: () -> Void
 
@@ -135,20 +143,32 @@ struct VideoDataTransport: View {
             Button { review.nextSector(); goToSelection() } label: { Image(systemName: "forward.end") }
                 .help(L10n.string(.controlNextSector))
             Divider().frame(height: 16)
-            Button(L10n.string(.controlPlayLap)) { controller.playLap() }
-                .help(L10n.string(.controlPlayLap) + " (⌥⌘P)")
+            PlayLapButton(data: data, controller: controller)
             Toggle(L10n.string(.controlLoopLap), isOn: $review.loops)
                 .toggleStyle(.switch)
                 .fixedSize()
                 .help(L10n.string(.controlLoopLap) + " (⌥⌘L)")
             Divider().frame(height: 16)
-            Button("Lap −") { review.previousLap(); goToSelection() }
+            Button(L10n.string(.controlLapMinus)) { review.previousLap(); goToSelection() }
                 .help(L10n.string(.controlPreviousLap))
-            Button("Lap +") { review.nextLap(); goToSelection() }
+            Button(L10n.string(.controlLapPlus)) { review.nextLap(); goToSelection() }
                 .help(L10n.string(.controlNextLap))
         }
         .font(.callout)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+    }
+}
+
+/// *Play lap*, enabled only when there is a lap the footage holds — observing
+/// the data model itself, so the rest of the transport doesn't redraw with it.
+private struct PlayLapButton: View {
+    @ObservedObject var data: VideoDataViewModel
+    @ObservedObject var controller: VideoReviewController
+
+    var body: some View {
+        Button(L10n.string(.controlPlayLap)) { controller.playLap() }
+            .disabled(!data.canPlayLap)
+            .help(L10n.string(.controlPlayLap) + " (⌥⌘P)")
     }
 }

@@ -17,6 +17,7 @@ struct OverlayEditCanvas: View {
     let aspect: OverlayAspect
     let availability: [OverlayWidget.ID: WidgetAvailability]
     @State private var isDragging = false
+    @State private var resizing: OverlayResizeHandle?
 
     private static let handleSize: CGFloat = 9
 
@@ -37,6 +38,8 @@ struct OverlayEditCanvas: View {
                 }
             }
         }
+        // A drag cut short (the editor closed mid-drag) still ends as one step.
+        .onDisappear { editor.endGesture() }
     }
 
     private func rect(_ frame: NormalizedRect, in size: CGSize) -> CGRect {
@@ -75,8 +78,15 @@ struct OverlayEditCanvas: View {
             .frame(width: Self.handleSize, height: Self.handleSize)
             .offset(x: x - Self.handleSize / 2, y: y - Self.handleSize / 2)
             .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                if resizing != handle {
+                    resizing = handle
+                    editor.beginGesture()
+                }
                 editor.resize(handle, by: normalized(value.translation, in: size), aspect: aspect)
-            }.onEnded { _ in editor.endGesture() })
+            }.onEnded { _ in
+                resizing = nil
+                editor.endGesture()
+            })
     }
 
     private func moveGesture(size: CGSize) -> some Gesture {
@@ -84,6 +94,9 @@ struct OverlayEditCanvas: View {
             .onChanged { value in
                 if !isDragging {
                     isDragging = true
+                    // A click on the video takes the keyboard back from a field
+                    // or control, so the arrow keys nudge the widget picked.
+                    NSApp.keyWindow?.makeFirstResponder(nil)
                     let start = CGPoint(x: value.startLocation.x / max(size.width, 1),
                                         y: value.startLocation.y / max(size.height, 1))
                     editor.select(at: start, aspect: aspect)
@@ -105,9 +118,9 @@ struct OverlayEditCanvas: View {
 // MARK: - Arrow-key nudges
 
 /// Arrow keys nudge the selected widget while the editor is open — 1%, or 5%
-/// with ⇧ — unless a text field is being typed in. Watches the window's key
-/// events (SwiftUI on macOS 13 has no key handler) and claims only the arrows
-/// it used.
+/// with ⇧ — unless a text field, slider or other control has the keyboard, or
+/// ⌘, ⌥ or ⌃ is held. Watches the window's key events (SwiftUI on macOS 13 has
+/// no key handler) and claims only the arrows it used.
 struct KeyNudgeMonitor: NSViewRepresentable {
     /// Nudge by whole grid steps; returns whether a widget moved.
     let onNudge: (_ dx: Int, _ dy: Int, _ large: Bool) -> Bool
@@ -137,7 +150,8 @@ struct KeyNudgeMonitor: NSViewRepresentable {
             stopMonitoring()
             guard window != nil else { return }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self, event.window === self.window, !(event.window?.firstResponder is NSText),
+                guard let self, event.window === self.window, Self.isFree(event.window?.firstResponder),
+                      event.modifierFlags.isDisjoint(with: [.command, .option, .control]),
                       let step = Self.step(for: event.keyCode) else { return event }
                 return self.onNudge(step.dx, step.dy, event.modifierFlags.contains(.shift)) ? nil : event
             }
@@ -146,6 +160,12 @@ struct KeyNudgeMonitor: NSViewRepresentable {
         func stopMonitoring() {
             if let monitor { NSEvent.removeMonitor(monitor) }
             monitor = nil
+        }
+
+        /// Whether the arrows are free to nudge: no text field, slider, table or
+        /// other control has the keyboard.
+        private static func isFree(_ responder: NSResponder?) -> Bool {
+            !(responder is NSText) && !(responder is NSControl)
         }
 
         /// The arrow keys' virtual key codes, top-left origin like the layout.
@@ -192,6 +212,11 @@ struct OverlayEditorInspector: View {
             }
             Section(L10n.string(.overlayEditorOptions)) {
                 OverlayWidgetOptionsEditor(editor: editor)
+            }
+            if editor.isDirty {
+                Label(L10n.string(.overlayEditorUnsaved), systemImage: "circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Text(L10n.string(.overlayEditorHint))
                 .font(.caption)

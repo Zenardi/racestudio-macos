@@ -46,10 +46,12 @@ import Foundation
                                                "Math channel “Grip” has an invalid expression"])
     }
 
-    /// A diagnostic that is not about a math channel is still counted, plainly.
-    @Test func test_other_diagnostics_are_listed_plainly() throws {
+    /// A diagnostic that is not about a math channel is still counted, in plain
+    /// words in the reader's language — never a type name.
+    @Test func test_other_diagnostics_are_listed_in_plain_words() throws {
         let notice = try #require(ProjectLoadNotice(document: document(diagnostics: [.ioFailure])))
 
-        #expect(notice.details(locale: en) == ["ioFailure"])
+        #expect(notice.details(locale: en) == ["Part of the workspace could not be read"])
+        #expect(notice.details(locale: ptBR) == ["Parte do espaço de trabalho não pôde ser lida"])
     }
 }
