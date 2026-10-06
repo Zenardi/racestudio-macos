@@ -62,7 +62,14 @@ enum TestMediaFactory {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: spec.width, AVVideoHeightKey: spec.height,
-            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 2_000_000]
+            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 2_000_000],
+            // Tagged Rec. 709 as cameras tag their footage: untagged SD-sized
+            // video is read as BT.601 and colour-converted into the export.
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
+            ]
         ])
         video.expectsMediaDataInRealTime = false
         // The timescale cameras write 30 and 29.97 fps in: the writer's default

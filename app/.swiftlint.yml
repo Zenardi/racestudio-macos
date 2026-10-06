@@ -19,3 +19,6 @@ line_length:
 
 identifier_name:
   min_length: 1 # allow short SwiftUI/local identifiers
+  excluded:
+    # AVVideoCompositing's required property (issue 9.13): the SDK's name, not ours.
+    - requiredPixelBufferAttributesForRenderContext
