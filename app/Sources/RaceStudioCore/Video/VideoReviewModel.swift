@@ -20,11 +20,14 @@ public enum VideoPlaybackAction: Equatable, Sendable {
 
 /// The analysis window's video-review brain (issue 9.6).
 ///
-/// It answers the four questions the panel and its `AVPlayer` keep asking —
+/// It answers the questions the panel and its `AVPlayer` keep asking —
 /// *which* lap or sector is under review, *where* that puts the shared cursor and
 /// the playhead, *whether* the footage actually covers it, and *what to do* when
 /// the reviewed window runs out — over a ``LapSectorTimeline`` (the track data)
-/// and a ``VideoSyncModel`` (the alignment).
+/// and a ``VideoSyncModel`` (the alignment). Since issue 9.7 it also owns how the
+/// alignment is made and trusted: frame-accurate trimming, two-point
+/// (offset + rate) sync, the plausibility-gated file-date guess, and the
+/// ``SyncStatus`` the status line shows.
 ///
 /// No AVKit and no playback state: the shell owns the player and applies these
 /// decisions, exactly as the 9.5 split between ``VideoSyncModel`` and its view.
@@ -48,6 +51,17 @@ public final class VideoReviewModel: ObservableObject {
     /// Whether reaching the end of the reviewed section replays it.
     @Published public var loops: Bool = false
 
+    /// How the footage is aligned (issue 9.7) — the status line's first half, and
+    /// what a save records alongside the offset and rate.
+    @Published public private(set) var status: SyncStatus = .notSynced
+
+    /// The footage's frame grid, so a frame step moves exactly one frame
+    /// (issue 9.7). 30 fps until the asset's nominal rate is known.
+    @Published public private(set) var frameGrid: FrameGrid = .fallback
+
+    /// The two-point anchors set so far (issue 9.7).
+    @Published public private(set) var anchors: [AnchorSlot: LapAnchor] = [:]
+
     public init(timeline: LapSectorTimeline = .empty,
                 sync: VideoSyncModel = VideoSyncModel(videoDuration: 0)) {
         self.timeline = timeline
@@ -60,14 +74,43 @@ public final class VideoReviewModel: ObservableObject {
     public var hasVideo: Bool { !sync.isEmpty }
 
     /// Seed the footage length once the asset has loaded, keeping whatever
-    /// alignment the operator already set.
+    /// alignment (offset and rate) the operator already set.
     public func setVideoDuration(_ seconds: Double) {
-        sync = VideoSyncModel(videoDuration: seconds, offset: sync.offset)
+        sync = VideoSyncModel(videoDuration: seconds, offset: sync.offset, rate: sync.rate)
     }
 
-    /// Re-align the footage to `offset` seconds (the fine-trim slider).
+    /// Seed the frame grid from the asset's nominal frame rate (issue 9.7).
+    public func setFrameRate(_ nominalFrameRate: Double) {
+        frameGrid = FrameGrid(nominalFrameRate: nominalFrameRate)
+    }
+
+    /// Re-align the footage to `offset` seconds (the fine-trim slider). Trimming
+    /// footage nobody aligned — or a file-date guess — is a sync by hand; trimming
+    /// an anchored sync refines it and keeps its laps.
     public func setOffset(_ offset: Double) {
         sync = sync.withOffset(offset)
+        if status == .notSynced || status == .estimated { status = .anchored(lap: nil) }
+    }
+
+    /// Move the offset by exactly `frames` frame durations of the ``frameGrid``
+    /// (issue 9.7), so a lap anchored on a frame stays on a frame.
+    public func stepOffset(frames: Int) {
+        setOffset(frameGrid.step(sync.offset, frames: frames))
+    }
+
+    /// Move the offset by exactly `seconds` (issue 9.7). A non-finite step is
+    /// ignored.
+    public func stepOffset(seconds: Double) {
+        guard seconds.isFinite else { return }
+        setOffset(sync.offset + seconds)
+    }
+
+    /// Apply one keyboard nudge (`,` / `.`, with `⇧` or `⌥`).
+    public func nudge(_ nudge: OffsetNudge) {
+        switch nudge.step {
+        case .frames(let frames): stepOffset(frames: frames)
+        case .seconds(let seconds): stepOffset(seconds: seconds)
+        }
     }
 
     /// The span the fine-trim slider covers, bracketing the current alignment.
@@ -75,24 +118,114 @@ public final class VideoReviewModel: ObservableObject {
 
     /// Align the footage so the **section under review** starts on the frame at
     /// `playhead` — the track-aware sync: scrub to where the lap actually begins,
-    /// anchor, done. Returns `false` (changing nothing) when nothing is selected,
-    /// rather than silently mis-syncing against an arbitrary time.
+    /// anchor, done. Returns `false` (changing nothing) without footage, without
+    /// a selection, or when the playhead is not a real time, rather than silently
+    /// mis-syncing. A two-point clock ``VideoSyncModel/rate`` is kept: the new
+    /// anchor moves the offset, and the drift correction still holds.
     @discardableResult
     public func anchorSelection(toPlayhead playhead: Double) -> Bool {
-        guard let span = selectedSpan else { return false }
+        guard hasVideo, let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
         sync = sync.aligned(sessionTime: span.start, toPlayhead: playhead)
+        status = .anchored(lap: lap)
         return true
     }
 
     /// Apply the wall-clock first guess from the session's and the video's start
-    /// instants. Returns `false` (changing nothing) when either clock is missing,
-    /// so a session with no parseable log date is aligned by hand instead.
+    /// instants — but only when it is plausible (issue 9.7): the footage must then
+    /// overlap the session's `0...sessionDuration`. An applied guess is marked
+    /// ``SyncStatus/estimated``.
+    ///
+    /// Nothing changes unless the outcome is ``AutoOffsetOutcome/applied``. A file
+    /// date never overrides the operator's own sync (re-linking a moved file keeps
+    /// the alignment it was saved with), and the raw guess is only consulted to
+    /// tell a missing clock (`.unavailable`) from a date that does not fit
+    /// (`.implausible`) — it is never applied unchecked.
     @discardableResult
-    public func applyAutoOffset(sessionStartEpoch: Double, videoStartEpoch: Double) -> Bool {
-        guard let offset = VideoSyncModel.autoOffset(sessionStartEpoch: sessionStartEpoch,
-                                                     videoStartEpoch: videoStartEpoch) else { return false }
+    public func applyAutoOffset(sessionStartEpoch: Double, videoStartEpoch: Double,
+                                sessionDuration: Double) -> AutoOffsetOutcome {
+        guard status == .notSynced || status == .estimated, hasVideo,
+              sessionDuration.isFinite, sessionDuration > 0,
+              VideoSyncModel.autoOffset(sessionStartEpoch: sessionStartEpoch,
+                                        videoStartEpoch: videoStartEpoch) != nil else { return .unavailable }
+        guard let offset = sync.plausibleAutoOffset(sessionStartEpoch: sessionStartEpoch,
+                                                    videoStartEpoch: videoStartEpoch,
+                                                    sessionDuration: sessionDuration) else { return .implausible }
         sync = sync.withOffset(offset)
+        status = .estimated
+        return .applied
+    }
+
+    // MARK: - Two-point sync (issue 9.7)
+
+    /// Pin anchor `slot` to the frame at `playhead`, against the start of the
+    /// section under review. Returns `false` (setting nothing) without footage,
+    /// a selection or a real playhead.
+    @discardableResult
+    public func setAnchor(_ slot: AnchorSlot, playhead: Double) -> Bool {
+        guard hasVideo, let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
+        anchors[slot] = LapAnchor(lap: lap, anchor: SyncAnchor(sessionTime: span.start, videoTime: playhead))
         return true
+    }
+
+    /// Solve offset and rate from anchors A and B so both land exactly on their
+    /// frames. On any failure — a missing anchor, anchors too close, an implied
+    /// rate no camera drifts to — the previous sync and status are kept.
+    @discardableResult
+    public func applyTwoPointSync() -> Result<TwoPointSync.Solution, TwoPointSyncError> {
+        guard let first = anchors[.a], let second = anchors[.b] else { return .failure(.missingAnchor) }
+        let result = TwoPointSync.solve(anchorA: first.anchor, anchorB: second.anchor)
+        if case .success(let solution) = result {
+            sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: solution.offset, rate: solution.rate)
+            status = .twoPoint(lapA: first.lap, lapB: second.lap)
+        }
+        return result
+    }
+
+    // MARK: - Status + persistence (issue 9.7)
+
+    /// Which laps the aligned footage covers in full — the status line's second
+    /// half. Follows every sync action, since it reads the live ``sync``.
+    public var coverageSummary: CoverageSummary { CoverageSummary.make(timeline: timeline, sync: sync) }
+
+    /// The panel's status line, e.g. "Synced on lap 3 + lap 14 · footage covers
+    /// laps 2–15 (14 of 16)".
+    public func statusLine(locale: Locale = .current) -> String {
+        status.statusLine(coverage: coverageSummary, locale: locale)
+    }
+
+    /// Bring back the alignment a saved workspace carries — offset, rate and
+    /// status — keeping the footage length already loaded.
+    public func restore(_ attachment: VideoAttachment) {
+        sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: attachment.offset, rate: attachment.rate)
+        status = attachment.status
+        anchors = [:]
+    }
+
+    /// The offset readout, to the millisecond in the locale's digits — a
+    /// 29.97 fps frame step reads as 0.033 s — plus the clock rate once a
+    /// two-point sync solved one: `"+12.500 s ×1.000083"`.
+    public func offsetReadout(locale: Locale = .current) -> String {
+        // Sign the value as shown (to the millisecond), so a sub-millisecond
+        // negative offset reads "+0.000 s" rather than "−0.000 s".
+        let milliseconds = (sync.offset * 1_000).rounded()
+        let sign = milliseconds < 0 ? "−" : "+"
+        let offset = sign + L10n.formattedNumber(abs(milliseconds) / 1_000, fractionDigits: 3, locale: locale) + " s"
+        guard sync.rate != 1 else { return offset }
+        return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
+    }
+
+    /// `attachment` re-stamped with the sync in force, for saving.
+    public func stamped(_ attachment: VideoAttachment) -> VideoAttachment {
+        attachment.withSync(offset: sync.offset, rate: sync.rate, status: status)
+    }
+
+    /// Forget the footage and everything about its alignment, so the next video
+    /// starts unsynced.
+    public func detachVideo() {
+        sync = VideoSyncModel(videoDuration: 0)
+        status = .notSynced
+        frameGrid = .fallback
+        anchors = [:]
     }
 
     // MARK: - Selection

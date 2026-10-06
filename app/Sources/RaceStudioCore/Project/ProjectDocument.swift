@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 5
+    public static let currentSchemaVersion = 6
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -34,7 +34,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// The session video attached to this workspace and the sync offset it was
     /// aligned by (issue 9.6), so a reopened project plays the same footage in
     /// step with the cursor. Added in schema v5; a migrated pre-9.6 project has
-    /// no attachment.
+    /// no attachment. Schema v6 (issue 9.7) adds the clock rate and the sync
+    /// status; a migrated v5 attachment runs at rate `1`.
     public var video: VideoAttachment?
 
     /// Non-fatal, typed issues found during load — e.g.

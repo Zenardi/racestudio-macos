@@ -78,34 +78,22 @@ struct VideoReviewPanel: View {
 
     // MARK: - Header (file + alignment)
 
+    /// The attached file and its controls, over the sync bar (issue 9.7): the
+    /// anchors, the frame-accurate trim and the status line.
     private var header: some View {
-        HStack(spacing: 12) {
-            Label(controller.attachment?.displayName ?? "", systemImage: "film")
-                .lineLimit(1)
-            Button(L10n.string(.controlAnchorVideoToSection)) { controller.anchorToCurrentFrame() }
-                .disabled(review.selectedSpan == nil)
-                .help("Align the footage so the section under review starts on the frame on screen")
-            Slider(value: offsetBinding, in: review.trimRange) {
-                Text(L10n.string(.controlVideoOffset))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Label(controller.attachment?.displayName ?? "", systemImage: "film")
+                    .lineLimit(1)
+                Spacer()
+                Button(L10n.string(.controlImportVideo), action: pickVideo)
+                Button(L10n.string(.controlRemoveVideo)) { controller.removeVideo() }
             }
-            .frame(maxWidth: 200)
-            .disabled(!review.hasVideo)
-            Text(String(format: "%+.2f s", review.sync.offset))
-                .monospacedDigit()
-                .frame(width: 76, alignment: .trailing)
-            Spacer()
-            Button(L10n.string(.controlImportVideo), action: pickVideo)
-            Button(L10n.string(.controlRemoveVideo)) { controller.removeVideo() }
+            VideoSyncBar(review: review, controller: controller)
         }
         .font(.callout)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-    }
-
-    /// Edits the offset through the controller, which re-projects and re-seeks so
-    /// a drag has no accumulated drift.
-    private var offsetBinding: Binding<Double> {
-        Binding(get: { review.sync.offset }, set: { controller.setOffset($0) })
     }
 
     // MARK: - Transport
@@ -165,7 +153,10 @@ struct VideoReviewPanel: View {
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await controller.attach(url, sessionStartEpoch: Double(model.session.metadata.datetimeUtc)) }
+        // The cursor's time extent is the session's length — what a file-date
+        // guess must overlap to be proposed (issue 9.7).
+        Task { await controller.attach(url, sessionStartEpoch: Double(model.session.metadata.datetimeUtc),
+                                       sessionDuration: cursor.timeBounds?.upperBound ?? 0) }
     }
 
     /// Re-cut the lap/sector windows whenever the split layout changes (the 8.11

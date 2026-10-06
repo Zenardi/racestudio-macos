@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import os
 import RaceStudioCore
@@ -32,10 +33,21 @@ final class VideoReviewController: ObservableObject {
     /// Whether the player is currently playing (drives the play/pause control).
     @Published private(set) var isPlaying = false
 
+    /// What became of the file-date guess on the last attach (issue 9.7) — the
+    /// panel explains a date that does not fit the session.
+    @Published private(set) var autoOffsetOutcome: AutoOffsetOutcome?
+
+    /// Why the last two-point sync was refused, shown until the next attempt
+    /// (issue 9.7). The previous sync stands meanwhile.
+    @Published private(set) var twoPointError: TwoPointSyncError?
+
     private let review: VideoReviewModel
     private weak var cursor: LinkedCursor?
     private var timeObserver: Any?
     private var statusObserver: NSKeyValueObservation?
+    /// Bumped by every open and detach, so an `open` still awaiting its asset
+    /// when the footage is replaced or removed never writes into the new state.
+    private var openGeneration = 0
     private let videos = VideoAttachmentStore(bookmarks: SecurityScopedBookmarkStore())
     private static let log = Logger(subsystem: "com.aim.racestudio", category: "VideoReview")
 
@@ -57,9 +69,17 @@ final class VideoReviewController: ObservableObject {
         attachObservers()
     }
 
-    /// Attach the video at `url` (a user pick), seed the mapping from the asset,
-    /// and propose a wall-clock alignment when both clocks are known.
-    func attach(_ url: URL, sessionStartEpoch: Double) async {
+    /// Attach the video at `url` (a user pick), seed the mapping and frame grid
+    /// from the asset, and propose a wall-clock alignment when both clocks are
+    /// known and the footage would then overlap the session's
+    /// `0...sessionDuration` (issue 9.7).
+    ///
+    /// Importing replaces the footage and forgets the old alignment with it — a
+    /// different file must never inherit "Synced on lap 3". The one exception is
+    /// re-linking a workspace video that failed to open, whose saved sync stands.
+    func attach(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
+        let relinking = attachment != nil && loadFailure != nil
+        if !relinking { review.detachVideo() }
         do {
             attachment = try videos.attach(url, offset: review.sync.offset)
         } catch {
@@ -69,40 +89,52 @@ final class VideoReviewController: ObservableObject {
             attachment = nil
         }
         loadFailure = nil
-        await open(url, sessionStartEpoch: sessionStartEpoch)
+        autoOffsetOutcome = nil
+        twoPointError = nil
+        await open(url, sessionStartEpoch: sessionStartEpoch, sessionDuration: sessionDuration)
     }
 
     /// Re-open the footage a loaded `.rsproj` carries (issue 9.6's persistence),
-    /// restoring the offset it was saved with. A moved or deleted file leaves the
-    /// panel in a stated failure rather than aborting the project load.
+    /// restoring the offset, rate and sync status it was saved with (9.7). A moved
+    /// or deleted file leaves the panel in a stated failure rather than aborting
+    /// the project load.
     func restore(_ attachment: VideoAttachment, sessionStartEpoch: Double) async {
         self.attachment = attachment
-        review.setOffset(attachment.offset)
+        review.restore(attachment)
+        autoOffsetOutcome = nil
+        twoPointError = nil
         do {
             let url = try videos.resolve(attachment)
             loadFailure = nil
-            // The saved offset is authoritative — do not re-guess from wall clocks.
-            await open(url, sessionStartEpoch: 0)
+            // The saved sync is authoritative — do not re-guess from wall clocks.
+            await open(url, sessionStartEpoch: 0, sessionDuration: 0)
         } catch VideoAttachmentError.stale {
+            clearPlayer()
             loadFailure = "“\(attachment.displayName)” has moved. Attach it again to re-link the video."
         } catch {
+            clearPlayer()
             loadFailure = "“\(attachment.displayName)” could not be opened. It may have been deleted."
         }
     }
 
     /// Detach the footage, leaving the workspace without a video.
     func removeVideo() {
+        openGeneration += 1
         player.pause()
         player.replaceCurrentItem(with: nil)
         attachment = nil
         loadFailure = nil
-        review.setVideoDuration(0)
+        autoOffsetOutcome = nil
+        twoPointError = nil
+        // The alignment belonged to that footage; the next video starts unsynced.
+        review.detachVideo()
     }
 
     /// The attachment to persist: the current file re-stamped with the alignment
-    /// in force, so a save captures a trim made after attaching.
+    /// in force — offset, rate and status — so a save captures a trim or a
+    /// two-point sync made after attaching.
     var attachmentForSaving: VideoAttachment? {
-        attachment?.withOffset(review.sync.offset)
+        attachment.map(review.stamped)
     }
 
     // MARK: - Transport
@@ -137,6 +169,7 @@ final class VideoReviewController: ObservableObject {
     /// frame follows immediately.
     func setOffset(_ offset: Double) {
         review.setOffset(offset)
+        twoPointError = nil
         seekFromCursor(to: cursor?.timePosition ?? 0)
     }
 
@@ -144,26 +177,99 @@ final class VideoReviewController: ObservableObject {
     /// sync. Returns `false` when nothing is selected to anchor against.
     @discardableResult
     func anchorToCurrentFrame() -> Bool {
-        review.anchorSelection(toPlayhead: player.currentTime().seconds)
+        twoPointError = nil
+        return review.anchorSelection(toPlayhead: player.currentTime().seconds)
+    }
+
+    /// Apply one fine-trim nudge (`,` / `.`, with `⇧` or `⌥`) and re-seek so the
+    /// visible frame follows (issue 9.7).
+    func nudge(_ nudge: OffsetNudge) {
+        review.nudge(nudge)
+        twoPointError = nil
+        seekFromCursor(to: cursor?.timePosition ?? 0)
+    }
+
+    /// Pin two-point anchor `slot` to the frame on screen, against the start of
+    /// the section under review (issue 9.7).
+    func setAnchor(_ slot: AnchorSlot) {
+        review.setAnchor(slot, playhead: player.currentTime().seconds)
+        twoPointError = nil
+    }
+
+    /// Solve offset and rate from anchors A and B (issue 9.7). A refusal is kept
+    /// for the panel to explain and the previous sync stands; a success re-seeks
+    /// so the visible frame follows the new mapping.
+    func applyTwoPointSync() {
+        switch review.applyTwoPointSync() {
+        case .success:
+            twoPointError = nil
+            seekFromCursor(to: cursor?.timePosition ?? 0)
+        case .failure(let error):
+            twoPointError = error
+            announce(error.message())
+        }
     }
 
     // MARK: - Internals
 
-    private func open(_ url: URL, sessionStartEpoch: Double) async {
+    private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
+        openGeneration += 1
+        let generation = openGeneration
         let asset = AVURLAsset(url: url)
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
+        // Each await below may outlive this footage (re-attached or removed in
+        // the meantime); a superseded open stops rather than writing stale state.
         do {
-            review.setVideoDuration(try await asset.load(.duration).seconds)
+            let duration = try await asset.load(.duration).seconds
+            guard generation == openGeneration else { return }
+            review.setVideoDuration(duration)
         } catch {
             Self.log.warning("Could not read video duration: \(error.localizedDescription, privacy: .public)")
         }
+        let frameRate = await nominalFrameRate(of: asset)
+        guard generation == openGeneration else { return }
+        review.setFrameRate(frameRate)
         // A camera that stamps its start time gives a usable first alignment for
-        // free; without one the operator anchors to a lap by hand.
-        if sessionStartEpoch > 0,
-           let created = try? await asset.load(.creationDate)?.load(.dateValue) {
-            review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
-                                   videoStartEpoch: created.timeIntervalSince1970)
+        // free; without one — or when the date cannot be right for this session —
+        // the operator anchors to a lap by hand.
+        guard sessionStartEpoch > 0,
+              let created = try? await asset.load(.creationDate)?.load(.dateValue),
+              generation == openGeneration else { return }
+        autoOffsetOutcome = review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
+                                                   videoStartEpoch: created.timeIntervalSince1970,
+                                                   sessionDuration: sessionDuration)
+    }
+
+    /// The first video track's nominal frame rate (issue 9.7), so a frame step is
+    /// exactly one of this footage's frames — or `0`, which the model reads as
+    /// "unknown" and replaces with its 30 fps fallback, so a clip without a
+    /// readable track never keeps the previous clip's grid.
+    private func nominalFrameRate(of asset: AVURLAsset) async -> Double {
+        do {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else { return 0 }
+            return Double(try await track.load(.nominalFrameRate))
+        } catch {
+            Self.log.warning("Could not read the frame rate: \(error.localizedDescription, privacy: .public)")
+            return 0
         }
+    }
+
+    /// Drop the player's footage after a failed restore, so no stale frame (or
+    /// stale length) can be anchored against while the panel asks to re-link.
+    private func clearPlayer() {
+        openGeneration += 1
+        player.replaceCurrentItem(with: nil)
+        review.setVideoDuration(0)
+    }
+
+    /// Speak `message` to VoiceOver users, who cannot see the panel's notice.
+    /// Posted on the window (announcements on the application object are
+    /// sometimes dropped), falling back to the app.
+    private func announce(_ message: String) {
+        let element: Any = NSApp.mainWindow ?? NSApp as Any
+        NSAccessibility.post(element: element, notification: .announcementRequested,
+                             userInfo: [.announcement: message,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     private func seek(to playhead: Double, then completion: (() -> Void)? = nil) {

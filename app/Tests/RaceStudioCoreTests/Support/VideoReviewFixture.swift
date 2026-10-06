@@ -22,6 +22,24 @@ enum VideoReviewFixture {
         VideoReviewModel(timeline: timeline(), sync: VideoSyncModel(videoDuration: 120))
     }
 
+    /// Sixteen one-minute laps from session time 0 (lap `n` = `60n…60(n+1)` s),
+    /// with no sectors — the issue 9.7 sync suites' stint: long enough for two
+    /// lap-start anchors to sit well over ten seconds apart.
+    static func sixteenLaps() -> LapSectorTimeline {
+        LapSectorTimeline(laps: (0..<16).map { index in
+            LapSpan(lap: LapID(index),
+                    span: SessionTimeSpan(start: Double(index) * 60, end: Double(index + 1) * 60),
+                    sectors: [])
+        })
+    }
+
+    /// A review over ``sixteenLaps()`` with `videoDuration` seconds of footage,
+    /// not yet aligned.
+    @MainActor
+    static func stint(videoDuration: Double = 1_000) -> VideoReviewModel {
+        VideoReviewModel(timeline: sixteenLaps(), sync: VideoSyncModel(videoDuration: videoDuration))
+    }
+
     /// The split id of the `index`-th split (0-based) in lap 0.
     static func splitID(_ index: Int) -> Int {
         timeline().laps[0].sectors[index].splitID

@@ -107,31 +107,27 @@ public final class ProjectStore {
     private static func decode(_ data: Data, version: Int) throws -> ProjectDocument {
         switch version {
         case ProjectDocument.currentSchemaVersion:
-            guard let document = try? JSONDecoder().decode(ProjectDocument.self, from: data) else {
-                throw ProjectError.corruptDocument
-            }
-            return document
+            return try shape(ProjectDocument.self, from: data)
+        case 5:
+            return migrate(try shape(ProjectDocumentV5.self, from: data))
         case 4:
-            guard let raw = try? JSONDecoder().decode(ProjectDocumentV4.self, from: data) else {
-                throw ProjectError.corruptDocument
-            }
-            return migrate(raw)
+            return migrate(try shape(ProjectDocumentV4.self, from: data))
         case 3:
-            guard let raw = try? JSONDecoder().decode(ProjectDocumentV3.self, from: data) else {
-                throw ProjectError.corruptDocument
-            }
-            return migrate(raw)
+            return migrate(try shape(ProjectDocumentV3.self, from: data))
         case 2:
-            guard let raw = try? JSONDecoder().decode(ProjectDocumentV2.self, from: data) else {
-                throw ProjectError.corruptDocument
-            }
-            return migrate(raw)
+            return migrate(try shape(ProjectDocumentV2.self, from: data))
         default: // version == 1 — the caller has already bounded it to 1…current.
-            guard let raw = try? JSONDecoder().decode(ProjectDocumentV1.self, from: data) else {
-                throw ProjectError.corruptDocument
-            }
-            return migrate(raw)
+            return migrate(try shape(ProjectDocumentV1.self, from: data))
         }
+    }
+
+    /// Decode `data` as one version's on-disk `type`, or throw
+    /// ``ProjectError/corruptDocument`` when the payload doesn't match it.
+    private static func shape<Shape: Decodable>(_ type: Shape.Type, from data: Data) throws -> Shape {
+        guard let decoded = try? JSONDecoder().decode(type, from: data) else {
+            throw ProjectError.corruptDocument
+        }
+        return decoded
     }
 
     /// Upgrade a decoded v1 document to the current shape: v1 math channels had
@@ -190,6 +186,26 @@ public final class ProjectStore {
             activeLayout: raw.activeLayout,
             logSheet: raw.logSheet,
             video: nil)
+    }
+
+    /// Upgrade a decoded v5 document to the current shape: v5 predates the clock
+    /// rate and sync status (issue 9.7), so an attached video runs at rate `1`,
+    /// and its status is inferred from the offset — a non-zero offset was set by
+    /// the operator (``SyncStatus/anchored(lap:)`` on an unrecorded lap), a zero
+    /// one was never aligned. Everything else is carried over unchanged.
+    static func migrate(_ raw: ProjectDocumentV5) -> ProjectDocument {
+        ProjectDocument(
+            schemaVersion: ProjectDocument.currentSchemaVersion,
+            sessionRefs: raw.sessionRefs,
+            layout: raw.layout,
+            selectedLaps: raw.selectedLaps,
+            mathChannels: raw.mathChannels,
+            activeLayout: raw.activeLayout,
+            logSheet: raw.logSheet,
+            video: raw.video.map { video in
+                VideoAttachment(bookmark: video.bookmark, displayName: video.displayName, offset: video.offset,
+                                rate: 1, status: video.offset != 0 ? .anchored(lap: nil) : .notSynced)
+            })
     }
 
     // MARK: - Resolution / validation
@@ -278,6 +294,26 @@ struct ProjectDocumentV4: Decodable {
     let mathChannels: [MathChannelDef]
     let activeLayout: WindowLayout
     let logSheet: LogSheet
+}
+
+/// The v5 on-disk shape — identical to the current document except its video
+/// attachment predates the clock rate and sync status (issue 9.7). Used only by
+/// ``ProjectStore/migrate(_:)``.
+struct ProjectDocumentV5: Decodable {
+    let sessionRefs: [SessionRef]
+    let layout: AnalysisLayout
+    let selectedLaps: [LapSelection]
+    let mathChannels: [MathChannelDef]
+    let activeLayout: WindowLayout
+    let logSheet: LogSheet
+    let video: VideoV5?
+
+    /// The 9.6 attachment: a bookmark, a name and an offset.
+    struct VideoV5: Decodable {
+        let bookmark: Data
+        let displayName: String
+        let offset: Double
+    }
 }
 
 /// The v3 on-disk shape — identical to the current document except it predates the

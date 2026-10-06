@@ -422,6 +422,108 @@
         }
       }
     },
+    "control.nudgeFrameBackward": {
+      "comment": "Video Review: move the video offset back by one frame (key ,).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset back one frame"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: voltar um quadro"
+          }
+        }
+      }
+    },
+    "control.nudgeFrameForward": {
+      "comment": "Video Review: move the video offset forward by one frame (key .).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset forward one frame"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: avançar um quadro"
+          }
+        }
+      }
+    },
+    "control.nudgeSecondBackward": {
+      "comment": "Video Review: move the video offset back by 1 second (Option-,).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset back 1 s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: voltar 1 s"
+          }
+        }
+      }
+    },
+    "control.nudgeSecondForward": {
+      "comment": "Video Review: move the video offset forward by 1 second (Option-.).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset forward 1 s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: avançar 1 s"
+          }
+        }
+      }
+    },
+    "control.nudgeTenthBackward": {
+      "comment": "Video Review: move the video offset back by 0.1 second (Shift-,).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset back 0.1 s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: voltar 0,1 s"
+          }
+        }
+      }
+    },
+    "control.nudgeTenthForward": {
+      "comment": "Video Review: move the video offset forward by 0.1 second (Shift-.).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offset forward 0.1 s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslocamento: avançar 0,1 s"
+          }
+        }
+      }
+    },
     "control.open": {
       "localizations": {
         "en": {
@@ -534,6 +636,40 @@
         }
       }
     },
+    "control.setAnchorA": {
+      "comment": "Video Review: pin anchor A of a two-point sync to the frame on screen at the reviewed lap's start.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Anchor A"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir âncora A"
+          }
+        }
+      }
+    },
+    "control.setAnchorB": {
+      "comment": "Video Review: pin anchor B of a two-point sync to the frame on screen at the reviewed lap's start.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Anchor B"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir âncora B"
+          }
+        }
+      }
+    },
     "control.toggleLapOverlay": {
       "localizations": {
         "en": {
@@ -546,6 +682,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alternar sobreposição de voltas"
+          }
+        }
+      }
+    },
+    "control.twoPointSync": {
+      "comment": "Video Review: solve the video offset and clock rate from anchors A and B.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Two-Point Sync"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar em dois pontos"
           }
         }
       }
@@ -995,6 +1148,295 @@
           "stringUnit": {
             "state": "translated",
             "value": "V"
+          }
+        }
+      }
+    },
+    "video.anchor.setOnLap": {
+      "comment": "Video Review: spoken value of a Set Anchor button once its anchor is set. %1$@ = lap number (1-based).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "set on lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "definida na volta %1$@"
+          }
+        }
+      }
+    },
+    "video.coverage.none": {
+      "comment": "Video Review status line: no lap is filmed in full.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "footage covers no laps"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "o vídeo não cobre nenhuma volta"
+          }
+        }
+      }
+    },
+    "video.coverage.range": {
+      "comment": "Video Review status line: %1$@ = first lap, %2$@ = last lap filmed in full, %3$@ = laps covered, %4$@ = total laps.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "footage covers laps %1$@–%2$@ (%3$@ of %4$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "o vídeo cobre as voltas %1$@–%2$@ (%3$@ de %4$@)"
+          }
+        }
+      }
+    },
+    "video.coverage.single": {
+      "comment": "Video Review status line: one lap filmed in full. %1$@ = lap number, %2$@ = laps covered, %3$@ = total laps.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "footage covers lap %1$@ (%2$@ of %3$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "o vídeo cobre a volta %1$@ (%2$@ de %3$@)"
+          }
+        }
+      }
+    },
+    "video.help.anchorToSection": {
+      "comment": "Video Review tooltip for Sync to Section.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Align the footage so the section under review starts on the frame on screen"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alinha o vídeo para que o trecho em análise comece no quadro exibido"
+          }
+        }
+      }
+    },
+    "video.help.setAnchor": {
+      "comment": "Video Review tooltip for Set Anchor A/B before the anchor is set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrub to the frame where the selected lap starts, then set this anchor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posicione o vídeo no quadro em que a volta selecionada começa e defina esta âncora"
+          }
+        }
+      }
+    },
+    "video.help.twoPointSync": {
+      "comment": "Video Review tooltip for Two-Point Sync once both anchors are set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solve the offset and clock rate so both anchors land on their frames"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcula o deslocamento e a taxa do relógio para que as duas âncoras caiam em seus quadros"
+          }
+        }
+      }
+    },
+    "video.message.anchorsTooClose": {
+      "comment": "Video Review: the two sync anchors are too close together in session time.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anchors A and B must be at least 10 s apart — set them on laps further apart."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As âncoras A e B precisam estar a pelo menos 10 s uma da outra — use voltas mais distantes."
+          }
+        }
+      }
+    },
+    "video.message.implausibleDate": {
+      "comment": "Video Review: the video file's creation date puts the footage outside the session, so no alignment was proposed.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video’s date doesn’t match this session — align it on a lap start"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A data do vídeo não corresponde a esta sessão — alinhe-o no início de uma volta"
+          }
+        }
+      }
+    },
+    "video.message.missingAnchor": {
+      "comment": "Video Review: two-point sync was requested before both anchors were set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set anchor A and anchor B on two lap starts first."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Defina antes as âncoras A e B no início de duas voltas."
+          }
+        }
+      }
+    },
+    "video.message.nonFinite": {
+      "comment": "Video Review: an anchor holds an invalid time.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Those anchors are not valid times — set them again."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Essas âncoras não são tempos válidos — defina-as novamente."
+          }
+        }
+      }
+    },
+    "video.message.rateOutOfBounds": {
+      "comment": "Video Review: the two anchors imply an impossible camera clock rate. %1$@ = signed percentage, e.g. +1.00.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These anchors imply a %1$@%% clock difference — more than any camera drifts, so one is on the wrong frame or lap. The previous sync is kept."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estas âncoras indicam uma diferença de relógio de %1$@%% — mais do que qualquer câmera desvia, então uma delas está no quadro ou na volta errada. A sincronização anterior foi mantida."
+          }
+        }
+      }
+    },
+    "video.status.anchored": {
+      "comment": "Video Review status line: aligned on one lap start. %1$@ = lap number (1-based).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced on lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizado na volta %1$@"
+          }
+        }
+      }
+    },
+    "video.status.estimated": {
+      "comment": "Video Review status line: the alignment was guessed from the video file's creation date.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated from file date"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimado pela data do arquivo"
+          }
+        }
+      }
+    },
+    "video.status.manual": {
+      "comment": "Video Review status line: aligned by trimming the offset by hand, not on a lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced by hand"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizado manualmente"
+          }
+        }
+      }
+    },
+    "video.status.notSynced": {
+      "comment": "Video Review status line: the footage has never been aligned to the session.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not synced"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não sincronizado"
+          }
+        }
+      }
+    },
+    "video.status.twoPoint": {
+      "comment": "Video Review status line: two-point sync. %1$@ = first lap number, %2$@ = second lap number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced on lap %1$@ + lap %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizado nas voltas %1$@ + %2$@"
           }
         }
       }

@@ -72,7 +72,8 @@ section at a time.
    two clocks. Otherwise — or to correct it — select a lap or sector, scrub the
    footage to the frame where that section actually begins, and press **Sync to
    Section**. The offset is exact and unbounded, so a camera started minutes
-   before the logger aligns fine; the slider then trims ±60 s around it.
+   before the logger aligns fine; the slider then trims ±60 s around it. See
+   [Syncing the video precisely](#syncing-the-video-precisely) below.
 3. **Review section by section.** The grid on the right is one row per lap and
    one cell per split, showing the time spent in each (the same numbers the
    **Splits** report shows — both are summed from one base grid,
@@ -87,6 +88,39 @@ While the footage plays it drives the shared cursor, so every other panel
 follows; while it is paused, scrubbing the plot seeks the video instead. A
 section the footage does not cover is dimmed and cannot be played, rather than
 seeking to a wrong frame.
+
+### Syncing the video precisely
+
+- **Why the file date can be wrong.** The proposed alignment comes from the
+  video file's creation date. A clip that was re-exported, trimmed or copied
+  carries the date it was *exported*, which can be days after the session. When
+  the date would leave the footage covering no part of the session, nothing is
+  proposed. The panel says *"The video’s date doesn’t match this session — align
+  it on a lap start"* instead, so align it on a lap as described above. A date
+  never replaces an alignment you made yourself.
+- **Frame stepping.** Trim the offset one frame at a time with `,` (back) and `.`
+  (forward), or with the buttons beside the slider (their tooltips name the
+  keys). A frame is one frame of *this* footage, at its own frame rate: at
+  29.97 fps it is 1001/30000 s, so the readout moves by 0.033 s. Every step moves
+  exactly one frame, so a lap you synced on a frame stays on a frame. Hold `⇧` to
+  step 0.1 s instead, or `⌥` to step 1 s.
+- **Two-point sync.** A camera's clock and the logger's drift apart slightly, by
+  up to a frame or two over a long stint, and one offset cannot correct that.
+  Select an early lap, scrub to the frame where the kart crosses the line, and
+  press **Set Anchor A**. Then do the same on a late lap with **Set Anchor B**,
+  and press **Two-Point Sync**. Both the offset and the clock rate are solved so
+  that both crossings land exactly on their frames, and the laps in between are
+  corrected in proportion. The anchors must be at least 10 s apart. A pair that
+  implies more than a ±0.5% clock difference is rejected, because it means one
+  anchor is on the wrong frame or lap, and the previous sync is kept. The solved
+  rate shows after the offset in the readout (for example `×1.000083`). A later
+  **Sync to Section** or trim moves the offset but keeps that rate.
+- **Sync status.** The line under the controls says how the footage is aligned:
+  *Not synced*, *Estimated from file date*, *Synced by hand*, *Synced on lap 3*,
+  or *Synced on lap 3 + lap 14*. It also says how many laps the footage covers in
+  full, for example *footage covers laps 2–15 (14 of 16)*. It updates after every
+  sync action. Saving the workspace keeps the offset, the clock rate and the
+  status.
 
 ## Notes
 
