@@ -99,6 +99,12 @@ extension ProjectDocument {
     /// The warning a load records when the overlay could not be read.
     static let unreadableOverlayWarning = "unreadable video overlay; opened with the overlay off"
 
+    /// The warning a load records when `count` widgets or settings of the
+    /// overlay could not be read (skipped, or read as their default).
+    static func skippedOverlayEntriesWarning(_ count: Int) -> String {
+        "video overlay: \(count) unreadable \(count == 1 ? "entry" : "entries") skipped"
+    }
+
     /// Decodes every field exactly as the synthesized conformance would, except
     /// the 9.10 ``overlay``: it is cosmetic next to the analysis it sits on, so a
     /// value that isn't a layout at all costs only the overlay — the workspace

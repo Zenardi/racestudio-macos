@@ -137,6 +137,14 @@ public struct NormalizedRect: Codable, Equatable, Hashable, Sendable {
     /// The 16:9 reference rect that ``resolved(in:anchor:safeMargin:)`` places at
     /// `rect` in an output of `aspect` — how an editor that drags a widget on the
     /// output's own frame stores what it dragged. Kept inside the safe area.
+    ///
+    /// Exact for every rect the forward map can produce. In an output of
+    /// another aspect a widget shrinks toward its anchor, so it can't reach the
+    /// last stretch of the frame on its anchor's side (a bottom-anchored widget
+    /// in 9:16 can't touch the top): a rect dragged there maps to the nearest
+    /// reference rect inside the safe area, which resolves back short of it. An
+    /// editor working in such an output should re-anchor the widget toward
+    /// where it is dragged, or edit in the 16:9 reference frame.
     public static func reference(from rect: NormalizedRect, in aspect: OverlayAspect, anchor: OverlayAnchor,
                                  safeMargin: Double = OverlayLayout.safeMargin) -> NormalizedRect {
         let scale = scale(for: aspect)

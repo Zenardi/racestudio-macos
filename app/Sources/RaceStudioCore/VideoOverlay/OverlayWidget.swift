@@ -192,9 +192,15 @@ extension OverlayWidget: Codable {
 
 extension KeyedDecodingContainer {
     /// The value at `key`, or `nil` when it is missing or malformed — for
-    /// settings whose loss should cost only themselves.
+    /// settings whose loss should cost only themselves. A value that is there but
+    /// unreadable is reported to the decode's ``SkippedElementCounter``, if any.
     func lenient<Value: Decodable>(_ type: Value.Type, forKey key: Key) -> Value? {
-        try? decodeIfPresent(type, forKey: key)
+        do {
+            return try decodeIfPresent(type, forKey: key)
+        } catch {
+            SkippedElementCounter.record(in: try? superDecoder(forKey: key))
+            return nil
+        }
     }
 }
 
@@ -219,10 +225,7 @@ struct LossyList<Element: Decodable>: Decodable {
             }
         }
         self.elements = elements
-        if skipped > 0, let key = SkippedElementCounter.key,
-           let counter = decoder.userInfo[key] as? SkippedElementCounter {
-            counter.add(skipped)
-        }
+        if skipped > 0 { SkippedElementCounter.record(skipped, in: decoder) }
     }
 
     /// Consumes any one element.
@@ -231,16 +234,20 @@ struct LossyList<Element: Decodable>: Decodable {
     }
 }
 
-/// Counts the elements every ``LossyList`` skips during one decode — at any
-/// depth — when placed in the decoder's `userInfo` under ``key``.
+/// Counts what one decode could not read — elements a ``LossyList`` skipped,
+/// settings that fell back to their default — at any depth, when placed in the
+/// decoder's `userInfo` under ``key``; so a caller can tell a complete read
+/// from a lossy one before it writes the value back.
 final class SkippedElementCounter {
     /// Where a decoder carries the counter.
     static let key = CodingUserInfoKey(rawValue: "com.racestudio.skippedElements")
 
-    /// How many elements were skipped so far.
-    private(set) var count = 0
+    /// How many entries could not be read so far.
+    private(set) var total = 0
 
-    func add(_ skipped: Int) {
-        count += skipped
+    /// Count `entries` unread on the counter `decoder` carries, if any.
+    static func record(_ entries: Int = 1, in decoder: Decoder?) {
+        guard let key, let counter = decoder?.userInfo[key] as? SkippedElementCounter else { return }
+        counter.total += entries
     }
 }

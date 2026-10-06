@@ -154,19 +154,58 @@ import Foundation
         #expect(store(dir).userPresets().map(\.name) == ["Wet", "Dry"])
     }
 
-    /// A library written by a newer build is read, and rewritten in this build's format.
-    @Test func test_a_newer_library_format_is_read_and_rewritten() throws {
+    /// A library written by a newer build is read as far as this build can, said
+    /// so, kept aside, and rewritten in this build's format.
+    @Test func test_a_newer_library_format_is_read_kept_aside_and_rewritten() throws {
         let dir = makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("OverlayPresets.json")
-        try Data(#"{"schema": 9, "presets": [{"name": "Wet"}]}"#.utf8).write(to: url)
+        let newer = #"{"schema": 9, "presets": [{"name": "Wet"}]}"#
+        try Data(newer.utf8).write(to: url)
+        let spy = LogSpy()
 
-        try store(dir).savePreset(layout("Dry"), named: "Dry")
+        try store(dir, spy: spy).savePreset(layout("Dry"), named: "Dry")
 
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
         #expect(json?["schema"] as? Int == 1)
+        #expect(spy.errors == [.newerFormat(9)])
+        #expect(try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup.json")) == Data(newer.utf8))
         #expect(store(dir).userPresets().map(\.name) == ["Wet", "Dry"])
+    }
+
+    /// A preset list that isn't a list is an unreadable library — kept aside on
+    /// the next save — not an empty one.
+    @Test func test_a_preset_list_of_the_wrong_type_is_unreadable() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let original = #"{"presets": {"name": "Wet"}}"#
+        try Data(original.utf8).write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        let spy = LogSpy()
+
+        try store(dir, spy: spy).savePreset(layout("Dry"), named: "Dry")
+
+        #expect(spy.errors == [.corruptFile])
+        #expect(try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup.json")) == Data(original.utf8))
+    }
+
+    /// A setting this build can't read — an anchor, a widget list, a theme — reads
+    /// as its default, and counts as not read in full: logged, and kept aside.
+    @Test func test_unreadable_settings_count_as_skipped() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let original = #"{"presets": [{"name": "A", "theme": "neon", "widgets": [{"kind": {"type": "speed"}, "#
+            + #""frame": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.1}, "anchor": "sideways"}]}, "#
+            + #"{"name": "B", "widgets": "oops"}]}"#
+        try Data(original.utf8).write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        let spy = LogSpy()
+
+        try store(dir, spy: spy).deletePreset(named: "Nothing")
+
+        #expect(spy.errors == [.skippedEntries(3)])
+        #expect(FileManager.default.fileExists(atPath: dir.appendingPathComponent("OverlayPresets.backup.json").path))
     }
 
     // MARK: - Save as preset

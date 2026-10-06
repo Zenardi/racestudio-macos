@@ -48,7 +48,7 @@ public final class AnalysisWindowModel: ObservableObject {
     /// The video overlay drawn over this workspace's footage (issue 9.10), or
     /// `nil` while the HUD is off. The window owns it, so it is saved with the
     /// workspace and restored on reopen whoever edits it.
-    @Published public var overlay: OverlayLayout?
+    @Published public var videoOverlay: OverlayLayout?
 
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor

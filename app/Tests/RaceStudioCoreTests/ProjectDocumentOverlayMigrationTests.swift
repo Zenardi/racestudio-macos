@@ -67,13 +67,12 @@ import Foundation
     }
 
     /// The Kart coaching preset, edited: imperial, the map rotated and nudged.
-    private var editedOverlay: OverlayLayout {
+    private func editedOverlay() throws -> OverlayLayout {
         var layout = OverlayPreset.kartCoaching.layout(locale: Locale(identifier: "en"))
+        let map = try #require(layout.widgets.firstIndex { $0.id == "trackMap" })
         layout.units = .imperial
-        if let map = layout.widgets.firstIndex(where: { $0.id == "trackMap" }) {
-            layout.widgets[map].options.trackMapRotation = 90
-            layout.widgets[map].frame.y = 0.6
-        }
+        layout.widgets[map].options.trackMapRotation = 90
+        layout.widgets[map].frame.y = 0.6
         return layout
     }
 
@@ -111,11 +110,12 @@ import Foundation
 
     /// Save → reopen restores the edited overlay exactly.
     @Test func test_v7_round_trip_with_an_overlay_is_value_equal() throws {
-        let document = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time), overlay: editedOverlay)
+        let overlay = try editedOverlay()
+        let document = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time), overlay: overlay)
 
         let loaded = try roundTrip(document)
 
-        #expect(loaded.overlay == editedOverlay)
+        #expect(loaded.overlay == overlay)
         #expect(loaded == document)
     }
 
@@ -134,10 +134,12 @@ import Foundation
             + #"{"id": "x", "kind": {"type": "laser"}, "frame": {"x": 0, "y": 0, "width": 0.1, "height": 0.1}}]}"#
         let v7 = project(version: 7, extra: overlay)
 
-        let loaded = try #require(try load(v7).overlay)
+        let project = try load(v7)
+        let loaded = try #require(project.overlay)
 
         #expect(loaded.widgets.map(\.id) == ["s"])
         #expect(loaded.widgets[0].frame.isContained(in: .safeArea(margin: OverlayLayout.safeMargin)))
+        #expect(project.warnings == ["video overlay: 1 unreadable entry skipped"])
     }
 
     /// An overlay that isn't a layout at all costs only the overlay: the workspace
@@ -149,6 +151,17 @@ import Foundation
         #expect(loaded.overlay == nil)
         #expect(loaded.video?.offset == 2.5)
         #expect(loaded.warnings == ["unreadable video overlay; opened with the overlay off"])
+    }
+
+    /// Several unreadable overlay entries are counted in one warning.
+    @Test func test_skipped_overlay_entries_are_counted_in_one_warning() throws {
+        let overlay = #", "overlay": {"theme": "neon", "widgets": [7, "#
+            + #"{"id": "s", "kind": {"type": "speed"}, "frame": {"x": 0.1, "y": 0.8, "width": 0.14, "height": 0.15}}]}"#
+
+        let loaded = try load(project(version: 7, extra: overlay))
+
+        #expect(loaded.warnings == ["video overlay: 2 unreadable entries skipped"])
+        #expect(loaded.overlay?.widgets.map(\.id) == ["s"])
     }
 
     /// The schema was bumped for the overlay: a save is stamped v7 on disk.
@@ -178,26 +191,28 @@ import Foundation
     /// The window owns its workspace's overlay — off until one is chosen — and a
     /// saved document carries it.
     @MainActor
-    @Test func test_the_window_owns_the_overlay_it_saves() {
+    @Test func test_the_window_owns_the_overlay_it_saves() throws {
         let model = windowModel()
-        #expect(model.overlay == nil)
+        let overlay = try editedOverlay()
+        #expect(model.videoOverlay == nil)
         #expect(model.projectDocument().overlay == nil)
 
-        model.overlay = editedOverlay
+        model.videoOverlay = overlay
 
-        #expect(model.projectDocument().overlay == editedOverlay)
+        #expect(model.projectDocument().overlay == overlay)
     }
 
     /// Reopening a workspace restores its overlay into the window — or clears it.
     @MainActor
-    @Test func test_restoring_a_workspace_restores_its_overlay() {
+    @Test func test_restoring_a_workspace_restores_its_overlay() throws {
         let model = windowModel()
-        let saved = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time), overlay: editedOverlay)
+        let overlay = try editedOverlay()
+        let saved = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time), overlay: overlay)
 
         model.restore(from: saved)
-        #expect(model.overlay == editedOverlay)
+        #expect(model.videoOverlay == overlay)
 
         model.restore(from: ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time)))
-        #expect(model.overlay == nil)
+        #expect(model.videoOverlay == nil)
     }
 }

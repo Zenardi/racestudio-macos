@@ -6,9 +6,12 @@ public enum OverlayPresetStoreError: Error, Equatable, Sendable {
     /// The library file exists but could not be read or decoded. Logged on load,
     /// which degrades to the built-ins — never thrown.
     case corruptFile
-    /// This many presets or widgets in the library could not be read and were
-    /// skipped. Logged on load — never thrown.
+    /// This many presets, widgets or settings in the library could not be read:
+    /// skipped, or read as their default. Logged on load — never thrown.
     case skippedEntries(Int)
+    /// The library was written in this newer format; it is read as far as this
+    /// build can. Logged on load — never thrown.
+    case newerFormat(Int)
     /// Writing the library failed (the previous file is left intact).
     case ioFailure
     /// A preset was saved without a name.
@@ -24,13 +27,17 @@ public enum OverlayPresetStoreError: Error, Equatable, Sendable {
 ///
 /// Writes are atomic (temp file + replace), so an interrupted save never leaves
 /// a truncated library. Reads are lenient and never throw: a missing file is an
-/// empty library; a preset or widget this build can't read is skipped and
-/// logged (``OverlayPresetStoreError/skippedEntries(_:)``); a file that can't be
-/// read at all logs ``OverlayPresetStoreError/corruptFile`` and yields no user
-/// presets, so the menu still offers the built-ins. Before a save overwrites a
-/// file that was not read in full, the file is kept aside as
+/// empty library; a preset or widget this build can't read is skipped, and a
+/// setting it can't read takes its default, both logged
+/// (``OverlayPresetStoreError/skippedEntries(_:)``), as is a newer format
+/// (``OverlayPresetStoreError/newerFormat(_:)``); a file that can't be read at
+/// all logs ``OverlayPresetStoreError/corruptFile`` and yields no user presets,
+/// so the menu still offers the built-ins. Before a save overwrites a file that
+/// was not read in full in any of these ways, the file is kept aside as
 /// `OverlayPresets.backup.json` (then `…backup-2.json`, …), so a hand edit gone
-/// wrong — or a library written by a newer build — is never silently lost.
+/// wrong — or a library from a newer build — is never silently lost. (Keys this
+/// build doesn't know at all are ignored, not detected: a format that adds
+/// meaning is expected to bump the schema.)
 ///
 /// The directory, the file manager, the write primitive and the log are
 /// injected (production: Application Support, an atomic `Data.write` and
@@ -86,19 +93,31 @@ public final class OverlayPresetStore {
             log(.corruptFile)
             return []
         }
+        if read.format > Self.currentSchema { log(.newerFormat(read.format)) }
         if read.skipped > 0 { log(.skippedEntries(read.skipped)) }
         return read.presets
     }
 
-    /// The presets in the library file and how many entries had to be skipped,
-    /// or `nil` when it can't be read or decoded at all.
-    private func readFile() -> (presets: [OverlayLayout], skipped: Int)? {
+    /// One read of the library file.
+    private struct LibraryRead {
+        let presets: [OverlayLayout]
+        /// The format it was written in.
+        let format: Int
+        /// How many entries could not be read.
+        let skipped: Int
+
+        /// Whether rewriting it would lose nothing this build saw.
+        var isComplete: Bool { skipped == 0 && format <= OverlayPresetStore.currentSchema }
+    }
+
+    /// The library file as read, or `nil` when it can't be read or decoded at all.
+    private func readFile() -> LibraryRead? {
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let counter = SkippedElementCounter()
         let decoder = JSONDecoder()
         if let key = SkippedElementCounter.key { decoder.userInfo[key] = counter }
         guard let file = try? decoder.decode(PresetFile.self, from: data) else { return nil }
-        return (file.presets, counter.count)
+        return LibraryRead(presets: file.presets, format: file.schema, skipped: counter.total)
     }
 
     // MARK: - Writing
@@ -113,7 +132,7 @@ public final class OverlayPresetStore {
         do {
             let data = try encoder.encode(PresetFile(presets: presets))
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            if fileManager.fileExists(atPath: fileURL.path), readFile()?.skipped != 0 {
+            if fileManager.fileExists(atPath: fileURL.path), readFile()?.isComplete != true {
                 try fileManager.copyItem(at: fileURL, to: nextBackupURL())
             }
             try write(data, fileURL)
@@ -188,7 +207,7 @@ public final class OverlayPresetStore {
 
 /// The library file: a format version and the presets.
 private struct PresetFile: Codable {
-    /// Written as this build's format; every format so far reads the same way.
+    /// The format: this build's when written; as found when read.
     var schema = OverlayPresetStore.currentSchema
     let presets: [OverlayLayout]
 
@@ -201,9 +220,12 @@ private struct PresetFile: Codable {
     }
 
     /// A preset this build can't read is skipped (and counted); a missing list
-    /// is empty.
+    /// is empty, but a list that isn't one makes the whole file unreadable.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        presets = container.lenient(LossyList<OverlayLayout>.self, forKey: .presets)?.elements ?? []
+        schema = container.lenient(Int.self, forKey: .schema) ?? OverlayPresetStore.currentSchema
+        presets = container.contains(.presets)
+            ? try container.decode(LossyList<OverlayLayout>.self, forKey: .presets).elements
+            : []
     }
 }

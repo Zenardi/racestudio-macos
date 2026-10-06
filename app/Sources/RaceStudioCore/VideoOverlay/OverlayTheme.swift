@@ -116,10 +116,16 @@ public struct OverlayTheme: Equatable, Sendable {
 extension OverlayTheme: Codable {
 
     /// Decodes a persisted ``id``; one this build doesn't know reads as
-    /// ``raceStudio`` rather than failing the layout.
+    /// ``raceStudio`` rather than failing the layout (and counts as unread, see
+    /// `SkippedElementCounter`).
     public init(from decoder: Decoder) throws {
         let id = try decoder.singleValueContainer().decode(String.self)
-        self = Self.builtIn.first { $0.id == id } ?? .raceStudio
+        guard let known = Self.builtIn.first(where: { $0.id == id }) else {
+            SkippedElementCounter.record(in: decoder)
+            self = .raceStudio
+            return
+        }
+        self = known
     }
 
     /// Encodes the ``id`` alone.
