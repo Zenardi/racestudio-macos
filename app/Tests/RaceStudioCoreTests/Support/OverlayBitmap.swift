@@ -69,15 +69,18 @@ final class OverlayBitmap {
     /// from the top, read straight from its data — nothing is drawn, so
     /// reading back on many threads cannot race inside CoreGraphics.
     static func pixelBytes(of image: CGImage) -> [UInt8] {
-        guard image.bitsPerPixel == 32, let data = image.dataProvider?.data,
-              let start = CFDataGetBytePtr(data) else { return [] }
-        var bytes: [UInt8] = []
-        bytes.reserveCapacity(image.width * 4 * image.height)
-        let rowBytes = image.width * 4
-        for row in 0..<image.height {
-            bytes.append(contentsOf: UnsafeBufferPointer(start: start + row * image.bytesPerRow, count: rowBytes))
+        guard image.bitsPerPixel == 32, let data = image.dataProvider?.data else { return [] }
+        // The data may be a fresh copy: keep it alive while its bytes are read.
+        return withExtendedLifetime(data) {
+            guard let start = CFDataGetBytePtr(data) else { return [] }
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(image.width * 4 * image.height)
+            let rowBytes = image.width * 4
+            for row in 0..<image.height {
+                bytes.append(contentsOf: UnsafeBufferPointer(start: start + row * image.bytesPerRow, count: rowBytes))
+            }
+            return bytes
         }
-        return bytes
     }
 
     /// The whole bitmap as a rect.

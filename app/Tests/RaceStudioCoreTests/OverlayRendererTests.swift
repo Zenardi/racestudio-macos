@@ -205,8 +205,9 @@ import Testing
 
     @Test func test_rendering_on_many_threads_at_once_gives_the_same_bytes() throws {
         let renderer = renderer(OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en")))
-        let expected = try image(self.renderer(OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en"))))
-            .bytes
+        let alone = self.renderer(OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en")))
+        let expected = OverlayBitmap.pixelBytes(of: try #require(alone.makeImage(OverlayRenderFixture.midLap,
+                                                                                 size: Self.size)))
         let results = ConcurrentResults()
 
         DispatchQueue.concurrentPerform(iterations: 8) { index in
@@ -229,7 +230,8 @@ import Testing
         for index in layout.widgets.indices where index.isMultiple(of: 3) { layout.widgets[index].opacity = 0.6 }
         let faded = layout
         func make() -> OverlayRenderer { renderer(faded) }
-        let expected = try image(make()).bytes
+        let expected = OverlayBitmap.pixelBytes(of: try #require(make().makeImage(OverlayRenderFixture.midLap,
+                                                                                  size: Self.size)))
         let results = ConcurrentResults()
         let rounds = 4, workers = 12
 
