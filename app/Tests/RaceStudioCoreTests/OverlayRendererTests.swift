@@ -158,6 +158,27 @@ import Testing
         #expect(renderer.staticLayerBuildCount == 2)
     }
 
+    /// Preparing a size ahead builds its static layers, so the first frame drawn
+    /// there does not.
+    @Test func test_preparing_a_size_builds_its_static_layers_ahead_of_the_first_frame() {
+        let renderer = renderer(OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en")))
+
+        renderer.prepare(for: Self.size)
+        let afterPreparing = renderer.staticLayerBuildCount
+        _ = renderer.makeImage(OverlayRenderFixture.midLap, size: Self.size)
+
+        #expect(afterPreparing == 1)
+        #expect(renderer.staticLayerBuildCount == 1)
+    }
+
+    @Test func test_preparing_a_size_the_renderer_cannot_draw_builds_nothing() {
+        let renderer = renderer(OverlayPreset.minimal.layout(locale: Locale(identifier: "en")))
+
+        renderer.prepare(for: CGSize(width: 0, height: 0))
+
+        #expect(renderer.staticLayerBuildCount == 0)
+    }
+
     @Test func test_the_static_layer_cache_keeps_only_recent_sizes() {
         let renderer = renderer(OverlayPreset.minimal.layout(locale: Locale(identifier: "en")))
         let sizes = (0...StaticLayerCache.capacity).map { CGSize(width: 320 + 16 * $0, height: 180) }
@@ -190,7 +211,7 @@ import Testing
 
         DispatchQueue.concurrentPerform(iterations: 8) { index in
             let image = renderer.makeImage(OverlayRenderFixture.midLap, size: Self.size)
-            results.store(index, image.map { OverlayBitmap(image: $0).bytes } ?? [])
+            results.store(index, image.map(OverlayBitmap.pixelBytes(of:)) ?? [])
         }
 
         #expect(results.all.count == 8)
@@ -215,7 +236,7 @@ import Testing
         for round in 0..<rounds {
             DispatchQueue.concurrentPerform(iterations: workers) { index in
                 let image = make().makeImage(OverlayRenderFixture.midLap, size: Self.size)
-                results.store(round * workers + index, image.map { OverlayBitmap(image: $0).bytes } ?? [])
+                results.store(round * workers + index, image.map(OverlayBitmap.pixelBytes(of:)) ?? [])
             }
         }
 

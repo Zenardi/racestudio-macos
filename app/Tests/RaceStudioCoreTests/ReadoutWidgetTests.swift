@@ -54,6 +54,22 @@ import Testing
         #expect(abs(filled - Int((layout.brake.height * 25 / 40).rounded())) <= 1)
     }
 
+    /// A full scale that is not a number — never left by `validated()`, but a
+    /// hand-built option can carry one — reads as the default.
+    @Test func test_a_pedal_full_scale_that_is_not_a_number_fills_as_a_percentage() {
+        let options = OverlayWidgetOptions(brakeFullScale: .nan)
+        let context = OverlayRenderFixture.context(.pedals, rect: CGRect(x: 0, y: 0, width: 120, height: 200),
+                                                   plate: .none, options: options)
+        let layout = PedalsWidget().layout(in: context)
+
+        let bitmap = OverlayRenderFixture.render(PedalsWidget(), TelemetryFrame(time: 0, values: [.brake: 25]),
+                                                 context: context)
+
+        let column = CGRect(x: layout.brake.midX.rounded(.down), y: 0, width: 1, height: 200)
+        let filled = bitmap.count(in: column) { $0.matches(self.theme.loss) }
+        #expect(abs(filled - Int((layout.brake.height * 0.25).rounded())) <= 1)
+    }
+
     @Test func test_pedal_full_scales_default_to_a_percentage() {
         let options = OverlayWidgetOptions()
 

@@ -196,8 +196,10 @@ Three presets are built in:
   - The delta bar fills right in red while you lose time and left in green
     while you gain it.
   - The RPM bar's shift light comes on at the widget's shift RPM.
-  - A pedal bar is full at 100, read as a percentage. For a brake logged in
-    bar, set the brake's full scale to the pressure at full braking.
+  - A pedal bar is full at 100, so it reads its channel as a percentage of
+    travel. A layout can store another full scale for each pedal, such as the
+    pressure at full braking for a brake logged in bar. Until the overlay
+    editor offers that setting, a brake logged in bar is drawn against 100.
   - The G-ball shows lateral G across and acceleration upwards (braking
     downwards), with rings at 0.5 g and 1 g and a one-second trail.
 - **Saved with the workspace.** The overlay is saved in the `.rsproj`. A

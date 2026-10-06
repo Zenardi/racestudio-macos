@@ -77,11 +77,26 @@ public struct OverlayRenderer: Sendable {
     /// previous frame; the blend mode, alpha, shadow and dash the context was
     /// left with are ignored. The pixels equal ``makeImage(_:size:)``'s when
     /// the context is premultiplied BGRA in sRGB, like a `32BGRA` video
-    /// buffer's. A size the renderer does not draw (see ``maximumDimension``)
-    /// leaves the context untouched.
+    /// buffer's, and allows anti-aliasing (a bitmap context's default). A size
+    /// the renderer does not draw (see ``maximumDimension``) leaves the context
+    /// untouched.
+    ///
+    /// Only overlay drawing is serialized: other CoreGraphics drawing of
+    /// translucent fills on other threads at the same time is outside the lock
+    /// and could meet the same CoreGraphics race — composite the overlay over
+    /// footage with Core Image or Metal, not CoreGraphics on several threads.
     public func draw(_ frame: TelemetryFrame, in context: CGContext, size: CGSize) {
         guard let pixels = OverlayPixelSize(size) else { return }
         Self.rasterLock.withLockUnchecked { render(frame, in: context, size: pixels) }
+    }
+
+    /// Build the static layers for an output of `size` now, rather than in the
+    /// first ``draw(_:in:size:)`` there — which otherwise holds the process-wide
+    /// draw lock for the build (tens of milliseconds at 4K). An export calls it
+    /// once before its first frame; the HUD on its render queue after a resize.
+    public func prepare(for size: CGSize) {
+        guard let pixels = OverlayPixelSize(size) else { return }
+        Self.rasterLock.withLockUnchecked { _ = cache.scene(for: pixels) { makeScene(pixels) } }
     }
 
     /// `frame` drawn into a new transparent image of `size` pixels —
@@ -101,7 +116,7 @@ public struct OverlayRenderer: Sendable {
 
     /// The body of ``draw(_:in:size:)``, under the raster lock.
     private func render(_ frame: TelemetryFrame, in context: CGContext, size pixels: OverlayPixelSize) {
-        let scene = cache.scene(for: pixels) { prepare(pixels) }
+        let scene = cache.scene(for: pixels) { makeScene(pixels) }
         context.saveGState()
         defer { context.restoreGState() }
         context.setBlendMode(.normal)
@@ -153,7 +168,7 @@ public struct OverlayRenderer: Sendable {
     }
 
     /// Lay out and pre-render every widget drawn at `size`.
-    private func prepare(_ size: OverlayPixelSize) -> OverlayScene {
+    private func makeScene(_ size: OverlayPixelSize) -> OverlayScene {
         let aspect = OverlayAspect(width: Double(size.width), height: Double(size.height))
         let widgets = layout.drawable(for: aspect, session: session).compactMap { resolved -> PreparedOverlayWidget? in
             let rect = Self.pixelRect(of: resolved.frame, width: size.width, height: size.height)

@@ -74,9 +74,13 @@ struct PedalsWidget: OverlayWidgetDrawer {
         }
     }
 
-    /// A pedal value as a share of `fullScale`, clamped to `0…1`; `nil` when missing.
+    /// A pedal value as a share of `fullScale` (the default when that is not a
+    /// usable scale), clamped to `0…1`; `nil` when missing.
     private static func fraction(_ value: Double?, of fullScale: Double) -> CGFloat? {
         guard let value, value.isFinite else { return nil }
-        return CGFloat(min(max(value / max(fullScale, OverlayWidgetOptions.pedalFullScaleLimits.lowerBound), 0), 1))
+        let scale = fullScale.isFinite
+            ? max(fullScale, OverlayWidgetOptions.pedalFullScaleLimits.lowerBound)
+            : OverlayWidgetOptions.defaultPedalFullScale
+        return CGFloat(min(max(value / scale, 0), 1))
     }
 }
