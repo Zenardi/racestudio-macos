@@ -49,13 +49,21 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     /// bar's scale, and the rotation into one turn.
     public func validated() -> OverlayWidgetOptions {
         let maxRPM = Self.usable(maxRPM, default: Self.defaultMaxRPM, in: Self.maxRPMLimits)
-        let rotation = trackMapRotation.isFinite ? trackMapRotation.truncatingRemainder(dividingBy: 360) : 0
         return OverlayWidgetOptions(
             maxRPM: maxRPM,
             shiftLightRPM: Self.usable(shiftLightRPM, default: Self.defaultShiftLightRPM, in: 0...maxRPM),
             deltaRange: Self.usable(deltaRange, default: Self.defaultDeltaRange, in: Self.deltaRangeLimits),
             gForceMax: Self.usable(gForceMax, default: Self.defaultGForceMax, in: Self.gForceMaxLimits),
-            trackMapRotation: rotation < 0 ? rotation + 360 : rotation)
+            trackMapRotation: Self.oneTurn(trackMapRotation))
+    }
+
+    /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below
+    /// zero can round up to a full `360`, which is the same angle as `0`.
+    private static func oneTurn(_ degrees: Double) -> Double {
+        guard degrees.isFinite else { return 0 }
+        let remainder = degrees.truncatingRemainder(dividingBy: 360)
+        let positive = remainder < 0 ? remainder + 360 : remainder
+        return positive < 360 ? positive : 0
     }
 
     /// `value` clamped to `limits`, or `fallback` (clamped too) when not finite.

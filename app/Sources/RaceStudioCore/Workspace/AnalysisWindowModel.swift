@@ -45,6 +45,11 @@ public final class AnalysisWindowModel: ObservableObject {
     /// default (the common motorsport count). `0` hides the split markers.
     @Published public private(set) var sectorSplits: Int = 3
 
+    /// The video overlay drawn over this workspace's footage (issue 9.10), or
+    /// `nil` while the HUD is off. The window owns it, so it is saved with the
+    /// workspace and restored on reopen whoever edits it.
+    @Published public var overlay: OverlayLayout?
+
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor
 

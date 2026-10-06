@@ -8,8 +8,10 @@ import Foundation
 /// widget so it keeps its margin to its anchor edge, keeps its shape, and stays
 /// inside the 3% title-safe area.
 ///
-/// Sizes follow the frame's short side: a widget is as many pixels tall in a
-/// 1920×1080 frame as it is wide-and-tall in a 1080×1920 one.
+/// A narrower output keeps each widget's share of the frame's width (it loses
+/// height to keep its shape); a wider one keeps its share of the height. Either
+/// way a widget only ever shrinks inside its authored rect, toward its anchor —
+/// so a layout that doesn't overlap at 16:9 doesn't overlap in any aspect.
 @Suite struct OverlayAspectResolutionTests {
 
     private let margin = OverlayLayout.safeMargin
@@ -20,28 +22,23 @@ import Foundation
 
     // MARK: - Single rects
 
-    /// At the reference aspect nothing moves, whatever the anchor.
+    /// At the reference aspect nothing moves, bit for bit, whatever the anchor.
     @Test(arguments: OverlayAnchor.allCases)
     func test_reference_aspect_is_the_identity(anchor: OverlayAnchor) {
-        let rect = NormalizedRect(x: 0.35, y: 0.4, width: 0.3, height: 0.07)
+        let rect = NormalizedRect(x: 0.35, y: 0.43, width: 0.29, height: 0.07)
 
-        let resolved = rect.resolved(in: .reference, anchor: anchor)
-
-        #expect(abs(resolved.x - rect.x) < 1e-12)
-        #expect(abs(resolved.y - rect.y) < 1e-12)
-        #expect(abs(resolved.width - rect.width) < 1e-12)
-        #expect(abs(resolved.height - rect.height) < 1e-12)
+        #expect(rect.resolved(in: .reference, anchor: anchor) == rect)
     }
 
-    /// 16:9 → 4:3: a bottom-leading widget keeps its left and bottom margins,
-    /// keeps its height (the short side is still the height) and grows wider in
-    /// normalized terms so its pixel shape is unchanged.
-    @Test func test_4x3_bottom_leading_keeps_margins_and_shape() {
+    /// 16:9 → 4:3: a bottom-leading widget keeps its left and bottom margins and
+    /// its share of the width, and gives up height to keep its pixel shape.
+    @Test func test_4x3_keeps_the_width_share_margins_and_shape() {
         let resolved = corner.resolved(in: .standard, anchor: .bottomLeading)
 
-        #expect(abs(resolved.minX - 0.03) < 1e-12)
+        #expect(resolved.minX == 0.03)
+        #expect(resolved.width == 0.14)
+        #expect(abs(resolved.height - 0.15 * 0.75) < 1e-12)
         #expect(abs((1 - resolved.maxY) - 0.03) < 1e-12)
-        #expect(abs(resolved.height - 0.15) < 1e-12)
         #expect(abs(resolved.aspectRatio(in: .standard) - corner.aspectRatio(in: .widescreen)) < 1e-9)
     }
 
@@ -52,51 +49,85 @@ import Foundation
         let resolved = lapInfo.resolved(in: .square, anchor: .topTrailing)
 
         #expect(abs((1 - resolved.maxX) - 0.03) < 1e-12)
-        #expect(abs(resolved.minY - 0.03) < 1e-12)
+        #expect(resolved.minY == 0.03)
     }
 
-    /// A centred widget keeps its centre.
+    /// A widget centred on an axis keeps its centre on it.
     @Test func test_centre_anchor_keeps_the_centre() {
-        let delta = NormalizedRect(x: 0.35, y: 0.03, width: 0.3, height: 0.07)
+        let gBall = NormalizedRect(x: 0.03, y: 0.4, width: 0.12, height: 0.21)
 
-        let resolved = delta.resolved(in: .standard, anchor: .top)
+        let resolved = gBall.resolved(in: .vertical, anchor: .leading)
 
-        #expect(abs(resolved.midX - 0.5) < 1e-12)
-        #expect(abs(resolved.minY - 0.03) < 1e-12)
+        #expect(abs(resolved.midY - gBall.midY) < 1e-12)
+        #expect(resolved.minX == 0.03)
     }
 
-    /// 9:16: the short side is the width, so the widget keeps its pixel size
-    /// relative to it and its shape.
-    @Test func test_vertical_keeps_shape_relative_to_the_short_side() {
+    /// 9:16: the widget keeps its share of the (now narrow) width and its shape.
+    @Test func test_vertical_keeps_the_width_share_and_shape() {
         let resolved = corner.resolved(in: .vertical, anchor: .bottomLeading)
 
-        #expect(abs(resolved.width - 0.14 * 16 / 9) < 1e-12)
-        #expect(abs(resolved.height - 0.15 * 9 / 16) < 1e-12)
+        #expect(resolved.width == 0.14)
+        #expect(abs(resolved.height - 0.15 * (9.0 / 16) / (16.0 / 9)) < 1e-12)
         #expect(abs((1 - resolved.maxY) - 0.03) < 1e-12)
         #expect(abs(resolved.aspectRatio(in: .vertical) - corner.aspectRatio(in: .widescreen)) < 1e-9)
     }
 
-    /// A widget too wide for the vertical frame shrinks, keeping its shape, to
-    /// fit the safe width.
-    @Test func test_an_oversized_widget_shrinks_to_fit_keeping_its_shape() {
-        let rpmBar = NormalizedRect(x: 0.2, y: 0.89, width: 0.6, height: 0.08)
+    /// An output wider than 16:9 keeps the widget's share of the height instead.
+    @Test func test_a_wider_output_keeps_the_height_share() {
+        let ultrawide = OverlayAspect(width: 21, height: 9)
 
-        let resolved = rpmBar.resolved(in: .vertical, anchor: .bottom)
+        let resolved = corner.resolved(in: ultrawide, anchor: .bottomLeading)
+
+        #expect(resolved.height == 0.15)
+        #expect(abs(resolved.width - 0.14 * 16 / 21) < 1e-12)
+        #expect(abs(resolved.aspectRatio(in: ultrawide) - corner.aspectRatio(in: .widescreen)) < 1e-9)
+    }
+
+    /// Resolved for any common output, a widget only shrinks, inside its authored
+    /// rect, at its anchor offsets.
+    @Test(arguments: OverlayAnchor.allCases, OverlayAspect.common)
+    func test_a_widget_only_shrinks_toward_its_anchor(anchor: OverlayAnchor, aspect: OverlayAspect) {
+        let rect = NormalizedRect(x: 0.4, y: 0.3, width: 0.3, height: 0.2)
+
+        let resolved = rect.resolved(in: aspect, anchor: anchor)
+
+        #expect(resolved.isContained(in: rect))
+        #expect(abs(resolved.offsets(from: anchor).horizontal - rect.offsets(from: anchor).horizontal) < 1e-12)
+        #expect(abs(resolved.offsets(from: anchor).vertical - rect.offsets(from: anchor).vertical) < 1e-12)
+    }
+
+    /// A rect too big for the safe area (one validation would have fixed)
+    /// shrinks, keeping its shape, to fit.
+    @Test func test_an_oversized_rect_shrinks_to_fit_keeping_its_shape() {
+        let oversized = NormalizedRect(x: -0.1, y: 0.89, width: 1.2, height: 0.08)
+
+        let resolved = oversized.resolved(in: .vertical, anchor: .bottom)
 
         #expect(abs(resolved.width - (1 - 2 * margin)) < 1e-12)
         #expect(resolved.isContained(in: safe))
-        #expect(abs(resolved.aspectRatio(in: .vertical) - rpmBar.aspectRatio(in: .widescreen)) < 1e-9)
+        #expect(abs(resolved.aspectRatio(in: .vertical) - oversized.aspectRatio(in: .widescreen)) < 1e-9)
     }
 
-    /// A centred widget that grows past the frame edge is pushed back inside the
-    /// safe area.
-    @Test func test_a_grown_centred_widget_is_kept_inside_the_safe_area() {
-        let banner = NormalizedRect(x: 0.03, y: 0.03, width: 0.3, height: 0.07)
+    /// The editor drags in the output's frame and stores the 16:9 reference
+    /// rect: mapping a resolved rect back gives the rect it came from.
+    @Test(arguments: OverlayAnchor.allCases, OverlayAspect.common)
+    func test_a_resolved_rect_maps_back_to_its_reference(anchor: OverlayAnchor, aspect: OverlayAspect) {
+        let rect = NormalizedRect(x: 0.6, y: 0.5, width: 0.3, height: 0.2)
 
-        let resolved = banner.resolved(in: .standard, anchor: .top)
+        let back = NormalizedRect.reference(from: rect.resolved(in: aspect, anchor: anchor), in: aspect,
+                                            anchor: anchor)
 
-        #expect(abs(resolved.minX - 0.03) < 1e-12)
-        #expect(resolved.isContained(in: safe))
+        #expect(abs(back.x - rect.x) < 1e-12)
+        #expect(abs(back.y - rect.y) < 1e-12)
+        #expect(abs(back.width - rect.width) < 1e-12)
+        #expect(abs(back.height - rect.height) < 1e-12)
+    }
+
+    /// A rect dragged past the edge in the output maps back inside the safe area.
+    @Test func test_mapping_back_stays_inside_the_safe_area() {
+        let dragged = NormalizedRect(x: 0.9, y: 0.95, width: 0.3, height: 0.1)
+
+        #expect(NormalizedRect.reference(from: dragged, in: .vertical, anchor: .bottomTrailing).isContained(in: safe))
     }
 
     /// A rect's offsets from its anchor: the margin to a start or end edge, or
@@ -150,13 +181,15 @@ import Foundation
 
     // MARK: - Every preset × every aspect
 
-    /// Every built-in preset, resolved for every common output, keeps each widget
-    /// inside the safe area, at its anchor offsets, in its shape.
+    /// Every built-in preset, resolved for every common output, draws every
+    /// widget inside the safe area, at its anchor offsets, in its shape.
     @Test(arguments: OverlayPreset.allCases, OverlayAspect.common)
     func test_every_preset_resolves_inside_the_safe_area(preset: OverlayPreset, aspect: OverlayAspect) {
         let layout = preset.layout(locale: Locale(identifier: "en"))
+        let resolved = layout.resolved(for: aspect)
 
-        for placed in layout.resolved(for: aspect) {
+        #expect(resolved.count == layout.widgets.count)
+        for placed in resolved {
             let source = placed.widget.frame
             let kept = placed.frame.offsets(from: placed.widget.anchor)
             let wanted = source.offsets(from: placed.widget.anchor)
@@ -166,6 +199,18 @@ import Foundation
             #expect(abs(kept.vertical - wanted.vertical) < 1e-9, "\(placed.id) drifts vertically")
             #expect(abs(placed.frame.aspectRatio(in: aspect) - source.aspectRatio(in: .reference)) < 1e-9,
                     "\(placed.id) changes shape")
+        }
+    }
+
+    /// No two widgets of a preset collide in any common output.
+    @Test(arguments: OverlayPreset.allCases, OverlayAspect.common)
+    func test_no_preset_overlaps_in_any_aspect(preset: OverlayPreset, aspect: OverlayAspect) {
+        let frames = preset.layout(locale: Locale(identifier: "en")).resolved(for: aspect).map(\.frame)
+
+        for (index, frame) in frames.enumerated() {
+            for other in frames[(index + 1)...] {
+                #expect(frame.overlapArea(with: other) < 1e-9, "\(frame) overlaps \(other) at \(aspect.ratio)")
+            }
         }
     }
 }

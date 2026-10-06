@@ -36,7 +36,7 @@ public enum OverlayWidgetKind: Equatable, Hashable, Sendable {
     case channelValue(OverlayChannelSource)
     /// The kart from the garage: "F4 · Thunder · RBC Honda · 18 HP".
     case kartBadge
-    /// Venue, date and session.
+    /// Venue, date and session name.
     case sessionInfo
 
     /// The kind's stable key: the `type` it persists under, and the id a new
@@ -200,25 +200,47 @@ extension KeyedDecodingContainer {
 
 /// An array read element by element, skipping any element that fails to decode
 /// — so one widget or preset this build can't read never loses its neighbours.
+/// The skips are reported to a ``SkippedElementCounter`` when the decoder
+/// carries one, so a caller can tell a complete read from a lossy one.
 struct LossyList<Element: Decodable>: Decodable {
     let elements: [Element]
 
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
         var elements: [Element] = []
+        var skipped = 0
         while !container.isAtEnd {
             if let element = try? container.decode(Element.self) {
                 elements.append(element)
             } else {
                 // A failed decode leaves the cursor in place; step over the element.
                 _ = try container.decode(Skipped.self)
+                skipped += 1
             }
         }
         self.elements = elements
+        if skipped > 0, let key = SkippedElementCounter.key,
+           let counter = decoder.userInfo[key] as? SkippedElementCounter {
+            counter.add(skipped)
+        }
     }
 
     /// Consumes any one element.
     private struct Skipped: Decodable {
         init(from decoder: Decoder) throws {}
+    }
+}
+
+/// Counts the elements every ``LossyList`` skips during one decode — at any
+/// depth — when placed in the decoder's `userInfo` under ``key``.
+final class SkippedElementCounter {
+    /// Where a decoder carries the counter.
+    static let key = CodingUserInfoKey(rawValue: "com.racestudio.skippedElements")
+
+    /// How many elements were skipped so far.
+    private(set) var count = 0
+
+    func add(_ skipped: Int) {
+        count += skipped
     }
 }

@@ -2,8 +2,9 @@ import Foundation
 
 /// The built-in video overlays (issue 9.10), defined in code so they always
 /// match this build's widgets. Each is laid out in the 16:9 reference frame
-/// inside the 3% safe area with no two widgets overlapping, and anchored so it
-/// re-places sensibly in 4:3, 1:1 and 9:16 (see `docs/handbook` — *Video
+/// inside the 3% safe area with no two widgets overlapping, and anchored to its
+/// corners and edges, so in 4:3, 1:1 and 9:16 every widget stays in its place,
+/// inside the safe area, still without overlaps (see `docs/handbook` — *Video
 /// overlay layouts* — for the annotated diagram).
 public enum OverlayPreset: String, CaseIterable, Sendable {
     /// Speed, the lap timer and the delta — the least on screen.

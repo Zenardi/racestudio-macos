@@ -144,8 +144,10 @@ Three presets are built in:
 - **Any frame shape.** Layouts are drawn in a 16:9 frame. For a 4:3, square
   (1:1) or vertical (9:16) video, each widget keeps its distance to its
   **anchor** (the corner or edge marked in the figure) and keeps its shape, and
-  no widget leaves the 3% title-safe area. Widgets are sized to the frame's
-  shorter side, so in a vertical video they are as large as in a landscape one.
+  no widget leaves the 3% title-safe area. In a narrower frame a widget keeps
+  its share of the width and gets shorter to keep its shape (in a wider frame,
+  its share of the height), shrinking toward its anchor. Widgets that don't
+  overlap in 16:9 therefore never overlap in another shape.
 - **Only what the session has.** Each widget needs data: the RPM bar needs an
   RPM channel, the map a GPS track, and the kart badge a kart from your garage
   (it reads, for example, *F4 · Thunder · RBC Honda · 18 HP*). A widget the
@@ -158,10 +160,13 @@ Three presets are built in:
   a single widget can use the other system.
 - **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
   workspace saved before overlays existed opens with the overlay off.
-- **Your own presets.** Your own layouts are kept in
-  `~/Library/Application Support/RaceStudio/OverlayPresets.json`. If that file is
-  damaged, RaceStudio still opens and offers the built-in presets. The damaged
-  file is kept as `OverlayPresets.corrupt.json` the next time a preset is saved.
+- **Your own presets.** Your own layouts are kept in `OverlayPresets.json` in
+  RaceStudio's Application Support folder; for the sandboxed app that is
+  `~/Library/Containers/com.racestudio.RaceStudio/Data/Library/Application Support/RaceStudio/`.
+  A preset can't take a built-in preset's name. If the file is damaged, or holds
+  a layout this version can't read, RaceStudio still opens and offers the
+  built-in presets. Before the file is next rewritten, it is kept as
+  `OverlayPresets.backup.json` (then `OverlayPresets.backup-2.json`, and so on).
 
 ## Notes
 

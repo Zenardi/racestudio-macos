@@ -17,9 +17,6 @@ struct WorkspaceBar: View {
     /// The window's video-review player (issue 9.6): the bar reads the attached
     /// footage off it when saving, and hands a loaded project's attachment back.
     @ObservedObject var video: VideoReviewController
-    /// The video overlay the opened workspace carried (issue 9.10), written back
-    /// on save so it is never dropped before the overlay editor owns it.
-    @State private var overlay: OverlayLayout?
 
     private var store: ProjectStore { ProjectStore(validator: FFIExpressionValidator()) }
     private var projectType: UTType { UTType(filenameExtension: ProjectStore.fileExtension) ?? .json }
@@ -54,7 +51,7 @@ struct WorkspaceBar: View {
         // so a trim made after attaching is what reopens.
         try? store.save(
             model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet,
-                                  video: video.attachmentForSaving, overlay: overlay), to: url)
+                                  video: video.attachmentForSaving), to: url)
     }
 
     private func openWorkspace() {
@@ -72,7 +69,6 @@ struct WorkspaceBar: View {
             return
         }
         model.restore(from: document)
-        overlay = document.overlay
         // Re-open the workspace's video (issue 9.6). A moved or deleted file leaves
         // the panel in a stated failure rather than aborting the load.
         if let attachment = document.video {

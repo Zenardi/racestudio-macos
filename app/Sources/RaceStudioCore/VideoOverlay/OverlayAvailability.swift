@@ -39,10 +39,11 @@ public struct OverlaySessionContext: Equatable, Sendable {
         return kart.specification.isEmpty ? kart.displayName : kart.specification
     }
 
-    /// Whether the session has any detail for the session-info widget to show.
+    /// Whether the session has anything for the session-info widget to show — its
+    /// venue, date or session name.
     var hasSessionDetails: Bool {
         guard let metadata else { return false }
-        return [metadata.track, metadata.session, metadata.driver, metadata.vehicle, metadata.series, metadata.logDate]
+        return [metadata.track, metadata.logDate, metadata.session]
             .contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
@@ -220,9 +221,18 @@ extension OverlayLayout {
     /// Whether `session` can feed each widget of the ``validated()`` layout, by
     /// widget id — hidden widgets included, so the editor can say why one would
     /// not draw. The renderer skips every widget that is not
-    /// ``WidgetAvailability/isDrawable``.
+    /// ``WidgetAvailability/isDrawable`` (``drawable(for:session:)``).
     public func availability(for session: OverlaySessionContext) -> [OverlayWidget.ID: WidgetAvailability] {
         Dictionary(uniqueKeysWithValues: validated().widgets.map { ($0.id, $0.kind.availability(for: session)) })
+    }
+
+    /// What the renderer draws for `session` in an output of `aspect`: the
+    /// ``resolved(for:)`` draw list, back to front, without the widgets the
+    /// session cannot feed (degraded ones stay). Like ``resolved(for:)``, it
+    /// validates the layout, so compute it once per layout, session and output
+    /// size, not per frame.
+    public func drawable(for aspect: OverlayAspect, session: OverlaySessionContext) -> [ResolvedOverlayWidget] {
+        resolved(for: aspect).filter { $0.widget.kind.availability(for: session).isDrawable }
     }
 }
 

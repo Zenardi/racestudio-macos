@@ -8,8 +8,8 @@ import Foundation
 /// The axes are normalized independently, so the same numbers are a different
 /// *shape* in a different frame: `0.18 × 0.32` is square in 16:9 and tall in
 /// 1:1 (``aspectRatio(in:)``). An ``OverlayLayout`` is authored in the 16:9
-/// reference frame and re-placed per output by
-/// ``resolved(in:anchor:safeMargin:)``.
+/// reference frame, re-placed per output by ``resolved(in:anchor:safeMargin:)``
+/// and mapped back by ``reference(from:in:anchor:safeMargin:)``.
 public struct NormalizedRect: Codable, Equatable, Hashable, Sendable {
     /// The left edge, as a fraction of the frame's width.
     public var x: Double
@@ -103,22 +103,26 @@ public struct NormalizedRect: Codable, Equatable, Hashable, Sendable {
     /// This rect, authored in the 16:9 reference frame, re-placed for an output of
     /// `aspect`:
     ///
-    /// - **size** — the widget keeps its size relative to the frame's *short*
-    ///   side and its pixel shape, so it is as many pixels tall in 1920×1080 as
-    ///   wide-and-tall in 1080×1920; one too big for the safe area shrinks, shape
-    ///   kept, until it fits;
+    /// - **size** — the widget keeps its pixel shape. In a frame narrower than
+    ///   16:9 (4:3, 1:1, 9:16) it keeps its share of the frame's *width* and gives
+    ///   up height; in a wider one, its share of the *height*. Either way it only
+    ///   ever shrinks;
     /// - **position** — on each axis it keeps its margin to its `anchor` edge
-    ///   (or, centred, its centre);
-    /// - **bounds** — it is then kept inside the `safeMargin` title-safe area.
+    ///   (or, centred, its centre), so it shrinks toward its anchor, inside its
+    ///   authored rect. A layout inside the safe area with no two widgets
+    ///   overlapping at 16:9 is therefore inside it, without overlaps, in every
+    ///   aspect;
+    /// - **bounds** — a rect too big for the `safeMargin` safe area (one
+    ///   ``OverlayLayout/validated()`` would have fixed) shrinks, shape kept, to
+    ///   fit, and is kept inside it.
     ///
-    /// At the reference aspect a rect inside the safe area is unchanged.
+    /// At the reference aspect a rect inside the safe area comes back bit for bit.
+    /// ``reference(from:in:anchor:safeMargin:)`` maps a resolved rect back.
     public func resolved(in aspect: OverlayAspect, anchor: OverlayAnchor,
                          safeMargin: Double = OverlayLayout.safeMargin) -> NormalizedRect {
-        let source = OverlayAspect.reference.ratio
-        let target = aspect.ratio
-        // Size in units of the short side, then back into the target's axes.
-        var newWidth = width * source / min(source, 1) * min(target, 1) / target
-        var newHeight = height / min(source, 1) * min(target, 1)
+        let scale = Self.scale(for: aspect)
+        var newWidth = width * scale.horizontal
+        var newHeight = height * scale.vertical
         let available = 1 - 2 * safeMargin
         let fit = min(1, available / newWidth, available / newHeight)
         newWidth *= fit
@@ -130,16 +134,41 @@ public struct NormalizedRect: Codable, Equatable, Hashable, Sendable {
         return placed.clamped(to: .safeArea(margin: safeMargin))
     }
 
+    /// The 16:9 reference rect that ``resolved(in:anchor:safeMargin:)`` places at
+    /// `rect` in an output of `aspect` — how an editor that drags a widget on the
+    /// output's own frame stores what it dragged. Kept inside the safe area.
+    public static func reference(from rect: NormalizedRect, in aspect: OverlayAspect, anchor: OverlayAnchor,
+                                 safeMargin: Double = OverlayLayout.safeMargin) -> NormalizedRect {
+        let scale = scale(for: aspect)
+        let width = rect.width / scale.horizontal
+        let height = rect.height / scale.vertical
+        let authored = NormalizedRect(
+            x: place(start: rect.x, length: rect.width, newLength: width, anchor: anchor.horizontal),
+            y: place(start: rect.y, length: rect.height, newLength: height, anchor: anchor.vertical),
+            width: width, height: height)
+        return authored.clamped(to: .safeArea(margin: safeMargin))
+    }
+
     // MARK: - Internals
 
-    /// The new start of a span of `newLength` that keeps the old span's margin to
-    /// its anchored edge (or its centre).
+    /// What a rect's width and height are multiplied by for an output of
+    /// `aspect`: a narrower frame keeps the width share and scales the height, a
+    /// wider one keeps the height share and scales the width — the pixel shape is
+    /// kept, and neither factor exceeds `1`.
+    private static func scale(for aspect: OverlayAspect) -> (horizontal: Double, vertical: Double) {
+        let relative = aspect.ratio / OverlayAspect.reference.ratio
+        return (min(1, 1 / relative), min(1, relative))
+    }
+
+    /// The new start of a span resized from `length` to `newLength` that keeps
+    /// its margin to its anchored edge (or its centre). Exact when the length is
+    /// unchanged; it is its own inverse with the lengths swapped.
     private static func place(start: Double, length: Double, newLength: Double,
                               anchor: OverlayAxisAnchor) -> Double {
         switch anchor {
         case .start: return start
-        case .center: return start + length / 2 - newLength / 2
-        case .end: return start + length - newLength // the end edge, so its margin, stays put
+        case .center: return start + (length - newLength) / 2
+        case .end: return start + (length - newLength) // the end edge, so its margin, stays put
         }
     }
 

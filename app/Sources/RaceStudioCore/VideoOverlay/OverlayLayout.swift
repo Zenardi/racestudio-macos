@@ -22,8 +22,10 @@ public struct OverlayLayout: Equatable, Sendable {
     /// The smallest a widget may be on either axis, as a fraction of the frame.
     public static let minimumWidgetSize = 0.03
 
-    /// The layout format it was written in.
-    public var schema: Int
+    /// The layout format: always ``currentSchema``. Whatever format a layout is
+    /// read from, it is read into — and written as — this build's, so a layout
+    /// re-saved here never claims a newer format whose rules it did not follow.
+    public var schema: Int { Self.currentSchema }
     /// The name shown in the preset menu.
     public var name: String
     /// The widgets, in layout order (the draw order among equal ``OverlayWidget/z``).
@@ -34,9 +36,8 @@ public struct OverlayLayout: Equatable, Sendable {
     /// Whether the overlay is shown — *Show HUD*. Off hides it, layout kept.
     public var isEnabled: Bool
 
-    public init(schema: Int = OverlayLayout.currentSchema, name: String, widgets: [OverlayWidget] = [],
-                units: UnitSystem = .metric, theme: OverlayTheme = .raceStudio, isEnabled: Bool = true) {
-        self.schema = schema
+    public init(name: String, widgets: [OverlayWidget] = [], units: UnitSystem = .metric,
+                theme: OverlayTheme = .raceStudio, isEnabled: Bool = true) {
         self.name = name
         self.widgets = widgets
         self.units = units
@@ -55,8 +56,9 @@ public struct OverlayLayout: Equatable, Sendable {
     /// visible widget of the ``validated()`` layout, ordered by ``OverlayWidget/z``
     /// (ties in layout order), each in its rect re-placed for that aspect
     /// (``NormalizedRect/resolved(in:anchor:safeMargin:)``). Empty while the
-    /// overlay is off. Widgets the session cannot feed are the caller's to skip
-    /// (``availability(for:)``).
+    /// overlay is off. Widgets the session cannot feed are left in; the renderer
+    /// draws ``drawable(for:session:)``, which skips them. Each call validates
+    /// the layout, so resolve once per layout and output size, not per frame.
     public func resolved(for aspect: OverlayAspect) -> [ResolvedOverlayWidget] {
         guard isEnabled else { return [] }
         return validated().widgets.enumerated()
@@ -139,11 +141,11 @@ extension OverlayLayout: Codable {
 
     /// Reads leniently, then validates: a widget this build can't read is
     /// skipped, a missing or malformed setting takes its default, and whatever
-    /// geometry a hand edit left is made drawable (``validated()``).
+    /// geometry a hand edit left is made drawable (``validated()``). There is one
+    /// format so far, so the stored `schema` needs no migration.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let raw = OverlayLayout(
-            schema: container.lenient(Int.self, forKey: .schema) ?? Self.currentSchema,
             name: container.lenient(String.self, forKey: .name) ?? "",
             widgets: container.lenient(LossyList<OverlayWidget>.self, forKey: .widgets)?.elements ?? [],
             units: container.lenient(UnitSystem.self, forKey: .units) ?? .metric,
@@ -152,12 +154,13 @@ extension OverlayLayout: Codable {
         self = raw.validated()
     }
 
-    /// Writes the ``validated()`` layout — JSON cannot hold a NaN, so a widget
-    /// with a non-finite rect is left out rather than failing the save.
+    /// Writes the ``validated()`` layout in ``currentSchema`` — JSON cannot hold
+    /// a NaN, so a widget with a non-finite rect is left out rather than failing
+    /// the save.
     public func encode(to encoder: Encoder) throws {
         let valid = validated()
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(valid.schema, forKey: .schema)
+        try container.encode(Self.currentSchema, forKey: .schema)
         try container.encode(valid.name, forKey: .name)
         try container.encode(valid.widgets, forKey: .widgets)
         try container.encode(valid.units, forKey: .units)

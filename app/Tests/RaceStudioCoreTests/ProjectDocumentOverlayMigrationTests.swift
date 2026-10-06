@@ -70,8 +70,10 @@ import Foundation
     private var editedOverlay: OverlayLayout {
         var layout = OverlayPreset.kartCoaching.layout(locale: Locale(identifier: "en"))
         layout.units = .imperial
-        layout.widgets[6].options.trackMapRotation = 90
-        layout.widgets[6].frame.y = 0.6
+        if let map = layout.widgets.firstIndex(where: { $0.id == "trackMap" }) {
+            layout.widgets[map].options.trackMapRotation = 90
+            layout.widgets[map].frame.y = 0.6
+        }
         return layout
     }
 
@@ -138,6 +140,17 @@ import Foundation
         #expect(loaded.widgets[0].frame.isContained(in: .safeArea(margin: OverlayLayout.safeMargin)))
     }
 
+    /// An overlay that isn't a layout at all costs only the overlay: the workspace
+    /// opens with it off, and the load says so.
+    @Test(arguments: ["5", "[]", #""Minimal""#])
+    func test_an_unreadable_overlay_opens_the_project_with_it_off(value: String) throws {
+        let loaded = try load(project(version: 7, extra: #", "overlay": \#(value)"#))
+
+        #expect(loaded.overlay == nil)
+        #expect(loaded.video?.offset == 2.5)
+        #expect(loaded.warnings == ["unreadable video overlay; opened with the overlay off"])
+    }
+
     /// The schema was bumped for the overlay: a save is stamped v7 on disk.
     @Test func test_saved_projects_are_stamped_v7() throws {
         let dir = try makeTempDir()
@@ -152,18 +165,39 @@ import Foundation
 
     // MARK: - The workspace save path
 
-    /// Saving the window carries the overlay it was given, so a reopened
-    /// workspace never drops one.
     @MainActor
-    @Test func test_the_workspace_document_carries_the_overlay() {
+    private func windowModel() -> AnalysisWindowModel {
         let session = Session(
             metadata: SessionMetadata(vehicle: "", track: "Interlagos", driver: "", session: "", series: "",
                                       logDate: "", logTime: "", datetimeUtc: 0),
             channels: [Channel(name: "GPS Speed", unit: "km/h", sampleRateHz: 20, decimals: 1, sampleCount: 10)],
             laps: [Lap(index: 0, startTimeS: 0, durationS: 60, endTimeS: 60)])
-        let model = AnalysisWindowModel(session: session, analysis: nil)
+        return AnalysisWindowModel(session: session, analysis: nil)
+    }
 
-        #expect(model.projectDocument(overlay: editedOverlay).overlay == editedOverlay)
+    /// The window owns its workspace's overlay — off until one is chosen — and a
+    /// saved document carries it.
+    @MainActor
+    @Test func test_the_window_owns_the_overlay_it_saves() {
+        let model = windowModel()
+        #expect(model.overlay == nil)
         #expect(model.projectDocument().overlay == nil)
+
+        model.overlay = editedOverlay
+
+        #expect(model.projectDocument().overlay == editedOverlay)
+    }
+
+    /// Reopening a workspace restores its overlay into the window — or clears it.
+    @MainActor
+    @Test func test_restoring_a_workspace_restores_its_overlay() {
+        let model = windowModel()
+        let saved = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time), overlay: editedOverlay)
+
+        model.restore(from: saved)
+        #expect(model.overlay == editedOverlay)
+
+        model.restore(from: ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time)))
+        #expect(model.overlay == nil)
     }
 }

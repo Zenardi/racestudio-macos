@@ -93,3 +93,32 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.overlay == rhs.overlay
     }
 }
+
+extension ProjectDocument {
+
+    /// The warning a load records when the overlay could not be read.
+    static let unreadableOverlayWarning = "unreadable video overlay; opened with the overlay off"
+
+    /// Decodes every field exactly as the synthesized conformance would, except
+    /// the 9.10 ``overlay``: it is cosmetic next to the analysis it sits on, so a
+    /// value that isn't a layout at all costs only the overlay — the workspace
+    /// opens with it off and records ``unreadableOverlayWarning`` — rather than
+    /// making the whole project unopenable. (A layout's own fields are already
+    /// read leniently; see ``OverlayLayout``.)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
+                  sessionRefs: try container.decode([SessionRef].self, forKey: .sessionRefs),
+                  layout: try container.decode(AnalysisLayout.self, forKey: .layout),
+                  selectedLaps: try container.decode([LapSelection].self, forKey: .selectedLaps),
+                  mathChannels: try container.decode([MathChannelDef].self, forKey: .mathChannels),
+                  activeLayout: try container.decode(WindowLayout.self, forKey: .activeLayout),
+                  logSheet: try container.decode(LogSheet.self, forKey: .logSheet),
+                  video: try container.decodeIfPresent(VideoAttachment.self, forKey: .video))
+        do {
+            overlay = try container.decodeIfPresent(OverlayLayout.self, forKey: .overlay)
+        } catch {
+            warnings.append(Self.unreadableOverlayWarning)
+        }
+    }
+}

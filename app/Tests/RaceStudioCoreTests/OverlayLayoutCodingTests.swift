@@ -141,6 +141,18 @@ import Foundation
         #expect(layout.widgets[0].frame.isContained(in: .safeArea(margin: OverlayLayout.safeMargin)))
     }
 
+    /// A layout written by a newer build is read into this build's format, and
+    /// is written back stamped with the format this build actually wrote — never
+    /// claiming a newer format whose rules it did not follow.
+    @Test func test_a_newer_format_is_read_and_written_as_this_builds() throws {
+        let future = try decode(#"{"schema": 9, "name": "Future", "widgets": []}"#)
+
+        let written = try JSONSerialization.jsonObject(with: JSONEncoder().encode(future)) as? [String: Any]
+
+        #expect(future.schema == OverlayLayout.currentSchema)
+        #expect(written?["schema"] as? Int == OverlayLayout.currentSchema)
+    }
+
     // MARK: - Writing
 
     /// JSON cannot hold a NaN, so a layout is written validated: a widget with a

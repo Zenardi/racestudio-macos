@@ -6,26 +6,37 @@ public enum OverlayPresetStoreError: Error, Equatable, Sendable {
     /// The library file exists but could not be read or decoded. Logged on load,
     /// which degrades to the built-ins — never thrown.
     case corruptFile
+    /// This many presets or widgets in the library could not be read and were
+    /// skipped. Logged on load — never thrown.
+    case skippedEntries(Int)
     /// Writing the library failed (the previous file is left intact).
     case ioFailure
     /// A preset was saved without a name.
     case emptyName
+    /// A preset was saved under a built-in preset's name, in any language the
+    /// app ships — the menu could not tell the two apart.
+    case reservedName
 }
 
 /// The user's own overlay presets — *Save as preset…* (issue 9.10) — kept as
-/// JSON in `~/Library/Application Support/RaceStudio/OverlayPresets.json`.
+/// JSON in `Application Support/RaceStudio/OverlayPresets.json` (inside the app's
+/// sandbox container when sandboxed).
 ///
 /// Writes are atomic (temp file + replace), so an interrupted save never leaves
 /// a truncated library. Reads are lenient and never throw: a missing file is an
-/// empty library; a preset this build can't read is skipped; a file that can't
-/// be read at all logs ``OverlayPresetStoreError/corruptFile`` and yields no
-/// user presets, so the menu still offers the built-ins. Saving over such a
-/// file first keeps it aside as `OverlayPresets.corrupt.json`, so a hand edit
-/// gone wrong is never silently destroyed.
+/// empty library; a preset or widget this build can't read is skipped and
+/// logged (``OverlayPresetStoreError/skippedEntries(_:)``); a file that can't be
+/// read at all logs ``OverlayPresetStoreError/corruptFile`` and yields no user
+/// presets, so the menu still offers the built-ins. Before a save overwrites a
+/// file that was not read in full, the file is kept aside as
+/// `OverlayPresets.backup.json` (then `…backup-2.json`, …), so a hand edit gone
+/// wrong — or a library written by a newer build — is never silently lost.
 ///
-/// The directory, the write primitive and the log are injected (production:
-/// Application Support, an atomic `Data.write` and `os.Logger`), so tests run in
-/// a temporary directory and observe the failure paths.
+/// The directory, the file manager, the write primitive and the log are
+/// injected (production: Application Support, an atomic `Data.write` and
+/// `os.Logger`), so tests run in a temporary directory and observe the failure
+/// paths. Each edit is a read-modify-write of the file, so use one store from
+/// one actor (the main actor in the app).
 public final class OverlayPresetStore {
 
     /// The library's file name.
@@ -51,7 +62,7 @@ public final class OverlayPresetStore {
         }
     }
 
-    /// `~/Library/Application Support/RaceStudio` — beside the session library.
+    /// `Application Support/RaceStudio` — beside the session library.
     public static func defaultDirectory() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -60,9 +71,6 @@ public final class OverlayPresetStore {
 
     /// The library file.
     public var fileURL: URL { directory.appendingPathComponent(Self.fileName) }
-
-    /// Where an unreadable library is kept aside before it is overwritten.
-    private var corruptURL: URL { directory.appendingPathComponent("OverlayPresets.corrupt.json") }
 
     // MARK: - Reading
 
@@ -74,34 +82,39 @@ public final class OverlayPresetStore {
     /// The user's saved presets, in the order saved. Never throws (see the type).
     public func userPresets() -> [OverlayLayout] {
         guard fileManager.fileExists(atPath: fileURL.path) else { return [] }
-        guard let presets = readFile() else {
+        guard let read = readFile() else {
             log(.corruptFile)
             return []
         }
-        return presets
+        if read.skipped > 0 { log(.skippedEntries(read.skipped)) }
+        return read.presets
     }
 
-    /// The presets in the library file, or `nil` when it can't be read or decoded.
-    private func readFile() -> [OverlayLayout]? {
-        guard let data = try? Data(contentsOf: fileURL),
-              let file = try? JSONDecoder().decode(PresetFile.self, from: data) else { return nil }
-        return file.presets
+    /// The presets in the library file and how many entries had to be skipped,
+    /// or `nil` when it can't be read or decoded at all.
+    private func readFile() -> (presets: [OverlayLayout], skipped: Int)? {
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
+        let counter = SkippedElementCounter()
+        let decoder = JSONDecoder()
+        if let key = SkippedElementCounter.key { decoder.userInfo[key] = counter }
+        guard let file = try? decoder.decode(PresetFile.self, from: data) else { return nil }
+        return (file.presets, counter.count)
     }
 
     // MARK: - Writing
 
     /// Replace the user's presets with `presets`, atomically, creating the folder
-    /// if needed. An existing file that can't be read is kept aside first.
-    /// - Throws: ``OverlayPresetStoreError/ioFailure`` when the write fails.
+    /// if needed. An existing file that was not read in full is kept aside first.
+    /// - Throws: ``OverlayPresetStoreError/ioFailure`` when the backup or the
+    ///   write fails (nothing is overwritten then).
     public func save(_ presets: [OverlayLayout]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
-            let data = try encoder.encode(PresetFile(schema: Self.currentSchema, presets: presets))
+            let data = try encoder.encode(PresetFile(presets: presets))
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-            if fileManager.fileExists(atPath: fileURL.path), readFile() == nil {
-                try? fileManager.removeItem(at: corruptURL)
-                try fileManager.copyItem(at: fileURL, to: corruptURL)
+            if fileManager.fileExists(atPath: fileURL.path), readFile()?.skipped != 0 {
+                try fileManager.copyItem(at: fileURL, to: nextBackupURL())
             }
             try write(data, fileURL)
         } catch {
@@ -112,12 +125,16 @@ public final class OverlayPresetStore {
     /// *Save as preset…*: store `layout` under `name` (trimmed), replacing — in
     /// place — a preset of the same name in any letter case.
     /// - Returns: the user's presets after the save.
-    /// - Throws: ``OverlayPresetStoreError/emptyName`` for a blank name, or
+    /// - Throws: ``OverlayPresetStoreError/emptyName`` for a blank name,
+    ///   ``OverlayPresetStoreError/reservedName`` for a built-in's name, or
     ///   ``OverlayPresetStoreError/ioFailure`` when the write fails.
     @discardableResult
     public func savePreset(_ layout: OverlayLayout, named name: String) throws -> [OverlayLayout] {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw OverlayPresetStoreError.emptyName }
+        guard !Self.reservedNames.contains(where: { Self.sameName($0, trimmed) }) else {
+            throw OverlayPresetStoreError.reservedName
+        }
         var named = layout
         named.name = trimmed
         var presets = userPresets()
@@ -142,18 +159,40 @@ public final class OverlayPresetStore {
         return presets
     }
 
+    // MARK: - Internals
+
+    /// The first free backup name: `OverlayPresets.backup.json`, then
+    /// `OverlayPresets.backup-2.json`, … — an earlier backup is never replaced.
+    private func nextBackupURL() -> URL {
+        var url = directory.appendingPathComponent("OverlayPresets.backup.json")
+        var suffix = 1
+        while fileManager.fileExists(atPath: url.path) {
+            suffix += 1
+            url = directory.appendingPathComponent("OverlayPresets.backup-\(suffix).json")
+        }
+        return url
+    }
+
+    /// Every built-in preset's name in every language the app ships.
+    private static var reservedNames: [String] {
+        let languages = LocalizationCatalog.shared.availableLanguages
+        return OverlayPreset.allCases.flatMap { preset in
+            languages.map { preset.title(locale: Locale(identifier: $0)) }
+        }
+    }
+
     private static func sameName(_ lhs: String, _ rhs: String) -> Bool {
         lhs.caseInsensitiveCompare(rhs) == .orderedSame
     }
 }
 
-/// The library file: a format version and the presets, read leniently.
+/// The library file: a format version and the presets.
 private struct PresetFile: Codable {
-    let schema: Int
+    /// Written as this build's format; every format so far reads the same way.
+    var schema = OverlayPresetStore.currentSchema
     let presets: [OverlayLayout]
 
-    init(schema: Int, presets: [OverlayLayout]) {
-        self.schema = schema
+    init(presets: [OverlayLayout]) {
         self.presets = presets
     }
 
@@ -161,10 +200,10 @@ private struct PresetFile: Codable {
         case schema, presets
     }
 
-    /// A preset this build can't read is skipped; a missing list is empty.
+    /// A preset this build can't read is skipped (and counted); a missing list
+    /// is empty.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        schema = container.lenient(Int.self, forKey: .schema) ?? OverlayPresetStore.currentSchema
         presets = container.lenient(LossyList<OverlayLayout>.self, forKey: .presets)?.elements ?? []
     }
 }

@@ -129,8 +129,44 @@ import Foundation
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try Data(#"{"schema": 1, "presets": [42, {"name": "Wet"}, "x"]}"#.utf8)
             .write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        let spy = LogSpy()
 
-        #expect(store(dir).userPresets() == [OverlayLayout(name: "Wet")])
+        #expect(store(dir, spy: spy).userPresets() == [OverlayLayout(name: "Wet")])
+        #expect(spy.errors == [.skippedEntries(2)])
+    }
+
+    /// A widget this build can't read inside a preset is skipped too, and the
+    /// next save keeps the original aside rather than silently losing it.
+    @Test func test_a_lossy_library_is_kept_aside_before_it_is_rewritten() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let original = #"{"presets": [{"name": "Wet", "widgets": [{"kind": {"type": "laser"}, "#
+            + #""frame": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.1}}]}]}"#
+        try Data(original.utf8).write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        let spy = LogSpy()
+
+        try store(dir, spy: spy).savePreset(layout("Dry"), named: "Dry")
+
+        let kept = try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup.json"))
+        #expect(String(bytes: kept, encoding: .utf8) == original)
+        #expect(spy.errors == [.skippedEntries(1)])
+        #expect(store(dir).userPresets().map(\.name) == ["Wet", "Dry"])
+    }
+
+    /// A library written by a newer build is read, and rewritten in this build's format.
+    @Test func test_a_newer_library_format_is_read_and_rewritten() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("OverlayPresets.json")
+        try Data(#"{"schema": 9, "presets": [{"name": "Wet"}]}"#.utf8).write(to: url)
+
+        try store(dir).savePreset(layout("Dry"), named: "Dry")
+
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        #expect(json?["schema"] as? Int == 1)
+        #expect(store(dir).userPresets().map(\.name) == ["Wet", "Dry"])
     }
 
     // MARK: - Save as preset
@@ -157,6 +193,15 @@ import Foundation
     @Test func test_a_blank_preset_name_is_refused() {
         #expect(throws: OverlayPresetStoreError.emptyName) {
             try store(makeTempDir()).savePreset(layout("A"), named: "   ")
+        }
+    }
+
+    /// A built-in's name, in any shipped language, is taken: the menu could not
+    /// tell the two apart.
+    @Test(arguments: ["minimal", "Kart Coaching", "Telemetria completa"])
+    func test_a_built_in_name_is_refused(name: String) {
+        #expect(throws: OverlayPresetStoreError.reservedName) {
+            try store(makeTempDir()).savePreset(layout("A"), named: name)
         }
     }
 
@@ -197,8 +242,43 @@ import Foundation
 
         try store(dir).savePreset(layout("Wet"), named: "Wet")
 
-        let kept = try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.corrupt.json"))
+        let kept = try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup.json"))
         #expect(String(bytes: kept, encoding: .utf8) == "{not json")
         #expect(store(dir).userPresets().map(\.name) == ["Wet"])
+    }
+
+    /// A second unreadable library never overwrites the first one's backup.
+    @Test func test_each_backup_is_kept() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("OverlayPresets.json")
+        try Data("first".utf8).write(to: url)
+        try store(dir).deletePreset(named: "Wet")
+        try Data("second".utf8).write(to: url)
+
+        try store(dir).deletePreset(named: "Wet")
+
+        #expect(try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup.json")) == Data("first".utf8))
+        #expect(try Data(contentsOf: dir.appendingPathComponent("OverlayPresets.backup-2.json"))
+            == Data("second".utf8))
+    }
+
+    /// When the backup itself can't be made, nothing is overwritten.
+    @Test func test_a_failed_backup_keeps_the_original_and_throws() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("OverlayPresets.json")
+        try Data("{not json".utf8).write(to: url)
+        let presets = OverlayPresetStore(directory: dir, fileManager: CopyRefusingFileManager(), log: { _ in })
+
+        #expect(throws: OverlayPresetStoreError.ioFailure) { try presets.savePreset(layout("Wet"), named: "Wet") }
+        #expect(try Data(contentsOf: url) == Data("{not json".utf8))
+    }
+
+    /// A file manager that cannot copy — the backup step fails.
+    private final class CopyRefusingFileManager: FileManager, @unchecked Sendable {
+        override func copyItem(at srcURL: URL, to dstURL: URL) throws { throw CocoaError(.fileWriteNoPermission) }
     }
 }

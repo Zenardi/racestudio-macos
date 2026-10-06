@@ -99,8 +99,9 @@ import Foundation
         #expect(options.trackMapRotation == 0)
     }
 
-    /// Rotation is kept in one turn.
-    @Test(arguments: [(720.0, 0.0), (405.0, 45.0), (-450.0, 270.0)])
+    /// Rotation is kept in one turn, `0..<360` — even when a hair below zero
+    /// would round up to a full turn.
+    @Test(arguments: [(720.0, 0.0), (405.0, 45.0), (-450.0, 270.0), (-1e-20, 0.0)])
     func test_track_map_rotation_is_normalized(degrees: Double, expected: Double) {
         let options = OverlayWidgetOptions(trackMapRotation: degrees)
 

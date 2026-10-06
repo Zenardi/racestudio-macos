@@ -196,14 +196,32 @@ import Foundation
         #expect(context(myChron6, kart: Kart(name: "Rental 12")).kartBadgeText == "Rental 12")
     }
 
-    /// Session info needs something to say.
+    /// Session info shows the venue, date and session — it needs one of them.
     @Test func test_session_info_needs_details() {
         let blank = SessionMetadata(vehicle: " ", track: "", driver: "", session: "", series: "", logDate: "",
                                     logTime: "", datetimeUtc: 0)
+        let driverOnly = SessionMetadata(vehicle: "Kart", track: "", driver: "Ana", session: "", series: "F4",
+                                         logDate: "", logTime: "", datetimeUtc: 0)
+        let dateOnly = SessionMetadata(vehicle: "", track: "", driver: "", session: "", series: "",
+                                       logDate: "10/04/2026", logTime: "", datetimeUtc: 0)
 
         #expect(availability(.sessionInfo, context(myChron6, metadata: metadata)) == .available)
+        #expect(availability(.sessionInfo, context(myChron6, metadata: dateOnly)) == .available)
         #expect(availability(.sessionInfo, context(myChron6, metadata: blank)) == .unavailable(.noSessionInfo))
+        #expect(availability(.sessionInfo, context(myChron6, metadata: driverOnly)) == .unavailable(.noSessionInfo))
         #expect(availability(.sessionInfo, context(myChron6)) == .unavailable(.noSessionInfo))
+    }
+
+    /// What the renderer draws is the draw list without the widgets the session
+    /// cannot feed — degraded ones stay.
+    @Test func test_the_drawable_list_skips_unavailable_widgets() {
+        let session = context(myChron6 + [channel("Brake", "bar")], kart: kart, metadata: metadata)
+        let layout = OverlayPreset.fullTelemetry.layout(locale: en)
+
+        let drawn = layout.drawable(for: .standard, session: session)
+
+        #expect(drawn.map(\.id) == layout.resolved(for: .standard).map(\.id).filter { $0 != "temperature" })
+        #expect(drawn.contains { $0.id == "pedals" })
     }
 
     // MARK: - Reasons
