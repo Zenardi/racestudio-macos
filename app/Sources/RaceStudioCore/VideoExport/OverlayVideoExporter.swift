@@ -13,6 +13,9 @@ import os
 ///
 /// - **Checks first:** the destination's volume must hold the plan's estimate
 ///   plus 10% (``DiskSpaceChecking``), or the export fails before writing.
+///   The space is read in the export's scratch directory — on that volume, and
+///   readable inside the sandbox, where the destination's folder may not be;
+///   a space that cannot be read does not block the export.
 /// - **Encodes** through an ``ExportPipeline``: the reader pulls each frame
 ///   through the ``OverlayCompositor``; the writer encodes at the plan's codec
 ///   and bit rate, hardware first. ADR 0008 records why a reader and writer,
@@ -24,6 +27,9 @@ import os
 /// - **Cancellable:** ``cancel()`` — or cancelling the task reading the
 ///   stream — stops it within a frame; the stream then throws
 ///   ``OverlayExportError/cancelled`` once its files are gone.
+///
+/// The caller keeps access to the footage and the destination (their
+/// security scope) until the stream ends.
 public actor OverlayVideoExporter {
 
     /// A fresh directory for an export's temporary file, on the same volume
@@ -37,6 +43,9 @@ public actor OverlayVideoExporter {
     private let progressInterval: Duration
     private let scratchDirectory: @Sendable (URL) throws -> URL
     private var jobs: [UUID: ExportJob] = [:]
+    /// Every export is numbered when it is asked for; a cancel covers every
+    /// number issued before it, even an export whose job has not started yet.
+    private nonisolated let tickets = OSAllocatedUnfairLock(initialState: (issued: 0, cancelledThrough: 0))
 
     /// - Parameters:
     ///   - diskSpace: where free space is checked.
@@ -59,24 +68,29 @@ public actor OverlayVideoExporter {
     ///   ``OverlayExportError`` when the export fails or is cancelled.
     public nonisolated func export(_ plan: ExportPlan, overlay: ExportOverlay,
                                    to destination: URL) -> AsyncThrowingStream<ExportProgress, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task { await self.run(plan, overlay: overlay, to: destination, reporting: continuation) }
+        let ticket = tickets.withLock { $0.issued += 1; return $0.issued }
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                await self.run(plan, overlay: overlay, to: destination, ticket: ticket, reporting: continuation)
+            }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    /// Cancel every export in progress.
+    /// Cancel every export asked for so far.
     public func cancel() {
+        tickets.withLock { $0.cancelledThrough = $0.issued }
         for job in jobs.values { job.cancel() }
     }
 
     // MARK: - Internals
 
-    private func run(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL,
+    private func run(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL, ticket: Int,
                      reporting continuation: AsyncThrowingStream<ExportProgress, Error>.Continuation) async {
         let job = ExportJob(totalFrames: plan.frameCount)
         let id = UUID()
         jobs[id] = job
+        if tickets.withLock({ ticket <= $0.cancelledThrough }) { job.cancel() }
         let ticker = Task { [progressInterval] in
             while (try? await Task.sleep(for: progressInterval)) != nil { continuation.yield(job.progress) }
         }
@@ -101,12 +115,11 @@ public actor OverlayVideoExporter {
     private func perform(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL,
                          job: ExportJob) async throws {
         try job.checkCancelled()
-        if let available = try diskSpace.availableCapacity(for: destination.deletingLastPathComponent()),
-           available < plan.requiredBytes {
-            throw OverlayExportError.insufficientDiskSpace(required: plan.requiredBytes, available: available)
-        }
         let scratch = try scratchDirectory(destination)
         defer { try? FileManager.default.removeItem(at: scratch) }
+        if let available = try? diskSpace.availableCapacity(for: scratch), available < plan.requiredBytes {
+            throw OverlayExportError.insufficientDiskSpace(required: plan.requiredBytes, available: available)
+        }
         let file = scratch.appendingPathComponent("\(UUID().uuidString).mp4")
         let composition: OverlayComposition
         do {

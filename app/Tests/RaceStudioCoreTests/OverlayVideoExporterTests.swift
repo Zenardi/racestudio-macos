@@ -90,7 +90,8 @@ import Testing
         #expect(movie.frameTimes.count == plan.frameCount)
     }
 
-    /// Where no HEVC encoder exists, an HEVC export is refused up front.
+    /// By default a plan checks this Mac's encoders: where no HEVC encoder
+    /// exists, an HEVC export is refused up front.
     @Test func test_the_system_encoder_list_decides_hevc_up_front() throws {
         let footage = FootageInfo(duration: 3, frameRate: FrameGrid(numerator: 30, denominator: 1),
                                   naturalSize: CGSize(width: 320, height: 180), rotation: .none, audio: nil,
@@ -99,7 +100,7 @@ import Testing
                                     range: .wholeFootage, session: SessionTimeSpan(start: 0, end: 3),
                                     settings: ExportSettings(codec: .hevc))
 
-        let result = ExportPlan.make(request: request, footage: footage, timeline: .empty, encoders: .system)
+        let result = ExportPlan.make(request: request, footage: footage, timeline: .empty)
 
         #expect((result.failureValue == nil) == EncoderAvailability.system.supportsHEVC)
     }

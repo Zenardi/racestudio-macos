@@ -61,6 +61,19 @@ struct FakeDiskSpace: DiskSpaceChecking {
     func availableCapacity(for url: URL) throws -> Int64? { available }
 }
 
+/// A disk whose free space cannot be read; it records where it was asked.
+final class UnreadableDiskSpace: DiskSpaceChecking, @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [URL] = []
+
+    var askedAbout: [URL] { lock.withLock { urls } }
+
+    func availableCapacity(for url: URL) throws -> Int64? {
+        lock.withLock { urls.append(url) }
+        throw CocoaError(.fileReadNoPermission)
+    }
+}
+
 /// The session-time bar, drawn slowly — so a test can cancel an export of a
 /// three-second clip half-way through.
 struct SlowSessionTimeBar: OverlayFrameDrawing {

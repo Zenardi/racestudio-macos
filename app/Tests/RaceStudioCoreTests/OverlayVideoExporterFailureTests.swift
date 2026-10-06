@@ -72,6 +72,21 @@ import Testing
         #expect(!sandbox.scratchExists)
     }
 
+    /// A cancel made the moment an export is asked for — before it has started
+    /// running — still cancels it.
+    @Test func test_a_cancel_right_after_asking_still_cancels() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let plan = try await exportPlan(try await sandbox.footage())
+        let exporter = sandbox.exporter()
+
+        let stream = exporter.export(plan, overlay: try await overlay(), to: sandbox.destination)
+        await exporter.cancel()
+
+        #expect(await failure(of: stream) == .cancelled)
+        #expect(!sandbox.destinationExists && !sandbox.scratchExists)
+    }
+
     /// When the task reading the progress is cancelled, the export stops and
     /// cleans up after itself.
     @Test func test_cancelling_the_consuming_task_stops_the_export() async throws {
@@ -177,6 +192,27 @@ import Testing
 
         #expect(error != nil)
         #expect(try Data(contentsOf: sandbox.destination) == older)
+    }
+
+    /// The free space is read where the export writes — its scratch directory,
+    /// on the destination's volume and readable inside the sandbox, unlike the
+    /// destination's folder — and a space that cannot be read does not block
+    /// the export.
+    @Test func test_free_space_is_read_in_the_scratch_directory_and_never_blocks_when_unknown() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let plan = try await exportPlan(try await sandbox.footage())
+        let disk = UnreadableDiskSpace()
+        let scratch = sandbox.scratch
+        let exporter = OverlayVideoExporter(diskSpace: disk, scratchDirectory: { _ in
+            try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+            return scratch
+        })
+
+        _ = try await collect(exporter.export(plan, overlay: try await overlay(), to: sandbox.destination))
+
+        #expect(disk.askedAbout == [scratch])
+        #expect(sandbox.destinationExists)
     }
 
     // MARK: - Production seams

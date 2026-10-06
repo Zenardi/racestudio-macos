@@ -66,14 +66,14 @@ public struct ExportPlan: Equatable, Sendable {
     ///
     /// - Parameters:
     ///   - timeline: the session's laps, for ``ExportRange/laps(_:)``.
-    ///   - encoders: the encoders this Mac has.
+    ///   - encoders: the encoders available; this Mac's by default.
     /// - Returns: the plan, or ``OverlayExportError/rangeOutsideFootage`` when
     ///   the range holds no frame of the footage (an empty or unknown lap
     ///   selection, a reversed or non-finite span, or one the footage does not
     ///   reach), or ``OverlayExportError/unsupportedOutput(_:)`` when the
     ///   output cannot be encoded.
     public static func make(request: ExportRequest, footage: FootageInfo, timeline: LapSectorTimeline,
-                            encoders: EncoderAvailability) -> Result<ExportPlan, OverlayExportError> {
+                            encoders: EncoderAvailability = .system) -> Result<ExportPlan, OverlayExportError> {
         guard let video = videoRange(of: request, footage: footage, timeline: timeline),
               let frames = frames(in: video, of: footage) else { return .failure(.rangeOutsideFootage) }
         let size: (width: Int, height: Int)
