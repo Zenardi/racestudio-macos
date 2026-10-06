@@ -210,7 +210,7 @@ private struct VideoSectorGrid: View {
 
     private func cell(_ sector: SectorSpan) -> some View {
         Button { onSelectSector(sector) } label: {
-            Text(Self.time(sector.duration))
+            Text(LapTimeFormatter.sectorString(from: sector.duration))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(background(sector))
@@ -244,13 +244,5 @@ private struct VideoSectorGrid: View {
         return review.sync.coverage(of: sector.span) == .none
             ? "\(name) — outside the attached footage"
             : "\(name) — review this section"
-    }
-
-    /// `m:ss.mmm`, matching the split-times table.
-    static func time(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds > 0 else { return "—" }
-        let minutes = Int(seconds) / 60
-        let rest = seconds - Double(minutes * 60)
-        return minutes > 0 ? String(format: "%d:%06.3f", minutes, rest) : String(format: "%.3f", rest)
     }
 }

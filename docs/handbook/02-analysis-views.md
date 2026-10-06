@@ -184,6 +184,20 @@ Three presets are built in:
   and the logger's delta, but no pedal or engine-temperature channels.
 - **Units.** A layout shows metric (km/h, °C) or imperial (mph, °F) values, and
   a single widget can use the other system.
+- **How it is drawn.** Readouts are set in a condensed face with fixed-width
+  digits, so a running lap time never jitters. A thin dark outline keeps them
+  readable over bright footage, even on a widget without a plate.
+  - A value the session cannot give at that moment shows a dash (—), never a
+    stale or zero value; for example, a sensor gap or the time before the
+    first lap.
+  - Numbers use the decimal mark of the language chosen for the export:
+    *1:02.345* in English, *1:02,345* in Brazilian Portuguese. The labels
+    follow it too: *LAST / BEST*, or *ÚLTIMA / MELHOR*.
+  - The delta bar fills right in red while you lose time and left in green
+    while you gain it.
+  - The RPM bar's shift light comes on at the widget's shift RPM.
+  - The G-ball shows lateral G across and acceleration upwards (braking
+    downwards), with rings at 0.5 g and 1 g and a one-second trail.
 - **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
   workspace saved before overlays existed opens with the overlay off.
 - **Your own presets.** Your own layouts are kept in `OverlayPresets.json` in

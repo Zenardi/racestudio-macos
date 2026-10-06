@@ -24,6 +24,9 @@ public struct TelemetryFrame: Equatable, Sendable {
     public let position: TrackPositionReading?
     /// The last second of G samples up to `t`, oldest first — the G-ball trail.
     public let gTrail: GForceTrail
+    /// The session channels the timeline was asked to sample by name (issue
+    /// 9.11), beside the roles — empty unless it was.
+    private let channels: NamedChannelValues
 
     /// A frame built by hand — previews and renderer snapshot tests.
     /// - Parameters:
@@ -34,22 +37,40 @@ public struct TelemetryFrame: Equatable, Sendable {
     ///   - delta: the live delta (seconds).
     ///   - position: the place on the mini map.
     ///   - gTrail: the G-ball trail, oldest first.
+    ///   - channels: session channels by name (``value(ofChannel:)``), in their
+    ///     own units.
     public init(time: Double, values: [TelemetryRole: Double], lap: LapClockReading? = nil, delta: Double? = nil,
-                position: TrackPositionReading? = nil, gTrail: [GForcePoint] = []) {
+                position: TrackPositionReading? = nil, gTrail: [GForcePoint] = [],
+                channels: [String: Double] = [:]) {
         var roles = PerRole<Double?>(repeating: nil)
         for (role, value) in values { roles[role] = value }
         self.init(time: time, roleValues: roles, lap: lap, delta: delta, position: position,
-                  gTrail: GForceTrail(ArraySlice(gTrail)))
+                  gTrail: GForceTrail(ArraySlice(gTrail)), channels: NamedChannelValues(channels))
     }
 
     init(time: Double, roleValues: PerRole<Double?>, lap: LapClockReading?, delta: Double?,
-         position: TrackPositionReading?, gTrail: GForceTrail) {
+         position: TrackPositionReading?, gTrail: GForceTrail, channels: NamedChannelValues = .none) {
         self.time = time
         self.values = roleValues
         self.lap = lap
         self.delta = delta
         self.position = position
         self.gTrail = gTrail
+        self.channels = channels
+    }
+
+    /// The value of the session channel called `name` — matched like the
+    /// channel map, ignoring case and surrounding spaces — in its own unit, or
+    /// `nil` in a gap or when the timeline was not loaded with that channel
+    /// (``TelemetryTimeline/load(session:source:sectors:reference:deltaSource:channelMap:channels:)``).
+    public func value(ofChannel name: String) -> Double? {
+        channels.value(forKey: TelemetryChannelMap.key(for: name))
+    }
+
+    /// As ``value(ofChannel:)``, for a name already reduced to its matching key
+    /// (``TelemetryChannelMap/key(for:)``) — the per-frame path.
+    func value(ofChannelKey key: String) -> Double? {
+        channels.value(forKey: key)
     }
 
     /// The value of `role` (in its binding's unit), or `nil`.
@@ -129,6 +150,8 @@ public struct SamplingCursor: Sendable {
     var trailEnd = -1
     var trailStart = -1
     var delta = LiveDelta.Hints()
+    /// One hint per channel sampled by name; empty (no allocation) without any.
+    var channels: [Int] = []
 
     public init() {}
 }

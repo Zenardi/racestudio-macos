@@ -1011,6 +1011,142 @@
         }
       }
     },
+    "overlay.label.best": {
+      "comment": "Video overlay label beside the best lap time so far (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BEST"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MELHOR"
+          }
+        }
+      }
+    },
+    "overlay.label.brake": {
+      "comment": "Video overlay label under the brake bar (one capital letter).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "F"
+          }
+        }
+      }
+    },
+    "overlay.label.exhaust": {
+      "comment": "Video overlay label beside the exhaust temperature (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EGT"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ESCAPE"
+          }
+        }
+      }
+    },
+    "overlay.label.gear": {
+      "comment": "Video overlay label above the gear number (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GEAR"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MARCHA"
+          }
+        }
+      }
+    },
+    "overlay.label.lap": {
+      "comment": "Video overlay label beside the lap number (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LAP"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VOLTA"
+          }
+        }
+      }
+    },
+    "overlay.label.last": {
+      "comment": "Video overlay label beside the last lap time (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LAST"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ÚLTIMA"
+          }
+        }
+      }
+    },
+    "overlay.label.throttle": {
+      "comment": "Video overlay label under the throttle bar (one capital letter).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "T"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A"
+          }
+        }
+      }
+    },
+    "overlay.label.water": {
+      "comment": "Video overlay label beside the water temperature (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H2O"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ÁGUA"
+          }
+        }
+      }
+    },
     "overlay.preset.fullTelemetry": {
       "comment": "Video overlay preset: every coaching widget plus pedals, temperatures, sector times and session info.",
       "localizations": {

@@ -38,6 +38,10 @@ fixtures/
                                #   writer emits for fuji_0033.xrk (5.1)
     fuji_0033.session.json     # structural golden: the Session that read_csv
                                #   reconstructs from fuji_0033_reference.csv (5.2)
+  overlay/golden/              # committed PNG goldens of the video overlay
+    <preset>-<state>.png       #   renderer (9.11): each built-in preset at
+                               #   1280×720 mid-lap, at lap start and in a
+                               #   channel gap — synthetic data only
 ```
 
 - **`*.xrk` / `*.csv`** are large and binary, so they stay **local** and are
@@ -57,6 +61,26 @@ fixtures/
 
 Both resolve this directory relative to the repo root and fail with a clear,
 actionable error when a fixture is missing.
+
+## The video overlay goldens (`overlay/golden/*.png`, issue 9.11)
+
+`OverlayRendererSnapshotTests` renders each built-in overlay preset from a
+made-up session (no footage, no session file) and compares it with these PNGs
+after a PNG round trip. A pixel differs when any channel is off by more than
+2/255, and a render matches when at most 0.5% of its pixels differ. That
+leaves room for CoreText anti-aliasing differences between macOS versions, but
+not for a moved widget or a changed number. The renderer's font-independent
+guarantees are asserted structurally by the widget suites: alpha 0 outside the
+widgets, the delta bar's side and colour, the shift light, and the G-ball and
+map dots.
+
+- **Re-record** after an intended change, from `app/`:
+  `RECORD_OVERLAY_GOLDENS=1 swift test --filter OverlayRendererSnapshotTests`.
+  Images whose pixels are unchanged are not rewritten. Review the new PNGs in
+  the PR.
+- **CI** sets `OVERLAY_SNAPSHOT_ARTIFACTS`, so every render, plus a
+  `*.diff.png` for any mismatch, is uploaded as the `overlay-snapshots`
+  artifact. You can inspect a runner's rendering from there, or record it.
 
 ## The AiM CSV byte golden (`golden/fuji_0033.csv`, issue 5.1)
 

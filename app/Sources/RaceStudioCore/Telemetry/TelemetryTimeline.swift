@@ -3,7 +3,7 @@ import Foundation
 /// The single answer to "what was the kart doing at session time `t`?" (issue
 /// 9.9) — shared by the in-app Video + Data HUD and the burned-in MP4 export.
 ///
-/// Loaded once per session (``load(session:source:sectors:reference:deltaSource:channelMap:)``,
+/// Loaded once per session (``load(session:source:sectors:reference:deltaSource:channelMap:channels:)``,
 /// off the main actor) into contiguous per-role series, the lap clock, the live
 /// delta, the projected track and the G trail; then sampled as a
 /// ``TelemetryFrame``:
@@ -31,6 +31,7 @@ public struct TelemetryTimeline: Sendable {
     private let loggerDeltas: [String: TelemetrySeries]
     private let loggerDelta: TelemetrySeries?
     private let gForce: GForceSamples
+    private let named: NamedChannelSeries
 
     /// - Parameters:
     ///   - channelMap: the role bindings the series were read through.
@@ -40,12 +41,15 @@ public struct TelemetryTimeline: Sendable {
     ///   - liveDelta: the computed delta against the reference lap.
     ///   - loggerDeltas: the logger's own delta channels by name, in seconds.
     ///   - deltaSource: which delta a frame reports.
+    ///   - channels: session channels to sample by name (issue 9.11), in
+    ///     their own units — what ``TelemetryFrame/value(ofChannel:)`` reads.
     public init(channelMap: TelemetryChannelMap, series: [TelemetryRole: TelemetrySeries], clock: LapClock,
                 position: TrackPosition, liveDelta: LiveDelta, loggerDeltas: [String: TelemetrySeries] = [:],
-                deltaSource: DeltaSource = .computed) {
+                deltaSource: DeltaSource = .computed, channels: [String: TelemetrySeries] = [:]) {
         self.init(channelMap: channelMap, roles: TelemetryRole.ordered.map { series[$0] }, clock: clock,
                   position: position, liveDelta: liveDelta, loggerDeltas: loggerDeltas, deltaSource: deltaSource,
-                  gForce: GForceSamples(lateral: series[.latG], longitudinal: series[.lonG]))
+                  gForce: GForceSamples(lateral: series[.latG], longitudinal: series[.lonG]),
+                  named: NamedChannelSeries(channels))
     }
 
     /// The lap the computed delta compares against, or `nil` when there is none.
@@ -87,7 +91,8 @@ public struct TelemetryTimeline: Sendable {
         }
         return TelemetryFrame(time: t, roleValues: values, lap: lap, delta: delta,
                               position: position.reading(at: t, hint: &cursor.position),
-                              gTrail: gForce.trail(at: t, end: &cursor.trailEnd, start: &cursor.trailStart))
+                              gTrail: gForce.trail(at: t, end: &cursor.trailEnd, start: &cursor.trailStart),
+                              channels: named.values(at: t, hints: &cursor.channels))
     }
 
     // MARK: - Variants
@@ -100,14 +105,15 @@ public struct TelemetryTimeline: Sendable {
     public func withDeltaReference(_ reference: LapID?) -> TelemetryTimeline {
         TelemetryTimeline(channelMap: channelMap, roles: roles, clock: clock, position: position,
                           liveDelta: liveDelta.referencing(reference), loggerDeltas: loggerDeltas,
-                          deltaSource: deltaSource, gForce: gForce)
+                          deltaSource: deltaSource, gForce: gForce, named: named)
     }
 
     /// This timeline reporting its delta from `source` instead. A logger channel
     /// the session does not carry reads `nil`.
     public func withDeltaSource(_ source: DeltaSource) -> TelemetryTimeline {
         TelemetryTimeline(channelMap: channelMap, roles: roles, clock: clock, position: position,
-                          liveDelta: liveDelta, loggerDeltas: loggerDeltas, deltaSource: source, gForce: gForce)
+                          liveDelta: liveDelta, loggerDeltas: loggerDeltas, deltaSource: source, gForce: gForce,
+                          named: named)
     }
 
     /// This timeline compared against `reference`, with every lap's delta series
@@ -121,7 +127,7 @@ public struct TelemetryTimeline: Sendable {
     }
 
     /// Fetch every lap's delta series now, off the main actor, so a sweep never
-    /// waits on the core. ``load(session:source:sectors:reference:deltaSource:channelMap:)``
+    /// waits on the core. ``load(session:source:sectors:reference:deltaSource:channelMap:channels:)``
     /// already does. Readers that race a cold cache may each fetch the same lap
     /// once; the fetch is idempotent, so prefetching is what avoids the waste.
     /// - Throws: `CancellationError` when the calling task is cancelled.
@@ -130,18 +136,19 @@ public struct TelemetryTimeline: Sendable {
     }
 
     /// An estimate of the bytes the timeline retains for its samples (the
-    /// series, the projected track, the odometer and the G trail).
+    /// series, the projected track, the odometer, the G trail and the channels
+    /// sampled by name).
     public var approximateByteCount: Int {
         roles.reduce(0) { $0 + ($1?.byteCount ?? 0) }
             + loggerDeltas.values.reduce(0) { $0 + $1.byteCount }
-            + position.byteCount + liveDelta.byteCount + gForce.byteCount
+            + position.byteCount + liveDelta.byteCount + gForce.byteCount + named.byteCount
     }
 
     // MARK: - Internals
 
     private init(channelMap: TelemetryChannelMap, roles: [TelemetrySeries?], clock: LapClock,
                  position: TrackPosition, liveDelta: LiveDelta, loggerDeltas: [String: TelemetrySeries],
-                 deltaSource: DeltaSource, gForce: GForceSamples) {
+                 deltaSource: DeltaSource, gForce: GForceSamples, named: NamedChannelSeries) {
         self.channelMap = channelMap
         self.roles = roles
         self.clock = clock
@@ -155,6 +162,7 @@ public struct TelemetryTimeline: Sendable {
             self.loggerDelta = nil
         }
         self.gForce = gForce
+        self.named = named
     }
 }
 
