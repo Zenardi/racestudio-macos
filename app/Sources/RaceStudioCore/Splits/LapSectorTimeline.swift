@@ -126,10 +126,8 @@ public struct LapSectorTimeline: Equatable, Sendable {
         for segment in segments { grids[segment.lap] = segment.baseTimes }
 
         return LapSectorTimeline(laps: laps.compactMap { lap in
-            guard lap.hasValidDuration, lap.startTimeS.isFinite else { return nil }
+            guard let window = window(of: lap) else { return nil }
             let id = LapID(Int(lap.index))
-            let end = lap.endTimeS.isFinite ? lap.endTimeS : lap.startTimeS + lap.durationS
-            let window = SessionTimeSpan(start: lap.startTimeS, end: end)
             guard let grid = grids[id], !grid.isEmpty else {
                 return LapSpan(lap: id, span: window, sectors: [])
             }
@@ -169,7 +167,19 @@ public struct LapSectorTimeline: Equatable, Sendable {
         return nil
     }
 
-    private static func sector(in lap: LapSpan, at time: Double) -> SectorSpan? {
+    /// The session-time window `lap` occupies, or `nil` when it is not reviewable
+    /// (no valid duration, or no finite start). The one definition of a lap's
+    /// window, shared with ``LapClock``.
+    static func window(of lap: Lap) -> SessionTimeSpan? {
+        guard lap.hasValidDuration, lap.startTimeS.isFinite else { return nil }
+        let end = lap.endTimeS.isFinite ? lap.endTimeS : lap.startTimeS + lap.durationS
+        return SessionTimeSpan(start: lap.startTimeS, end: end)
+    }
+
+    /// The sector of `lap` holding `time` — half-open, with the lap's final
+    /// instant closing its last sector. Shared with ``LapClock`` so the overlay
+    /// and the review grid name the same sector.
+    static func sector(in lap: LapSpan, at time: Double) -> SectorSpan? {
         if let match = lap.sectors.first(where: { $0.span.contains(time) }) { return match }
         // As above, but a zero-length sector (a split with no cells behind it)
         // never claims an instant.
