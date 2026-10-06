@@ -90,6 +90,9 @@ final class FakeDeviceService: DeviceService, @unchecked Sendable {
             lock.unlock()
             continuation.resume()
         } else {
+            // The model downloads one session at a time; a second held download
+            // would leak the first continuation.
+            precondition(waiter == nil, "two downloads held at once")
             waiter = continuation
             lock.unlock()
         }

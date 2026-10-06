@@ -151,6 +151,34 @@ No CRITICAL, HIGH or MEDIUM. Both LOW items, about test hygiene, are fixed:
 
 The pass reported the rest of `a9cefd3..83bbc09` clean.
 
+## Found during validation — a hang in the device-panel test fake (7a89ce9)
+
+The full suite hung in about 1 of 12 runs once the overlay tests added CPU
+load. `origin/main`, built from a clean export, never hung in 25 runs.
+
+The cause: `FakeDeviceService` reset its `cancelled` flag when a download was
+recorded. A test's cancel could land after the model reported `.downloading`
+but before the fake recorded the download. That erased the cancel, and the
+held download then waited forever. It is an existing test-harness race that
+appears only under load.
+
+**Fixed**:
+- The fake consumes a cancel.
+- `untilDownloading` waits until the fake actually holds the download, with a
+  10 s deadline.
+- The overlay bitmaps scan in one pass, so they starve other suites less.
+
+25 of 25 full runs then completed.
+
+**Review of the fix** (same reviewer):
+- The continuation is resumed exactly once, the retry and close semantics are
+  kept, and the scan's pointer arithmetic is correct.
+- LOW: a second held download would overwrite the first waiter. **Fixed**:
+  a precondition.
+- LOW: a cancel that lands between a download's end and `.finished` would
+  pre-cancel the next held download. **Justified as is**: no test reaches it,
+  and it would time out and record an issue rather than hang.
+
 ## Validation
 
 | Check | Result |
