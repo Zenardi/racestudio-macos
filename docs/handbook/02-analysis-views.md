@@ -122,6 +122,47 @@ seeking to a wrong frame.
   sync action. Saving the workspace keeps the offset, the clock rate and the
   status.
 
+## Video overlay layouts
+
+A **video overlay** is a layout of telemetry widgets drawn over the footage:
+speed, an RPM bar, the lap timer, a delta bar, a G-ball, a mini track map, your
+kart's badge and more. One layout drives both the live display over the player
+and the exported MP4, so what you preview is what you export. *Picking, editing
+and exporting an overlay arrive with the Video + Data view and the overlay
+export; this section describes the layouts they share.*
+
+![The three built-in overlay presets in a 16:9 frame, inside the 3% safe area, with the anchor each widget keeps its margin to.](img/video-overlay-presets.svg)
+
+Three presets are built in:
+
+| Preset | Widgets |
+|---|---|
+| **Minimal** | speed, lap timer, delta bar |
+| **Kart coaching** | speed, RPM bar, delta bar, lap info (lap n · last · best), G-ball, mini track map, kart badge |
+| **Full telemetry** | everything in Kart coaching, plus session info, sector times, temperatures and pedals |
+
+- **Any frame shape.** Layouts are drawn in a 16:9 frame. For a 4:3, square
+  (1:1) or vertical (9:16) video, each widget keeps its distance to its
+  **anchor** (the corner or edge marked in the figure) and keeps its shape, and
+  no widget leaves the 3% title-safe area. Widgets are sized to the frame's
+  shorter side, so in a vertical video they are as large as in a landscape one.
+- **Only what the session has.** Each widget needs data: the RPM bar needs an
+  RPM channel, the map a GPS track, and the kart badge a kart from your garage
+  (it reads, for example, *F4 · Thunder · RBC Honda · 18 HP*). A widget the
+  session cannot feed is left out instead of being drawn empty, and the reason is
+  given, for example *No throttle or brake channel*. A widget with half its data
+  shows that half, saying so: a kart with only a brake sensor gets *No throttle
+  channel; showing brake only*. A MyChron kart session usually has speed, RPM, G
+  and the logger's delta, but no pedal or engine-temperature channels.
+- **Units.** A layout shows metric (km/h, °C) or imperial (mph, °F) values, and
+  a single widget can use the other system.
+- **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
+  workspace saved before overlays existed opens with the overlay off.
+- **Your own presets.** Your own layouts are kept in
+  `~/Library/Application Support/RaceStudio/OverlayPresets.json`. If that file is
+  damaged, RaceStudio still opens and offers the built-in presets. The damaged
+  file is kept as `OverlayPresets.corrupt.json` the next time a preset is saved.
+
 ## Notes
 
 - Large sessions stay responsive: the engine exposes **windowed** queries and

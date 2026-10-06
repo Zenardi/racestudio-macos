@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 510" role="img" aria-label="The three built-in video overlay presets drawn in a 16:9 frame: Minimal (speed, lap timer, delta bar), Kart coaching (kart badge, delta bar, lap info, G-ball, speed, RPM bar, track map) and Full telemetry (kart coaching plus session info, sector times, temperatures and pedals), each inside the 3% safe area, with the anchor each widget keeps its margin to.">
+  <style>
+    .frame{fill:#1b2330;stroke:#3b6bd6;stroke-width:1.5}
+    .safe{fill:none;stroke:#8fa3c4;stroke-width:1;stroke-dasharray:4 3}
+    .w{fill:#f4f7fc;fill-opacity:.9;stroke:#3b6bd6;stroke-width:1}
+    .a{fill:#d64545}
+    .h{font:600 13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .t{font:8px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+  </style>
+  <text class="lbl" x="20" y="16">Built-in video overlay presets, 16:9 reference frame (schematic, to scale)</text>
+  <text class="h" x="20" y="34">1 · Minimal</text>
+  <rect class="frame" x="20" y="44" width="352" height="198"/>
+  <rect class="safe" x="30.6" y="49.9" width="330.9" height="186.1"/>
+  <rect class="w" x="30.6" y="206.4" width="49.3" height="29.7" rx="2"/>
+  <text class="t" x="33.6" y="216.4">Speed</text>
+  <circle class="a" cx="30.6" cy="236.1" r="2.6"/>
+  <rect class="w" x="298.1" y="49.9" width="63.4" height="17.8" rx="2"/>
+  <text class="t" x="301.1" y="59.9">Lap timer</text>
+  <circle class="a" cx="361.4" cy="49.9" r="2.6"/>
+  <rect class="w" x="143.2" y="49.9" width="105.6" height="13.9" rx="2"/>
+  <text class="t" x="146.2" y="59.9">Delta bar</text>
+  <circle class="a" cx="196.0" cy="49.9" r="2.6"/>
+  <text class="h" x="388" y="34">2 · Kart coaching</text>
+  <rect class="frame" x="388" y="44" width="352" height="198"/>
+  <rect class="safe" x="398.6" y="49.9" width="330.9" height="186.1"/>
+  <rect class="w" x="398.6" y="49.9" width="84.5" height="11.9" rx="2"/>
+  <text class="t" x="401.6" y="58.8">Kart badge</text>
+  <circle class="a" cx="398.6" cy="49.9" r="2.6"/>
+  <rect class="w" x="511.2" y="49.9" width="105.6" height="13.9" rx="2"/>
+  <text class="t" x="514.2" y="59.9">Delta bar</text>
+  <circle class="a" cx="564.0" cy="49.9" r="2.6"/>
+  <rect class="w" x="652.0" y="49.9" width="77.4" height="23.8" rx="2"/>
+  <text class="t" x="655.0" y="59.9">Lap info</text>
+  <circle class="a" cx="729.4" cy="49.9" r="2.6"/>
+  <rect class="w" x="398.6" y="160.8" width="42.2" height="41.6" rx="2"/>
+  <text class="t" x="401.6" y="170.8">G-ball</text>
+  <circle class="a" cx="398.6" cy="202.4" r="2.6"/>
+  <rect class="w" x="398.6" y="206.4" width="49.3" height="29.7" rx="2"/>
+  <text class="t" x="401.6" y="216.4">Speed</text>
+  <circle class="a" cx="398.6" cy="236.1" r="2.6"/>
+  <rect class="w" x="493.6" y="220.2" width="140.8" height="15.8" rx="2"/>
+  <text class="t" x="496.6" y="230.2">RPM bar</text>
+  <circle class="a" cx="564.0" cy="236.1" r="2.6"/>
+  <rect class="w" x="666.1" y="172.7" width="63.4" height="63.4" rx="2"/>
+  <text class="t" x="669.1" y="182.7">Track map</text>
+  <circle class="a" cx="729.4" cy="236.1" r="2.6"/>
+  <text class="h" x="20" y="280">3 · Full telemetry</text>
+  <rect class="frame" x="20" y="290" width="352" height="198"/>
+  <rect class="safe" x="30.6" y="295.9" width="330.9" height="186.1"/>
+  <rect class="w" x="30.6" y="295.9" width="84.5" height="11.9" rx="2"/>
+  <text class="t" x="33.6" y="304.8">Kart badge</text>
+  <circle class="a" cx="30.6" cy="295.9" r="2.6"/>
+  <rect class="w" x="143.2" y="295.9" width="105.6" height="13.9" rx="2"/>
+  <text class="t" x="146.2" y="305.9">Delta bar</text>
+  <circle class="a" cx="196.0" cy="295.9" r="2.6"/>
+  <rect class="w" x="284.0" y="295.9" width="77.4" height="23.8" rx="2"/>
+  <text class="t" x="287.0" y="305.9">Lap info</text>
+  <circle class="a" cx="361.4" cy="295.9" r="2.6"/>
+  <rect class="w" x="30.6" y="406.8" width="42.2" height="41.6" rx="2"/>
+  <text class="t" x="33.6" y="416.8">G-ball</text>
+  <circle class="a" cx="30.6" cy="448.4" r="2.6"/>
+  <rect class="w" x="30.6" y="452.4" width="49.3" height="29.7" rx="2"/>
+  <text class="t" x="33.6" y="462.4">Speed</text>
+  <circle class="a" cx="30.6" cy="482.1" r="2.6"/>
+  <rect class="w" x="125.6" y="466.2" width="140.8" height="15.8" rx="2"/>
+  <text class="t" x="128.6" y="476.2">RPM bar</text>
+  <circle class="a" cx="196.0" cy="482.1" r="2.6"/>
+  <rect class="w" x="298.1" y="418.7" width="63.4" height="63.4" rx="2"/>
+  <text class="t" x="301.1" y="428.7">Track map</text>
+  <circle class="a" cx="361.4" cy="482.1" r="2.6"/>
+  <rect class="w" x="30.6" y="309.8" width="84.5" height="9.9" rx="2"/>
+  <text class="t" x="33.6" y="316.7">Session info</text>
+  <circle class="a" cx="30.6" cy="309.8" r="2.6"/>
+  <rect class="w" x="298.1" y="323.7" width="63.4" height="31.7" rx="2"/>
+  <text class="t" x="301.1" y="333.7">Sectors</text>
+  <circle class="a" cx="361.4" cy="323.7" r="2.6"/>
+  <rect class="w" x="319.2" y="359.3" width="42.2" height="19.8" rx="2"/>
+  <text class="t" x="322.2" y="369.3">Temps</text>
+  <circle class="a" cx="361.4" cy="359.3" r="2.6"/>
+  <rect class="w" x="86.9" y="452.4" width="21.1" height="29.7" rx="2"/>
+  <text class="t" x="89.9" y="462.4">Ped.</text>
+  <circle class="a" cx="86.9" cy="482.1" r="2.6"/>
+  <rect class="safe" x="388" y="300" width="26" height="14"/>
+  <text class="lbl" x="424" y="312">3% title-safe area — no widget leaves it</text>
+  <rect class="w" x="388" y="328" width="26" height="14" rx="2"/>
+  <text class="lbl" x="424" y="340">a widget (rect in the 16:9 frame)</text>
+  <circle class="a" cx="401" cy="363" r="3.5"/>
+  <text class="lbl" x="424" y="367">its anchor: the corner or edge it keeps</text>
+  <text class="lbl" x="424" y="383">its margin to in 4:3, 1:1 and 9:16</text>
+  <text class="lbl" x="388" y="412">Widgets the session cannot feed (pedals</text>
+  <text class="lbl" x="388" y="428">without pedal sensors, say) are skipped,</text>
+  <text class="lbl" x="388" y="444">never drawn empty.</text>
+</svg>

@@ -108,6 +108,8 @@ public final class ProjectStore {
         switch version {
         case ProjectDocument.currentSchemaVersion:
             return try shape(ProjectDocument.self, from: data)
+        case 6:
+            return migrate(try shape(ProjectDocumentV6.self, from: data))
         case 5:
             return migrate(try shape(ProjectDocumentV5.self, from: data))
         case 4:
@@ -206,6 +208,22 @@ public final class ProjectStore {
                 VideoAttachment(bookmark: video.bookmark, displayName: video.displayName, offset: video.offset,
                                 rate: 1, status: video.offset != 0 ? .anchored(lap: nil) : .notSynced)
             })
+    }
+
+    /// Upgrade a decoded v6 document to the current shape: v6 predates the video
+    /// overlay (issue 9.10), so it opens with none — the HUD is off. Everything
+    /// else, including the 9.7 video attachment, is carried over unchanged.
+    static func migrate(_ raw: ProjectDocumentV6) -> ProjectDocument {
+        ProjectDocument(
+            schemaVersion: ProjectDocument.currentSchemaVersion,
+            sessionRefs: raw.sessionRefs,
+            layout: raw.layout,
+            selectedLaps: raw.selectedLaps,
+            mathChannels: raw.mathChannels,
+            activeLayout: raw.activeLayout,
+            logSheet: raw.logSheet,
+            video: raw.video,
+            overlay: nil)
     }
 
     // MARK: - Resolution / validation
@@ -314,6 +332,18 @@ struct ProjectDocumentV5: Decodable {
         let displayName: String
         let offset: Double
     }
+}
+
+/// The v6 on-disk shape — identical to the current document except it predates
+/// the video overlay (issue 9.10). Used only by ``ProjectStore/migrate(_:)``.
+struct ProjectDocumentV6: Decodable {
+    let sessionRefs: [SessionRef]
+    let layout: AnalysisLayout
+    let selectedLaps: [LapSelection]
+    let mathChannels: [MathChannelDef]
+    let activeLayout: WindowLayout
+    let logSheet: LogSheet
+    let video: VideoAttachment?
 }
 
 /// The v3 on-disk shape — identical to the current document except it predates the

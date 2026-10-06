@@ -15,12 +15,14 @@ public extension AnalysisWindowModel {
     /// Capture the window's current workspace as a ``ProjectDocument`` (issue 8.13):
     /// the selected channels as one pane (in selection order), the selected lap
     /// indices under the session's content id, the active layout, and the supplied
-    /// `mathChannels` + `logSheet` + `video` (all owned outside the window — the 8.8
-    /// manager, the 8.17 log-sheet model, and the 9.6 video-review player — so they
-    /// are passed in). The result is what the 5.4 ``ProjectStore`` saves.
+    /// `mathChannels` + `logSheet` + `video` + `overlay` (all owned outside the
+    /// window — the 8.8 manager, the 8.17 log-sheet model, the 9.6 video-review
+    /// player and the 9.10 overlay — so they are passed in). The result is what the
+    /// 5.4 ``ProjectStore`` saves.
     func projectDocument(mathChannels: [MathChannelDef] = [],
                          logSheet: LogSheet = LogSheet(),
-                         video: VideoAttachment? = nil) -> ProjectDocument {
+                         video: VideoAttachment? = nil,
+                         overlay: OverlayLayout? = nil) -> ProjectDocument {
         let id = sessionContentID
         return ProjectDocument(
             sessionRefs: [SessionRef(id: id, displayName: sessionDisplayName)],
@@ -31,7 +33,8 @@ public extension AnalysisWindowModel {
             mathChannels: mathChannels,
             activeLayout: activeLayout,
             logSheet: logSheet,
-            video: video)
+            video: video,
+            overlay: overlay)
     }
 
     /// Restore the window from a loaded ``ProjectDocument`` (issue 8.13): re-select

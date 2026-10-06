@@ -98,7 +98,7 @@ public enum TelemetryRole: String, CaseIterable, Codable, Sendable {
     private static let speedUnits: [String: UnitConversion] = [
         "km/h": .identity, "kmh": .identity, "kph": .identity,
         "m/s": UnitConversion(scale: 3.6), "mps": UnitConversion(scale: 3.6),
-        "mph": UnitConversion(scale: 1.609344)
+        "mph": .milesPerHourToKilometresPerHour
     ]
 
     private static let rpmUnits: Set<String> = ["rpm", "", "1/min", "rev/min"]
@@ -137,8 +137,18 @@ public struct UnitConversion: Equatable, Sendable {
     /// °F → °C.
     static let fahrenheitToCelsius = UnitConversion(scale: 5.0 / 9.0, offset: -32.0 * 5.0 / 9.0)
 
+    /// mph → km/h (the international mile, 1.609344 km) — the one definition the
+    /// channel map reads with and the overlay's ``UnitSystem`` displays through.
+    static let milesPerHourToKilometresPerHour = UnitConversion(scale: 1.609344)
+
     /// `value` in the target unit.
     public func apply(_ value: Double) -> Double {
         value * scale + offset
+    }
+
+    /// The conversion back, so a unit pair is defined once and read both ways:
+    /// `inverse.apply(apply(v)) == v` up to rounding. Requires a non-zero scale.
+    public var inverse: UnitConversion {
+        UnitConversion(scale: 1 / scale, offset: -offset / scale)
     }
 }
