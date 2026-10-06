@@ -32,6 +32,14 @@ final class VideoReviewController: ObservableObject {
     /// Whether the player is currently playing (drives the play/pause control).
     @Published private(set) var isPlaying = false
 
+    /// What became of the file-date guess on the last attach (issue 9.7) — the
+    /// panel explains a date that does not fit the session.
+    @Published private(set) var autoOffsetOutcome: AutoOffsetOutcome?
+
+    /// Why the last two-point sync was refused, shown until the next attempt
+    /// (issue 9.7). The previous sync stands meanwhile.
+    @Published private(set) var twoPointError: TwoPointSyncError?
+
     private let review: VideoReviewModel
     private weak var cursor: LinkedCursor?
     private var timeObserver: Any?
@@ -57,9 +65,11 @@ final class VideoReviewController: ObservableObject {
         attachObservers()
     }
 
-    /// Attach the video at `url` (a user pick), seed the mapping from the asset,
-    /// and propose a wall-clock alignment when both clocks are known.
-    func attach(_ url: URL, sessionStartEpoch: Double) async {
+    /// Attach the video at `url` (a user pick), seed the mapping and frame grid
+    /// from the asset, and propose a wall-clock alignment when both clocks are
+    /// known and the footage would then overlap the session's
+    /// `0...sessionDuration` (issue 9.7).
+    func attach(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
         do {
             attachment = try videos.attach(url, offset: review.sync.offset)
         } catch {
@@ -69,20 +79,25 @@ final class VideoReviewController: ObservableObject {
             attachment = nil
         }
         loadFailure = nil
-        await open(url, sessionStartEpoch: sessionStartEpoch)
+        autoOffsetOutcome = nil
+        twoPointError = nil
+        await open(url, sessionStartEpoch: sessionStartEpoch, sessionDuration: sessionDuration)
     }
 
     /// Re-open the footage a loaded `.rsproj` carries (issue 9.6's persistence),
-    /// restoring the offset it was saved with. A moved or deleted file leaves the
-    /// panel in a stated failure rather than aborting the project load.
+    /// restoring the offset, rate and sync status it was saved with (9.7). A moved
+    /// or deleted file leaves the panel in a stated failure rather than aborting
+    /// the project load.
     func restore(_ attachment: VideoAttachment, sessionStartEpoch: Double) async {
         self.attachment = attachment
-        review.setOffset(attachment.offset)
+        review.restore(attachment)
+        autoOffsetOutcome = nil
+        twoPointError = nil
         do {
             let url = try videos.resolve(attachment)
             loadFailure = nil
-            // The saved offset is authoritative — do not re-guess from wall clocks.
-            await open(url, sessionStartEpoch: 0)
+            // The saved sync is authoritative — do not re-guess from wall clocks.
+            await open(url, sessionStartEpoch: 0, sessionDuration: 0)
         } catch VideoAttachmentError.stale {
             loadFailure = "“\(attachment.displayName)” has moved. Attach it again to re-link the video."
         } catch {
@@ -96,13 +111,17 @@ final class VideoReviewController: ObservableObject {
         player.replaceCurrentItem(with: nil)
         attachment = nil
         loadFailure = nil
-        review.setVideoDuration(0)
+        autoOffsetOutcome = nil
+        twoPointError = nil
+        // The alignment belonged to that footage; the next video starts unsynced.
+        review.detachVideo()
     }
 
     /// The attachment to persist: the current file re-stamped with the alignment
-    /// in force, so a save captures a trim made after attaching.
+    /// in force — offset, rate and status — so a save captures a trim or a
+    /// two-point sync made after attaching.
     var attachmentForSaving: VideoAttachment? {
-        attachment?.withOffset(review.sync.offset)
+        attachment.map(review.stamped)
     }
 
     // MARK: - Transport
@@ -147,9 +166,35 @@ final class VideoReviewController: ObservableObject {
         review.anchorSelection(toPlayhead: player.currentTime().seconds)
     }
 
+    /// Apply one fine-trim nudge (`,` / `.`, with `⇧` or `⌥`) and re-seek so the
+    /// visible frame follows (issue 9.7).
+    func nudge(_ nudge: OffsetNudge) {
+        review.nudge(nudge)
+        seekFromCursor(to: cursor?.timePosition ?? 0)
+    }
+
+    /// Pin two-point anchor `slot` to the frame on screen, against the start of
+    /// the section under review (issue 9.7).
+    func setAnchor(_ slot: AnchorSlot) {
+        review.setAnchor(slot, playhead: player.currentTime().seconds)
+    }
+
+    /// Solve offset and rate from anchors A and B (issue 9.7). A refusal is kept
+    /// for the panel to explain and the previous sync stands; a success re-seeks
+    /// so the visible frame follows the new mapping.
+    func applyTwoPointSync() {
+        switch review.applyTwoPointSync() {
+        case .success:
+            twoPointError = nil
+            seekFromCursor(to: cursor?.timePosition ?? 0)
+        case .failure(let error):
+            twoPointError = error
+        }
+    }
+
     // MARK: - Internals
 
-    private func open(_ url: URL, sessionStartEpoch: Double) async {
+    private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
         let asset = AVURLAsset(url: url)
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
         do {
@@ -157,12 +202,27 @@ final class VideoReviewController: ObservableObject {
         } catch {
             Self.log.warning("Could not read video duration: \(error.localizedDescription, privacy: .public)")
         }
+        await loadFrameRate(of: asset)
         // A camera that stamps its start time gives a usable first alignment for
-        // free; without one the operator anchors to a lap by hand.
+        // free; without one — or when the date cannot be right for this session —
+        // the operator anchors to a lap by hand.
         if sessionStartEpoch > 0,
            let created = try? await asset.load(.creationDate)?.load(.dateValue) {
-            review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
-                                   videoStartEpoch: created.timeIntervalSince1970)
+            autoOffsetOutcome = review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
+                                                       videoStartEpoch: created.timeIntervalSince1970,
+                                                       sessionDuration: sessionDuration)
+        }
+    }
+
+    /// Seed the frame grid from the first video track's nominal frame rate
+    /// (issue 9.7), so a frame step is exactly one of this footage's frames.
+    /// Without a readable track the model keeps its 30 fps fallback.
+    private func loadFrameRate(of asset: AVURLAsset) async {
+        do {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else { return }
+            review.setFrameRate(Double(try await track.load(.nominalFrameRate)))
+        } catch {
+            Self.log.warning("Could not read the frame rate: \(error.localizedDescription, privacy: .public)")
         }
     }
 

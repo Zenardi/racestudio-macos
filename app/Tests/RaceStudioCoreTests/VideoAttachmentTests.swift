@@ -203,12 +203,6 @@ import Foundation
         #expect(loaded.selectedLaps == [LapSelection(sessionID: "s1", lapIndices: [3, 4])])
         #expect(loaded.mathChannels.first?.unit == "g")
     }
-
-    /// The schema version was bumped for this field — a v5 file is this build's
-    /// current shape.
-    @Test func test_schema_version_is_five() {
-        #expect(ProjectDocument.currentSchemaVersion == 5)
-    }
 }
 
 /// A `BookmarkStoring` whose bookmark creation always fails — the attach-time

@@ -11,7 +11,9 @@ public enum VideoAttachmentError: Error, Equatable, Sendable {
 }
 
 /// The session video persisted with a workspace (issue 9.6): a re-openable
-/// reference to the footage plus the alignment the operator settled on.
+/// reference to the footage plus the alignment the operator settled on — the
+/// offset, and since issue 9.7 (`.rsproj` schema v6) the clock rate and how the
+/// alignment was made.
 ///
 /// The file itself is referenced by **bookmark**, not by path, so a `.rsproj`
 /// reopened in a later launch can re-acquire a user-picked file under the App
@@ -30,16 +32,55 @@ public struct VideoAttachment: Codable, Equatable, Sendable {
     /// which would otherwise defeat ``VideoSyncModel``'s clamp on the next load.
     public let offset: Double
 
-    public init(bookmark: Data, displayName: String, offset: Double = 0) {
+    /// The 9.7 clock rate (``VideoSyncModel/rate``) a two-point sync solved, so the
+    /// drift correction survives a save. Always finite and `> 0`: anything else
+    /// is sanitized to `1`, both on construction and on decode.
+    public let rate: Double
+
+    /// How the alignment was made (issue 9.7), so a reopened workspace still says
+    /// whether its sync was confirmed or only estimated.
+    public let status: SyncStatus
+
+    public init(bookmark: Data, displayName: String, offset: Double = 0,
+                rate: Double = 1, status: SyncStatus = .notSynced) {
         self.bookmark = bookmark
         self.displayName = displayName
         self.offset = offset.isFinite ? offset : 0
+        self.rate = (rate.isFinite && rate > 0) ? rate : 1
+        self.status = status
     }
 
-    /// The same footage re-aligned to `newOffset` — what a trim or a re-anchor
-    /// persists.
+    /// The same footage re-aligned to `newOffset`, keeping its rate and status —
+    /// what a trim persists.
     public func withOffset(_ newOffset: Double) -> VideoAttachment {
-        VideoAttachment(bookmark: bookmark, displayName: displayName, offset: newOffset)
+        withSync(offset: newOffset, rate: rate, status: status)
+    }
+
+    /// The same footage with a whole new alignment — what a save stamps from the
+    /// sync in force.
+    public func withSync(offset: Double, rate: Double, status: SyncStatus) -> VideoAttachment {
+        VideoAttachment(bookmark: bookmark, displayName: displayName, offset: offset, rate: rate, status: status)
+    }
+}
+
+extension VideoAttachment {
+
+    private enum CodingKeys: String, CodingKey {
+        case bookmark, displayName, offset, rate, status
+    }
+
+    /// Decodes through ``init(bookmark:displayName:offset:rate:status:)`` so a
+    /// hand-edited or corrupt value is sanitized exactly as on construction. The
+    /// 9.7 `rate` and `status` are optional on disk (defaulting to `1` and
+    /// ``SyncStatus/notSynced``); the v5 → v6 migration decides what a pre-9.7
+    /// alignment means instead (see ``ProjectStore``).
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(bookmark: try container.decode(Data.self, forKey: .bookmark),
+                  displayName: try container.decode(String.self, forKey: .displayName),
+                  offset: try container.decode(Double.self, forKey: .offset),
+                  rate: try container.decodeIfPresent(Double.self, forKey: .rate) ?? 1,
+                  status: try container.decodeIfPresent(SyncStatus.self, forKey: .status) ?? .notSynced)
     }
 }
 

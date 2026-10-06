@@ -236,14 +236,17 @@ import Foundation
     }
 
     /// The wall-clock guess is applied when both clocks are known, and refused
-    /// when either is missing.
+    /// when either is missing. (Issue 9.7 made the outcome typed and gated it on
+    /// the footage overlapping the session — see `VideoReviewSyncTests`.)
     @Test func test_auto_offset_is_applied_only_when_both_clocks_are_known() {
         let review = model()
 
-        #expect(review.applyAutoOffset(sessionStartEpoch: 1_000_090, videoStartEpoch: 1_000_000))
+        #expect(review.applyAutoOffset(sessionStartEpoch: 1_000_090, videoStartEpoch: 1_000_000,
+                                       sessionDuration: 24) == .applied)
         #expect(review.sync.offset == 90)
 
-        #expect(!review.applyAutoOffset(sessionStartEpoch: 0, videoStartEpoch: 1_000_000))
+        #expect(review.applyAutoOffset(sessionStartEpoch: 0, videoStartEpoch: 1_000_000,
+                                       sessionDuration: 24) == .unavailable)
         #expect(review.sync.offset == 90, "a refused guess leaves the alignment alone")
     }
 
