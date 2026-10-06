@@ -43,11 +43,12 @@ extension TelemetryTimeline {
         try Task.checkCancellation()
         let track = source.gpsTrack(start: 0, count: .max)
         let clock = LapClock(laps: session.laps, sectors: sectors)
-        let odometer = TelemetrySeries(times: track.map(\.time), values: track.map(\.distance))
+        let fixTimes = track.map(\.time)
+        let odometer = TelemetrySeries(times: fixTimes, values: track.map(\.distance),
+                                       maxGap: TelemetrySeries.gapThreshold(forTimes: fixTimes))
         let liveDelta = LiveDelta(reference: reference ?? clock.best?.lap, laps: session.laps, distance: odometer,
                                   provider: deltaProvider(source))
-        try Task.checkCancellation()
-        liveDelta.prefetch()
+        try liveDelta.prefetch()
         return TelemetryTimeline(channelMap: map, series: series, clock: clock,
                                  position: TrackPosition(track: track, laps: session.laps), liveDelta: liveDelta,
                                  loggerDeltas: loggerDeltas, deltaSource: deltaSource)
@@ -87,8 +88,7 @@ extension TelemetryTimeline {
         let channel = session.channels[index]
         let samples = source.samples(channelIndex: channelIndex, start: 0, count: channel.sampleCount)
         let rate = channel.sampleRateHz
-        let gap = maxGap ?? (rate > 0 && rate.isFinite ? max(TelemetrySeries.defaultMaxGap, 2 / rate)
-                                                       : TelemetrySeries.defaultMaxGap)
+        let gap = maxGap ?? TelemetrySeries.gapThreshold(sampleInterval: rate > 0 && rate.isFinite ? 1 / rate : 0)
         return TelemetrySeries(times: samples.map(\.time), values: samples.map { conversion.apply($0.value) },
                                mode: mode, maxGap: gap)
     }

@@ -5,8 +5,8 @@ import Foundation
 
 /// Oracle conformance for `TelemetryTimeline` (issue 9.9): on the public MyChron
 /// sample `aim_official_test.xrk`, decoded and served by the real FFI, the frame
-/// at 10 chosen instants carries the speed, rpm, lateral/longitudinal G, lap
-/// number, lap time, last/best lap and live delta that the libxrk oracle
+/// at 12 chosen instants carries the speed, rpm, lateral/longitudinal G, track
+/// position, lap number, lap time, last/best lap and live delta that the libxrk oracle
 /// computes independently (`scripts/gen_telemetry_golden.py`, committed as
 /// `fixtures/golden/aim_official_test.telemetry.json`), within the tolerances in
 /// `docs/DECODE_TOLERANCES.md` ("Telemetry frames").
@@ -28,6 +28,9 @@ import Foundation
     private static let rpm = 1e-3
     /// Lap times are millisecond-precise beacon markers.
     private static let seconds = 1e-3
+    /// Latitude/longitude are stored to 9 decimals; the decoders agree to the
+    /// 8-decimal GPS golden (~1 mm).
+    private static let degrees = 1e-8
 
     // MARK: - Golden
 
@@ -56,6 +59,8 @@ import Foundation
         let rpm: Double
         let latG: Double
         let lonG: Double
+        let latitude: Double
+        let longitude: Double
         let deltaS: Double
     }
 
@@ -86,14 +91,20 @@ import Foundation
 
         #expect(timeline.clock.best?.lap == LapID(golden.bestLap.index))
         #expect(abs((timeline.clock.best?.time ?? 0) - golden.bestLap.timeS) <= Self.seconds)
+        var cursor = SamplingCursor()
         for expected in golden.frames {
-            let frame = timeline.frame(at: laps[expected.lapIndex].startTimeS + expected.offsetS)
-            check(frame, against: expected)
+            let t = laps[expected.lapIndex].startTimeS + expected.offsetS
+            let frame = timeline.frame(at: t)
+            #expect(timeline.frame(at: t, cursor: &cursor) == frame, "the sequential path agrees")
+            check(frame, against: expected, projection: timeline.position.projection)
         }
     }
 
-    private func check(_ frame: TelemetryFrame, against expected: FrameGolden) {
+    private func check(_ frame: TelemetryFrame, against expected: FrameGolden, projection: GeoProjection) {
         let label = "lap \(expected.lapIndex) + \(expected.offsetS) s"
+        let place = frame.position.map { projection.unproject($0.point) }
+        #expect(close(place?.latitude, expected.latitude, Self.degrees), "latitude \(label)")
+        #expect(close(place?.longitude, expected.longitude, Self.degrees), "longitude \(label)")
         #expect(close(frame.speed, expected.speedKmh, Self.speedKmh), "speed \(label)")
         #expect(close(frame.rpm, expected.rpm, Self.rpm), "rpm \(label)")
         #expect(close(frame.latG, expected.latG, Self.gForce), "latG \(label)")

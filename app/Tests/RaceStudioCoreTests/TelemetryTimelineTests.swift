@@ -169,6 +169,28 @@ import Foundation
         #expect(trail.allSatisfy { $0.longitudinal == 0.3 })
     }
 
+    /// The trail is a zero-based collection: `gTrail[0]` is its oldest point.
+    @Test func test_g_trail_is_zero_based() async throws {
+        let trail = try await timeline().frame(at: 10.01).gTrail
+
+        #expect(trail.startIndex == 0)
+        #expect(trail[0].time == 9.05)
+        #expect(trail[trail.count - 1].time == 10)
+    }
+
+    /// A renderer can build a frame by hand (previews, snapshot tests): roles
+    /// it gives are reported, the rest are `nil`.
+    @Test func test_a_frame_can_be_built_by_hand() {
+        let point = GForcePoint(time: 1, lateral: 0.5, longitudinal: -0.8)
+
+        let frame = TelemetryFrame(time: 1, values: [.speed: 84, .gear: 3], lap: nil, delta: -0.21,
+                                   position: TrackPositionReading(point: .zero, heading: 90), gTrail: [point])
+
+        #expect(frame.speed == 84 && frame.gear == 3 && frame.rpm == nil)
+        #expect(frame.delta == -0.21)
+        #expect(Array(frame.gTrail) == [point])
+    }
+
     // MARK: - Sequential vs random
 
     /// Property: a sequential sweep with one cursor gives exactly the frames
@@ -193,6 +215,19 @@ import Foundation
         for _ in 0..<500 {
             let t = Double.random(in: -2...64, using: &rng)
             #expect(timeline.frame(at: t, cursor: &cursor) == timeline.frame(at: t), "t \(t)")
+        }
+    }
+
+    /// A cursor carried from one timeline to a re-referenced one is never
+    /// trusted for the other's delta curve: its frames equal fresh reads.
+    @Test func test_a_cursor_carried_to_a_re_referenced_timeline_is_not_trusted() async throws {
+        let original = try await timeline()
+        var cursor = SamplingCursor()
+        _ = original.frame(at: 10, cursor: &cursor)
+
+        for reference in [LapID(0), LapID(2), LapID(1)] {
+            let switched = original.withDeltaReference(reference)
+            #expect(switched.frame(at: 10.5, cursor: &cursor) == switched.frame(at: 10.5), "\(reference)")
         }
     }
 

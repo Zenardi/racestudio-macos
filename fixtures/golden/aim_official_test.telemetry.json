@@ -16,7 +16,9 @@
       "lap_number": 1,
       "last_lap": null,
       "lat_g": -1.343423,
+      "latitude": 45.045624948,
       "lon_g": 0.347172,
+      "longitude": 12.150919294,
       "offset_s": 70.0,
       "rpm": 8500.667,
       "speed_kmh": 50.942764
@@ -39,7 +41,9 @@
         "time_s": 82.248
       },
       "lat_g": 1.051026,
+      "latitude": 45.044970423,
       "lon_g": -0.036193,
+      "longitude": 12.149710336,
       "offset_s": 0.0,
       "rpm": 13461.85,
       "speed_kmh": 80.017518
@@ -62,7 +66,9 @@
         "time_s": 82.248
       },
       "lat_g": 1.117668,
+      "latitude": 45.046466911,
       "lon_g": -0.333791,
+      "longitude": 12.151854627,
       "offset_s": 12.345,
       "rpm": 11838.9,
       "speed_kmh": 83.642509
@@ -85,7 +91,9 @@
         "time_s": 53.058
       },
       "lat_g": 1.675853,
+      "latitude": 45.046079136,
       "lon_g": -0.079074,
+      "longitude": 12.150787394,
       "offset_s": 31.25,
       "rpm": 6610.5,
       "speed_kmh": 80.709949
@@ -108,10 +116,37 @@
         "time_s": 52.217
       },
       "lat_g": -2.185921,
+      "latitude": 45.045341357,
       "lon_g": -0.139294,
+      "longitude": 12.150017353,
       "offset_s": 25.0,
       "rpm": 10077.857,
       "speed_kmh": 54.264162
+    },
+    {
+      "best_so_far": {
+        "index": 3,
+        "number": 4,
+        "time_s": 50.973
+      },
+      "delta_s": -0.033526,
+      "elapsed_s": 40.0,
+      "is_in_lap": false,
+      "is_out_lap": false,
+      "lap_index": 4,
+      "lap_number": 5,
+      "last_lap": {
+        "index": 3,
+        "number": 4,
+        "time_s": 50.973
+      },
+      "lat_g": -1.132973,
+      "latitude": 45.0453525,
+      "lon_g": 0.360963,
+      "longitude": 12.150728566,
+      "offset_s": 40.0,
+      "rpm": 8521.6,
+      "speed_kmh": 84.104706
     },
     {
       "best_so_far": {
@@ -131,7 +166,9 @@
         "time_s": 49.802
       },
       "lat_g": 1.970293,
+      "latitude": 45.046781977,
       "lon_g": 0.002485,
+      "longitude": 12.150335824,
       "offset_s": 7.777,
       "rpm": 9948.6,
       "speed_kmh": 113.459421
@@ -154,10 +191,37 @@
         "time_s": 50.742
       },
       "lat_g": 1.13935,
+      "latitude": 45.044761416,
       "lon_g": 0.445247,
+      "longitude": 12.15103707,
       "offset_s": 45.678,
       "rpm": 10653.6,
       "speed_kmh": 72.093656
+    },
+    {
+      "best_so_far": {
+        "index": 4,
+        "number": 5,
+        "time_s": 49.802
+      },
+      "delta_s": -0.050328,
+      "elapsed_s": 5.0,
+      "is_in_lap": false,
+      "is_out_lap": false,
+      "lap_index": 7,
+      "lap_number": 8,
+      "last_lap": {
+        "index": 6,
+        "number": 7,
+        "time_s": 49.866
+      },
+      "lat_g": -0.053751,
+      "latitude": 45.046126153,
+      "lon_g": -2.6e-05,
+      "longitude": 12.149826035,
+      "offset_s": 5.0,
+      "rpm": 9840.9,
+      "speed_kmh": 116.38564
     },
     {
       "best_so_far": {
@@ -177,7 +241,9 @@
         "time_s": 50.618
       },
       "lat_g": 0.03035,
+      "latitude": 45.046198886,
       "lon_g": 0.173609,
+      "longitude": 12.150398127,
       "offset_s": 20.0,
       "rpm": 8035.0,
       "speed_kmh": 90.041724
@@ -200,7 +266,9 @@
         "time_s": 49.765
       },
       "lat_g": 0.940151,
+      "latitude": 45.045566363,
       "lon_g": -0.915546,
+      "longitude": 12.151609458,
       "offset_s": 33.333,
       "rpm": 7500.25,
       "speed_kmh": 91.316427
@@ -223,11 +291,14 @@
         "time_s": 50.316
       },
       "lat_g": 1.887594,
+      "latitude": 45.046112798,
       "lon_g": 0.283505,
+      "longitude": 12.151541846,
       "offset_s": 15.0,
       "rpm": 10810.4,
       "speed_kmh": 81.734248
     }
   ],
-  "lap_count": 11
+  "lap_count": 11,
+  "libxrk": "0.12.0"
 }

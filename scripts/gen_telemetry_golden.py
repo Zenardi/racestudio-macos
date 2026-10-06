@@ -10,8 +10,10 @@ sample values (not the Rust decoder) and numpy evaluates the frame contract:
     rpm         RPM linearly interpolated at t (the frame interpolates every
                 continuous role, although libxrk flags this RPM sample-held)
     lat_g/lon_g GPS_LateralAcc / GPS_InlineAcc linearly interpolated at t
-    lap_*       the beacon lap table: lap number, elapsed time, last lap, best
-                lap (fastest, earliest on a tie), best-so-far, out/in-lap flags
+    latitude/   GPS Latitude / Longitude linearly interpolated at t — the track
+    longitude   position, which the test un-projects from the map frame
+    lap_*       the beacon lap table: lap number, elapsed time, last valid lap,
+                best lap (fastest, earliest on a tie), best-so-far, out/in-lap
     delta_s     the live delta to the best lap: the 3.2 delta-t series (numpy
                 port of `delta_t`: unclamped trapezoidal distance per lap, time
                 re-based to the lap's first GPS Speed sample, the comparison lap
@@ -33,8 +35,9 @@ Everything is placed on the **raw logger clock** the app's session time uses:
 
 Instants are stored as `(lap_index, offset_s)` — seconds past that lap's beacon
 — and the Swift test re-anchors them on the decoder's own lap starts. Every
-value is checked to lie outside any sample gap (> 0.5 s), so none of the
-goldens is a "nil" case.
+instant is checked to lie inside its lap and every value outside any sample
+gap (> 0.5 s), so none of the goldens is a "nil" case. The libxrk version is
+recorded, so a regeneration with another decoder shows up in the diff.
 
 Usage: gen_telemetry_golden.py OUT_DIR FILE.xrk
 """
@@ -45,6 +48,7 @@ import json
 import os
 import struct
 import sys
+from importlib.metadata import version
 
 import numpy as np
 from libxrk import aim_xrk
@@ -60,8 +64,10 @@ _INSTANTS = (
     (1, 12_345),
     (2, 31_250),
     (3, 25_000),
+    (4, 40_000),
     (5, 7_777),
     (6, 45_678),
+    (7, 5_000),
     (8, 20_000),
     (9, 33_333),
     (10, 15_000),
@@ -144,8 +150,8 @@ def _first_lap_origin(raw):
 
 def _at(tc, values, t):
     """Linear interpolation at t, asserting t sits inside the samples, not in a gap."""
+    assert tc[0] <= t <= tc[-1], f"t={t} outside the channel"
     upper = int(np.searchsorted(tc, t, side="right"))
-    assert 0 < upper <= len(tc), f"t={t} outside the channel"
     if upper < len(tc):
         assert tc[upper] - tc[upper - 1] <= _MAX_GAP_MS, f"t={t} inside a sample gap"
     return float(np.interp(t, tc, values))
@@ -197,6 +203,10 @@ def _telemetry_golden(log, raw, fname):
     def timing(i):
         return None if i is None else {"index": i, "number": i + 1, "time_s": _round(durations[i], 3)}
 
+    def last_valid(lap):
+        earlier = [i for i in range(lap) if durations[i] > 0]
+        return earlier[-1] if earlier else None
+
     raw_gps = _gps_times(raw)
     lib_gps_tc, speed = _values(log, "GPS Speed")
     assert len(raw_gps) == len(lib_gps_tc), "one GPS record per libxrk fix"
@@ -206,12 +216,15 @@ def _telemetry_golden(log, raw, fname):
     rpm_tc = rpm_tc + time_offset
     lat = (gps_tc, _values(log, "GPS_LateralAcc")[1])
     lon = (gps_tc, _values(log, "GPS_InlineAcc")[1])
+    latitude = (gps_tc, _values(log, "GPS Latitude")[1])
+    longitude = (gps_tc, _values(log, "GPS Longitude")[1])
     laps_speed = [(gps_tc[(gps_tc >= s) & (gps_tc < e)], speed[(gps_tc >= s) & (gps_tc < e)])
                   for s, e in zip(starts, ends)]
 
     best = best_of(range(count))
     frames = []
     for lap, offset_ms in _INSTANTS:
+        assert 0 <= offset_ms < beacon[lap]["duration_ms"], f"instant {lap}+{offset_ms} ms is outside its lap"
         t = float(starts[lap] + offset_ms)
         frames.append({
             "lap_index": lap,
@@ -220,15 +233,18 @@ def _telemetry_golden(log, raw, fname):
             "elapsed_s": offset_ms / 1000.0,
             "is_out_lap": lap == 0,
             "is_in_lap": lap == count - 1,
-            "last_lap": timing(lap - 1 if lap > 0 else None),
+            "last_lap": timing(last_valid(lap)),
             "best_so_far": timing(best_of(range(lap))),
             "speed_kmh": _round(_at(gps_tc, speed, t) * 3.6),
             "rpm": _round(_at(rpm_tc, rpm, t), 3),
             "lat_g": _round(_at(*lat, t)),
             "lon_g": _round(_at(*lon, t)),
+            "latitude": _round(_at(*latitude, t), 9),
+            "longitude": _round(_at(*longitude, t), 9),
             "delta_s": _round(_live_delta(laps_speed, best, lap, t)),
         })
-    return {"file": fname, "best_lap": timing(best), "lap_count": count, "frames": frames}
+    return {"file": fname, "libxrk": version("libxrk"), "best_lap": timing(best), "lap_count": count,
+            "frames": frames}
 
 
 def main(argv):

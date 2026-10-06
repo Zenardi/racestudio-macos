@@ -87,19 +87,25 @@ public struct LapClock: Equatable, Sendable {
     ///   - sectors: the split timeline naming each lap's sectors (``LapSectorTimeline/empty``
     ///     for none).
     public init(laps: [Lap], sectors: LapSectorTimeline = .empty) {
-        let best = Self.timing(SessionSummaryViewModel.bestLapIndex(laps).map { laps[$0] })
-        self.best = best
-        self.entries = laps.enumerated().compactMap { position, lap in
-            guard let window = LapSectorTimeline.window(of: lap) else { return nil }
-            let id = LapID(Int(lap.index))
-            let earlier = Array(laps[..<position])
-            return Entry(lap: id, number: Int(lap.index) + 1, window: window,
-                         last: Self.timing(earlier.last(where: \.hasValidDuration)),
-                         bestSoFar: Self.timing(SessionSummaryViewModel.bestLapIndex(earlier).map { earlier[$0] }),
-                         isOutLap: position == 0,
-                         isInLap: laps.count > 1 && position == laps.count - 1,
-                         sectors: sectors.lapSpan(id))
-        }.sorted { $0.window.start < $1.window.start }
+        self.best = Self.timing(SessionSummaryViewModel.bestLapIndex(laps).map { laps[$0] })
+        var entries: [Entry] = []
+        var lastValid: Lap?
+        var bestSoFar: Lap?
+        for (position, lap) in laps.enumerated() {
+            if let window = LapSectorTimeline.window(of: lap), window.end > window.start {
+                let id = LapID(Int(lap.index))
+                entries.append(Entry(lap: id, number: Int(lap.index) + 1, window: window,
+                                     last: Self.timing(lastValid), bestSoFar: Self.timing(bestSoFar),
+                                     isOutLap: position == 0, isInLap: laps.count > 1 && position == laps.count - 1,
+                                     sectors: sectors.lapSpan(id)))
+            }
+            if lap.hasValidDuration { lastValid = lap }
+            // The shared rule over (best so far, this lap) — the earlier wins a
+            // tie — equals the rule over every lap so far, in one pass.
+            let contenders = [bestSoFar, lap].compactMap { $0 }
+            bestSoFar = SessionSummaryViewModel.bestLapIndex(contenders).map { contenders[$0] }
+        }
+        self.entries = Self.disjoint(entries)
     }
 
     /// The lap timer at session time `t`, or `nil` when `t` is outside every
@@ -129,7 +135,7 @@ public struct LapClock: Equatable, Sendable {
     private func entryIndex(at t: Double, hint: inout Int) -> Int? {
         guard t.isFinite, !entries.isEmpty else { return nil }
         if holds(hint, t) { return hint }
-        if holds(hint + 1, t) {
+        if hint < entries.count - 1, holds(hint + 1, t) {
             hint += 1
             return hint
         }
@@ -149,6 +155,27 @@ public struct LapClock: Equatable, Sendable {
         guard entries.indices.contains(index) else { return false }
         let window = entries[index].window
         return window.contains(t) || (index == entries.count - 1 && t == window.end)
+    }
+
+    /// `entries` in start order (session order on a tie) with each window cut
+    /// at the next lap's beacon — which opens the next lap — so no instant
+    /// belongs to two laps and the hinted and searched lookups always agree. A
+    /// lap left with no time at all (two laps starting together) is dropped.
+    /// Only malformed input overlaps: the decoder's laps are contiguous.
+    private static func disjoint(_ entries: [Entry]) -> [Entry] {
+        let ordered = entries.enumerated()
+            .sorted { ($0.element.window.start, $0.offset) < ($1.element.window.start, $1.offset) }
+            .map(\.element)
+        return ordered.indices.compactMap { index in
+            let entry = ordered[index]
+            let nextStart = index + 1 < ordered.count ? ordered[index + 1].window.start : .infinity
+            let end = Swift.min(entry.window.end, nextStart)
+            guard end > entry.window.start else { return nil }
+            return Entry(lap: entry.lap, number: entry.number,
+                         window: SessionTimeSpan(start: entry.window.start, end: end), last: entry.last,
+                         bestSoFar: entry.bestSoFar, isOutLap: entry.isOutLap, isInLap: entry.isInLap,
+                         sectors: entry.sectors)
+        }
     }
 
     private static func timing(_ lap: Lap?) -> LapTiming? {

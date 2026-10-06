@@ -159,15 +159,56 @@ import Foundation
 
     /// Prefetching fetches every lap but the reference up front, so the export
     /// path never waits on the core mid-render.
-    @Test func test_prefetch_fetches_every_other_lap_once() {
+    @Test func test_prefetch_fetches_every_other_lap_once() throws {
         let provider = Provider()
         let live = delta(provider: provider)
 
-        live.prefetch()
-        live.prefetch()
+        try live.prefetch()
+        try live.prefetch()
         _ = live.delta(at: 15, lap: LapID(1))
 
         #expect(provider.callCount == 2, "laps 1 and 2; the reference needs no series")
+    }
+
+    /// A lap the core has no series for is remembered as such: asked once.
+    @Test func test_a_lap_without_a_series_is_fetched_once() {
+        let provider = Provider()
+        let live = delta(reference: LapID(2), provider: provider)
+
+        for t in stride(from: 10.0, to: 21, by: 0.5) {
+            #expect(live.delta(at: t, lap: LapID(1)) == nil)
+        }
+        #expect(provider.callCount == 1)
+    }
+
+    /// Prefetching stops with `CancellationError` when its task is cancelled.
+    @Test func test_prefetch_is_cancellable() async {
+        let live = delta()
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try live.prefetch()
+        }
+
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    /// Eight readers racing on a cold cache all read the single-threaded deltas.
+    @Test func test_concurrent_reads_on_a_cold_cache_agree() async {
+        let instants = Array(stride(from: 10.0, to: 31, by: 0.1))
+        let expected = instants.map { delta().delta(at: $0, lap: $0 < 21 ? LapID(1) : LapID(2)) }
+        let live = delta()
+
+        let results = await withTaskGroup(of: [Double?].self) { group in
+            for _ in 0..<8 {
+                group.addTask {
+                    var hints = LiveDelta.Hints()
+                    return instants.map { live.delta(at: $0, lap: $0 < 21 ? LapID(1) : LapID(2), hints: &hints) }
+                }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+
+        for deltas in results { #expect(deltas == expected) }
     }
 
     /// Switching the reference recomputes: the new reference reads zero, and the

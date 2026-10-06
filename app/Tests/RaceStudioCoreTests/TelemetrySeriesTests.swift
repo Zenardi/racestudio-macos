@@ -127,7 +127,30 @@ import Foundation
                 "equal-length arrays are sanitised too")
     }
 
+    /// A single forward-spiked time (a corrupt record far in the future) is
+    /// dropped on its own, rather than hiding every sample until the clock
+    /// catches up with it.
+    @Test func test_a_forward_spike_is_dropped_alone() {
+        let series = TelemetrySeries(times: [0, 0.1, 65, 0.2, 0.3], values: [0, 1, 99, 2, 3])
+
+        #expect(series.times == [0, 0.1, 0.2, 0.3])
+        #expect(series.value(at: 0.25) == 2.5)
+    }
+
     // MARK: - Hint cursor
+
+    /// A 1 kHz channel swept at 30 fps advances ~33 samples a frame; the hinted
+    /// read still equals the random read at every frame.
+    @Test func test_a_fast_channel_swept_at_frame_rate_equals_random_reads() {
+        let times = (0..<20_000).map { Double($0) / 1000 }
+        let series = TelemetrySeries(times: times, values: times.map { $0 * $0 })
+        var hint = -1
+
+        for frame in 0..<600 {
+            let t = Double(frame) / 30
+            #expect(series.value(at: t, hint: &hint) == series.value(at: t), "t \(t)")
+        }
+    }
 
     /// Property: for random series (with gaps, holes and both modes) and both
     /// monotone and shuffled query sequences, reading with a carried hint gives

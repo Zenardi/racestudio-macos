@@ -39,10 +39,10 @@ public struct TelemetrySeries: Equatable, Sendable {
     public let maxGap: Double
 
     /// - Parameters:
-    ///   - times: sample times in seconds. Samples whose time is not finite, or
-    ///     does not move strictly forward (a repeated time, or a single
-    ///     out-of-order record the decoder leaves as logged), are dropped so the
-    ///     kept times are searchable.
+    ///   - times: sample times in seconds. Samples a search cannot use are
+    ///     dropped (``searchableIndices(_:count:)``): a non-finite time, one that
+    ///     does not move strictly forward (a repeat, or an out-of-order record the
+    ///     decoder leaves as logged), and a lone forward spike.
     ///   - values: sample values; extra elements past the shorter array are dropped.
     ///   - mode: linear (default) or step-hold.
     ///   - maxGap: the gap threshold, ``defaultMaxGap`` by default.
@@ -55,19 +55,53 @@ public struct TelemetrySeries: Equatable, Sendable {
             self.times = times
             self.values = values
         } else {
-            var keptTimes: [Double] = []
-            var keptValues: [Double] = []
-            keptTimes.reserveCapacity(count)
-            keptValues.reserveCapacity(count)
-            for index in 0..<count where times[index].isFinite && times[index] > (keptTimes.last ?? -.infinity) {
-                keptTimes.append(times[index])
-                keptValues.append(values[index])
-            }
-            self.times = keptTimes
-            self.values = keptValues
+            let kept = Self.searchableIndices(times, count: count)
+            self.times = kept.map { times[$0] }
+            self.values = kept.map { values[$0] }
         }
         self.mode = mode
         self.maxGap = maxGap
+    }
+
+    /// The gap threshold for samples `sampleInterval` seconds apart: two
+    /// periods, never under ``defaultMaxGap`` — so a slow channel's normal
+    /// cadence (1 Hz logger temperature, a 1 Hz GPS) is not mistaken for a gap.
+    /// An unknown (non-positive or non-finite) interval gets the default.
+    public static func gapThreshold(sampleInterval: Double) -> Double {
+        guard sampleInterval > 0, sampleInterval.isFinite else { return defaultMaxGap }
+        return Swift.max(defaultMaxGap, 2 * sampleInterval)
+    }
+
+    /// The gap threshold for samples at `times`, from their median spacing.
+    public static func gapThreshold(forTimes times: [Double]) -> Double {
+        var steps: [Double] = []
+        steps.reserveCapacity(times.count)
+        for index in times.indices.dropFirst() where times[index] > times[index - 1] {
+            steps.append(times[index] - times[index - 1])
+        }
+        steps.sort()
+        return gapThreshold(sampleInterval: steps.isEmpty ? 0 : steps[steps.count / 2])
+    }
+
+    /// The indices of the first `count` of `times` a search can use, in order:
+    /// finite and strictly increasing. A time that steps back (or repeats) is
+    /// dropped — the earlier record is trusted, as the decoder treats a single
+    /// out-of-order record. A lone forward spike — later than both of the next
+    /// two samples, which themselves continue the series — is dropped on its
+    /// own, instead of hiding every sample until the clock catches up with it.
+    static func searchableIndices(_ times: [Double], count: Int) -> [Int] {
+        var kept: [Int] = []
+        kept.reserveCapacity(count)
+        var last = -Double.infinity
+        for index in 0..<count where times[index].isFinite && times[index] > last {
+            let time = times[index]
+            if index + 2 < count, times[index + 1] > last, time > times[index + 1], time > times[index + 2] {
+                continue
+            }
+            kept.append(index)
+            last = time
+        }
+        return kept
     }
 
     /// Whether the series has no samples.

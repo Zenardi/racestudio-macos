@@ -88,12 +88,12 @@ import CoreGraphics
 
     // MARK: - Heading
 
-    /// Heading is the direction of travel along the current segment, in degrees
-    /// clockwise from north; a stationary kart keeps the heading it had.
+    /// Heading is the direction of the next metre of travel, in degrees
+    /// clockwise from north; a kart pausing briefly faces where it moves next.
     @Test func test_heading_follows_the_direction_of_travel() throws {
         let position = TrackPosition(track: box(), laps: [])
 
-        let expected: [(Double, Double)] = [(0.05, 0), (0.15, 90), (0.25, 180), (0.35, 270), (0.45, 270), (0.55, 0)]
+        let expected: [(Double, Double)] = [(0.05, 0), (0.15, 90), (0.25, 180), (0.35, 270), (0.45, 0), (0.55, 0)]
         for (t, heading) in expected {
             let reading = try #require(position.reading(at: t)?.heading, "t \(t)")
             #expect(abs(reading - heading) < 1e-6, "t \(t)")
@@ -110,6 +110,36 @@ import CoreGraphics
         let reading = try #require(TrackPosition(track: start + [off], laps: []).reading(at: 0.05)?.heading)
 
         #expect(abs(reading - 90) < 1e-6, "it sets off east")
+    }
+
+    /// A parked kart's GPS jitter (a few tens of centimetres) does not spin the
+    /// heading: it keeps the heading it arrived with.
+    @Test func test_gps_jitter_does_not_spin_a_parked_kart() throws {
+        let arriving = (0..<4).map {
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 45, longitude: 12 + 0.0001 * Double($0)),
+                          distance: 0, time: Double($0) / 10)
+        }
+        let wobble = [0.000002, -0.000003, 0.000001, -0.000002, 0.000003, 0, -0.000001, 0.000002, -0.000002, 0.000001]
+        let parked = wobble.enumerated().map { index, offset in
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 45 + offset, longitude: 12.0003 - offset),
+                          distance: 0, time: 0.4 + Double(index) / 10)
+        }
+        let position = TrackPosition(track: arriving + parked, laps: [])
+
+        for t in stride(from: 0.45, to: 1.3, by: 0.1) {
+            let heading = try #require(position.reading(at: t)?.heading, "t \(t)")
+            #expect(abs(heading - 90) < 1e-6, "t \(t)")
+        }
+    }
+
+    /// A slow GPS (1 Hz) is not a gap: the position interpolates between fixes.
+    @Test func test_a_one_hertz_gps_is_not_a_gap() {
+        let slow = (0..<5).map {
+            GPSTrackPoint(coordinate: GPSCoord(latitude: 45, longitude: 12 + 0.0001 * Double($0)),
+                          distance: 0, time: Double($0))
+        }
+
+        #expect(TrackPosition(track: slow, laps: []).reading(at: 1.5) != nil)
     }
 
     /// A kart that never moves has no direction of travel.

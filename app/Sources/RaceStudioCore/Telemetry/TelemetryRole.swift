@@ -73,8 +73,9 @@ public enum TelemetryRole: String, CaseIterable, Codable, Sendable {
             return ["GPS InlineAcc", "GPS_InlineAcc", "InlineAcc", "Inline Acc", "LongAcc",
                     "Longitudinal Acc", "Lon G", "Long G"]
         case .waterTemp:
-            return ["Water Temp", "Water Temperature", "WaterTemp", "WT", "Coolant Temp", "H2O Temp", "Engine Temp"]
-        case .exhaustTemp: return ["Exhaust Temp", "Exhaust Temperature", "EGT", "Exh Temp", "EGT 1"]
+            return ["Water Temp", "Water Temperature", "WaterTemp", "WT", "WAT", "Coolant Temp", "H2O Temp",
+                    "H2O", "Engine Temp"]
+        case .exhaustTemp: return ["Exhaust Temp", "Exhaust Temperature", "EGT", "Exh Temp", "EGT 1", "EGT1"]
         }
     }
 

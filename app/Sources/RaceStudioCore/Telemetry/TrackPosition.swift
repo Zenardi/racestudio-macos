@@ -23,10 +23,19 @@ public struct TrackPositionReading: Equatable, Sendable {
 /// into the unit square by ``GeoProjection`` with ``GeoProjection/framingTrim``,
 /// north up. Every fix is projected once, at build time; a read interpolates
 /// the projected points (the projection is affine in latitude/longitude, so
-/// that equals projecting the interpolated fix) and step-holds the heading of
-/// the segment the kart is on. ``racingLine`` is the pre-projected best lap,
+/// that equals projecting the interpolated fix) and step-holds the heading
+/// computed for the fix before it. ``racingLine`` is the pre-projected best lap,
 /// for drawing the static map.
 public struct TrackPosition: Sendable {
+
+    /// How far (metres) the kart must move before its direction counts — GPS
+    /// jitter on a parked kart stays well inside it.
+    static let headingMinimumTravel = 1.0
+    /// How far ahead (seconds) a fix looks for that much travel before it holds
+    /// the previous heading instead.
+    static let headingLookahead = 2.0
+    /// Ground metres per degree of latitude (the projection's raw unit).
+    private static let metresPerDegree = 111_320.0
 
     /// The projection into the unit map frame.
     public let projection: GeoProjection
@@ -41,25 +50,27 @@ public struct TrackPosition: Sendable {
     /// - Parameters:
     ///   - track: the session's GPS fixes.
     ///   - laps: the session's laps, which pick the best lap to frame.
-    ///   - maxGap: the GPS gap threshold (seconds); no position inside a longer gap.
-    public init(track: [GPSTrackPoint], laps: [Lap], maxGap: Double = TelemetrySeries.defaultMaxGap) {
+    ///   - maxGap: the GPS gap threshold (seconds); no position inside a longer
+    ///     gap. `nil` (the default) derives it from the fixes' own spacing
+    ///     (``TelemetrySeries/gapThreshold(forTimes:)``), so a 1 Hz GPS is not
+    ///     one long gap.
+    public init(track: [GPSTrackPoint], laps: [Lap], maxGap: Double? = nil) {
         let framed = SessionPreview.bestLapCoordinates(laps, track: track)
         let projection = GeoProjection.fit(to: framed, trimmingFraction: GeoProjection.framingTrim)
         self.projection = projection
         self.racingLine = framed.count >= 2 ? framed.map(projection.project) : []
 
-        // Keep the fixes a search can use: finite, strictly increasing times.
-        var times: [Double] = []
-        var points: [CGPoint] = []
-        times.reserveCapacity(track.count)
-        points.reserveCapacity(track.count)
-        for fix in track where fix.time.isFinite && fix.time > (times.last ?? -.infinity) {
-            times.append(fix.time)
-            points.append(projection.project(fix.coordinate))
-        }
-        self.x = TelemetrySeries(times: times, values: points.map { Double($0.x) }, maxGap: maxGap)
-        self.y = TelemetrySeries(times: times, values: points.map { Double($0.y) }, maxGap: maxGap)
-        self.heading = TelemetrySeries(times: times, values: Self.headings(points), mode: .stepHold, maxGap: maxGap)
+        // Keep the fixes a search can use, by the same rule every series uses.
+        let kept = TelemetrySeries.searchableIndices(track.map(\.time), count: track.count)
+        let times = kept.map { track[$0].time }
+        let points = kept.map { projection.project(track[$0].coordinate) }
+        let gap = maxGap ?? TelemetrySeries.gapThreshold(forTimes: times)
+        let minimumTravel = Self.headingMinimumTravel / Self.metresPerDegree * projection.scale
+        self.x = TelemetrySeries(times: times, values: points.map { Double($0.x) }, maxGap: gap)
+        self.y = TelemetrySeries(times: times, values: points.map { Double($0.y) }, maxGap: gap)
+        self.heading = TelemetrySeries(times: times, values: Self.headings(points, times: times,
+                                                                           minimumTravel: minimumTravel),
+                                       mode: .stepHold, maxGap: gap)
     }
 
     /// Whether the session has no GPS fix to place the kart by.
@@ -91,22 +102,27 @@ public struct TrackPosition: Sendable {
 
     // MARK: - Internals
 
-    /// The heading of the segment leaving each point (the last point keeps the
-    /// final segment's), degrees clockwise from north in the map frame — whose
-    /// uniform, latitude-corrected scale preserves ground bearings. A segment of
-    /// zero length (a stationary kart) inherits the heading before it, or the
-    /// first real heading when the kart had not yet moved; `NaN` throughout
-    /// when it never moves.
-    private static func headings(_ points: [CGPoint]) -> [Double] {
+    /// The heading at each point: towards the first later point more than
+    /// `minimumTravel` (map units) away within ``headingLookahead`` seconds, in
+    /// degrees clockwise from north in the map frame — whose uniform,
+    /// latitude-corrected scale preserves ground bearings. A point with no such
+    /// travel ahead (a parked kart's jitter, the end of the track) holds the
+    /// heading before it; a stationary start takes the first real heading; `NaN`
+    /// throughout when the kart never moves.
+    private static func headings(_ points: [CGPoint], times: [Double], minimumTravel: Double) -> [Double] {
         var headings = [Double](repeating: .nan, count: points.count)
         var lastKnown = Double.nan
         for index in points.indices {
-            let next = index + 1 < points.count ? points[index + 1] : points[index]
-            let dx = Double(next.x - points[index].x), dy = Double(next.y - points[index].y)
-            if dx != 0 || dy != 0 {
-                // Map y grows southwards, so north is −y.
-                let degrees = atan2(dx, -dy) * 180 / .pi
-                lastKnown = degrees < 0 ? degrees + 360 : degrees
+            var ahead = index + 1
+            while ahead < points.count, times[ahead] - times[index] <= headingLookahead {
+                let dx = Double(points[ahead].x - points[index].x), dy = Double(points[ahead].y - points[index].y)
+                if (dx * dx + dy * dy).squareRoot() > minimumTravel {
+                    // Map y grows southwards, so north is −y.
+                    let degrees = atan2(dx, -dy) * 180 / .pi
+                    lastKnown = degrees < 0 ? degrees + 360 : degrees
+                    break
+                }
+                ahead += 1
             }
             headings[index] = lastKnown
         }

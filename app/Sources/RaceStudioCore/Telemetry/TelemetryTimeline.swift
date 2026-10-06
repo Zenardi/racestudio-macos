@@ -30,7 +30,7 @@ public struct TelemetryTimeline: Sendable {
     private let liveDelta: LiveDelta
     private let loggerDeltas: [String: TelemetrySeries]
     private let loggerDelta: TelemetrySeries?
-    private let gForce: GForceTrail
+    private let gForce: GForceSamples
 
     /// - Parameters:
     ///   - channelMap: the role bindings the series were read through.
@@ -45,7 +45,7 @@ public struct TelemetryTimeline: Sendable {
                 deltaSource: DeltaSource = .computed) {
         self.init(channelMap: channelMap, roles: TelemetryRole.ordered.map { series[$0] }, clock: clock,
                   position: position, liveDelta: liveDelta, loggerDeltas: loggerDeltas, deltaSource: deltaSource,
-                  gForce: GForceTrail(lateral: series[.latG], longitudinal: series[.lonG]))
+                  gForce: GForceSamples(lateral: series[.latG], longitudinal: series[.lonG]))
     }
 
     /// The lap the computed delta compares against, or `nil` when there is none.
@@ -72,11 +72,10 @@ public struct TelemetryTimeline: Sendable {
     /// The frame at session time `t`, reusing `cursor` from the previous read —
     /// the sequential export path. Any cursor is safe; it only skips searches.
     public func frame(at t: Double, cursor: inout SamplingCursor) -> TelemetryFrame {
-        var values = TelemetryRoleValues()
+        var values = PerRole<Double?>(repeating: nil)
         for role in TelemetryRole.ordered {
-            if let series = roles[role.slot] {
-                values[role] = series.value(at: t, hint: &cursor.roles[role.slot])
-            }
+            // Read through the optional in place: no copy of the series.
+            values[role] = roles[role.slot]?.value(at: t, hint: &cursor.roles[role])
         }
         let lap = clock.reading(at: t, hint: &cursor.lap)
         let delta: Double?
@@ -86,7 +85,7 @@ public struct TelemetryTimeline: Sendable {
         case .logger:
             delta = loggerDelta?.value(at: t, hint: &cursor.logger)
         }
-        return TelemetryFrame(time: t, values: values, lap: lap, delta: delta,
+        return TelemetryFrame(time: t, roleValues: values, lap: lap, delta: delta,
                               position: position.reading(at: t, hint: &cursor.position),
                               gTrail: gForce.trail(at: t, end: &cursor.trailEnd, start: &cursor.trailStart))
     }
@@ -94,8 +93,10 @@ public struct TelemetryTimeline: Sendable {
     // MARK: - Variants
 
     /// This timeline with the computed delta compared against `reference`
-    /// instead (`nil` for none); its curves are fetched afresh, lazily. Start a
-    /// new ``SamplingCursor`` for it.
+    /// instead (`nil` for none). Its curves are fetched afresh and **lazily**: the
+    /// first frame of each lap fetches that lap's series from the core,
+    /// synchronously, on the caller's thread. From the main actor, or before an
+    /// export, use ``prefetchingDeltaReference(_:)`` instead.
     public func withDeltaReference(_ reference: LapID?) -> TelemetryTimeline {
         TelemetryTimeline(channelMap: channelMap, roles: roles, clock: clock, position: position,
                           liveDelta: liveDelta.referencing(reference), loggerDeltas: loggerDeltas,
@@ -109,10 +110,23 @@ public struct TelemetryTimeline: Sendable {
                           liveDelta: liveDelta, loggerDeltas: loggerDeltas, deltaSource: source, gForce: gForce)
     }
 
-    /// Fetch every lap's delta curve now, so a sweep never waits on the core.
-    /// ``load(session:source:sectors:reference:deltaSource:channelMap:)`` already does.
-    public func prefetchDeltas() {
-        liveDelta.prefetch()
+    /// This timeline compared against `reference`, with every lap's delta series
+    /// already fetched — off the main actor (a `nonisolated` `async` function) —
+    /// so no frame read afterwards waits on the core.
+    /// - Throws: `CancellationError` when the calling task is cancelled.
+    public func prefetchingDeltaReference(_ reference: LapID?) async throws -> TelemetryTimeline {
+        let timeline = withDeltaReference(reference)
+        try await timeline.prefetchDeltas()
+        return timeline
+    }
+
+    /// Fetch every lap's delta series now, off the main actor, so a sweep never
+    /// waits on the core. ``load(session:source:sectors:reference:deltaSource:channelMap:)``
+    /// already does. Readers that race a cold cache may each fetch the same lap
+    /// once; the fetch is idempotent, so prefetching is what avoids the waste.
+    /// - Throws: `CancellationError` when the calling task is cancelled.
+    public func prefetchDeltas() async throws {
+        try liveDelta.prefetch()
     }
 
     /// An estimate of the bytes the timeline retains for its samples (the
@@ -127,7 +141,7 @@ public struct TelemetryTimeline: Sendable {
 
     private init(channelMap: TelemetryChannelMap, roles: [TelemetrySeries?], clock: LapClock,
                  position: TrackPosition, liveDelta: LiveDelta, loggerDeltas: [String: TelemetrySeries],
-                 deltaSource: DeltaSource, gForce: GForceTrail) {
+                 deltaSource: DeltaSource, gForce: GForceSamples) {
         self.channelMap = channelMap
         self.roles = roles
         self.clock = clock

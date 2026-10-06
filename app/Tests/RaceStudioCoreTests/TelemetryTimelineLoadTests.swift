@@ -182,6 +182,37 @@ import Foundation
         #expect(timeline.frame(at: 5).speed != nil)
     }
 
+    /// Re-referencing for the UI is asynchronous: the new reference's series are
+    /// fetched off the main actor before the timeline is handed back, so no
+    /// frame read afterwards waits on the core.
+    @Test @MainActor func test_re_referencing_fetches_off_the_main_actor() async throws {
+        let built = TelemetryFixture.make()
+        let source = RecordingSource(built.source)
+        let timeline = try await TelemetryTimeline.load(session: built.session, source: source)
+
+        let switched = try await timeline.prefetchingDeltaReference(LapID(0))
+        let readsAfterFetch = source.reads.count
+        _ = (0..<600).map { switched.frame(at: Double($0) / 10) }
+
+        #expect(switched.deltaReference == LapID(0))
+        #expect(!source.anyOnMain)
+        #expect(source.reads.count == readsAfterFetch, "no core read while sampling")
+    }
+
+    /// A GPS logged at 1 Hz is not one long gap: the odometer (and so the
+    /// delta) and the position read between its fixes.
+    @Test func test_a_one_hertz_gps_still_yields_delta_and_position() async throws {
+        let built = TelemetryFixture.make()
+        let everySecond = built.source.gpsTrack(start: 0, count: .max).filter { $0.time == $0.time.rounded() }
+        let slow = FakeSessionDataSource(banks: [], gps: everySecond, deltas: [
+            FakeSessionDataSource.DeltaKey(reference: 1, comparison: 0): TelemetryFixture.deltaSeries(comparison: 0)])
+
+        let frame = try await TelemetryTimeline.load(session: built.session, source: slow).frame(at: 10.5)
+
+        #expect(frame.position != nil)
+        #expect(frame.delta != nil)
+    }
+
     /// Prefetching a re-referenced timeline fetches every other lap's series
     /// against the new reference, so the export sweep never waits on the core.
     @Test func test_prefetching_a_new_reference_fetches_every_other_lap() async throws {
@@ -189,7 +220,7 @@ import Foundation
         let source = RecordingSource(built.source)
         let timeline = try await TelemetryTimeline.load(session: built.session, source: source)
 
-        timeline.withDeltaReference(LapID(0)).prefetchDeltas()
+        try await timeline.withDeltaReference(LapID(0)).prefetchDeltas()
 
         #expect(source.reads.filter { $0.hasPrefix("delta 0") }.sorted() == ["delta 0→1", "delta 0→2"])
     }

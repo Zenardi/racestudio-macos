@@ -149,6 +149,20 @@ import Foundation
         #expect(TelemetryRole.gear.canonicalUnit == nil, "gear passes its value through")
     }
 
+    /// Each role's slot is its position in declaration order — the order the
+    /// timeline stores its series in — so the two can never drift apart.
+    @Test func test_role_slots_follow_declaration_order() {
+        #expect(TelemetryRole.ordered == TelemetryRole.allCases)
+        for (index, role) in TelemetryRole.ordered.enumerated() {
+            #expect(role.slot == index, "\(role)")
+        }
+    }
+
+    /// AiM's short water-temperature name binds too.
+    @Test func test_aim_short_water_temperature_name_binds() {
+        #expect(TelemetryChannelMap.resolve(channels: [channel("WAT", "C")]).binding(for: .waterTemp) != nil)
+    }
+
     /// Gear is step-held; every other role is continuous.
     @Test func test_only_gear_is_step_held() {
         for role in TelemetryRole.allCases {
@@ -187,6 +201,18 @@ import Foundation
         let forced = try #require(map.overriding(.speed, with: channels[2]).binding(for: .speed))
         #expect(forced.conversion == .identity, "an unrecognised unit is the user's call: pass through")
         #expect(forced.unit == "C")
+    }
+
+    /// Overriding by listing index picks the chosen one of two identical
+    /// channels; an index past the listing unbinds the role.
+    @Test func test_an_override_by_index_binds_the_chosen_duplicate() {
+        let twins = [channel("Speed", "km/h"), channel("Speed", "km/h")]
+        let map = TelemetryChannelMap.resolve(channels: twins)
+
+        #expect(map.binding(for: .speed)?.channelIndex == 0)
+        #expect(map.overriding(.speed, withChannelAt: 1).binding(for: .speed)?.channelIndex == 1)
+        #expect(map.overriding(.speed, withChannelAt: 2).binding(for: .speed) == nil)
+        #expect(map.overriding(.speed, withChannelAt: nil).binding(for: .speed) == nil)
     }
 
     // MARK: - Logger delta channels

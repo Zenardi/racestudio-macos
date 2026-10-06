@@ -1,35 +1,20 @@
 import Foundation
 
-/// One `(lateral, longitudinal)` acceleration sample — a point of the G-ball
-/// trail (issue 9.9).
-public struct GForcePoint: Equatable, Sendable {
-    /// Session time (seconds) of the sample.
-    public let time: Double
-    /// Lateral acceleration (g).
-    public let lateral: Double
-    /// Longitudinal acceleration (g).
-    public let longitudinal: Double
-
-    public init(time: Double, lateral: Double, longitudinal: Double) {
-        self.time = time
-        self.lateral = lateral
-        self.longitudinal = longitudinal
-    }
-}
-
 /// What the kart was doing at one session instant (issue 9.9) — the value the
 /// overlay renderer draws a video frame from, identical in the live HUD and the
 /// burned-in export.
 ///
-/// Values are in canonical units — speed km/h, rpm, G in g, temperatures °C,
-/// times and the delta in seconds — so preview and export format them the same
-/// way; display conversion is the renderer's job. Anything the session cannot
-/// say at this instant (a missing channel, a sample gap, no lap, no GPS) is
-/// `nil`, never zero.
+/// Speed (km/h), rpm, G (g) and temperatures (°C) are in canonical units, and
+/// times and the delta in seconds, so preview and export format them the same
+/// way; display conversion is the renderer's job. Gear and the pedals — and any
+/// role hand-remapped to a channel in a unit the role does not recognise — are
+/// passed through in their channel's unit (``TelemetryChannelBinding/unit``).
+/// Anything the session cannot say at this instant (a missing channel, a
+/// sample gap, no lap, no GPS) is `nil`, never zero.
 public struct TelemetryFrame: Equatable, Sendable {
     /// The session time the frame was sampled at (seconds, the cursor's clock).
     public let time: Double
-    private let values: TelemetryRoleValues
+    private let values: PerRole<Double?>
     /// The lap timer, or `nil` outside every valid lap.
     public let lap: LapClockReading?
     /// The live delta to the reference lap (seconds; negative = gaining), or
@@ -38,13 +23,29 @@ public struct TelemetryFrame: Equatable, Sendable {
     /// The kart's place on the mini map, or `nil` without a GPS fix.
     public let position: TrackPositionReading?
     /// The last second of G samples up to `t`, oldest first — the G-ball trail.
-    /// A view into the timeline's own storage (no copy).
-    public let gTrail: ArraySlice<GForcePoint>
+    public let gTrail: GForceTrail
 
-    init(time: Double, values: TelemetryRoleValues, lap: LapClockReading?, delta: Double?,
-         position: TrackPositionReading?, gTrail: ArraySlice<GForcePoint>) {
+    /// A frame built by hand — previews and renderer snapshot tests.
+    /// - Parameters:
+    ///   - time: the session time it stands for.
+    ///   - values: the roles that have a value (in their reported units); every
+    ///     other role is `nil`.
+    ///   - lap: the lap timer reading.
+    ///   - delta: the live delta (seconds).
+    ///   - position: the place on the mini map.
+    ///   - gTrail: the G-ball trail, oldest first.
+    public init(time: Double, values: [TelemetryRole: Double], lap: LapClockReading? = nil, delta: Double? = nil,
+                position: TrackPositionReading? = nil, gTrail: [GForcePoint] = []) {
+        var roles = PerRole<Double?>(repeating: nil)
+        for (role, value) in values { roles[role] = value }
+        self.init(time: time, roleValues: roles, lap: lap, delta: delta, position: position,
+                  gTrail: GForceTrail(ArraySlice(gTrail)))
+    }
+
+    init(time: Double, roleValues: PerRole<Double?>, lap: LapClockReading?, delta: Double?,
+         position: TrackPositionReading?, gTrail: GForceTrail) {
         self.time = time
-        self.values = values
+        self.values = roleValues
         self.lap = lap
         self.delta = delta
         self.position = position
@@ -66,9 +67,9 @@ public struct TelemetryFrame: Equatable, Sendable {
     public var throttle: Double? { self[.throttle] }
     /// Brake, in its channel's unit.
     public var brake: Double? { self[.brake] }
-    /// Lateral acceleration (g).
+    /// Lateral acceleration (g), positive to the right.
     public var latG: Double? { self[.latG] }
-    /// Longitudinal acceleration (g).
+    /// Longitudinal acceleration (g), positive under acceleration.
     public var lonG: Double? { self[.lonG] }
     /// Water temperature (°C).
     public var waterTemp: Double? { self[.waterTemp] }
@@ -76,11 +77,17 @@ public struct TelemetryFrame: Equatable, Sendable {
     public var exhaustTemp: Double? { self[.exhaustTemp] }
 }
 
-/// One value per role, stored inline so a frame carries no heap allocation.
-struct TelemetryRoleValues: Equatable, Sendable {
-    private var speed, rpm, gear, throttle, brake, latG, lonG, waterTemp, exhaustTemp: Double?
+/// One `Value` per ``TelemetryRole``, stored inline — no heap allocation, so a
+/// frame's values and a cursor's hints cost nothing to create.
+struct PerRole<Value: Equatable & Sendable>: Equatable, Sendable {
+    private var speed, rpm, gear, throttle, brake, latG, lonG, waterTemp, exhaustTemp: Value
 
-    subscript(role: TelemetryRole) -> Double? {
+    init(repeating value: Value) {
+        (speed, rpm, gear, throttle, brake) = (value, value, value, value, value)
+        (latG, lonG, waterTemp, exhaustTemp) = (value, value, value, value)
+    }
+
+    subscript(role: TelemetryRole) -> Value {
         get {
             switch role {
             case .speed: return speed
@@ -112,9 +119,10 @@ struct TelemetryRoleValues: Equatable, Sendable {
 
 /// Search state carried across a sweep of ``TelemetryTimeline/frame(at:cursor:)``
 /// (issue 9.9) — one per reader (the HUD, each export worker). It only speeds
-/// the reads up: any cursor, fresh or stale, gives the same frames.
+/// the reads up: any cursor, fresh or stale, gives the same frames. Stored
+/// inline, so creating one allocates nothing.
 public struct SamplingCursor: Sendable {
-    var roles = [Int](repeating: -1, count: TelemetryRole.ordered.count)
+    var roles = PerRole<Int>(repeating: -1)
     var lap = -1
     var position = -1
     var logger = -1
@@ -123,47 +131,4 @@ public struct SamplingCursor: Sendable {
     var delta = LiveDelta.Hints()
 
     public init() {}
-}
-
-/// The `(lateral, longitudinal)` G samples paired on one time axis, read as a
-/// trailing window for the G-ball (issue 9.9).
-struct GForceTrail: Sendable {
-    /// How far back the trail reaches (seconds).
-    static let duration = 1.0
-
-    let points: [GForcePoint]
-    private let times: [Double]
-
-    /// Pairs each lateral sample with the longitudinal value at its time; a
-    /// sample with no longitudinal value there (a gap) is left out.
-    init(lateral: TelemetrySeries?, longitudinal: TelemetrySeries?) {
-        guard let lateral, let longitudinal else {
-            self.points = []
-            self.times = []
-            return
-        }
-        var points: [GForcePoint] = []
-        points.reserveCapacity(lateral.times.count)
-        var hint = -1
-        for (time, value) in zip(lateral.times, lateral.values) where value.isFinite {
-            if let lon = longitudinal.value(at: time, hint: &hint) {
-                points.append(GForcePoint(time: time, lateral: value, longitudinal: lon))
-            }
-        }
-        self.points = points
-        self.times = points.map(\.time)
-    }
-
-    /// The samples in `(t − duration, t]`, oldest first.
-    func trail(at t: Double, end: inout Int, start: inout Int) -> ArraySlice<GForcePoint> {
-        guard t.isFinite else { return points[0..<0] }
-        let upper = lastIndex(atOrBefore: t, in: times, hint: &end) + 1
-        let lower = lastIndex(atOrBefore: t - Self.duration, in: times, hint: &start) + 1
-        return lower < upper ? points[lower..<upper] : points[0..<0]
-    }
-
-    /// The bytes the trail retains.
-    var byteCount: Int {
-        points.count * MemoryLayout<GForcePoint>.stride + times.count * MemoryLayout<Double>.stride
-    }
 }

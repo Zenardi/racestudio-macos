@@ -23,8 +23,13 @@ public enum DeltaSource: Equatable, Sendable {
 /// slower than the reference (losing time), negative = gaining.
 ///
 /// Immutable apart from that cache, which is guarded by a lock, so one instance
-/// is safely read from the UI and an export worker at once. Switching the
-/// reference (``referencing(_:)``) yields a new instance with an empty cache.
+/// is safely read from the UI and an export worker at once. A read that misses
+/// the cache fetches from the core synchronously on the reader's thread (readers
+/// racing on the same cold lap may each fetch it — the fetch is idempotent), so
+/// ``prefetch()`` it before sampling from the main actor or an exporter. The
+/// provider keeps the session's data source alive for as long as the instance
+/// lives, so a new reference can still be fetched. Switching the reference
+/// (``referencing(_:)``) yields a new instance with an empty cache.
 public final class LiveDelta: Sendable {
 
     /// The core's delta-t series of `lap` versus `reference` as `(distance, dt)`
@@ -37,7 +42,9 @@ public final class LiveDelta: Sendable {
     public struct Hints: Sendable {
         var distance = -1
         var series = -1
-        var owner: ObjectIdentifier?
+        /// The instance the cached curve came from — held, not just identified,
+        /// so a freed instance's address can never be mistaken for a new one's.
+        var owner: LiveDelta?
         var lap: LapID?
         var curve: Curve?
 
@@ -102,8 +109,8 @@ public final class LiveDelta: Sendable {
     public func delta(at t: Double, lap: LapID, hints: inout Hints) -> Double? {
         guard let reference, let odometer = distance.value(at: t, hint: &hints.distance) else { return nil }
         if lap == reference { return 0 }
-        if hints.lap != lap || hints.owner != ObjectIdentifier(self) {
-            hints.owner = ObjectIdentifier(self)
+        if hints.lap != lap || hints.owner !== self {
+            hints.owner = self
             hints.lap = lap
             hints.curve = curve(for: lap, reference: reference)
             hints.series = -1
@@ -116,9 +123,12 @@ public final class LiveDelta: Sendable {
 
     /// Fetch every lap's curve now (the reference needs none), so a later sweep —
     /// the exporter's — never waits on the core.
-    public func prefetch() {
+    /// - Throws: `CancellationError` when the calling task is cancelled (checked
+    ///   before each lap).
+    public func prefetch() throws {
         guard let reference else { return }
         for lap in windows.keys.sorted(by: { $0.index < $1.index }) where lap != reference {
+            try Task.checkCancellation()
             _ = curve(for: lap, reference: reference)
         }
     }

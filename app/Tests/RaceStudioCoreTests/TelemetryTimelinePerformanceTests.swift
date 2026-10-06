@@ -18,8 +18,9 @@ import Foundation
     private static let frameCount = 18_000
 
     #if DEBUG
-    private static let sequentialBudget = Duration.seconds(3)
-    private static let randomBudget = Duration.seconds(5)
+    // ~10x the instrumented debug run measured locally (~0.1 s / ~0.15 s).
+    private static let sequentialBudget = Duration.seconds(1)
+    private static let randomBudget = Duration.seconds(2)
     #else
     private static let sequentialBudget = Duration.milliseconds(50)
     private static let randomBudget = Duration.milliseconds(200)

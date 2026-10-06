@@ -86,21 +86,30 @@ public struct TelemetryChannelMap: Equatable, Sendable {
         Set(bindings.keys)
     }
 
-    /// This map with `role` rebound to `channel` — a hand remap. `nil` unbinds
-    /// the role, as does a channel this session does not list (it has no data to
-    /// read). The channel's unit is converted when the role accepts it and
-    /// passed through as-is otherwise: an explicit choice is honoured, and the
-    /// binding's ``TelemetryChannelBinding/unit`` says what the values are in.
+    /// This map with `role` rebound to `channel` — a hand remap, resolved to the
+    /// first listed channel equal to it (``overriding(_:withChannelAt:)`` picks
+    /// between identical ones). `nil`, or a channel this session does not list,
+    /// unbinds the role.
     public func overriding(_ role: TelemetryRole, with channel: Channel?) -> TelemetryChannelMap {
+        overriding(role, withChannelAt: channel.flatMap { channels.firstIndex(of: $0) })
+    }
+
+    /// This map with `role` rebound to the channel at `index` in the listing — a
+    /// hand remap. `nil`, or an index past the listing, unbinds the role (there
+    /// is no data to read). The channel's unit is converted when the role
+    /// accepts it and passed through as-is otherwise: an explicit choice is
+    /// honoured, and the binding's ``TelemetryChannelBinding/unit`` says what the
+    /// values are in.
+    public func overriding(_ role: TelemetryRole, withChannelAt index: Int?) -> TelemetryChannelMap {
         var copy = self
-        guard let channel, let index = channels.firstIndex(of: channel) else {
+        guard let index, channels.indices.contains(index) else {
             copy.bindings[role] = nil
             return copy
         }
-        let binding = Self.binding(role, channel: channel, index: index)
+        let channel = channels[index]
+        copy.bindings[role] = Self.binding(role, channel: channel, index: index)
             ?? TelemetryChannelBinding(role: role, channelIndex: index, channelName: channel.name,
                                        sourceUnit: channel.unit, unit: channel.unit, conversion: .identity)
-        copy.bindings[role] = binding
         return copy
     }
 

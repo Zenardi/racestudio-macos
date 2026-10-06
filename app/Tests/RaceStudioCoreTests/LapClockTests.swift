@@ -154,6 +154,27 @@ import Foundation
         #expect(try #require(clock.reading(at: 250)).sector == nil, "lap 2 has no base grid")
     }
 
+    // MARK: - Malformed laps
+
+    /// Overlapping windows are cut at the next lap's beacon (it opens the next
+    /// lap), a reversed window is dropped, and of two laps starting together the
+    /// later-listed one holds the time — so hinted and fresh reads agree.
+    @Test func test_overlapping_and_reversed_laps_read_consistently() throws {
+        let laps = [lap(0, 0, 10), lap(1, 5, 10), Lap(index: 2, startTimeS: 20, durationS: 5, endTimeS: 18),
+                    lap(3, 30, 5), lap(4, 30, 3)]
+        let clock = LapClock(laps: laps)
+
+        #expect(try #require(clock.reading(at: 7)).lap == LapID(1), "lap 1's beacon opens lap 1")
+        #expect(clock.reading(at: 19) == nil, "a reversed window holds nothing")
+        #expect(try #require(clock.reading(at: 31)).lap == LapID(4))
+        for start in [-1, 0, 1, 2, Int.max] {
+            var hint = start
+            for t in stride(from: -1.0, to: 36, by: 0.25) {
+                #expect(clock.reading(at: t, hint: &hint) == clock.reading(at: t), "hint \(start) t \(t)")
+            }
+        }
+    }
+
     // MARK: - Hint cursor
 
     /// Property: reading with a carried hint equals a fresh reading at every
