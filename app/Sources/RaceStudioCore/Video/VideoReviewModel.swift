@@ -183,35 +183,12 @@ public final class VideoReviewModel: ObservableObject {
 
     // MARK: - Status + persistence (issue 9.7)
 
-    /// Which laps the aligned footage covers in full — the status line's second
-    /// half. Follows every sync action, since it reads the live ``sync``.
-    public var coverageSummary: CoverageSummary { CoverageSummary.make(timeline: timeline, sync: sync) }
-
-    /// The panel's status line, e.g. "Synced on lap 3 + lap 14 · footage covers
-    /// laps 2–15 (14 of 16)".
-    public func statusLine(locale: Locale = .current) -> String {
-        status.statusLine(coverage: coverageSummary, locale: locale)
-    }
-
     /// Bring back the alignment a saved workspace carries — offset, rate and
     /// status — keeping the footage length already loaded.
     public func restore(_ attachment: VideoAttachment) {
         sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: attachment.offset, rate: attachment.rate)
         status = attachment.status
         anchors = [:]
-    }
-
-    /// The offset readout, to the millisecond in the locale's digits — a
-    /// 29.97 fps frame step reads as 0.033 s — plus the clock rate once a
-    /// two-point sync solved one: `"+12.500 s ×1.000083"`.
-    public func offsetReadout(locale: Locale = .current) -> String {
-        // Sign the value as shown (to the millisecond), so a sub-millisecond
-        // negative offset reads "+0.000 s" rather than "−0.000 s".
-        let milliseconds = (sync.offset * 1_000).rounded()
-        let sign = milliseconds < 0 ? "−" : "+"
-        let offset = sign + L10n.formattedNumber(abs(milliseconds) / 1_000, fractionDigits: 3, locale: locale) + " s"
-        guard sync.rate != 1 else { return offset }
-        return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
     }
 
     /// `attachment` re-stamped with the sync in force, for saving.

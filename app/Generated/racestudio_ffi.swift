@@ -1402,6 +1402,11 @@ public struct AudioSyncEstimate {
      * the app offer it for one-click apply.
      */
     public var confident: Bool
+    /**
+     * The display confidence in `[0, 1]` — `0.5` at the threshold, `1` at a
+     * 4:1 peak ratio; never above one half when not `confident`.
+     */
+    public var confidence: Double
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -1422,12 +1427,17 @@ public struct AudioSyncEstimate {
         /**
          * Whether the estimate clears both confidence thresholds — only then may
          * the app offer it for one-click apply.
-         */confident: Bool) {
+         */confident: Bool, 
+        /**
+         * The display confidence in `[0, 1]` — `0.5` at the threshold, `1` at a
+         * 4:1 peak ratio; never above one half when not `confident`.
+         */confidence: Double) {
         self.offsetS = offsetS
         self.score = score
         self.peakRatio = peakRatio
         self.pitchPerRpm = pitchPerRpm
         self.confident = confident
+        self.confidence = confidence
     }
 }
 
@@ -1450,6 +1460,9 @@ extension AudioSyncEstimate: Equatable, Hashable {
         if lhs.confident != rhs.confident {
             return false
         }
+        if lhs.confidence != rhs.confidence {
+            return false
+        }
         return true
     }
 
@@ -1459,6 +1472,7 @@ extension AudioSyncEstimate: Equatable, Hashable {
         hasher.combine(peakRatio)
         hasher.combine(pitchPerRpm)
         hasher.combine(confident)
+        hasher.combine(confidence)
     }
 }
 
@@ -1474,7 +1488,8 @@ public struct FfiConverterTypeAudioSyncEstimate: FfiConverterRustBuffer {
                 score: FfiConverterDouble.read(from: &buf), 
                 peakRatio: FfiConverterDouble.read(from: &buf), 
                 pitchPerRpm: FfiConverterDouble.read(from: &buf), 
-                confident: FfiConverterBool.read(from: &buf)
+                confident: FfiConverterBool.read(from: &buf), 
+                confidence: FfiConverterDouble.read(from: &buf)
         )
     }
 
@@ -1484,6 +1499,7 @@ public struct FfiConverterTypeAudioSyncEstimate: FfiConverterRustBuffer {
         FfiConverterDouble.write(value.peakRatio, into: &buf)
         FfiConverterDouble.write(value.pitchPerRpm, into: &buf)
         FfiConverterBool.write(value.confident, into: &buf)
+        FfiConverterDouble.write(value.confidence, into: &buf)
     }
 }
 

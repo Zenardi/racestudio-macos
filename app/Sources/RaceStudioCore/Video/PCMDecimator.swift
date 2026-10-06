@@ -1,0 +1,121 @@
+import Accelerate
+import Foundation
+
+/// Streaming **downmix + anti-aliased integer decimation** (issue 9.8): turns a
+/// video's 44.1/48 kHz interleaved float audio into the ~8 kHz mono the engine
+/// pitch estimator reads, one decoded chunk at a time — so a ten-minute clip
+/// never holds its source-rate track, only one chunk plus the output.
+///
+/// Channels are averaged; a Blackman-windowed sinc low-pass (cut at 45 % of the
+/// output rate, so harmonics up to ~3.6 kHz survive and nothing above Nyquist
+/// folds back) runs through Accelerate's `vDSP_desamp`, which filters and
+/// decimates in one pass. The filter is symmetric and centred — output sample
+/// `n` sits exactly on input frame `n·factor` — so decimation adds no delay for
+/// the offset estimate to trip on. Non-finite samples are read as silence.
+public struct PCMDecimator: Sendable {
+
+    /// Source frames per second.
+    public let sourceRate: Int
+    /// Interleaved channels per frame.
+    public let channels: Int
+    /// Source frames per output sample — divides ``sourceRate`` exactly.
+    public let factor: Int
+
+    /// Output samples per second: `sourceRate / factor`, never below the target.
+    public var outputRate: Int { sourceRate / factor }
+
+    /// Low-pass taps either side of the centre, per unit of ``factor``.
+    static let halfWidthPerFactor = 8
+    /// The low-pass cut-off as a fraction of the output rate.
+    static let cutoffFraction = 0.45
+
+    private let taps: [Float]
+    /// Mono samples from the first one the next output still needs.
+    private var buffer: [Float]
+    private var inputFrames = 0
+    private var emitted = 0
+
+    /// A decimator from `sourceRate` × `channels` towards (and never under)
+    /// `targetRate`, or `nil` when any of them is not positive.
+    public init?(sourceRate: Int, channels: Int, targetRate: Int) {
+        guard sourceRate > 0, channels > 0, targetRate > 0 else { return nil }
+        self.sourceRate = sourceRate
+        self.channels = channels
+        self.factor = Self.factor(sourceRate: sourceRate, targetRate: targetRate)
+        self.taps = Self.lowPass(factor: factor)
+        // Pre-pad half a filter of silence so output 0 is centred on frame 0.
+        self.buffer = [Float](repeating: 0, count: (taps.count - 1) / 2)
+    }
+
+    /// The largest factor that divides `sourceRate` exactly and keeps the output
+    /// at or above `targetRate` (`1` when the source is already at or below it).
+    static func factor(sourceRate: Int, targetRate: Int) -> Int {
+        var factor = max(1, sourceRate / targetRate)
+        while sourceRate % factor != 0 { factor -= 1 }
+        return factor
+    }
+
+    /// A unit-gain, Blackman-windowed sinc low-pass for decimating by `factor`.
+    static func lowPass(factor: Int) -> [Float] {
+        guard factor > 1 else { return [1] }
+        let half = halfWidthPerFactor * factor
+        let span = Double(2 * half)
+        let cutoff = cutoffFraction / Double(factor) // cycles per source frame
+        let taps = (0...2 * half).map { n -> Double in
+            let x = Double(n - half)
+            let sinc = x == 0 ? 2 * cutoff : sin(2 * .pi * cutoff * x) / (.pi * x)
+            let phase = 2 * .pi * Double(n) / span
+            return sinc * (0.42 - 0.5 * cos(phase) + 0.08 * cos(2 * phase))
+        }
+        let gain = taps.reduce(0, +)
+        return taps.map { Float($0 / gain) }
+    }
+
+    /// Feed interleaved frames; returns the output samples they complete.
+    public mutating func process(_ interleaved: UnsafeBufferPointer<Float>) -> [Float] {
+        let frames = interleaved.count / channels
+        buffer.reserveCapacity(buffer.count + frames)
+        let scale = 1 / Float(channels)
+        for frame in 0..<frames {
+            var sum: Float = 0
+            for channel in 0..<channels {
+                let sample = interleaved[frame * channels + channel]
+                sum += sample.isFinite ? sample : 0
+            }
+            buffer.append(sum * scale)
+        }
+        inputFrames += frames
+        return drain(limit: .max)
+    }
+
+    /// End the stream: the last outputs, their filters run into silence, so
+    /// the whole stream yields `ceil(frames / factor)` samples.
+    public mutating func finish() -> [Float] {
+        let pending = (inputFrames + factor - 1) / factor - emitted
+        guard pending > 0 else { return [] }
+        buffer.append(contentsOf: repeatElement(0, count: taps.count))
+        return drain(limit: pending)
+    }
+
+    /// Every output whose whole filter window is buffered (at most `limit`),
+    /// then drop the input no later output needs.
+    private mutating func drain(limit: Int) -> [Float] {
+        let length = taps.count
+        guard buffer.count >= length else { return [] }
+        let count = min((buffer.count - length) / factor + 1, limit)
+        var out = [Float](repeating: 0, count: count)
+        buffer.withUnsafeBufferPointer { input in
+            taps.withUnsafeBufferPointer { filter in
+                out.withUnsafeMutableBufferPointer { output in
+                    guard let a = input.baseAddress, let f = filter.baseAddress, let c = output.baseAddress else {
+                        return
+                    }
+                    vDSP_desamp(a, vDSP_Stride(factor), f, c, vDSP_Length(count), vDSP_Length(length))
+                }
+            }
+        }
+        buffer.removeFirst(count * factor)
+        emitted += count
+        return out
+    }
+}

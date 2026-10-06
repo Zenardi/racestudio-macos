@@ -574,6 +574,7 @@ fn test_estimate_audio_sync_recovers_the_offset() {
         "{estimate:?}"
     );
     assert!(estimate.confident, "{estimate:?}");
+    assert!((0.5..=1.0).contains(&estimate.confidence), "{estimate:?}");
     assert!(
         (estimate.pitch_per_rpm * 120.0 - 1.0).abs() < 0.05,
         "{estimate:?}"

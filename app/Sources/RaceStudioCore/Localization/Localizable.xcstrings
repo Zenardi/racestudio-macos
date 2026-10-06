@@ -1526,6 +1526,244 @@
         }
       }
     },
+    "video.autoSync.checking": {
+      "comment": "Auto-sync from engine sound (issue 9.8): help text while the attached video is still being checked for an audio track.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking the video for an audio track…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificando se o vídeo tem trilha de áudio…"
+          }
+        }
+      }
+    },
+    "video.autoSync.confidence": {
+      "comment": "Auto-sync from engine sound (issue 9.8): result detail line. %1$@ = confidence as a percentage, e.g. 96%.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confidence: %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confiança: %1$@"
+          }
+        }
+      }
+    },
+    "video.autoSync.failed": {
+      "comment": "Auto-sync from engine sound (issue 9.8): the match could not run for an unexpected reason.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine sound could not be matched against the RPM."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível comparar o som do motor com o RPM."
+          }
+        }
+      }
+    },
+    "video.autoSync.flatRPM": {
+      "comment": "Auto-sync from engine sound (issue 9.8): failure when the session's RPM is constant.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The RPM never changes, so there is nothing to match."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O RPM não varia, então não há o que comparar."
+          }
+        }
+      }
+    },
+    "video.autoSync.matched": {
+      "comment": "Auto-sync from engine sound (issue 9.8): result headline for a confident match. %1$@ = proposed offset, e.g. −113.632 s.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine sound matches the RPM at %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O som do motor coincide com o RPM em %1$@"
+          }
+        }
+      }
+    },
+    "video.autoSync.noAudio": {
+      "comment": "Auto-sync from engine sound (issue 9.8): the attached video has no audio track.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video has no audio track to match."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este vídeo não tem trilha de áudio para comparar."
+          }
+        }
+      }
+    },
+    "video.autoSync.noMatch": {
+      "comment": "Auto-sync from engine sound (issue 9.8): result headline when no alignment stands out clearly enough to offer.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No confident match"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma correspondência confiável"
+          }
+        }
+      }
+    },
+    "video.autoSync.noMatchDetail": {
+      "comment": "Auto-sync from engine sound (issue 9.8): what to do after a weak result.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The engine sound does not line up with the RPM clearly enough to trust. Align on a lap start instead."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O som do motor não se alinha ao RPM com clareza suficiente. Alinhe pelo início de uma volta."
+          }
+        }
+      }
+    },
+    "video.autoSync.noRPM": {
+      "comment": "Auto-sync from engine sound (issue 9.8): the session has no usable RPM channel.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session has no RPM channel to match the engine sound against."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta sessão não tem canal de RPM para comparar com o som do motor."
+          }
+        }
+      }
+    },
+    "video.autoSync.noVideo": {
+      "comment": "Auto-sync from engine sound (issue 9.8): help text when no video is attached.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach a video first."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anexe um vídeo primeiro."
+          }
+        }
+      }
+    },
+    "video.autoSync.silent": {
+      "comment": "Auto-sync from engine sound (issue 9.8): failure when the video's audio is silent.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video's audio is silent."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O áudio do vídeo está em silêncio."
+          }
+        }
+      }
+    },
+    "video.autoSync.tooShort": {
+      "comment": "Auto-sync from engine sound (issue 9.8): failure when the video and the session overlap too little.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video and the session overlap by less than 20 seconds."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O vídeo e a sessão se sobrepõem por menos de 20 segundos."
+          }
+        }
+      }
+    },
+    "video.autoSync.unreadable": {
+      "comment": "Auto-sync from engine sound (issue 9.8): failure decoding the video's audio track.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video's audio could not be read."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler o áudio do vídeo."
+          }
+        }
+      }
+    },
+    "video.autoSync.unsupported": {
+      "comment": "Auto-sync from engine sound (issue 9.8): this build has no analysis core to estimate with.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine-sound sync is not available in this build."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sincronização pelo som do motor não está disponível nesta versão."
+          }
+        }
+      }
+    },
     "video.coverage.none": {
       "comment": "Video Review status line: no lap is filmed in full.",
       "localizations": {
@@ -1590,6 +1828,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alinha o vídeo para que o trecho em análise comece no quadro exibido"
+          }
+        }
+      }
+    },
+    "video.help.autoSync": {
+      "comment": "Auto-sync from engine sound (issue 9.8): button help text when it can run.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimate the offset by matching the engine sound against the RPM channel. You confirm the result before it is applied."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estima o deslocamento comparando o som do motor com o canal de RPM. Você confirma o resultado antes de aplicá-lo."
           }
         }
       }
@@ -1726,6 +1981,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sincronizado na volta %1$@"
+          }
+        }
+      }
+    },
+    "video.status.autoAudio": {
+      "comment": "Video Review status line: synced from engine sound (issue 9.8). %1$@ = match confidence as a percentage, e.g. 87%.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced from engine sound (%1$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizado pelo som do motor (%1$@)"
           }
         }
       }

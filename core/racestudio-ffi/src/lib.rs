@@ -358,6 +358,9 @@ pub struct AudioSyncEstimate {
     /// Whether the estimate clears both confidence thresholds — only then may
     /// the app offer it for one-click apply.
     pub confident: bool,
+    /// The display confidence in `[0, 1]` — `0.5` at the threshold, `1` at a
+    /// 4:1 peak ratio; never above one half when not `confident`.
+    pub confidence: f64,
 }
 
 /// The window function applied before an [`SessionHandle::fft_spectrum`] transform.
@@ -1149,6 +1152,7 @@ impl SessionHandle {
             peak_ratio: estimate.peak_ratio,
             pitch_per_rpm: estimate.pitch_per_rpm,
             confident: estimate.is_confident(),
+            confidence: estimate.confidence(),
         })
     }
 }

@@ -20,6 +20,7 @@
 
 use racestudio_analysis::audio_sync::{
     estimate_offset, pitch_track, AudioSyncError, PitchConfig, SyncEstimate,
+    MIN_CONFIDENT_PEAK_RATIO, MIN_CONFIDENT_SCORE,
 };
 
 use crate::support::engine_audio::{fixture_rpm, kart_rpm, tone, white_noise, EngineAudio, Lcg};
@@ -465,6 +466,29 @@ fn ten_minute_clip_estimates_within_budget() {
     eprintln!("10-minute clip: {elapsed:?}, {estimate:?}");
     assert_within_frame(&estimate, -80.0, "ten-minute clip");
     assert!(elapsed.as_secs_f64() < 5.0, "took {elapsed:?}");
+}
+
+#[test]
+fn confidence_level_is_half_at_the_threshold_and_full_at_four_to_one() {
+    let at = |score: f64, peak_ratio: f64| SyncEstimate {
+        offset_s: 0.0,
+        score,
+        peak_ratio,
+        pitch_per_rpm: 1.0 / 120.0,
+    };
+    let threshold = at(2.0, MIN_CONFIDENT_PEAK_RATIO);
+
+    assert!((threshold.confidence() - 0.5).abs() < 1e-12);
+    assert_eq!(at(2.0, 4.0).confidence(), 1.0);
+    assert_eq!(at(2.0, 9.0).confidence(), 1.0, "saturates");
+    assert_eq!(at(2.0, 1.0).confidence(), 0.0, "no better than its rival");
+    assert_eq!(at(2.0, 0.5).confidence(), 0.0, "worse than its rival");
+    assert!(at(2.0, 2.0).confidence() > 0.5 && at(2.0, 2.0).confidence() < 1.0);
+    assert!(at(2.0, 1.2).confidence() > 0.0 && at(2.0, 1.2).confidence() < 0.5);
+    // A rejected estimate never reads as confident, whatever its ratio.
+    let weak_score = at(MIN_CONFIDENT_SCORE / 2.0, 3.0);
+    assert!(!weak_score.is_confident());
+    assert!(weak_score.confidence() < 0.5);
 }
 
 #[test]

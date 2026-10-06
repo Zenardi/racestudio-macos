@@ -131,7 +131,32 @@ impl SyncEstimate {
     pub fn is_confident(&self) -> bool {
         self.score >= MIN_CONFIDENT_SCORE && self.peak_ratio >= MIN_CONFIDENT_PEAK_RATIO
     }
+
+    /// A display confidence in `[0, 1]`: the peak ratio on a log scale, `0.5`
+    /// exactly at [`MIN_CONFIDENT_PEAK_RATIO`] and `1` from [`FULL_CONFIDENCE_RATIO`]
+    /// up — so the bar crosses the middle where the verdict flips. An estimate
+    /// [`is_confident`](Self::is_confident) rejects (on its score) never reads
+    /// above one half.
+    #[must_use]
+    pub fn confidence(&self) -> f64 {
+        let ratio = self.peak_ratio.max(1.0);
+        let level = if ratio < MIN_CONFIDENT_PEAK_RATIO {
+            0.5 * ratio.ln() / MIN_CONFIDENT_PEAK_RATIO.ln()
+        } else {
+            let span = (FULL_CONFIDENCE_RATIO / MIN_CONFIDENT_PEAK_RATIO).ln();
+            0.5 + 0.5 * ((ratio / MIN_CONFIDENT_PEAK_RATIO).ln() / span).min(1.0)
+        };
+        if self.is_confident() {
+            level
+        } else {
+            level.min(0.49)
+        }
+    }
 }
+
+/// The peak ratio at which [`SyncEstimate::confidence`] reads `1` — real onboard
+/// footage of a whole session lands around 3.5.
+pub const FULL_CONFIDENCE_RATIO: f64 = 4.0;
 
 /// Estimate the offset between mono camera audio `pcm` (sampled at
 /// `sample_rate` Hz, ideally decimated to ~8 kHz) and the session's `rpm`
