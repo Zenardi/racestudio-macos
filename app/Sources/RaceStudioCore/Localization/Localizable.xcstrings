@@ -1220,6 +1220,57 @@
         }
       }
     },
+    "video.help.anchorToSection": {
+      "comment": "Video Review tooltip for Sync to Section.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Align the footage so the section under review starts on the frame on screen"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alinha o vídeo para que o trecho em análise comece no quadro exibido"
+          }
+        }
+      }
+    },
+    "video.help.setAnchor": {
+      "comment": "Video Review tooltip for Set Anchor A/B before the anchor is set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrub to the frame where the selected lap starts, then set this anchor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posicione o vídeo no quadro em que a volta selecionada começa e defina esta âncora"
+          }
+        }
+      }
+    },
+    "video.help.twoPointSync": {
+      "comment": "Video Review tooltip for Two-Point Sync once both anchors are set.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solve the offset and clock rate so both anchors land on their frames"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcula o deslocamento e a taxa do relógio para que as duas âncoras caiam em seus quadros"
+          }
+        }
+      }
+    },
     "video.message.anchorsTooClose": {
       "comment": "Video Review: the two sync anchors are too close together in session time.",
       "localizations": {

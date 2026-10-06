@@ -73,14 +73,16 @@ extension VideoAttachment {
     /// hand-edited or corrupt value is sanitized exactly as on construction. The
     /// 9.7 `rate` and `status` are optional on disk (defaulting to `1` and
     /// ``SyncStatus/notSynced``); the v5 → v6 migration decides what a pre-9.7
-    /// alignment means instead (see ``ProjectStore``).
+    /// alignment means instead (see ``ProjectStore``). A malformed `status` is
+    /// cosmetic, so it reads as not synced rather than making the whole
+    /// workspace unopenable.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(bookmark: try container.decode(Data.self, forKey: .bookmark),
                   displayName: try container.decode(String.self, forKey: .displayName),
                   offset: try container.decode(Double.self, forKey: .offset),
                   rate: try container.decodeIfPresent(Double.self, forKey: .rate) ?? 1,
-                  status: try container.decodeIfPresent(SyncStatus.self, forKey: .status) ?? .notSynced)
+                  status: (try? container.decodeIfPresent(SyncStatus.self, forKey: .status)) ?? .notSynced)
     }
 }
 

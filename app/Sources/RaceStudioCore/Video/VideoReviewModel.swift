@@ -118,11 +118,13 @@ public final class VideoReviewModel: ObservableObject {
 
     /// Align the footage so the **section under review** starts on the frame at
     /// `playhead` — the track-aware sync: scrub to where the lap actually begins,
-    /// anchor, done. Returns `false` (changing nothing) when nothing is selected
-    /// or the playhead is not a real time, rather than silently mis-syncing.
+    /// anchor, done. Returns `false` (changing nothing) without footage, without
+    /// a selection, or when the playhead is not a real time, rather than silently
+    /// mis-syncing. A two-point clock ``VideoSyncModel/rate`` is kept: the new
+    /// anchor moves the offset, and the drift correction still holds.
     @discardableResult
     public func anchorSelection(toPlayhead playhead: Double) -> Bool {
-        guard let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
+        guard hasVideo, let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
         sync = sync.aligned(sessionTime: span.start, toPlayhead: playhead)
         status = .anchored(lap: lap)
         return true
@@ -156,11 +158,11 @@ public final class VideoReviewModel: ObservableObject {
     // MARK: - Two-point sync (issue 9.7)
 
     /// Pin anchor `slot` to the frame at `playhead`, against the start of the
-    /// section under review. Returns `false` (setting nothing) without a
-    /// selection or a real playhead.
+    /// section under review. Returns `false` (setting nothing) without footage,
+    /// a selection or a real playhead.
     @discardableResult
     public func setAnchor(_ slot: AnchorSlot, playhead: Double) -> Bool {
-        guard let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
+        guard hasVideo, let lap = selectedLap, let span = selectedSpan, playhead.isFinite else { return false }
         anchors[slot] = LapAnchor(lap: lap, anchor: SyncAnchor(sessionTime: span.start, videoTime: playhead))
         return true
     }
@@ -197,6 +199,16 @@ public final class VideoReviewModel: ObservableObject {
         sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: attachment.offset, rate: attachment.rate)
         status = attachment.status
         anchors = [:]
+    }
+
+    /// The offset readout, to the millisecond in the locale's digits — a
+    /// 29.97 fps frame step reads as 0.033 s — plus the clock rate once a
+    /// two-point sync solved one: `"+12.500 s ×1.000083"`.
+    public func offsetReadout(locale: Locale = .current) -> String {
+        let sign = sync.offset < 0 ? "−" : "+"
+        let offset = sign + L10n.formattedNumber(abs(sync.offset), fractionDigits: 3, locale: locale) + " s"
+        guard sync.rate != 1 else { return offset }
+        return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
     }
 
     /// `attachment` re-stamped with the sync in force, for saving.

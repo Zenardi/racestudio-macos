@@ -95,6 +95,11 @@ import Foundation
                                             sessionDuration: 600) == nil)
     }
 
+    /// Footage shorter than the minimum overlap can never be plausible.
+    @Test func test_footage_shorter_than_a_second_is_never_plausible() {
+        #expect(plausible(videoStart: sessionStart - 0.2, sync: VideoSyncModel(videoDuration: 0.9)) == nil)
+    }
+
     /// A zero-length video can overlap nothing.
     @Test func test_a_zero_length_video_is_refused() {
         #expect(plausible(videoStart: sessionStart - 30, sync: VideoSyncModel(videoDuration: 0)) == nil)

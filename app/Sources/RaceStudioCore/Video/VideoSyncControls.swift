@@ -2,16 +2,21 @@ import Foundation
 
 /// Which of the two two-point anchors is being set (issue 9.7).
 public enum AnchorSlot: String, CaseIterable, Sendable {
+    /// The first anchor — usually an early lap.
     case a
+    /// The second anchor — usually a late lap, at least 10 s on.
     case b
 }
 
 /// A two-point anchor as the review sets it (issue 9.7): the lap whose start it
 /// was taken from, for the status line, and the session/video pair it pins.
 public struct LapAnchor: Equatable, Sendable {
+    /// The lap the anchor was set on.
     public let lap: LapID
+    /// The session instant and the frame it pins together.
     public let anchor: SyncAnchor
 
+    /// Records `anchor`, taken from the start of `lap`.
     public init(lap: LapID, anchor: SyncAnchor) {
         self.lap = lap
         self.anchor = anchor
@@ -44,16 +49,22 @@ public enum AutoOffsetOutcome: Equatable, Sendable {
 /// The modifier a keyboard nudge needs, kept free of SwiftUI so the key map is
 /// part of the tested core (issue 9.7).
 public enum NudgeModifier: Equatable, Sendable {
+    /// The bare key: one frame.
     case none
+    /// `⇧`: 0.1 s.
     case shift
+    /// `⌥`: 1 s.
     case option
 }
 
 /// One fine-trim step of the sync offset (issue 9.7): a frame on `,` / `.`,
 /// 0.1 s with `⇧`, 1 s with `⌥` — backward on `,`, forward on `.`.
 public enum OffsetNudge: CaseIterable, Sendable {
+    /// One frame back (`,`) or forward (`.`).
     case frameBackward, frameForward
+    /// 0.1 s back (`⇧,`) or forward (`⇧.`).
     case tenthBackward, tenthForward
+    /// 1 s back (`⌥,`) or forward (`⌥.`).
     case secondBackward, secondForward
 
     /// How far the nudge moves the offset.
@@ -91,6 +102,16 @@ public enum OffsetNudge: CaseIterable, Sendable {
         case .frameBackward, .frameForward: return .none
         case .tenthBackward, .tenthForward: return .shift
         case .secondBackward, .secondForward: return .option
+        }
+    }
+
+    /// The shortcut as the tooltip shows it — the modifier glyph, then the key:
+    /// `,`, `⇧.`, `⌥,`.
+    public var shortcut: String {
+        switch modifier {
+        case .none: return String(key)
+        case .shift: return "⇧" + String(key)
+        case .option: return "⌥" + String(key)
         }
     }
 

@@ -9,6 +9,7 @@ public struct SyncAnchor: Equatable, Sendable {
     /// The playhead of the matching frame, in seconds of footage.
     public let videoTime: Double
 
+    /// Pairs the session instant `sessionTime` with the frame at `videoTime`.
     public init(sessionTime: Double, videoTime: Double) {
         self.sessionTime = sessionTime
         self.videoTime = videoTime
@@ -41,12 +42,15 @@ public enum TwoPointSync {
 
     /// The solved alignment, ready for ``VideoSyncModel/init(videoDuration:offset:rate:)``.
     public struct Solution: Equatable, Sendable {
+        /// The playhead session time `0` maps to, in seconds.
         public let offset: Double
+        /// Video seconds per session second.
         public let rate: Double
     }
 
-    /// The clock rates accepted as a real camera drift: ±0.5% — a hundred times
-    /// the worst consumer camera, while still catching an anchor on the wrong lap.
+    /// The clock rates accepted as a real camera drift: ±0.5% — fifty times the
+    /// worst consumer camera (100 ppm), while still catching an anchor on the
+    /// wrong lap.
     public static let rateBounds: ClosedRange<Double> = 0.995...1.005
 
     /// The least session time between the anchors, in seconds. Closer anchors

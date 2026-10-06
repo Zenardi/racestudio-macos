@@ -34,16 +34,20 @@ import Foundation
         #expect(review.sync.offset == 0)
     }
 
-    /// Frame steps keep the offset on the footage's frame grid, even from a trim
-    /// that left it between two frames.
-    @Test func test_frame_steps_keep_the_offset_on_the_grid() {
+    /// After a track anchor (which leaves the offset between two frames), the
+    /// first frame step still moves exactly one frame — the readout changes by
+    /// 0.033 s at 29.97 fps — and the anchored lap stays on a frame boundary.
+    @Test func test_frame_step_after_an_anchor_moves_exactly_one_frame() {
         let review = stint()
-        review.setFrameRate(25)
-        review.setOffset(0.05)
+        review.setFrameRate(Double(Float(29.97003)))
+        review.select(lap: LapID(2))
+        review.anchorSelection(toPlayhead: 130.2)
+        let anchored = review.sync.offset
 
         review.stepOffset(frames: 1)
 
-        #expect(review.sync.offset == 0.08)
+        #expect(abs(review.sync.offset - anchored - 1_001.0 / 30_000.0) < 1e-12)
+        #expect(abs((review.seekTarget ?? 0) - 130.2 - 1_001.0 / 30_000.0) < 1e-9)
     }
 
     /// Until the asset's rate is known, a frame is a 30 fps frame.
@@ -107,6 +111,12 @@ import Foundation
         #expect(OffsetNudge.allCases.map(\.modifier) == [.none, .none, .shift, .shift, .option, .option])
     }
 
+    /// Each nudge names its shortcut for the tooltip: the modifier glyph, then
+    /// the key.
+    @Test func test_nudge_shortcuts_read_as_glyphs() {
+        #expect(OffsetNudge.allCases.map(\.shortcut) == [",", ".", "⇧,", "⇧.", "⌥,", "⌥."])
+    }
+
     /// Every nudge has a spoken label for VoiceOver in both languages.
     @Test func test_every_nudge_has_a_label() {
         for nudge in OffsetNudge.allCases {
@@ -140,6 +150,27 @@ import Foundation
         #expect(!review.anchorSelection(toPlayhead: .nan))
         #expect(review.status == .notSynced)
         #expect(review.sync.offset == 0)
+    }
+
+    /// Without footage there is no frame to anchor to.
+    @Test func test_anchoring_needs_footage() {
+        let review = stint(videoDuration: 0)
+        review.select(lap: LapID(2))
+
+        #expect(!review.anchorSelection(toPlayhead: 0))
+        #expect(review.status == .notSynced)
+    }
+
+    /// Trimming a two-point sync refines it — both laps are kept.
+    @Test func test_trimming_keeps_a_two_point_sync() {
+        let review = stint()
+        review.restore(VideoAttachment(bookmark: Data(), displayName: "v.mp4", offset: 30, rate: 1.0001,
+                                       status: .twoPoint(lapA: LapID(2), lapB: LapID(13))))
+
+        review.nudge(.secondForward)
+
+        #expect(review.status == .twoPoint(lapA: LapID(2), lapB: LapID(13)))
+        #expect(review.sync.rate == 1.0001)
     }
 
     /// Trimming footage nobody aligned yet is a sync by hand.

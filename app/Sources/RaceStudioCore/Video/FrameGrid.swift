@@ -2,7 +2,7 @@ import Foundation
 
 /// The footage's frame grid (issue 9.7): its nominal frame rate as an exact
 /// rational, `numerator / denominator` frames per second, so the sync offset can
-/// be stepped **one frame at a time** and kept on frame boundaries.
+/// be stepped **exactly one frame at a time**.
 ///
 /// At 29.97 fps a frame lasts 1001/30000 s (33.4 ms); landing the offset on the
 /// exact frame where the kart crosses the line is guesswork with a ±60 s slider
@@ -20,9 +20,9 @@ public struct FrameGrid: Equatable, Sendable {
     /// The grid used when the footage's rate is unknown: 30 fps.
     public static let fallback = FrameGrid(numerator: 30, denominator: 1)
 
-    /// The fastest nominal rate taken at face value; anything above it is a
-    /// corrupt track header, not a camera.
-    static let maximumFramesPerSecond: Double = 10_000
+    /// The nominal rates taken at face value; anything outside is a corrupt
+    /// track header, not a camera.
+    static let plausibleFramesPerSecond: ClosedRange<Double> = 1...10_000
 
     /// How close a nominal rate must be to an integer or NTSC rate to be read as
     /// that exact rational (the asset reports a rounded `Float`).
@@ -43,9 +43,9 @@ public struct FrameGrid: Equatable, Sendable {
     /// The grid for a track's `nominalFrameRate`. Integer rates (25, 30, 60) and
     /// the NTSC family (23.976, 29.97, 59.94 → `N×1000 / 1001`) are recognised as
     /// their exact rationals; any other rate is kept to the thousandth. A
-    /// non-finite, non-positive or absurd rate gives ``fallback``.
+    /// non-finite rate, or one outside 1…10 000 fps, gives ``fallback``.
     public init(nominalFrameRate fps: Double) {
-        guard fps.isFinite, fps > 0, fps <= Self.maximumFramesPerSecond else {
+        guard Self.plausibleFramesPerSecond.contains(fps) else {
             self = .fallback
             return
         }
@@ -74,12 +74,15 @@ public struct FrameGrid: Equatable, Sendable {
         seconds(atFrame: frameIndex(nearest: time))
     }
 
-    /// `time` moved `frames` frames along the grid (negative steps back). The
-    /// step starts from the frame nearest `time`, so the result is always on the
-    /// grid, and from a grid time it moves exactly `frames` frame durations. A
-    /// non-finite time is treated as `0`.
+    /// `time` moved by exactly `frames` frame durations (negative steps back).
+    ///
+    /// The step is never snapped: a time on the grid stays on it, and one a track
+    /// anchor left between two frames keeps that frame-exact phase — snapping it
+    /// would shift the anchored lap by up to half a frame, and make the first
+    /// step move anywhere from half a frame to one and a half. A non-finite time
+    /// is treated as `0`.
     public func step(_ time: Double, frames: Int) -> Double {
-        seconds(atFrame: frameIndex(nearest: time) + Double(frames))
+        (time.isFinite ? time : 0) + Double(frames) * frameDuration
     }
 
     // MARK: - Internals

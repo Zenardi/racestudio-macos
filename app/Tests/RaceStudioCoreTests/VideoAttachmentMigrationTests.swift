@@ -94,9 +94,31 @@ import Foundation
         #expect(try load(v5Project(video: nil)).video == nil)
     }
 
-    /// The schema was bumped for these fields: v6 is this build's current shape.
-    @Test func test_schema_version_is_six() {
-        #expect(ProjectDocument.currentSchemaVersion == 6)
+    /// The schema was bumped for these fields: a save is stamped v6 on disk.
+    @Test func test_saved_projects_are_stamped_v6() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("stamp.rsproj")
+        try store().save(ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time)), to: url)
+
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+
+        #expect(json?["schemaVersion"] as? Int == 6)
+    }
+
+    /// A corrupt sync status is cosmetic: the project still opens, the footage
+    /// simply reads as not synced, and its offset and rate survive.
+    @Test func test_a_malformed_status_opens_as_not_synced() throws {
+        let video = #"{"bookmark": "\#(bookmark.base64EncodedString())", "displayName": "a.mp4", "offset": 4, "#
+            + #""rate": 1.0002, "status": {"kind": "telepathic"}}"#
+        let v6 = v5Project(video: video).replacingOccurrences(of: #""schemaVersion": 5"#,
+                                                               with: #""schemaVersion": 6"#)
+
+        let loaded = try load(v6)
+
+        #expect(loaded.video?.status == .notSynced)
+        #expect(loaded.video?.offset == 4)
+        #expect(loaded.video?.rate == 1.0002)
     }
 
     // MARK: - v6

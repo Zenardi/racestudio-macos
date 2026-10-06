@@ -99,10 +99,11 @@ seeking to a wrong frame.
   it on a lap start"* instead, so align it on a lap as described above. A date
   never replaces an alignment you made yourself.
 - **Frame stepping.** Trim the offset one frame at a time with `,` (back) and `.`
-  (forward), or with the buttons beside the slider. A frame is one frame of
-  *this* footage, at its own frame rate: at 29.97 fps it is 1001/30000 s, so the
-  readout moves by 0.033 s. Frame steps always land the offset on a frame
-  boundary. Hold `⇧` to step 0.1 s instead, or `⌥` to step 1 s.
+  (forward), or with the buttons beside the slider (their tooltips name the
+  keys). A frame is one frame of *this* footage, at its own frame rate: at
+  29.97 fps it is 1001/30000 s, so the readout moves by 0.033 s. Every step moves
+  exactly one frame, so a lap you synced on a frame stays on a frame. Hold `⇧` to
+  step 0.1 s instead, or `⌥` to step 1 s.
 - **Two-point sync.** A camera's clock and the logger's drift apart slightly, by
   up to a frame or two over a long stint, and one offset cannot correct that.
   Select an early lap, scrub to the frame where the kart crosses the line, and
@@ -111,7 +112,9 @@ seeking to a wrong frame.
   that both crossings land exactly on their frames, and the laps in between are
   corrected in proportion. The anchors must be at least 10 s apart. A pair that
   implies more than a ±0.5% clock difference is rejected, because it means one
-  anchor is on the wrong frame or lap, and the previous sync is kept.
+  anchor is on the wrong frame or lap, and the previous sync is kept. The solved
+  rate shows after the offset in the readout (for example `×1.000083`). A later
+  **Sync to Section** or trim moves the offset but keeps that rate.
 - **Sync status.** The line under the controls says how the footage is aligned:
   *Not synced*, *Estimated from file date*, *Synced by hand*, *Synced on lap 3*,
   or *Synced on lap 3 + lap 14*. It also says how many laps the footage covers in

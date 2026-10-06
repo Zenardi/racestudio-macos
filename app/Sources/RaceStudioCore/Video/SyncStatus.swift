@@ -56,6 +56,11 @@ extension SyncStatus: Codable {
         case notSynced, estimated, anchored, twoPoint
     }
 
+    /// The lap indices a saved status may name. A hand-edited or corrupt file can
+    /// carry any `Int`; one outside this range is a decode error, never a lap —
+    /// `Int.max` would otherwise trap when the status line adds one to it.
+    static let lapIndexRange = 0...Int(Int32.max - 1)
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         switch try container.decode(Kind.self, forKey: .kind) {
@@ -64,11 +69,23 @@ extension SyncStatus: Codable {
         case .estimated:
             self = .estimated
         case .anchored:
-            self = .anchored(lap: try container.decodeIfPresent(Int.self, forKey: .lap).map(LapID.init))
+            self = .anchored(lap: try container.decodeIfPresent(Int.self, forKey: .lap) == nil
+                ? nil : Self.lap(forKey: .lap, in: container))
         case .twoPoint:
-            self = .twoPoint(lapA: LapID(try container.decode(Int.self, forKey: .lapA)),
-                             lapB: LapID(try container.decode(Int.self, forKey: .lapB)))
+            self = .twoPoint(lapA: try Self.lap(forKey: .lapA, in: container),
+                             lapB: try Self.lap(forKey: .lapB, in: container))
         }
+    }
+
+    /// The lap index under `key`, refused unless it is in ``lapIndexRange``.
+    private static func lap(forKey key: CodingKeys,
+                            in container: KeyedDecodingContainer<CodingKeys>) throws -> LapID {
+        let index = try container.decode(Int.self, forKey: key)
+        guard lapIndexRange.contains(index) else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: container,
+                                                   debugDescription: "lap index \(index) out of range")
+        }
+        return LapID(index)
     }
 
     public func encode(to encoder: Encoder) throws {

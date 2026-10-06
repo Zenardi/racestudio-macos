@@ -51,6 +51,7 @@ import Foundation
     @Test(arguments: [(Double(Float(29.97003)), 30_000, 1_001),
                       (23.976, 24_000, 1_001),
                       (59.94, 60_000, 1_001),
+                      (119.88, 120_000, 1_001),
                       (25, 25, 1),
                       (30, 30, 1),
                       (Double(Float(60.0)), 60, 1)])
@@ -64,7 +65,7 @@ import Foundation
     }
 
     /// An unknown or absurd nominal rate falls back to 30 fps.
-    @Test(arguments: [0.0, -29.97, .nan, .infinity, 1e12])
+    @Test(arguments: [0.0, -29.97, .nan, .infinity, 1e12, 0.0005, 0.9])
     func test_unknown_nominal_rate_falls_back(fps: Double) {
         #expect(FrameGrid(nominalFrameRate: fps) == FrameGrid.fallback)
     }
@@ -103,18 +104,26 @@ import Foundation
         var time = 0.0
         for _ in 0..<10 { time = ntsc.step(time, frames: 1) }
 
-        #expect(time == ntsc.step(0, frames: 10))
+        #expect(abs(time - ntsc.step(0, frames: 10)) < 1e-12)
         #expect(abs(time - 10 * 1_001.0 / 30_000.0) < 1e-12)
     }
 
-    /// A step from between two frames lands back on the grid, a frame on from the
-    /// nearest one — frame stepping always keeps the offset on the frame grid.
-    @Test func test_step_from_off_the_grid_lands_on_it() {
+    /// A step from between two frames still moves exactly one frame: an offset a
+    /// track anchor left off the grid keeps its frame-exact phase rather than
+    /// being snapped half a frame away.
+    @Test func test_step_from_off_the_grid_moves_exactly_one_frame() {
         let grid = FrameGrid(numerator: 25, denominator: 1)
 
-        #expect(grid.step(0.05, frames: 1) == 0.08)
-        #expect(grid.step(0.05, frames: -1) == 0)
-        #expect(ntsc.snap(ntsc.step(0.05, frames: 1)) == ntsc.step(0.05, frames: 1))
+        #expect(abs(grid.step(0.05, frames: 1) - 0.09) < 1e-12)
+        #expect(abs(grid.step(0.05, frames: -1) - 0.01) < 1e-12)
+        #expect(abs(ntsc.step(10.4, frames: 1) - 10.4 - ntsc.frameDuration) < 1e-12)
+    }
+
+    /// A step from a grid time stays on the grid.
+    @Test func test_step_from_the_grid_stays_on_it() {
+        let onGrid = ntsc.snap(7.7)
+
+        #expect(abs(ntsc.snap(ntsc.step(onGrid, frames: 3)) - ntsc.step(onGrid, frames: 3)) < 1e-12)
     }
 
     /// A non-finite time is treated as `0`, so a step can never emit `NaN`.

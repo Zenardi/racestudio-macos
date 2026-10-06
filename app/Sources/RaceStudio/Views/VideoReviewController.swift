@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import os
 import RaceStudioCore
@@ -44,6 +45,9 @@ final class VideoReviewController: ObservableObject {
     private weak var cursor: LinkedCursor?
     private var timeObserver: Any?
     private var statusObserver: NSKeyValueObservation?
+    /// Bumped by every open and detach, so an `open` still awaiting its asset
+    /// when the footage is replaced or removed never writes into the new state.
+    private var openGeneration = 0
     private let videos = VideoAttachmentStore(bookmarks: SecurityScopedBookmarkStore())
     private static let log = Logger(subsystem: "com.aim.racestudio", category: "VideoReview")
 
@@ -69,7 +73,13 @@ final class VideoReviewController: ObservableObject {
     /// from the asset, and propose a wall-clock alignment when both clocks are
     /// known and the footage would then overlap the session's
     /// `0...sessionDuration` (issue 9.7).
+    ///
+    /// Importing replaces the footage and forgets the old alignment with it — a
+    /// different file must never inherit "Synced on lap 3". The one exception is
+    /// re-linking a workspace video that failed to open, whose saved sync stands.
     func attach(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
+        let relinking = attachment != nil && loadFailure != nil
+        if !relinking { review.detachVideo() }
         do {
             attachment = try videos.attach(url, offset: review.sync.offset)
         } catch {
@@ -99,14 +109,17 @@ final class VideoReviewController: ObservableObject {
             // The saved sync is authoritative — do not re-guess from wall clocks.
             await open(url, sessionStartEpoch: 0, sessionDuration: 0)
         } catch VideoAttachmentError.stale {
+            clearPlayer()
             loadFailure = "“\(attachment.displayName)” has moved. Attach it again to re-link the video."
         } catch {
+            clearPlayer()
             loadFailure = "“\(attachment.displayName)” could not be opened. It may have been deleted."
         }
     }
 
     /// Detach the footage, leaving the workspace without a video.
     func removeVideo() {
+        openGeneration += 1
         player.pause()
         player.replaceCurrentItem(with: nil)
         attachment = nil
@@ -156,6 +169,7 @@ final class VideoReviewController: ObservableObject {
     /// frame follows immediately.
     func setOffset(_ offset: Double) {
         review.setOffset(offset)
+        twoPointError = nil
         seekFromCursor(to: cursor?.timePosition ?? 0)
     }
 
@@ -163,13 +177,15 @@ final class VideoReviewController: ObservableObject {
     /// sync. Returns `false` when nothing is selected to anchor against.
     @discardableResult
     func anchorToCurrentFrame() -> Bool {
-        review.anchorSelection(toPlayhead: player.currentTime().seconds)
+        twoPointError = nil
+        return review.anchorSelection(toPlayhead: player.currentTime().seconds)
     }
 
     /// Apply one fine-trim nudge (`,` / `.`, with `⇧` or `⌥`) and re-seek so the
     /// visible frame follows (issue 9.7).
     func nudge(_ nudge: OffsetNudge) {
         review.nudge(nudge)
+        twoPointError = nil
         seekFromCursor(to: cursor?.timePosition ?? 0)
     }
 
@@ -177,6 +193,7 @@ final class VideoReviewController: ObservableObject {
     /// the section under review (issue 9.7).
     func setAnchor(_ slot: AnchorSlot) {
         review.setAnchor(slot, playhead: player.currentTime().seconds)
+        twoPointError = nil
     }
 
     /// Solve offset and rate from anchors A and B (issue 9.7). A refusal is kept
@@ -189,41 +206,67 @@ final class VideoReviewController: ObservableObject {
             seekFromCursor(to: cursor?.timePosition ?? 0)
         case .failure(let error):
             twoPointError = error
+            announce(error.message())
         }
     }
 
     // MARK: - Internals
 
     private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
+        openGeneration += 1
+        let generation = openGeneration
         let asset = AVURLAsset(url: url)
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
+        // Each await below may outlive this footage (re-attached or removed in
+        // the meantime); a superseded open stops rather than writing stale state.
         do {
-            review.setVideoDuration(try await asset.load(.duration).seconds)
+            let duration = try await asset.load(.duration).seconds
+            guard generation == openGeneration else { return }
+            review.setVideoDuration(duration)
         } catch {
             Self.log.warning("Could not read video duration: \(error.localizedDescription, privacy: .public)")
         }
-        await loadFrameRate(of: asset)
+        let frameRate = await nominalFrameRate(of: asset)
+        guard generation == openGeneration else { return }
+        review.setFrameRate(frameRate)
         // A camera that stamps its start time gives a usable first alignment for
         // free; without one — or when the date cannot be right for this session —
         // the operator anchors to a lap by hand.
-        if sessionStartEpoch > 0,
-           let created = try? await asset.load(.creationDate)?.load(.dateValue) {
-            autoOffsetOutcome = review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
-                                                       videoStartEpoch: created.timeIntervalSince1970,
-                                                       sessionDuration: sessionDuration)
+        guard sessionStartEpoch > 0,
+              let created = try? await asset.load(.creationDate)?.load(.dateValue),
+              generation == openGeneration else { return }
+        autoOffsetOutcome = review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
+                                                   videoStartEpoch: created.timeIntervalSince1970,
+                                                   sessionDuration: sessionDuration)
+    }
+
+    /// The first video track's nominal frame rate (issue 9.7), so a frame step is
+    /// exactly one of this footage's frames — or `0`, which the model reads as
+    /// "unknown" and replaces with its 30 fps fallback, so a clip without a
+    /// readable track never keeps the previous clip's grid.
+    private func nominalFrameRate(of asset: AVURLAsset) async -> Double {
+        do {
+            guard let track = try await asset.loadTracks(withMediaType: .video).first else { return 0 }
+            return Double(try await track.load(.nominalFrameRate))
+        } catch {
+            Self.log.warning("Could not read the frame rate: \(error.localizedDescription, privacy: .public)")
+            return 0
         }
     }
 
-    /// Seed the frame grid from the first video track's nominal frame rate
-    /// (issue 9.7), so a frame step is exactly one of this footage's frames.
-    /// Without a readable track the model keeps its 30 fps fallback.
-    private func loadFrameRate(of asset: AVURLAsset) async {
-        do {
-            guard let track = try await asset.loadTracks(withMediaType: .video).first else { return }
-            review.setFrameRate(Double(try await track.load(.nominalFrameRate)))
-        } catch {
-            Self.log.warning("Could not read the frame rate: \(error.localizedDescription, privacy: .public)")
-        }
+    /// Drop the player's footage after a failed restore, so no stale frame (or
+    /// stale length) can be anchored against while the panel asks to re-link.
+    private func clearPlayer() {
+        openGeneration += 1
+        player.replaceCurrentItem(with: nil)
+        review.setVideoDuration(0)
+    }
+
+    /// Speak `message` to VoiceOver users, who cannot see the panel's notice.
+    private func announce(_ message: String) {
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: message,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     private func seek(to playhead: Double, then completion: (() -> Void)? = nil) {

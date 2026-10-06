@@ -60,6 +60,15 @@ import Foundation
         #expect(anchor.label(locale: ptBR) == "definida na volta 3")
     }
 
+    /// Without footage there is no frame to anchor to.
+    @Test func test_an_anchor_needs_footage() {
+        let review = VideoReviewFixture.stint(videoDuration: 0)
+        review.select(lap: LapID(2))
+
+        #expect(!review.setAnchor(.a, playhead: 0))
+        #expect(review.anchors.isEmpty)
+    }
+
     /// A non-finite playhead sets no anchor.
     @Test func test_a_non_finite_playhead_sets_no_anchor() {
         let review = VideoReviewFixture.stint()
@@ -154,6 +163,18 @@ import Foundation
         #expect(review.coverageSummary == CoverageSummary(firstLap: LapID(1), lastLap: LapID(14),
                                                           coveredLaps: 14, totalLaps: 16))
         #expect(review.statusLine(locale: en) == "Synced by hand · footage covers laps 2–15 (14 of 16)")
+    }
+
+    /// The readout shows the offset to the millisecond, in the locale's digits,
+    /// and the solved clock rate once it is not 1.
+    @Test func test_offset_readout_follows_the_locale_and_shows_the_rate() {
+        let review = VideoReviewFixture.stint()
+        review.setOffset(-1_001.0 / 30_000.0)
+        #expect(review.offsetReadout(locale: en) == "−0.033 s")
+        #expect(review.offsetReadout(locale: ptBR) == "−0,033 s")
+
+        review.restore(VideoAttachment(bookmark: Data(), displayName: "v.mp4", offset: 12.5, rate: 1.000083))
+        #expect(review.offsetReadout(locale: en) == "+12.500 s ×1.000083")
     }
 
     // MARK: - Persistence and reset

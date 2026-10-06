@@ -130,7 +130,9 @@ import Foundation
 
     /// An unknown kind, or a two-point status missing a lap, is a decode error
     /// rather than a silently wrong status.
-    @Test(arguments: [#"{"kind":"telepathic"}"#, #"{"kind":"twoPoint","lapA":2}"#, #"{"lap":3}"#])
+    @Test(arguments: [#"{"kind":"telepathic"}"#, #"{"kind":"twoPoint","lapA":2}"#, #"{"lap":3}"#,
+                      #"{"kind":"anchored","lap":-1}"#, #"{"kind":"anchored","lap":9223372036854775807}"#,
+                      #"{"kind":"twoPoint","lapA":-4,"lapB":3}"#, #"{"kind":"twoPoint","lapA":2,"lapB":2147483647}"#])
     func test_malformed_status_fails_to_decode(json: String) {
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(SyncStatus.self, from: Data(json.utf8))
