@@ -207,7 +207,7 @@ import RaceStudioFFIBindings
     @Test func test_close_cancels_a_running_queue() async throws {
         let harness = try await DevicePanelFixtures.atSessions(holdsDownloads: true)
         let queue = Task { await harness.model.download([harness.sessions[0]]) }
-        await DevicePanelFixtures.untilDownloading(harness.model)
+        await DevicePanelFixtures.untilDownloading(harness)
 
         await harness.model.close()
         await queue.value

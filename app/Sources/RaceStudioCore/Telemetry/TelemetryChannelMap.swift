@@ -86,6 +86,20 @@ public struct TelemetryChannelMap: Equatable, Sendable {
         Set(bindings.keys)
     }
 
+    /// The listing index of the first channel called `name` that has samples —
+    /// matched ignoring case and surrounding spaces, like the roles — or `nil`
+    /// when the session has none (issue 9.11).
+    func channelIndex(named name: String) -> Int? {
+        let wanted = Self.key(for: name)
+        return channels.firstIndex { $0.sampleCount > 0 && Self.key(for: $0.name) == wanted }
+    }
+
+    /// The key a channel name is matched by: trimmed of surrounding spaces and
+    /// lower-cased, so `" water temp"` finds `Water Temp`.
+    static func key(for name: String) -> String {
+        normalized(name)
+    }
+
     /// This map with `role` rebound to `channel` — a hand remap, resolved to the
     /// first listed channel equal to it (``overriding(_:withChannelAt:)`` picks
     /// between identical ones). `nil`, or a channel this session does not list,

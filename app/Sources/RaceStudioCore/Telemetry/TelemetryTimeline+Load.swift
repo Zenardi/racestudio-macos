@@ -16,11 +16,16 @@ extension TelemetryTimeline {
     ///     session's best lap.
     ///   - deltaSource: which delta the frames report.
     ///   - channelMap: a hand-edited role map; `nil` resolves one automatically.
+    ///   - channels: session channels to sample by name as well (issue 9.11) —
+    ///     an overlay's channel readouts (``OverlayLayout/sessionChannelNames``),
+    ///     in their own units, interpolated linearly between samples like every
+    ///     role but gear. A name the session lacks is skipped and reads `nil`.
     /// - Throws: `CancellationError` when the calling task is cancelled.
     public static func load(session: Session, source: any SessionDataSource,
                             sectors: LapSectorTimeline = .empty, reference: LapID? = nil,
                             deltaSource: DeltaSource = .computed,
-                            channelMap: TelemetryChannelMap? = nil) async throws -> TelemetryTimeline {
+                            channelMap: TelemetryChannelMap? = nil,
+                            channels: [String] = []) async throws -> TelemetryTimeline {
         try Task.checkCancellation()
         let map = channelMap ?? TelemetryChannelMap.resolve(channels: session.channels)
         var series: [TelemetryRole: TelemetrySeries] = [:]
@@ -40,6 +45,15 @@ extension TelemetryTimeline {
                                                                                       : .identity,
                                       mode: .stepHold, maxGap: .infinity)
         }
+        var named: [String: TelemetrySeries] = [:]
+        for name in channels {
+            guard let index = map.channelIndex(named: name), named[session.channels[index].name] == nil else {
+                continue
+            }
+            try Task.checkCancellation()
+            named[session.channels[index].name] = read(index, of: session, from: source, conversion: .identity,
+                                                       mode: .linear)
+        }
         try Task.checkCancellation()
         let track = source.gpsTrack(start: 0, count: .max)
         let clock = LapClock(laps: session.laps, sectors: sectors)
@@ -51,12 +65,12 @@ extension TelemetryTimeline {
         try liveDelta.prefetch()
         return TelemetryTimeline(channelMap: map, series: series, clock: clock,
                                  position: TrackPosition(track: track, laps: session.laps), liveDelta: liveDelta,
-                                 loggerDeltas: loggerDeltas, deltaSource: deltaSource)
+                                 loggerDeltas: loggerDeltas, deltaSource: deltaSource, channels: named)
     }
 
     /// Load the timeline of the session `analysis` serves — the UI entry point.
     /// The reads run off the main actor (see
-    /// ``load(session:source:sectors:reference:deltaSource:channelMap:)``).
+    /// ``load(session:source:sectors:reference:deltaSource:channelMap:channels:)``).
     ///
     /// - Parameters:
     ///   - analysis: the loaded session's analysis pump.
@@ -65,15 +79,18 @@ extension TelemetryTimeline {
     ///   - reference: the live delta's reference lap; `nil` for the best lap.
     ///   - deltaSource: which delta the frames report.
     ///   - channelMap: a hand-edited role map; `nil` resolves one automatically.
+    ///   - channels: session channels to sample by name as well.
     @MainActor
     public static func load(from analysis: AnalysisSession, laps: [Lap]? = nil,
                             timeline: LapSectorTimeline = .empty, reference: LapID? = nil,
                             deltaSource: DeltaSource = .computed,
-                            channelMap: TelemetryChannelMap? = nil) async throws -> TelemetryTimeline {
+                            channelMap: TelemetryChannelMap? = nil,
+                            channels: [String] = []) async throws -> TelemetryTimeline {
         let session = analysis.session
         let timed = laps.map { Session(metadata: session.metadata, channels: session.channels, laps: $0) } ?? session
         return try await load(session: timed, source: analysis.dataSource, sectors: timeline,
-                              reference: reference, deltaSource: deltaSource, channelMap: channelMap)
+                              reference: reference, deltaSource: deltaSource, channelMap: channelMap,
+                              channels: channels)
     }
 
     // MARK: - Internals

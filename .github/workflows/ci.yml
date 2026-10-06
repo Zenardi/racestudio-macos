@@ -98,6 +98,21 @@ jobs:
         run: make ci
         env:
           COVERAGE_THRESHOLD: "95"
+          # The overlay snapshot tests (issue 9.11) write every render here, and
+          # a diff image for any golden mismatch, for the upload step below.
+          OVERLAY_SNAPSHOT_ARTIFACTS: ${{ runner.temp }}/overlay-snapshots
+
+      # The runner's own overlay renders (and diffs, on a mismatch), so a golden
+      # this runner rasterises differently can be inspected — and, if need be,
+      # re-recorded from these files (fixtures/overlay/golden/).
+      - name: Upload overlay snapshot renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: overlay-snapshots
+          path: ${{ runner.temp }}/overlay-snapshots
+          if-no-files-found: ignore
+          retention-days: 14
 
       # Large-session performance guard (issue 7.2): run the Criterion benches and
       # fail if any tracked benchmark blows past its wall-clock ceiling in

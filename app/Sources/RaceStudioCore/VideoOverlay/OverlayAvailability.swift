@@ -64,12 +64,7 @@ public struct OverlaySessionContext: Equatable, Sendable {
     /// Whether the session has a sampled channel called `name` (matched like the
     /// channel map: case- and surrounding-whitespace-insensitively).
     func hasChannel(named name: String) -> Bool {
-        let wanted = Self.normalized(name)
-        return channelMap.channels.contains { $0.sampleCount > 0 && Self.normalized($0.name) == wanted }
-    }
-
-    private static func normalized(_ name: String) -> String {
-        name.trimmingCharacters(in: .whitespaces).lowercased()
+        channelMap.channelIndex(named: name) != nil
     }
 }
 

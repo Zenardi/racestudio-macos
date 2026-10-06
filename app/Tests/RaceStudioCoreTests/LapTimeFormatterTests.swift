@@ -21,4 +21,34 @@ import Foundation
         #expect(LapTimeFormatter.string(from: .infinity) == "—")
         #expect(LapTimeFormatter.string(from: -5) == "—")
     }
+
+    // MARK: - Decimal mark and sector form (issue 9.11)
+
+    @Test func test_lap_time_takes_the_decimal_separator_it_is_given() {
+        #expect(LapTimeFormatter.string(from: 82.248, decimalSeparator: ",") == "1:22,248")
+    }
+
+    @Test func test_sector_time_under_a_minute_drops_the_minutes() {
+        #expect(LapTimeFormatter.sectorString(from: 9.5) == "9.500")
+        #expect(LapTimeFormatter.sectorString(from: 59.999) == "59.999")
+    }
+
+    @Test func test_sector_time_rounding_up_to_a_minute_shows_the_minute() {
+        #expect(LapTimeFormatter.sectorString(from: 59.9996) == "1:00.000")
+    }
+
+    @Test func test_sector_time_of_a_minute_or_more_is_a_lap_time() {
+        #expect(LapTimeFormatter.sectorString(from: 75) == "1:15.000")
+    }
+
+    @Test func test_sector_time_takes_the_decimal_separator_it_is_given() {
+        #expect(LapTimeFormatter.sectorString(from: 12.3456, decimalSeparator: ",") == "12,346")
+    }
+
+    @Test func test_an_empty_or_unusable_sector_time_is_the_placeholder() {
+        #expect(LapTimeFormatter.sectorString(from: 0) == "—")
+        #expect(LapTimeFormatter.sectorString(from: -1) == "—")
+        #expect(LapTimeFormatter.sectorString(from: .nan) == "—")
+        #expect(LapTimeFormatter.sectorString(from: 1e300) == "—")
+    }
 }
