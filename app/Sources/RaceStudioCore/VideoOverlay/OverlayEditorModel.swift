@@ -129,6 +129,11 @@ public final class OverlayEditorModel: ObservableObject {
         }
     }
 
+    /// Show every widget's numbers in `units`, unless the widget sets its own.
+    public func setUnits(_ units: UnitSystem) {
+        commit { $0.units = units }
+    }
+
     /// Take `preset`'s name and widgets and switch the HUD on — choosing a preset
     /// is asking to see it. The operator's units and theme are kept.
     public func apply(_ preset: OverlayLayout) {

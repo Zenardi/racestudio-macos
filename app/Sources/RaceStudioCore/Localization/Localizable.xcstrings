@@ -410,6 +410,23 @@
         }
       }
     },
+    "control.doneEditing": {
+      "comment": "Video + Data: leave the overlay editor.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluir"
+          }
+        }
+      }
+    },
     "control.download": {
       "localizations": {
         "en": {
@@ -422,6 +439,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixar sessão"
+          }
+        }
+      }
+    },
+    "control.editOverlay": {
+      "comment": "Video + Data: arrange the overlay's widgets on the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar sobreposição"
           }
         }
       }
@@ -474,6 +508,23 @@
         }
       }
     },
+    "control.loopLap": {
+      "comment": "Video + Data: replay the lap under review when it ends.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop Lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir volta"
+          }
+        }
+      }
+    },
     "control.loopSection": {
       "localizations": {
         "en": {
@@ -486,6 +537,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Repetir trecho"
+          }
+        }
+      }
+    },
+    "control.nextLap": {
+      "comment": "Video + Data transport: the same section on the next lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same section, next lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo trecho, próxima volta"
+          }
+        }
+      }
+    },
+    "control.nextSector": {
+      "comment": "Video + Data transport: review the next sector.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next sector"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximo setor"
           }
         }
       }
@@ -608,6 +693,40 @@
         }
       }
     },
+    "control.pause": {
+      "comment": "Video + Data transport: pause the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar"
+          }
+        }
+      }
+    },
+    "control.playLap": {
+      "comment": "Video + Data: play exactly the selected lap (or the lap at the cursor).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproduzir volta"
+          }
+        }
+      }
+    },
     "control.playSection": {
       "localizations": {
         "en": {
@@ -620,6 +739,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reproduzir trecho"
+          }
+        }
+      }
+    },
+    "control.previousLap": {
+      "comment": "Video + Data transport: the same section on the previous lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same section, previous lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo trecho, volta anterior"
+          }
+        }
+      }
+    },
+    "control.previousSector": {
+      "comment": "Video + Data transport: review the previous sector.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous sector"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setor anterior"
           }
         }
       }
@@ -734,6 +887,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Definir âncora B"
+          }
+        }
+      }
+    },
+    "control.showHUD": {
+      "comment": "Video + Data: show or hide the telemetry overlay (HUD) drawn over the video. The layout is kept.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show HUD"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar HUD"
+          }
+        }
+      }
+    },
+    "control.syncControls": {
+      "comment": "Video + Data: show or hide the video sync controls.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronização"
           }
         }
       }
@@ -899,6 +1086,23 @@
         }
       }
     },
+    "feature.videoData": {
+      "comment": "Name of the Video + Data workspace: the onboard video with a live telemetry HUD, a lap strip plot and the track map.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video + Data"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo + Dados"
+          }
+        }
+      }
+    },
     "feature.videoReview": {
       "localizations": {
         "en": {
@@ -927,6 +1131,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sincronização de vídeo"
+          }
+        }
+      }
+    },
+    "hud.accessibilityLabel": {
+      "comment": "VoiceOver label of the live telemetry HUD over the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telemetry HUD"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HUD de telemetria"
           }
         }
       }
@@ -1114,6 +1335,23 @@
         }
       }
     },
+    "menu.video": {
+      "comment": "Menu bar: the Video menu (Video + Data commands).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo"
+          }
+        }
+      }
+    },
     "menu.view": {
       "localizations": {
         "en": {
@@ -1126,6 +1364,91 @@
           "stringUnit": {
             "state": "translated",
             "value": "Visualizar"
+          }
+        }
+      }
+    },
+    "overlay.editor.hint": {
+      "comment": "Overlay editor help line.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag a widget to move it, a handle to resize it. Arrow keys nudge 1% (⇧ 5%). ⌘Z undoes."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arraste um widget para movê-lo e uma alça para redimensioná-lo. As setas movem 1% (⇧ 5%). ⌘Z desfaz."
+          }
+        }
+      }
+    },
+    "overlay.editor.noOptions": {
+      "comment": "Overlay editor: the selected widget has no options.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This widget has no options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este widget não tem opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.noSelection": {
+      "comment": "Overlay editor options placeholder.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a widget to see its options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecione um widget para ver as opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.options": {
+      "comment": "Overlay editor: the selected widget's options.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.preset": {
+      "comment": "Overlay editor: the preset menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preset"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Predefinição"
           }
         }
       }
@@ -1143,6 +1466,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Edição da sobreposição"
+          }
+        }
+      }
+    },
+    "overlay.editor.units": {
+      "comment": "Overlay editor: the units menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Units"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unidades"
+          }
+        }
+      }
+    },
+    "overlay.editor.widgets": {
+      "comment": "Overlay editor: the list of widgets with their toggles.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
           }
         }
       }
@@ -1279,6 +1636,125 @@
           "stringUnit": {
             "state": "translated",
             "value": "ÁGUA"
+          }
+        }
+      }
+    },
+    "overlay.option.brakeFullScale": {
+      "comment": "Pedals widget option: the brake reading at a full bar, in the channel's unit.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brake full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total do freio"
+          }
+        }
+      }
+    },
+    "overlay.option.deltaRange": {
+      "comment": "Delta bar option: the seconds a full half-bar stands for.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delta range (± s)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faixa do delta (± s)"
+          }
+        }
+      }
+    },
+    "overlay.option.gForceMax": {
+      "comment": "G-ball option: the g at the outer ring.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G-ball range (g)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faixa da bola de G (g)"
+          }
+        }
+      }
+    },
+    "overlay.option.mapRotation": {
+      "comment": "Track map widget option: rotation in degrees clockwise from north-up.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map rotation (°)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotação do mapa (°)"
+          }
+        }
+      }
+    },
+    "overlay.option.maxRPM": {
+      "comment": "RPM bar option: the rpm at a full bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total de RPM"
+          }
+        }
+      }
+    },
+    "overlay.option.shiftLight": {
+      "comment": "RPM bar option: the rpm the shift light comes on at.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift light at (rpm)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luz de troca em (rpm)"
+          }
+        }
+      }
+    },
+    "overlay.option.throttleFullScale": {
+      "comment": "Pedals widget option: the throttle reading at a full bar, in the channel's unit.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttle full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total do acelerador"
           }
         }
       }
@@ -1636,6 +2112,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "temperatura da água"
+          }
+        }
+      }
+    },
+    "overlay.units.imperial": {
+      "comment": "Overlay units: mph and °F.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imperial"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imperial"
+          }
+        }
+      }
+    },
+    "overlay.units.metric": {
+      "comment": "Overlay units: km/h and °C.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metric"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métrico"
           }
         }
       }
@@ -2138,6 +2648,23 @@
         }
       }
     },
+    "video.attachPrompt": {
+      "comment": "Video + Data empty state before a video is attached.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the onboard video for this session to watch it with its data — a live HUD, the lap plot and the track map, on one clock."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anexe o vídeo onboard desta sessão para assisti-lo com os dados — HUD ao vivo, gráfico da volta e mapa da pista, no mesmo relógio."
+          }
+        }
+      }
+    },
     "video.autoSync.checking": {
       "comment": "Auto-sync from engine sound (issue 9.8): help text while the attached video is still being checked for an audio track.",
       "localizations": {
@@ -2529,6 +3056,23 @@
         }
       }
     },
+    "video.loadingTelemetry": {
+      "comment": "Video + Data placeholder while the session's telemetry loads.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading telemetry…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregando telemetria…"
+          }
+        }
+      }
+    },
     "video.message.anchorsTooClose": {
       "comment": "Video Review: the two sync anchors are too close together in session time.",
       "localizations": {
@@ -2610,6 +3154,142 @@
           "stringUnit": {
             "state": "translated",
             "value": "Estas âncoras indicam uma diferença de relógio de %1$@%% — mais do que qualquer câmera desvia, então uma delas está no quadro ou na volta errada. A sincronização anterior foi mantida."
+          }
+        }
+      }
+    },
+    "video.noFootage": {
+      "comment": "Plate over the player when the attached video does not cover the cursor's moment.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No footage here"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem vídeo neste trecho"
+          }
+        }
+      }
+    },
+    "video.noFootageDetail": {
+      "comment": "Second line of the No footage plate.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video doesn’t cover this moment. The data keeps following the cursor."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O vídeo não cobre este momento. Os dados continuam seguindo o cursor."
+          }
+        }
+      }
+    },
+    "video.noGPS": {
+      "comment": "Video + Data map placeholder for a session without a GPS track.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No GPS track for this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem trajeto de GPS nesta sessão"
+          }
+        }
+      }
+    },
+    "video.noLaps": {
+      "comment": "Video + Data placeholder for a session without laps.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session has no laps to review"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta sessão não tem voltas para revisar"
+          }
+        }
+      }
+    },
+    "video.pane.laps": {
+      "comment": "Video + Data toolbar toggle: show the lap list and sector grid.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laps"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltas"
+          }
+        }
+      }
+    },
+    "video.pane.map": {
+      "comment": "Video + Data toolbar toggle: show the track map.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa"
+          }
+        }
+      }
+    },
+    "video.pane.plot": {
+      "comment": "Video + Data toolbar toggle: show the lap strip plot.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gráfico"
+          }
+        }
+      }
+    },
+    "video.sectionAtCursor": {
+      "comment": "VoiceOver label of the lap/sector readout under the player.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section at the cursor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trecho no cursor"
           }
         }
       }

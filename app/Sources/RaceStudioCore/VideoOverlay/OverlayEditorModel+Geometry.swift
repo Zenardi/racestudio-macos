@@ -7,13 +7,13 @@ public enum OverlayResizeHandle: String, CaseIterable, Sendable {
     case topLeading, top, topTrailing, leading, trailing, bottomLeading, bottom, bottomTrailing
 
     /// Whether the drag moves the left edge.
-    var movesLeading: Bool { [.topLeading, .leading, .bottomLeading].contains(self) }
+    public var movesLeading: Bool { [.topLeading, .leading, .bottomLeading].contains(self) }
     /// Whether the drag moves the right edge.
-    var movesTrailing: Bool { [.topTrailing, .trailing, .bottomTrailing].contains(self) }
+    public var movesTrailing: Bool { [.topTrailing, .trailing, .bottomTrailing].contains(self) }
     /// Whether the drag moves the top edge.
-    var movesTop: Bool { [.topLeading, .top, .topTrailing].contains(self) }
+    public var movesTop: Bool { [.topLeading, .top, .topTrailing].contains(self) }
     /// Whether the drag moves the bottom edge.
-    var movesBottom: Bool { [.bottomLeading, .bottom, .bottomTrailing].contains(self) }
+    public var movesBottom: Bool { [.bottomLeading, .bottom, .bottomTrailing].contains(self) }
 }
 
 /// The editor's geometry (issue 9.12): which widget is under the pointer, and

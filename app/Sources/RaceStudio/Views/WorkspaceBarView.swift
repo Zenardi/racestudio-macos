@@ -17,6 +17,12 @@ struct WorkspaceBar: View {
     /// The window's video-review player (issue 9.6): the bar reads the attached
     /// footage off it when saving, and hands a loaded project's attachment back.
     @ObservedObject var video: VideoReviewController
+    /// The overlay editor (issue 9.12): a save marks it clean, an open loads the
+    /// project's overlay into it with a fresh history.
+    @ObservedObject var overlayEditor: OverlayEditorModel
+    /// What the last project open could not read, until dismissed.
+    @State private var notice: ProjectLoadNotice?
+    @State private var showsNoticeDetails = false
 
     private var store: ProjectStore { ProjectStore(validator: FFIExpressionValidator()) }
     private var projectType: UTType { UTType(filenameExtension: ProjectStore.fileExtension) ?? .json }
@@ -29,14 +35,15 @@ struct WorkspaceBar: View {
                 .help("Save this workspace (layout, selection, math channels) to a .rsproj file")
             Divider().frame(height: 18)
             Button { model.select(layout: .videoReview) }
-                label: { Label(L10n.string(.featureVideoReview), systemImage: "film") }
-                .help("Review the session video lap by lap and sector by sector")
+                label: { Label(L10n.string(.featureVideoData), systemImage: "film") }
+                .help("Watch the session video with its data — HUD, lap plot and track map")
             Divider().frame(height: 18)
             StoryBoardView(
                 board: StoryBoardModel(selection: model.selection.laps, laps: model.session.laps),
                 onSetReference: { model.setReferenceLap($0) },
                 onHide: { model.toggleLap($0) },
                 onMove: { model.reorderSelectedLap(from: $0, to: $1) })
+            if let notice { noticeBadge(notice) }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -49,9 +56,14 @@ struct WorkspaceBar: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // The attached video (issue 9.6) is captured with the alignment in force,
         // so a trim made after attaching is what reopens.
-        try? store.save(
-            model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet,
-                                  video: video.attachmentForSaving), to: url)
+        do {
+            try store.save(
+                model.projectDocument(mathChannels: mathManager.definitions, logSheet: logSheet.sheet,
+                                      video: video.attachmentForSaving), to: url)
+            overlayEditor.markSaved()
+        } catch {
+            presentSaveFailure(url)
+        }
     }
 
     private func openWorkspace() {
@@ -69,6 +81,10 @@ struct WorkspaceBar: View {
             return
         }
         model.restore(from: document)
+        // The overlay (issue 9.12) opens in the editor with a fresh history, and
+        // whatever the load could not read is said, not dropped.
+        overlayEditor.load(document.overlay)
+        notice = ProjectLoadNotice(document: document)
         // Re-open the workspace's video (issue 9.6). A moved or deleted file leaves
         // the panel in a stated failure rather than aborting the load.
         if let attachment = document.video {
@@ -86,6 +102,38 @@ struct WorkspaceBar: View {
                                           expression: definition.expression)
             }
         }
+    }
+
+    /// The load notice: a quiet badge with the count, its lines on click.
+    private func noticeBadge(_ notice: ProjectLoadNotice) -> some View {
+        HStack(spacing: 4) {
+            Button { showsNoticeDetails.toggle() } label: {
+                Label(notice.summary(), systemImage: "exclamationmark.triangle")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .popover(isPresented: $showsNoticeDetails) {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(notice.details().enumerated()), id: \.offset) { _, line in
+                        Text(line).font(.callout)
+                    }
+                }
+                .padding(12)
+                .frame(maxWidth: 360, alignment: .leading)
+            }
+            Button { self.notice = nil } label: { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Dismiss")
+        }
+    }
+
+    private func presentSaveFailure(_ url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Couldn’t save “\(url.lastPathComponent)”"
+        alert.informativeText = "The workspace could not be written there."
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     private func presentOpenFailure(_ url: URL) {

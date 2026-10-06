@@ -181,6 +181,17 @@ import Foundation
         #expect(!renderer.track.racingLine.isEmpty)
     }
 
+    /// Each telemetry handed in is a new revision, so the HUD knows to rebuild
+    /// its renderer.
+    @Test func test_each_new_telemetry_is_a_new_revision() async throws {
+        let loaded = try await VideoDataFixture.loaded()
+        let first = loaded.model.telemetryRevision
+
+        loaded.model.setTelemetry(loaded.telemetry)
+
+        #expect(loaded.model.telemetryRevision == first + 1)
+    }
+
     /// Before the telemetry is in there is nothing to draw.
     @Test func test_no_renderer_before_the_telemetry() {
         let model = VideoDataViewModel(review: VideoReviewModel())

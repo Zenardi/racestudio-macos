@@ -69,6 +69,10 @@ public final class VideoDataViewModel: ObservableObject {
     /// read the cursor itself, and the frame publishes what changes.
     public private(set) var displayedTime: Double?
 
+    /// Bumped by every ``setTelemetry(_:)`` — how the HUD knows its renderer
+    /// (which bakes in the session's channels and track) must be rebuilt.
+    public private(set) var telemetryRevision = 0
+
     private var samplingCursor = SamplingCursor()
     private var track: [GPSTrackPoint] = []
     private var loadGeneration = 0
@@ -88,6 +92,7 @@ public final class VideoDataViewModel: ObservableObject {
     /// show and re-plotting the lap.
     public func setTelemetry(_ timeline: TelemetryTimeline?) {
         telemetry = timeline
+        telemetryRevision += 1
         samplingCursor = SamplingCursor()
         currentFrame = nil
         if plotLap == nil { plotLap = review.timeline.laps.first?.lap }

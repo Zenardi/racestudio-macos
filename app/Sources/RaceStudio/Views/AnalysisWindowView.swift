@@ -28,12 +28,16 @@ struct AnalysisWindowView: View {
     // the window level like the math-channels manager, so an edited sheet survives
     // layout switches and is captured into / restored from the project.
     @StateObject private var logSheet = LogSheetModel()
-    // The Video Review state (issue 9.6) — the lap/sector timeline, the alignment,
-    // and which section is under review — plus the player that applies it. Owned
-    // here, not in the panel, so the attached footage survives layout switches and
-    // can be captured into / restored from the project.
+    // The Video + Data state (issues 9.6, 9.12) — the lap/sector timeline, the
+    // alignment and which section is under review; the telemetry on the shared
+    // clock; the overlay editor — plus the player that applies them. Owned here,
+    // not in the panel, so the attached footage, the HUD layout and its undo
+    // history survive layout switches and can be captured into / restored from
+    // the project.
     @StateObject private var videoReview: VideoReviewModel
+    @StateObject private var videoData: VideoDataViewModel
     @StateObject private var videoController: VideoReviewController
+    @StateObject private var overlayEditor: OverlayEditorModel
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -46,14 +50,17 @@ struct AnalysisWindowView: View {
         _mathManager = StateObject(wrappedValue: MathChannelsManagerModel(
             evaluator: viewModel.evaluator ?? NoSessionEvaluator()))
         let review = VideoReviewModel()
+        let data = VideoDataViewModel(review: review)
         _videoReview = StateObject(wrappedValue: review)
-        _videoController = StateObject(wrappedValue: VideoReviewController(review: review))
+        _videoData = StateObject(wrappedValue: data)
+        _videoController = StateObject(wrappedValue: VideoReviewController(data: data))
+        _overlayEditor = StateObject(wrappedValue: OverlayEditorModel(layout: nil))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
-                         video: videoController)
+                         video: videoController, overlayEditor: overlayEditor)
             Divider()
             HStack(spacing: 0) {
                 LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
@@ -64,8 +71,9 @@ struct AnalysisWindowView: View {
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
-                              logSheet: logSheet, videoReview: videoReview,
-                              videoController: videoController, analysis: analysis)
+                              logSheet: logSheet, videoReview: videoReview, videoData: videoData,
+                              overlayEditor: overlayEditor, videoController: videoController,
+                              analysis: analysis)
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -73,6 +81,11 @@ struct AnalysisWindowView: View {
             }
         }
         .accessibilityLabel(L10n.string(.chartAnalysisWindow))
+        .onAppear {
+            // The window keeps the workspace's copy of the overlay the editor edits,
+            // so a save captures every committed edit.
+            overlayEditor.onCommit = { [weak model] layout in model?.videoOverlay = layout }
+        }
     }
 }
 
@@ -132,6 +145,8 @@ private struct PanelHost: View {
     @ObservedObject var spectrum: SpectrumPanelModel
     @ObservedObject var logSheet: LogSheetModel
     @ObservedObject var videoReview: VideoReviewModel
+    let videoData: VideoDataViewModel
+    @ObservedObject var overlayEditor: OverlayEditorModel
     @ObservedObject var videoController: VideoReviewController
     let analysis: AnalysisSession?
 
@@ -165,9 +180,9 @@ private struct PanelHost: View {
             case .splitTimes:
                 SplitTimesPanel(model: model, report: splitReport, analysis: analysis)
             case .videoReview:
-                VideoReviewPanel(model: model, review: videoReview, splitReport: splitReport,
-                                 cursor: model.linkedCursor, controller: videoController,
-                                 analysis: analysis)
+                VideoDataPanel(model: model, data: videoData, review: videoReview, editor: overlayEditor,
+                               splitReport: splitReport, cursor: model.linkedCursor, controller: videoController,
+                               analysis: analysis)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:

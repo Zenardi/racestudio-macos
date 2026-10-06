@@ -175,6 +175,17 @@ import Foundation
         #expect(editor.layout.widgets.first { $0.id == "pedals" }?.options == OverlayWidgetOptions())
     }
 
+    /// The overlay's units are one undoable step.
+    @Test func test_units_are_undoable() {
+        let editor = editor()
+
+        editor.setUnits(.metric)
+
+        #expect(editor.layout.units == .metric)
+        editor.undo()
+        #expect(editor.layout.units == .imperial)
+    }
+
     /// Commands naming a widget the layout lacks change nothing.
     @Test func test_commands_on_an_unknown_widget_change_nothing() {
         let editor = editor()
