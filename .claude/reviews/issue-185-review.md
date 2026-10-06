@@ -2,7 +2,7 @@
 
 **Reviewed**: 2026-10-06
 **Branch**: feature/185-audio-auto-sync → main
-**Decision**: SECOND_PASS_PENDING
+**Decision**: APPROVE (third pass clean — see below)
 
 ## Summary
 
@@ -143,8 +143,8 @@ is marked as justified.
    and bindings are regenerated.
 8. **Missing hostile-input tests.** **Fixed**: rate boundaries (800 / 801 /
    96 000 / 96 001) and the three-hour audio boundary are covered in a
-   `checked_input` unit test. Also added: infinite windows on one side; FFI
-   NaN windows, a rate over the cap, and audio over three hours.
+   `checked_input` unit test. Also added: windows with both bounds at the same
+   infinity; FFI NaN windows, a rate over the cap, and audio over three hours.
 9. **Nits.** `FULL_CONFIDENCE_RATIO` now sits with the other constants;
    `reduce(f64::max)`; the `log_ks` bounds use `first()`/`last()`; `sample`
    guards with `saturating_sub`.
@@ -215,3 +215,38 @@ is marked as justified.
   camera files always carry a duration.
 - *`RPMChannelMemo` "resolved once" is not observable.* The session's channel
   listing is immutable, and the test covers the answers.
+
+## Third pass — CLEAN
+
+An independent reviewer agent checked every second-pass "Fixed" claim against
+`117d3bc`. All 19 claims held, and it found no CRITICAL, HIGH or MEDIUM issue.
+It also confirmed these areas:
+
+- the `withTaskCancellationHandler` read loop, including the idempotent double
+  `cancelReading()`;
+- the `report` state machine;
+- the dismiss guard against both popover orderings;
+- the ceiling and the `(span, count)` run ranking for extreme finite values;
+- that each new test fails without its fix.
+
+LOW findings, all fixed in the final commit unless marked:
+
+1. **The `#[cfg(test)]` module sat mid-file in `mod.rs`.** It escaped
+   `clippy::items_after_test_module` only because `PitchConfig` derives.
+   **Fixed**: it moved to the end of the file.
+2. **The ADR still said "past the sixth harmonic".** **Fixed**.
+3. **This note's decision line and item 8 wording.** **Fixed**.
+4. **`waitUntil` (fakes) duplicates the review suite's private `eventually`.**
+   **Justified**: `eventually` reads main-actor state in a non-`Sendable`
+   closure, while `waitUntil` takes a `@Sendable` one for the coordinator
+   suite's lock-protected log. One helper cannot serve both without
+   isolation warnings.
+
+**Decision: APPROVE.** Validation:
+
+- `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings` and
+  `cargo test --workspace` (719 passed, 4 ignored);
+- the full Swift suite (1834 tests);
+- swiftlint, with 0 violations;
+- the shell build;
+- coverage: Rust 99.14 % and Swift Core 99.47 %.

@@ -282,6 +282,37 @@ fn session_rpm(rpm: &[(f64, f64)]) -> Result<Vec<(f64, f64)>, AudioSyncError> {
     Ok(points)
 }
 
+/// The pitch front end's framing and search band.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PitchConfig {
+    /// Frame length in seconds, rounded to the nearest power-of-two sample count
+    /// (0.5 s → 4096 samples at 8 kHz, ~2 Hz bins).
+    pub frame_s: f64,
+    /// Hop between frame starts, in seconds.
+    pub hop_s: f64,
+    /// Lowest candidate fundamental (Hz).
+    pub min_hz: f64,
+    /// Highest candidate fundamental (Hz); must sit below Nyquist.
+    pub max_hz: f64,
+    /// Harmonics summed per candidate.
+    pub harmonics: usize,
+}
+
+impl Default for PitchConfig {
+    /// 0.5 s frames every 20 ms, fundamentals 15–400 Hz (a four-stroke single
+    /// idling at 1 800 rpm fires at 15 Hz; a two-stroke at 24 000 rpm turns at
+    /// 400 Hz), four harmonics.
+    fn default() -> Self {
+        Self {
+            frame_s: 0.5,
+            hop_s: 0.02,
+            min_hz: 15.0,
+            max_hz: 400.0,
+            harmonics: 4,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,36 +343,5 @@ mod tests {
             checked_input(&longer, 801, window, &cfg),
             Err(AudioSyncError::InvalidInput)
         );
-    }
-}
-
-/// The pitch front end's framing and search band.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PitchConfig {
-    /// Frame length in seconds, rounded to the nearest power-of-two sample count
-    /// (0.5 s → 4096 samples at 8 kHz, ~2 Hz bins).
-    pub frame_s: f64,
-    /// Hop between frame starts, in seconds.
-    pub hop_s: f64,
-    /// Lowest candidate fundamental (Hz).
-    pub min_hz: f64,
-    /// Highest candidate fundamental (Hz); must sit below Nyquist.
-    pub max_hz: f64,
-    /// Harmonics summed per candidate.
-    pub harmonics: usize,
-}
-
-impl Default for PitchConfig {
-    /// 0.5 s frames every 20 ms, fundamentals 15–400 Hz (a four-stroke single
-    /// idling at 1 800 rpm fires at 15 Hz; a two-stroke at 24 000 rpm turns at
-    /// 400 Hz), four harmonics.
-    fn default() -> Self {
-        Self {
-            frame_s: 0.5,
-            hop_s: 0.02,
-            min_hz: 15.0,
-            max_hz: 400.0,
-            harmonics: 4,
-        }
     }
 }

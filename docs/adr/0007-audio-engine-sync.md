@@ -180,7 +180,7 @@ silent or engine-less clip whatever its ratio.
   - `AVAssetAudioPCMSource` decodes with `AVAssetReader`, and `PCMDecimator`
     downmixes and decimates chunk by chunk through `vDSP_desamp`, zero-phase.
     Its Blackman sinc is cut at 40 % of the output rate (24 taps per unit of
-    decimation factor): flat to 30 % of the output rate, past the sixth
+    decimation factor): flat to 30 % of the output rate, the sixth
     harmonic of the 400 Hz band, and at least 55 dB down from the output
     Nyquist. The source-rate track is never held; the 8–8.8 kHz mono output costs
     about 2 MB per minute. Progress is reported in whole percents, at most a
