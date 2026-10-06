@@ -14,6 +14,15 @@ public enum FootageRotation: Int, CaseIterable, Sendable {
     /// Turned a quarter counter-clockwise.
     case counterclockwise90 = 270
 
+    /// The quarter turn nearest the rotation of a track's `transform` — its
+    /// angle `atan2(b, a)`, so float noise in a stored matrix still reads as
+    /// the turn the camera meant. Mirroring is not modelled.
+    public init(transform: CGAffineTransform) {
+        let degrees = atan2(Double(transform.b), Double(transform.a)) * 180 / .pi
+        let quarter = Int((degrees / 90).rounded())
+        self = Self(rawValue: ((quarter % 4 + 4) % 4) * 90) ?? .none
+    }
+
     /// Whether the turn swaps the frame's width and height.
     public var swapsDimensions: Bool {
         self == .clockwise90 || self == .counterclockwise90
