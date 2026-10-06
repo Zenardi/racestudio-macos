@@ -42,6 +42,13 @@ fn session() -> Vec<(f64, f64)> {
 
 /// Assert `estimate` lands within one frame of `truth`.
 fn assert_within_frame(estimate: &SyncEstimate, truth: f64, label: &str) {
+    // The accuracy table the ADR records (`--nocapture`).
+    eprintln!(
+        "{label:<32} truth {truth:>8.3}  error {:>+7.1} ms  score {:>5.2}  ratio {:>5.2}",
+        (estimate.offset_s - truth) * 1000.0,
+        estimate.score,
+        estimate.peak_ratio
+    );
     assert!(
         (estimate.offset_s - truth).abs() <= FRAME_S,
         "{label}: estimated {:.4} s, truth {truth} s (score {:.2}, ratio {:.2})",

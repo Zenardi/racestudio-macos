@@ -310,6 +310,57 @@
         }
       }
     },
+    "control.applyAutoSync": {
+      "comment": "Auto-sync from engine sound (issue 9.8): applies the proposed offset after the operator reviews it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar"
+          }
+        }
+      }
+    },
+    "control.autoSyncEngineSound": {
+      "comment": "Auto-sync from engine sound (issue 9.8): the Video Review button that estimates the offset from the engine sound.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-sync from Engine Sound"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar pelo som do motor"
+          }
+        }
+      }
+    },
+    "control.cancelAutoSync": {
+      "comment": "Auto-sync from engine sound (issue 9.8): stops a running auto-sync; the existing sync is kept.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      }
+    },
     "control.connectDevice": {
       "localizations": {
         "en": {
@@ -338,6 +389,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Excluir sessão"
+          }
+        }
+      }
+    },
+    "control.dismissAutoSync": {
+      "comment": "Auto-sync from engine sound (issue 9.8): closes the result without applying it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
           }
         }
       }
@@ -1611,6 +1679,23 @@
         }
       }
     },
+    "video.autoSync.matching": {
+      "comment": "Auto-sync from engine sound (issue 9.8): progress while the engine sound is matched against the RPM.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matching the engine sound to the RPM…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparando o som do motor com o RPM…"
+          }
+        }
+      }
+    },
     "video.autoSync.noAudio": {
       "comment": "Auto-sync from engine sound (issue 9.8): the attached video has no audio track.",
       "localizations": {
@@ -1692,6 +1777,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Anexe um vídeo primeiro."
+          }
+        }
+      }
+    },
+    "video.autoSync.reading": {
+      "comment": "Auto-sync from engine sound (issue 9.8): progress while the video's audio is decoded. %1$@ = percentage done, e.g. 42%.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the video's audio… %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lendo o áudio do vídeo… %1$@"
           }
         }
       }

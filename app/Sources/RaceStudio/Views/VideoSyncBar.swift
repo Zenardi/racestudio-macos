@@ -15,6 +15,8 @@ import RaceStudioCore
 struct VideoSyncBar: View {
     @ObservedObject var review: VideoReviewModel
     @ObservedObject var controller: VideoReviewController
+    /// The session the engine sound is matched against (issue 9.8).
+    let analysis: AnalysisSession?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -51,6 +53,8 @@ struct VideoSyncBar: View {
             Button(L10n.string(.controlTwoPointSync)) { controller.applyTwoPointSync() }
                 .disabled(!review.hasVideo || !hasBothAnchors)
                 .help(hasBothAnchors ? L10n.string(.videoHelpTwoPointSync) : TwoPointSyncError.missingAnchor.message())
+            Divider().frame(height: 16)
+            AutoSyncControl(review: review, controller: controller, analysis: analysis)
         }
     }
 

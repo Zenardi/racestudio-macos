@@ -82,6 +82,7 @@ if ffiEnabled {
     testExcludes.append("SessionDeleteTests.swift")
     testExcludes.append("DevicePanelModelTests.swift")
     testExcludes.append("TelemetryTimelineGoldenTests.swift")
+    testExcludes.append("AudioSyncFFITests.swift")
 }
 
 let package = Package(

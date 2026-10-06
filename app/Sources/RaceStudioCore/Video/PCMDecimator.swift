@@ -74,15 +74,23 @@ public struct PCMDecimator: Sendable {
     /// Feed interleaved frames; returns the output samples they complete.
     public mutating func process(_ interleaved: UnsafeBufferPointer<Float>) -> [Float] {
         let frames = interleaved.count / channels
-        buffer.reserveCapacity(buffer.count + frames)
-        let scale = 1 / Float(channels)
-        for frame in 0..<frames {
-            var sum: Float = 0
+        guard frames > 0, let source = interleaved.baseAddress else { return [] }
+        let start = buffer.count
+        buffer.append(contentsOf: repeatElement(0, count: frames))
+        var scale = 1 / Float(channels)
+        let channels = self.channels
+        buffer.withUnsafeMutableBufferPointer { mono in
+            guard let base = mono.baseAddress else { return }
+            let out = base + start
+            // Sum each channel's strided column into the mono run, then average.
             for channel in 0..<channels {
-                let sample = interleaved[frame * channels + channel]
-                sum += sample.isFinite ? sample : 0
+                vDSP_vadd(source + channel, vDSP_Stride(channels), out, 1, out, 1, vDSP_Length(frames))
             }
-            buffer.append(sum * scale)
+            vDSP_vsmul(out, 1, &scale, out, 1, vDSP_Length(frames))
+            // A decoder glitch (NaN / ∞) reads as silence, never poisons the filter.
+            for index in start..<(start + frames) where !mono[index].isFinite {
+                mono[index] = 0
+            }
         }
         inputFrames += frames
         return drain(limit: .max)

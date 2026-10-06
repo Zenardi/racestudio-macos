@@ -53,6 +53,14 @@ import Foundation
         #expect(proposal.confidence == 0.96)
     }
 
+    /// The confidence bar speaks its level for any estimated proposal.
+    @Test func test_confidence_text_names_the_level() {
+        #expect(AudioSyncProposal.weak(offset: 1, confidence: 0.3).confidenceText(locale: en) == "Confidence: 30%")
+        #expect(AudioSyncProposal.confident(offset: 1, confidence: 0.91).confidenceText(locale: ptBR)
+                == "Confiança: 91%")
+        #expect(AudioSyncProposal.unavailable(.silentAudio).confidenceText(locale: en) == nil)
+    }
+
     /// An unavailable result names its reason and carries no offset.
     @Test func test_an_unavailable_proposal_reads_its_reason() {
         let proposal = AudioSyncProposal.unavailable(.flatRPM)
@@ -70,6 +78,19 @@ import Foundation
         #expect(!L10n.isFlagged(failure.message(locale: en)))
         #expect(!L10n.isFlagged(failure.message(locale: ptBR)))
         #expect(failure.message(locale: en) != failure.message(locale: ptBR))
+    }
+
+    // MARK: - Progress
+
+    /// Reading reports how far through the audio it is; matching has no
+    /// fraction (an indeterminate bar).
+    @Test func test_phases_read_as_progress() {
+        #expect(AudioSyncPhase.reading(0.42).label(locale: en) == "Reading the video's audio… 42%")
+        #expect(AudioSyncPhase.reading(0.42).label(locale: ptBR) == "Lendo o áudio do vídeo… 42%")
+        #expect(AudioSyncPhase.matching.label(locale: en) == "Matching the engine sound to the RPM…")
+        #expect(AudioSyncPhase.reading(0.42).fraction == 0.42)
+        #expect(AudioSyncPhase.reading(7).fraction == 1)
+        #expect(AudioSyncPhase.matching.fraction == nil)
     }
 
     // MARK: - Availability

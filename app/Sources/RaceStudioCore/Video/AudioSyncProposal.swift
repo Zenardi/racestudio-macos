@@ -129,13 +129,20 @@ public enum AudioSyncProposal: Equatable, Sendable {
     /// what to do instead of a weak one.
     public func detail(locale: Locale = .current) -> String? {
         switch self {
-        case .confident(_, let confidence):
-            return L10n.format(.videoAutoSyncConfidence, locale: locale,
-                               SyncStatus.percent(confidence, locale: locale))
+        case .confident:
+            return confidenceText(locale: locale)
         case .weak:
             return L10n.string(.videoAutoSyncNoMatchDetail, locale: locale)
         case .unavailable:
             return nil
+        }
+    }
+
+    /// The confidence as the bar speaks it — `"Confidence: 96%"` — or `nil`
+    /// when nothing was estimated.
+    public func confidenceText(locale: Locale = .current) -> String? {
+        confidence.map {
+            L10n.format(.videoAutoSyncConfidence, locale: locale, SyncStatus.percent($0, locale: locale))
         }
     }
 }

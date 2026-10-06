@@ -89,7 +89,7 @@ struct VideoReviewPanel: View {
                 Button(L10n.string(.controlImportVideo), action: pickVideo)
                 Button(L10n.string(.controlRemoveVideo)) { controller.removeVideo() }
             }
-            VideoSyncBar(review: review, controller: controller)
+            VideoSyncBar(review: review, controller: controller, analysis: analysis)
         }
         .font(.callout)
         .padding(.horizontal, 10)

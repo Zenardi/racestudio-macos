@@ -62,6 +62,14 @@ public final class VideoReviewModel: ObservableObject {
     /// The two-point anchors set so far (issue 9.7).
     @Published public private(set) var anchors: [AnchorSlot: LapAnchor] = [:]
 
+    /// Where an auto-sync from engine sound stands (issue 9.8) — driven by
+    /// ``runAutoSync(_:searchRange:)``.
+    @Published public internal(set) var autoSyncState: AutoSyncState = .idle
+
+    /// Bumped by every auto-sync start and stop, so a superseded run never
+    /// writes its late result.
+    var autoSyncGeneration = 0
+
     public init(timeline: LapSectorTimeline = .empty,
                 sync: VideoSyncModel = VideoSyncModel(videoDuration: 0)) {
         self.timeline = timeline
@@ -181,6 +189,20 @@ public final class VideoReviewModel: ObservableObject {
         return result
     }
 
+    /// Apply an auto-sync proposal the operator confirmed (issue 9.8): only a
+    /// ``AudioSyncProposal/confident(offset:confidence:)`` one, and only with
+    /// footage attached. The offset was matched at equal clocks, so any
+    /// two-point rate is dropped; the status becomes
+    /// ``SyncStatus/autoAudio(confidence:)``, which frame steps then refine.
+    @discardableResult
+    public func applyAudioSync(_ proposal: AudioSyncProposal) -> Bool {
+        guard hasVideo, case let .confident(offset, confidence) = proposal else { return false }
+        sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: offset)
+        status = .autoAudio(confidence: confidence)
+        stopAutoSync()
+        return true
+    }
+
     // MARK: - Status + persistence (issue 9.7)
 
     /// Bring back the alignment a saved workspace carries — offset, rate and
@@ -203,6 +225,7 @@ public final class VideoReviewModel: ObservableObject {
         status = .notSynced
         frameGrid = .fallback
         anchors = [:]
+        stopAutoSync()
     }
 
     // MARK: - Selection

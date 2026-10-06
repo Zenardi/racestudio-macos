@@ -20,6 +20,19 @@ public enum AudioSyncPhase: Equatable, Sendable {
     case reading(Double)
     /// Matching the engine sound against the RPM.
     case matching
+
+    /// How far through the phase is, in `0...1` — `nil` while matching (an
+    /// indeterminate bar).
+    public var fraction: Double? {
+        guard case .reading(let fraction) = self else { return nil }
+        return min(1, max(0, fraction))
+    }
+
+    /// The progress line the panel shows.
+    public func label(locale: Locale = .current) -> String {
+        guard let fraction else { return L10n.string(.videoAutoSyncMatching, locale: locale) }
+        return L10n.format(.videoAutoSyncReading, locale: locale, SyncStatus.percent(fraction, locale: locale))
+    }
 }
 
 /// Runs one *Auto-sync from engine sound* (issue 9.8): decode the footage's

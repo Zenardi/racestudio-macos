@@ -41,6 +41,15 @@ final class VideoReviewController: ObservableObject {
     /// (issue 9.7). The previous sync stands meanwhile.
     @Published private(set) var twoPointError: TwoPointSyncError?
 
+    /// Whether the open footage has an audio track to auto-sync from (issue
+    /// 9.8) — `nil` while it is being checked.
+    @Published private(set) var hasAudioTrack: Bool?
+
+    /// The open footage, read again by an auto-sync run.
+    private var videoURL: URL?
+    /// The auto-sync run in flight, cancelled by Cancel or by new footage.
+    private var autoSyncTask: Task<Void, Never>?
+
     private let review: VideoReviewModel
     private weak var cursor: LinkedCursor?
     private var timeObserver: Any?
@@ -119,6 +128,7 @@ final class VideoReviewController: ObservableObject {
 
     /// Detach the footage, leaving the workspace without a video.
     func removeVideo() {
+        stopAudioWork()
         openGeneration += 1
         player.pause()
         player.replaceCurrentItem(with: nil)
@@ -210,13 +220,62 @@ final class VideoReviewController: ObservableObject {
         }
     }
 
+    // MARK: - Auto-sync from engine sound (issue 9.8)
+
+    /// Start matching the footage's engine sound against `analysis`'s RPM. The
+    /// run's progress and proposal land in the review's `autoSyncState`;
+    /// nothing is applied until ``applyAutoSync()``.
+    func startAutoSync(analysis: AnalysisSession?) {
+        guard let url = videoURL, let analysis,
+              let range = analysis.audioSyncSearchRange(videoDuration: review.sync.videoDuration),
+              let coordinator = analysis.audioSyncCoordinator(source: AVAssetAudioPCMSource(url: url)) else { return }
+        autoSyncTask?.cancel()
+        autoSyncTask = Task { [review] in await review.runAutoSync(coordinator, searchRange: range) }
+    }
+
+    /// Cancel: stop the run at once; the sync in force is untouched.
+    func cancelAutoSync() {
+        autoSyncTask?.cancel()
+        autoSyncTask = nil
+        review.cancelAutoSync()
+    }
+
+    /// Apply the confident proposal the operator confirmed, and re-seek so the
+    /// visible frame follows the new alignment.
+    func applyAutoSync() {
+        guard let proposal = review.autoSyncState.proposal, review.applyAudioSync(proposal) else { return }
+        twoPointError = nil
+        seekFromCursor(to: cursor?.timePosition ?? 0)
+        announce(review.status.label())
+    }
+
+    /// Close the result without applying it.
+    func dismissAutoSync() {
+        review.dismissAutoSync()
+    }
+
+    /// Stop any auto-sync work tied to the footage being replaced or removed.
+    private func stopAudioWork() {
+        cancelAutoSync()
+        videoURL = nil
+        hasAudioTrack = nil
+    }
+
     // MARK: - Internals
 
     private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
         openGeneration += 1
         let generation = openGeneration
+        stopAudioWork()
+        videoURL = url
         let asset = AVURLAsset(url: url)
         player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
+        // Whether there is engine sound to auto-sync from (issue 9.8).
+        Task { [weak self] in
+            let hasAudio = await AVAssetAudioPCMSource.hasAudioTrack(at: url)
+            guard let self, generation == self.openGeneration else { return }
+            self.hasAudioTrack = hasAudio
+        }
         // Each await below may outlive this footage (re-attached or removed in
         // the meantime); a superseded open stops rather than writing stale state.
         do {
@@ -258,6 +317,7 @@ final class VideoReviewController: ObservableObject {
     /// stale length) can be anchored against while the panel asks to re-link.
     private func clearPlayer() {
         openGeneration += 1
+        stopAudioWork()
         player.replaceCurrentItem(with: nil)
         review.setVideoDuration(0)
     }
