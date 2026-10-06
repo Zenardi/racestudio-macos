@@ -133,7 +133,7 @@ public final class OverlayPresetStore {
             let data = try encoder.encode(PresetFile(presets: presets))
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
             if fileManager.fileExists(atPath: fileURL.path), readFile()?.isComplete != true {
-                try fileManager.copyItem(at: fileURL, to: nextBackupURL())
+                try keepAside()
             }
             try write(data, fileURL)
         } catch {
@@ -180,16 +180,20 @@ public final class OverlayPresetStore {
 
     // MARK: - Internals
 
-    /// The first free backup name: `OverlayPresets.backup.json`, then
-    /// `OverlayPresets.backup-2.json`, … — an earlier backup is never replaced.
-    private func nextBackupURL() -> URL {
+    /// Copy the library file to the first free backup name —
+    /// `OverlayPresets.backup.json`, then `OverlayPresets.backup-2.json`, … — so
+    /// an earlier backup is never replaced; unless a backup of the very same
+    /// bytes is already there (a save retried after a failed write).
+    private func keepAside() throws {
+        let current = try? Data(contentsOf: fileURL)
         var url = directory.appendingPathComponent("OverlayPresets.backup.json")
         var suffix = 1
         while fileManager.fileExists(atPath: url.path) {
+            if let current, (try? Data(contentsOf: url)) == current { return }
             suffix += 1
             url = directory.appendingPathComponent("OverlayPresets.backup-\(suffix).json")
         }
-        return url
+        try fileManager.copyItem(at: fileURL, to: url)
     }
 
     /// Every built-in preset's name in every language the app ships.

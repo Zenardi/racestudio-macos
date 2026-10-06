@@ -154,6 +154,37 @@ import Foundation
         #expect(store(dir).userPresets().map(\.name) == ["Wet", "Dry"])
     }
 
+    /// A widget that can't be read counts once, however many of its settings
+    /// are broken too.
+    @Test func test_an_unreadable_widget_counts_once() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let original = #"{"presets": [{"name": "A", "widgets": [{"id": 5, "anchor": "sideways", "#
+            + #""kind": {"type": "laser"}, "frame": {"x": 0.1, "y": 0.1, "width": 0.2, "height": 0.1}}]}]}"#
+        try Data(original.utf8).write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        let spy = LogSpy()
+
+        #expect(store(dir, spy: spy).userPresets().map(\.widgets.count) == [0])
+        #expect(spy.errors == [.skippedEntries(1)])
+    }
+
+    /// Saves that keep failing over the same unread library keep one backup of
+    /// it, not one per attempt.
+    @Test func test_retried_saves_keep_one_backup_of_the_same_file() throws {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("{not json".utf8).write(to: dir.appendingPathComponent("OverlayPresets.json"))
+        struct DiskFull: Error {}
+        let failing = store(dir, write: { _, _ in throw DiskFull() })
+
+        for _ in 0..<3 { _ = try? failing.savePreset(layout("Wet"), named: "Wet") }
+
+        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).sorted()
+        #expect(files == ["OverlayPresets.backup.json", "OverlayPresets.json"])
+    }
+
     /// A library written by a newer build is read as far as this build can, said
     /// so, kept aside, and rewritten in this build's format.
     @Test func test_a_newer_library_format_is_read_kept_aside_and_rewritten() throws {

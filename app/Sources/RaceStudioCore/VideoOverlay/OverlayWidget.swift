@@ -176,9 +176,13 @@ extension OverlayWidget: Codable {
     /// hand edit broke costs that setting, not the widget.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        // The required fields first: a widget that can't be read is skipped (and
+        // counted) as one entry, before any of its settings are counted.
+        let kind = try container.decode(OverlayWidgetKind.self, forKey: .kind)
+        let frame = try container.decode(NormalizedRect.self, forKey: .frame)
         self.init(id: container.lenient(String.self, forKey: .id),
-                  kind: try container.decode(OverlayWidgetKind.self, forKey: .kind),
-                  frame: try container.decode(NormalizedRect.self, forKey: .frame),
+                  kind: kind,
+                  frame: frame,
                   anchor: container.lenient(OverlayAnchor.self, forKey: .anchor) ?? .topLeading,
                   z: container.lenient(Int.self, forKey: .z) ?? 0,
                   opacity: container.lenient(Double.self, forKey: .opacity) ?? 1,
