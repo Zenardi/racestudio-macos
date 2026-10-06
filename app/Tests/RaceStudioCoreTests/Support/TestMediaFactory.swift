@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import CoreVideo
 import Foundation
 @testable import RaceStudioCore
@@ -23,6 +24,11 @@ enum TestMediaFactory {
         /// A white square in the stored frame's top-left corner, to tell its
         /// orientation.
         var marker = false
+        /// Moving noise instead of the index colour — content an encoder has to
+        /// work for, like real footage (the benchmark's source).
+        var noise = false
+        /// The H.264 average bit rate.
+        var bitRate = 2_000_000
 
         /// The video's length in seconds.
         var duration: Double { Double(frames) * frameRate.frameDuration }
@@ -62,7 +68,7 @@ enum TestMediaFactory {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         let video = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: spec.width, AVVideoHeightKey: spec.height,
-            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 2_000_000],
+            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: spec.bitRate],
             // Tagged Rec. 709 as cameras tag their footage: untagged SD-sized
             // video is read as BT.601 and colour-converted into the export.
             AVVideoColorPropertiesKey: [
@@ -78,7 +84,8 @@ enum TestMediaFactory {
         video.transform = transform(for: spec.rotation, width: spec.width, height: spec.height)
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: video, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-            kCVPixelBufferWidthKey as String: spec.width, kCVPixelBufferHeightKey as String: spec.height
+            kCVPixelBufferWidthKey as String: spec.width, kCVPixelBufferHeightKey as String: spec.height,
+            kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()
         ])
         writer.add(video)
         let audio = spec.audio ? audioInput() : nil
@@ -155,7 +162,11 @@ enum TestMediaFactory {
             var buffer: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
             guard let buffer else { throw CocoaError(.featureUnsupported) }
-            TestMediaFactory.fill(buffer, frame: videoFrame, marker: spec.marker)
+            if spec.noise {
+                TestMediaFactory.paintNoise(buffer, frame: videoFrame)
+            } else {
+                TestMediaFactory.fill(buffer, frame: videoFrame, marker: spec.marker)
+            }
             let time = CMTime(value: CMTimeValue(videoFrame * spec.frameRate.denominator),
                               timescale: CMTimeScale(spec.frameRate.numerator))
             guard adaptor.append(buffer, withPresentationTime: time) else { throw CocoaError(.fileWriteUnknown) }
@@ -190,6 +201,16 @@ enum TestMediaFactory {
         for row in 0..<min(markerSize, height) {
             memset_pattern4(base + row * rowBytes, &white, markerSize * 4)
         }
+    }
+
+    /// Coarse random noise, shifted a few pixels each frame, rendered on the GPU.
+    static func paintNoise(_ buffer: CVPixelBuffer, frame index: Int) {
+        let shift = CGFloat(index * 7)
+        let noise = CIFilter(name: "CIRandomGenerator")?.outputImage ?? CIImage.empty()
+        let size = CGRect(x: 0, y: 0, width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+        let image = noise.transformed(by: CGAffineTransform(scaleX: 6, y: 6).translatedBy(x: shift, y: shift / 2))
+            .cropped(to: size)
+        OverlayFrameComposer.sharedContext.render(image, to: buffer, bounds: size, colorSpace: nil)
     }
 
     /// `count` mono 16-bit samples of the 1 kHz sine, from sample `start`.

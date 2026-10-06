@@ -394,7 +394,7 @@ scripts/gen_app_icon.swift     # app-icon source: draws the icon (AppKit/CoreGra
 docs/ACCESSIBILITY.md          # accessibility & localization audit (7.3): VoiceOver/Dynamic Type checklist + en/pt-BR catalog
 docs/handbook/                 # user handbook (7.5): import, analysis views, math channels, device download; `make docs` renders + link-checks
 docs/DECODE_TOLERANCES.md      # decode conformance tolerance table (1.8)
-docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render, 0006 device-wifi RE)
+docs/adr/                      # architecture decision records (0001 FFI, 0002 decode, 0003 plot render, 0006 device-wifi RE, 0007 audio sync, 0008 overlay export)
 docs/device/LEGAL_GATE.md      # M6 legal gate: AiM first-contact, clean-room roles, do-not-redistribute list
 docs/device/CAPTURE.md         # M6 capture runbook (6.2): macOS pymobiledevice3 capture + de-identification
 docs/device/PROTOCOL.md        # M6 clean-room protocol notes (6.2): STCP framing, checksum, discovery/transfer
