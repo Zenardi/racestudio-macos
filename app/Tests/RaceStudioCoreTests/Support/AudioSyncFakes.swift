@@ -24,15 +24,12 @@ struct FakeSource: AudioPCMSource {
     }
 }
 
-/// A read that ignores cancellation for 0.1 s, then reports progress and
-/// returns anyway — a run that outlives its retirement.
-struct LateReporter: AudioPCMSource {
-    func monoPCM(targetRate: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> MonoPCM {
-        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { done.resume() }
-        }
-        progress(0.7)
-        return MonoPCM(samples: [0.1], sampleRate: targetRate, startTime: 0)
+/// Wait until `condition` holds or `seconds` of wall time pass — a deadline,
+/// so a loaded CI runner waits as long as it needs to.
+func waitUntil(within seconds: Int = 10, _ condition: @Sendable () -> Bool) async {
+    let deadline = ContinuousClock.now + .seconds(seconds)
+    while !condition(), ContinuousClock.now < deadline {
+        try? await Task.sleep(nanoseconds: 1_000_000)
     }
 }
 

@@ -18,6 +18,7 @@ public struct AudioSyncEstimate: Equatable, Sendable {
     /// Display confidence in `0...1` — `0.5` at the threshold.
     public let confidence: Double
 
+    /// An estimate as the core reports it (see each property).
     public init(offset: Double, score: Double, peakRatio: Double, pitchPerRPM: Double,
                 isConfident: Bool, confidence: Double) {
         self.offset = offset
@@ -39,7 +40,8 @@ public enum AudioSyncFailure: Error, Equatable, Sendable, CaseIterable {
     case noRPM
     /// The video and the session overlap by under 20 s.
     case tooShort
-    /// The audio is silent throughout.
+    /// No engine pitch is heard anywhere in the audio (silence, or only wind
+    /// or music).
     case silentAudio
     /// The RPM never changes.
     case flatRPM
@@ -157,7 +159,9 @@ public enum AudioSyncProposal: Equatable, Sendable {
 /// Whether the *Auto-sync from engine sound* button can run, and if not why
 /// (issue 9.8) — the reason is the button's help text.
 public enum AudioSyncAvailability: Equatable, Sendable {
+    /// The button can run.
     case available
+    /// The button is disabled, for this reason.
     case unavailable(Reason)
 
     /// What is missing, in the order the operator can fix it.

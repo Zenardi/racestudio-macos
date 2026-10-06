@@ -106,7 +106,8 @@ seeking to a wrong frame.
   progress bar shows beside it while it reads the audio and matches it.
   **Cancel** stops it at any point and leaves your current sync exactly as it
   was, and so does removing the video or closing the window. A ten-minute clip
-  takes about a second. VoiceOver reads the result out when it arrives.
+  takes about a second. Pressing the button again during a run starts over.
+  VoiceOver reads the result out when it arrives.
   - When the match is clear, the result shows the proposed offset and a
     confidence bar. Press **Apply** to use it, or **Dismiss** to keep what you
     have. It is never applied on its own.

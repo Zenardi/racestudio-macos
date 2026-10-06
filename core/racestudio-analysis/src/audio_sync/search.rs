@@ -87,9 +87,7 @@ pub(crate) fn coarse_search(
         .zip(&profile)
         .filter(|(l, _)| ((l.lag - lags[peak_index].lag) as f64).abs() >= exclusion)
         .map(|(_, &s)| s)
-        .fold(None, |acc: Option<f64>, s| {
-            Some(acc.map_or(s, |a| a.max(s)))
-        });
+        .reduce(f64::max);
     Ok(Coarse {
         offset_s: map.t0 - rpm.t0 + lag * map.hop,
         log_k: map.grid.u0 - lr_min + d as f64 * map.grid.du,

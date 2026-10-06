@@ -599,22 +599,19 @@ fn test_estimate_audio_sync_rejects_a_missing_channel() {
 }
 
 #[test]
-fn test_estimate_audio_sync_rejects_an_inverted_window() {
+fn test_estimate_audio_sync_rejects_an_inverted_or_nan_window() {
     let rpm = kart_rpm(240.0);
     let session = rpm_session("audio_sync_inverted.xrk", &rpm);
+    let pcm = engine_audio(&rpm, -50.0, 30.0);
 
-    let result = session.estimate_audio_sync(
-        "RPM".into(),
-        engine_audio(&rpm, -50.0, 30.0),
-        AUDIO_FS,
-        60.0,
-        -300.0,
-    );
+    for (min, max) in [(60.0, -300.0), (f64::NAN, 60.0), (-300.0, f64::NAN)] {
+        let result = session.estimate_audio_sync("RPM".into(), pcm.clone(), AUDIO_FS, min, max);
 
-    assert!(matches!(
-        result,
-        Err(AnalysisError::WindowOutOfBounds { .. })
-    ));
+        assert!(
+            matches!(result, Err(AnalysisError::WindowOutOfBounds { .. })),
+            "window ({min}, {max}): {result:?}"
+        );
+    }
 }
 
 #[test]
@@ -631,12 +628,17 @@ fn test_estimate_audio_sync_surfaces_the_core_refusals() {
     let short = estimate(&session, pcm[..80_000].to_vec(), AUDIO_FS);
     let silent = estimate(&session, vec![0.0; pcm.len()], AUDIO_FS);
     let bad_rate = estimate(&session, pcm.clone(), 500);
+    let too_fast = estimate(&session, pcm.clone(), 96_001);
+    // Just over three hours at the lowest rate that clears the pitch band.
+    let too_long = estimate(&session, vec![0.0; 801 * 10_801], 801);
     let no_rpm = estimate(&stalled, pcm.clone(), AUDIO_FS);
     let constant = estimate(&flat, pcm, AUDIO_FS);
 
     assert!(matches!(short, Err(AnalysisError::AudioTooShort)));
     assert!(matches!(silent, Err(AnalysisError::NoEnginePitch)));
     assert!(matches!(bad_rate, Err(AnalysisError::InvalidAudio)));
+    assert!(matches!(too_fast, Err(AnalysisError::InvalidAudio)));
+    assert!(matches!(too_long, Err(AnalysisError::InvalidAudio)));
     assert!(matches!(no_rpm, Err(AnalysisError::NoUsableRpm)));
     assert!(matches!(constant, Err(AnalysisError::FlatRpm)));
 }

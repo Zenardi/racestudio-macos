@@ -142,7 +142,9 @@ fn accumulate(
             hi = hi.max(lr);
         }
     }
-    let (k_lo, k_hi) = (probe.log_ks[0], probe.log_ks[probe.log_ks.len() - 1]);
+    let (Some(&k_lo), Some(&k_hi)) = (probe.log_ks.first(), probe.log_ks.last()) else {
+        return;
+    };
     let band = band(&probe.fine.grid, k_lo + lo, k_hi + hi);
     if band.is_empty() {
         return;
@@ -270,7 +272,7 @@ fn sample(row: &[f32], pos: f64) -> f64 {
         return 0.0;
     }
     let i = pos.floor() as usize;
-    if i + 1 >= row.len() {
+    if i >= row.len().saturating_sub(1) {
         return 0.0;
     }
     let w = pos - i as f64;

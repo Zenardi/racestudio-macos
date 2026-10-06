@@ -1,8 +1,9 @@
 import Foundation
 
-/// What the Video Review panel reads out about the alignment (issues 9.7 + 9.8)
-/// — derived only from the live ``VideoReviewModel/sync`` and
-/// ``VideoReviewModel/status``, so it follows every sync action.
+/// What the Video Review panel reads out (issues 9.6 – 9.8): the section under
+/// review, and the alignment — derived only from the live
+/// ``VideoReviewModel/sync`` and ``VideoReviewModel/status``, so it follows
+/// every sync action.
 public extension VideoReviewModel {
 
     /// Which laps the aligned footage covers in full — the status line's second
@@ -21,6 +22,33 @@ public extension VideoReviewModel {
         let offset = VideoSyncModel.readout(offset: sync.offset, locale: locale)
         guard sync.rate != 1 else { return offset }
         return offset + " ×" + L10n.formattedNumber(sync.rate, fractionDigits: 6, locale: locale)
+    }
+}
+
+public extension VideoReviewModel {
+
+    /// The section under review, named the way the readout names it —
+    /// `"Lap 2"` or `"Lap 2 · S1"`.
+    var selectedLabel: String? {
+        guard let lap = selectedLap else { return nil }
+        if let splitID = selectedSplitID, let sector = timeline.sector(lap: lap, splitID: splitID) {
+            return Self.label(lap: lap, sector: sector.name)
+        }
+        return timeline.lapSpan(lap).map { Self.label(lap: $0.lap, sector: nil) }
+    }
+
+    /// The lap and sector the cursor is passing through at `time`, named for the
+    /// panel's readout, or `nil` outside every lap.
+    func label(atSessionTime time: Double) -> String? {
+        guard let location = timeline.location(atSessionTime: time) else { return nil }
+        return Self.label(lap: location.lap, sector: location.sector?.name)
+    }
+
+    private static func label(lap: LapID, sector: String?) -> String {
+        // Laps read 1-based everywhere in the UI, matching the lap picker.
+        let base = "Lap \(lap.index + 1)"
+        guard let sector else { return base }
+        return "\(base) · \(sector)"
     }
 }
 

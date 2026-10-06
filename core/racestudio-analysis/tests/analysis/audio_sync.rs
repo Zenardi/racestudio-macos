@@ -225,10 +225,27 @@ fn estimate_offset_handles_a_window_narrower_than_a_coarse_step() {
 #[test]
 fn estimate_offset_clamps_the_refined_offset_to_the_window() {
     let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    // The truth (−40 s) sits 0.1 s past the window's upper bound: the coarse
+    // peak lands on the bound and the refinement steps out towards the truth.
+    let window = (-60.0, -40.1);
 
-    let estimate = estimate_offset(&pcm, TEST_FS, &session(), (-0.05, 0.05)).expect("estimate");
+    let estimate = estimate_offset(&pcm, TEST_FS, &session(), window).expect("estimate");
 
-    assert!((-0.05..=0.05).contains(&estimate.offset_s), "{estimate:?}");
+    assert_eq!(estimate.offset_s, window.1, "{estimate:?}");
+}
+
+#[test]
+fn estimate_offset_refuses_a_window_at_infinity() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+
+    for window in [
+        (f64::INFINITY, f64::INFINITY),
+        (f64::NEG_INFINITY, f64::NEG_INFINITY),
+    ] {
+        let result = estimate_offset(&pcm, TEST_FS, &session(), window);
+
+        assert_eq!(result.unwrap_err(), AudioSyncError::TooShort, "{window:?}");
+    }
 }
 
 #[test]
@@ -278,6 +295,20 @@ fn estimate_offset_ignores_a_stray_rpm_timestamp() {
 }
 
 #[test]
+fn estimate_offset_ignores_rpm_glitch_spikes() {
+    let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
+    let mut rpm = session();
+    // A handful of corrupt readings, one absurd: none may widen the search.
+    for (i, spike) in [(500, 1e300), (1_500, 1e9), (2_500, 250_000.0)] {
+        rpm[i].1 = spike;
+    }
+
+    let estimate = estimate_offset(&pcm, TEST_FS, &rpm, (-400.0, 200.0)).expect("estimate");
+
+    assert_within_frame(&estimate, -40.0, "rpm glitch spikes");
+}
+
+#[test]
 fn estimate_offset_tolerates_unsorted_and_duplicate_rpm_times() {
     let pcm = EngineAudio::default().render(&session(), -40.0, 60.0, TEST_FS, 21);
     let mut rpm = session();
@@ -322,6 +353,10 @@ fn pitch_track_is_empty_for_a_degenerate_band() {
         },
         PitchConfig {
             min_hz: 1e-320,
+            ..base
+        },
+        PitchConfig {
+            min_hz: 1e-20,
             ..base
         },
         PitchConfig {
@@ -402,6 +437,9 @@ fn estimate_offset_rejects_invalid_input() {
         (TEST_FS, (-10.0, f64::NAN)),
         // No audio is sampled this fast; a rate like this must not size a frame.
         (u32::MAX, (-10.0, 10.0)),
+        (96_001, (-10.0, 10.0)),
+        // Nyquist must clear the 400 Hz band.
+        (800, (-10.0, 10.0)),
     ] {
         let result = estimate_offset(&pcm, rate, &rpm, window);
 
@@ -687,7 +725,7 @@ fn audio_sync_errors_read_as_sentences() {
         ),
         (
             AudioSyncError::InvalidInput,
-            "invalid sample rate or search window",
+            "unsupported sample rate, search window or length",
         ),
     ] {
         assert_eq!(error.to_string(), text);

@@ -12,6 +12,8 @@ public struct MonoPCM: Equatable, Sendable {
     /// samples is moved onto the video's clock by it.
     public let startTime: Double
 
+    /// A clip of `samples` at `sampleRate` Hz whose first sample sits at video
+    /// time `startTime`.
     public init(samples: [Float], sampleRate: Int, startTime: Double) {
         self.samples = samples
         self.sampleRate = sampleRate
@@ -41,6 +43,7 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
     /// The footage to read.
     public let url: URL
 
+    /// A source reading the footage at `url` (opened on each read).
     public init(url: URL) {
         self.url = url
     }
@@ -53,7 +56,10 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
     }
 
     /// Decode, reporting progress in whole percents, each once — at most a
-    /// hundred updates however many chunks the decoder delivers.
+    /// hundred updates however many chunks the decoder delivers. The read
+    /// blocks a cooperative thread chunk by chunk; cancelling also cancels the
+    /// reader, so a slow read stops at the reader's next chance rather than
+    /// only between chunks.
     public func monoPCM(targetRate: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> MonoPCM {
         let asset = AVURLAsset(url: url)
         let track = try await audioTrack(of: asset)
@@ -66,13 +72,18 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
         defer { if reader.status == .reading { reader.cancelReading() } }
         var decoding = Decoding(targetRate: targetRate, duration: duration)
         var reported = -1
-        while let buffer = output.copyNextSampleBuffer() {
-            try Task.checkCancellation()
-            try autoreleasepool { try decoding.append(buffer) }
-            if let percent = decoding.percent, percent > reported {
-                reported = percent
-                progress(Double(percent) / 100)
+        let cancel = ReaderCancellation(reader: reader)
+        try await withTaskCancellationHandler {
+            while let buffer = output.copyNextSampleBuffer() {
+                try Task.checkCancellation()
+                try autoreleasepool { try decoding.append(buffer) }
+                if let percent = decoding.percent, percent > reported {
+                    reported = percent
+                    progress(Double(percent) / 100)
+                }
             }
+        } onCancel: {
+            cancel.fire()
         }
         try Task.checkCancellation()
         guard reader.status == .completed, let pcm = decoding.finish() else {
@@ -116,12 +127,24 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
     }
 }
 
+/// Cancels a reader from the task's cancellation handler, which runs on
+/// whichever thread cancels; the reader then hands out no more samples
+/// (`copyNextSampleBuffer()` returns `nil`).
+private struct ReaderCancellation: @unchecked Sendable {
+    let reader: AVAssetReader
+
+    func fire() {
+        reader.cancelReading()
+    }
+}
+
 /// The running state of one decode: the decimator (built from the first
 /// chunk's format), the output so far, where the audio starts, and how far
 /// through the clip the last chunk ended.
 private struct Decoding {
-    /// The longest clip the output's capacity is reserved for up front.
-    static let reservationCap: Double = 7_200
+    /// The most output samples reserved up front (about half an hour at
+    /// 8.8 kHz); a longer clip grows its buffer as it goes.
+    static let reservationCap: Double = 16_000_000
 
     let targetRate: Int
     let duration: Double
@@ -145,11 +168,15 @@ private struct Decoding {
               let description = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee,
               let block = CMSampleBufferGetDataBuffer(buffer) else { return }
         if decimator == nil {
-            decimator = PCMDecimator(sourceRate: Int(description.mSampleRate),
-                                     channels: Int(description.mChannelsPerFrame), targetRate: targetRate)
+            // A corrupt rate (NaN, ∞, absurd) reads as no audio, never a trap.
+            let rate = description.mSampleRate
+            let sourceRate = rate.isFinite && rate >= 1 && rate <= Double(PCMDecimator.maxSourceRate)
+                ? Int(rate.rounded()) : 0
+            decimator = PCMDecimator(sourceRate: sourceRate, channels: Int(description.mChannelsPerFrame),
+                                     targetRate: targetRate)
             if let decimator {
-                let seconds = min(duration, Self.reservationCap)
-                samples.reserveCapacity(Int(seconds * Double(decimator.outputRate)) + 1)
+                let expected = min(duration * Double(decimator.outputRate), Self.reservationCap)
+                samples.reserveCapacity(Int(expected) + 1)
             }
         }
         let count = CMBlockBufferGetDataLength(block) / MemoryLayout<Float>.size

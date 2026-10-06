@@ -20,6 +20,16 @@ public enum AutoSyncState: Equatable, Sendable {
         if case .finished(let proposal) = self { return proposal }
         return nil
     }
+
+    /// What VoiceOver hears when a run finishes — the result's headline and
+    /// detail — or `nil` while nothing has finished.
+    public func announcement(locale: Locale = .current) -> String? {
+        proposal.map { proposal in
+            [proposal.headline(locale: locale), proposal.detail(locale: locale)]
+                .compactMap { $0 }
+                .joined(separator: ". ")
+        }
+    }
 }
 
 /// The auto-sync run (issue 9.8): a ``AudioSyncCoordinator`` driven from the
@@ -44,12 +54,14 @@ public extension VideoReviewModel {
     }
 
     /// Run `coordinator` over `searchRange` in the calling task, publishing its
-    /// phases and then its proposal; any run in flight is retired first.
+    /// phases and then its proposal; any run in flight is retired first. For
+    /// tests, which await the run directly — the app uses ``startAutoSync(_:searchRange:)``.
     ///
     /// Cancelling the calling task stops the run at its next check and returns to
-    /// ``AutoSyncState/idle``; so does ``cancelAutoSync()`` at once, dropping
-    /// whatever the run later returns. Either way the sync is left as it was.
-    func runAutoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>) async {
+    /// ``AutoSyncState/idle``. ``cancelAutoSync()`` returns to idle at once and
+    /// drops whatever this run later returns, but does not stop its work — the
+    /// caller owns this task.
+    internal func runAutoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>) async {
         stopAutoSync()
         await autoSync(coordinator, searchRange: searchRange, generation: beginAutoSync())
     }
@@ -59,8 +71,11 @@ public extension VideoReviewModel {
         stopAutoSync()
     }
 
-    /// Dismiss a finished run's result without applying it.
+    /// Dismiss a finished run's result without applying it. Only a result is
+    /// dismissed: a run started meanwhile (the popover's close can land after
+    /// a new click) carries on.
     func dismissAutoSync() {
+        guard autoSyncState.proposal != nil else { return }
         stopAutoSync()
     }
 
@@ -81,7 +96,10 @@ public extension VideoReviewModel {
     }
 
     /// Run `generation`: the decoding and matching go to a detached task, never
-    /// the main actor, and only a run still current writes its result.
+    /// the main actor (they block a cooperative thread while they read and
+    /// match — one run at a time), and only a run still current writes its
+    /// result. A cancelled run returns to idle; any other escape reads as
+    /// "could not estimate".
     private func autoSync(_ coordinator: AudioSyncCoordinator, searchRange: ClosedRange<Double>,
                           generation: Int) async {
         let report: @Sendable (AudioSyncPhase) -> Void = { [weak self] phase in
@@ -90,10 +108,17 @@ public extension VideoReviewModel {
         let work = Task.detached(priority: .userInitiated) {
             try await coordinator.run(searchRange: searchRange, progress: report)
         }
-        let proposal = try? await withTaskCancellationHandler {
-            try await work.value
-        } onCancel: {
-            work.cancel()
+        let proposal: AudioSyncProposal?
+        do {
+            proposal = try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
+            }
+        } catch is CancellationError {
+            proposal = nil
+        } catch {
+            proposal = .unavailable(.estimationFailed)
         }
         guard generation == autoSyncGeneration else { return }
         autoSyncState = proposal.map(AutoSyncState.finished) ?? .idle
@@ -101,9 +126,18 @@ public extension VideoReviewModel {
     }
 
     /// A progress report from run `generation` — ignored once it was retired
-    /// or has finished.
-    private func report(_ phase: AudioSyncPhase, generation: Int) {
-        guard generation == autoSyncGeneration, autoSyncState.isRunning else { return }
-        autoSyncState = .running(phase)
+    /// or has finished, and never moving backwards: reading progress only
+    /// grows, and nothing returns from matching to reading. (Each report hops
+    /// to the main actor on its own task, so the order is not guaranteed.)
+    internal func report(_ phase: AudioSyncPhase, generation: Int) {
+        guard generation == autoSyncGeneration, case .running(let current) = autoSyncState else { return }
+        switch (current, phase) {
+        case (.matching, .reading):
+            return
+        case (.reading(let done), .reading(let now)) where now <= done:
+            return
+        default:
+            autoSyncState = .running(phase)
+        }
     }
 }

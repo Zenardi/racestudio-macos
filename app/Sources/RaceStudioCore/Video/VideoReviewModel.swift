@@ -63,7 +63,7 @@ public final class VideoReviewModel: ObservableObject {
     @Published public private(set) var anchors: [AnchorSlot: LapAnchor] = [:]
 
     /// Where an auto-sync from engine sound stands (issue 9.8) — driven by
-    /// ``runAutoSync(_:searchRange:)``.
+    /// ``startAutoSync(_:searchRange:)``.
     @Published public internal(set) var autoSyncState: AutoSyncState = .idle
 
     /// Bumped by every auto-sync start and stop, so a superseded run never
@@ -197,9 +197,11 @@ public final class VideoReviewModel: ObservableObject {
     /// ``SyncStatus/autoAudio(confidence:)``, which frame steps then refine.
     @discardableResult
     public func applyAudioSync(_ proposal: AudioSyncProposal) -> Bool {
-        guard hasVideo, case let .confident(offset, confidence) = proposal, offset.isFinite else { return false }
+        guard hasVideo, case let .confident(offset, confidence) = proposal,
+              offset.isFinite, confidence.isFinite else { return false }
         sync = VideoSyncModel(videoDuration: sync.videoDuration, offset: offset)
-        status = .autoAudio(confidence: confidence)
+        // Held to the range a saved status decodes, so it survives a reload.
+        status = .autoAudio(confidence: min(1, max(0, confidence)))
         stopAutoSync()
         return true
     }
@@ -260,23 +262,6 @@ public final class VideoReviewModel: ObservableObject {
         guard let lap = selectedLap else { return nil }
         if let splitID = selectedSplitID { return timeline.sector(lap: lap, splitID: splitID)?.span }
         return timeline.lapSpan(lap)?.span
-    }
-
-    /// The section under review, named the way the readout names it —
-    /// `"Lap 2"` or `"Lap 2 · S1"`.
-    public var selectedLabel: String? {
-        guard let lap = selectedLap else { return nil }
-        if let splitID = selectedSplitID, let sector = timeline.sector(lap: lap, splitID: splitID) {
-            return Self.label(lap: lap, sector: sector.name)
-        }
-        return timeline.lapSpan(lap).map { Self.label(lap: $0.lap, sector: nil) }
-    }
-
-    /// The lap and sector the cursor is passing through at `time`, named for the
-    /// panel's readout, or `nil` outside every lap.
-    public func label(atSessionTime time: Double) -> String? {
-        guard let location = timeline.location(atSessionTime: time) else { return nil }
-        return Self.label(lap: location.lap, sector: location.sector?.name)
     }
 
     // MARK: - Seeking + playback
@@ -344,13 +329,6 @@ public final class VideoReviewModel: ObservableObject {
     }
 
     // MARK: - Internals
-
-    private static func label(lap: LapID, sector: String?) -> String {
-        // Laps read 1-based everywhere in the UI, matching the lap picker.
-        let base = "Lap \(lap.index + 1)"
-        guard let sector else { return base }
-        return "\(base) · \(sector)"
-    }
 
     private func apply(_ sector: SectorSpan) {
         selectedLap = sector.lap

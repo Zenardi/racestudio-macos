@@ -79,7 +79,9 @@ import Foundation
         let pcm = try await AVAssetAudioPCMSource(url: url).monoPCM(targetRate: 8_000) { _ in }
 
         #expect(pcm.sampleRate == 8_820)
-        #expect(abs(Double(pcm.samples.count) - 2 * 8_820) < 0.02 * 2 * 8_820)
+        // ±5 %, so the check holds whether or not this OS trims AAC priming
+        // (≈ 2.4 % of a 2 s clip).
+        #expect(abs(Double(pcm.samples.count) - 2 * 8_820) < 0.05 * 2 * 8_820)
         #expect(abs(frequency(pcm.samples[2_000..<14_000], rate: 8_820) - 100) < 1)
     }
 
@@ -116,8 +118,9 @@ import Foundation
         }
     }
 
-    /// A file whose audio header promises samples it does not hold reads as
-    /// unreadable, never as an empty clip.
+    /// A file whose audio header promises samples it does not hold is a typed
+    /// failure, never an empty clip: unreadable, or — as AVFoundation may no
+    /// longer see a track in what is left — no audio track.
     @Test func test_a_truncated_file_is_unreadable() async throws {
         let dir = try MediaFixtures.tempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -126,9 +129,10 @@ import Foundation
         let whole = try Data(contentsOf: url)
         try whole.prefix(64).write(to: url)
 
-        await #expect(throws: AudioSyncFailure.self) {
+        let failure = await #expect(throws: AudioSyncFailure.self) {
             _ = try await AVAssetAudioPCMSource(url: url).monoPCM(targetRate: 8_000) { _ in }
         }
+        #expect(failure == .unreadableAudio || failure == .noAudioTrack, "\(String(describing: failure))")
     }
 
     /// Cancelling mid-read stops at the next chunk with `CancellationError`.

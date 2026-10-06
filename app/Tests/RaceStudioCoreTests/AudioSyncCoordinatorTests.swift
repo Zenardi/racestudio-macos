@@ -79,7 +79,9 @@ import Foundation
         let estimator = FakeEstimator(result: .success(.confident(offset: 0)))
         let coordinator = AudioSyncCoordinator(source: FakeSource(hangs: true), estimator: estimator,
                                                rpmChannel: "RPM")
-        let run = Task { try await coordinator.run(searchRange: -1...1) { _ in } }
+        let phases = PhaseLog()
+        let run = Task { try await coordinator.run(searchRange: -1...1) { phases.record($0) } }
+        await waitUntil { phases.values == [.reading(0.5)] }
 
         run.cancel()
 

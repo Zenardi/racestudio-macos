@@ -4132,7 +4132,7 @@ public enum AnalysisError {
     
     /**
      * Audio sync (9.8): the sample rate is outside the supported range (too
-     * low for the pitch band, or above 384 kHz), or the audio or the RPM trace
+     * low for the pitch band, or above 96 kHz), or the audio or the RPM trace
      * runs over three hours.
      */
     case InvalidAudio(message: String)

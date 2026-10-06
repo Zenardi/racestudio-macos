@@ -63,15 +63,20 @@ public final class RPMChannelMemo {
     private weak var session: AnalysisSession?
     private var name: String?
 
+    /// An empty memo; the first question resolves.
     public init() {}
 
-    /// The RPM channel of `analysis`, or `nil` without a session or an RPM
-    /// channel — resolved again only when asked about a different session.
+    /// The RPM channel of `analysis` — only one whose samples span some session
+    /// time, so a channel the search could not use disables the button rather
+    /// than leaving it dead — or `nil` without a session or such a channel.
+    /// Resolved again only when asked about a different session.
     public func channelName(in analysis: AnalysisSession?) -> String? {
         guard let analysis else { return nil }
         if session !== analysis {
             session = analysis
-            name = analysis.rpmChannel?.channelName
+            name = analysis.rpmChannel.flatMap { channel in
+                analysis.sampleSpan(channelIndex: channel.channelIndex).map { _ in channel.channelName }
+            }
         }
         return name
     }

@@ -63,6 +63,10 @@ import Foundation
         #expect(PCMDecimator(sourceRate: 0, channels: 2, targetRate: 8_000) == nil)
         #expect(PCMDecimator(sourceRate: 48_000, channels: 0, targetRate: 8_000) == nil)
         #expect(PCMDecimator(sourceRate: 48_000, channels: 2, targetRate: 0) == nil)
+        #expect(PCMDecimator(sourceRate: PCMDecimator.maxSourceRate + 1, channels: 2, targetRate: 8_000) == nil)
+        #expect(PCMDecimator(sourceRate: 48_000, channels: PCMDecimator.maxChannels + 1, targetRate: 8_000) == nil)
+        #expect(PCMDecimator(sourceRate: PCMDecimator.maxSourceRate, channels: PCMDecimator.maxChannels,
+                             targetRate: 8_000) != nil)
     }
 
     // MARK: - Signal
@@ -101,7 +105,7 @@ import Foundation
     @Test func test_tones_just_above_the_output_nyquist_are_held_down() {
         let out = decimate(tone(4_400, rate: 48_000, seconds: 1, gains: [1]), rate: 48_000, channels: 1)
 
-        #expect(rms(out[1_000..<7_000]) < Float(0.5) / Float(2).squareRoot() * 0.002)
+        #expect(rms(out[1_000..<7_000]) < Float(0.5) / Float(2).squareRoot() * 0.000_5)
     }
 
     /// The harmonics the pitch search reads (up to 2.4 kHz) pass at full level.

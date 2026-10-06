@@ -9,7 +9,7 @@ import Foundation
 /// Channels are averaged; a Blackman-windowed sinc low-pass runs through
 /// Accelerate's `vDSP_desamp`, which filters and decimates in one pass. It is
 /// cut at 40 % of the output rate with 24 taps per unit of factor: flat
-/// (−0.02 dB) to 30 % of the output rate — 2.4 kHz at 8 kHz, past the sixth
+/// (−0.02 dB) to 30 % of the output rate — 2.4 kHz at 8 kHz, the sixth
 /// harmonic of the 400 Hz pitch band — and at least 55 dB down from the output
 /// Nyquist on, so what folds back is buried. The filter is symmetric and centred —
 /// output sample `n` sits exactly on input frame `n·factor` — so decimation
@@ -33,6 +33,12 @@ public struct PCMDecimator: Sendable {
     /// The low-pass cut-off as a fraction of the output rate.
     static let cutoffFraction = 0.40
 
+    /// The highest source rate accepted (Hz) — above any real audio, so a
+    /// corrupt format cannot size a giant filter.
+    public static let maxSourceRate = 384_000
+    /// The most interleaved channels accepted.
+    public static let maxChannels = 64
+
     private let taps: [Float]
     /// Mono samples from the first one the next output still needs.
     private var buffer: [Float]
@@ -40,9 +46,11 @@ public struct PCMDecimator: Sendable {
     private var emitted = 0
 
     /// A decimator from `sourceRate` × `channels` towards (and never under)
-    /// `targetRate`, or `nil` when any of them is not positive.
+    /// `targetRate`, or `nil` when any of them is not positive, or the rate or
+    /// channel count is beyond ``maxSourceRate`` / ``maxChannels``.
     public init?(sourceRate: Int, channels: Int, targetRate: Int) {
-        guard sourceRate > 0, channels > 0, targetRate > 0 else { return nil }
+        guard (1...Self.maxSourceRate).contains(sourceRate), (1...Self.maxChannels).contains(channels),
+              targetRate > 0 else { return nil }
         self.sourceRate = sourceRate
         self.channels = channels
         self.factor = Self.factor(sourceRate: sourceRate, targetRate: targetRate)

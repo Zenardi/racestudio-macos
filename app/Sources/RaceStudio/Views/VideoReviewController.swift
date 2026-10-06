@@ -51,8 +51,9 @@ final class VideoReviewController: ObservableObject {
 
     /// The open footage, read again by an auto-sync run.
     private var videoURL: URL?
-    /// The auto-sync run the review owns, held only so closing the window
-    /// cancels it (the review cancels it on Cancel, Dismiss, apply and detach).
+    /// The auto-sync run the review owns, held so closing the window cancels
+    /// it (the review cancels it on Cancel, apply and detach) and so only the
+    /// current run's result is announced.
     private var autoSyncRun: Task<Void, Never>?
 
     private let review: VideoReviewModel
@@ -243,8 +244,10 @@ final class VideoReviewController: ObservableObject {
         autoSyncRun = run
         Task { [weak self] in
             await run.value
-            guard let self, self.autoSyncRun == run, let proposal = self.review.autoSyncState.proposal else { return }
-            self.announce([proposal.headline(), proposal.detail()].compactMap { $0 }.joined(separator: ". "))
+            guard let self, self.autoSyncRun == run, let message = self.review.autoSyncState.announcement() else {
+                return
+            }
+            self.announce(message)
         }
     }
 

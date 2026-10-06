@@ -37,13 +37,17 @@ struct AutoSyncControl: View {
         Button { controller.startAutoSync(analysis: analysis) } label: {
             Label(L10n.string(.controlAutoSyncEngineSound), systemImage: "waveform")
         }
-        .disabled(!availability.isAvailable || review.autoSyncState.isRunning)
+        // Left enabled while a run is in flight, so keyboard focus is not lost
+        // mid-run; a click then starts over.
+        .disabled(!availability.isAvailable)
         .help(availability.help())
         .popover(isPresented: resultShown, arrowEdge: .bottom) { result }
     }
 
     /// The popover is up while a finished run's proposal waits; closing it
-    /// dismisses the proposal without applying it.
+    /// dismisses the proposal without applying it. A close that lands after a
+    /// new run started leaves that run alone (``VideoReviewModel/dismissAutoSync()``
+    /// only dismisses a result).
     private var resultShown: Binding<Bool> {
         Binding(get: { review.autoSyncState.proposal != nil },
                 set: { if !$0 { controller.dismissAutoSync() } })
@@ -51,29 +55,39 @@ struct AutoSyncControl: View {
 
     // MARK: - Progress
 
-    /// The bar and its line read as one element; Cancel stays its own button.
-    /// Escape is left to the window — the panel shares it with other controls.
+    /// The line speaks the progress, so the bar beside it is hidden from
+    /// VoiceOver (it would read the percentage twice); Cancel stays its own
+    /// button. Escape is left to the window — the panel shares it with other
+    /// controls.
     private func progress(_ phase: AudioSyncPhase) -> some View {
         HStack(spacing: 6) {
-            HStack(spacing: 6) {
+            Group {
                 if let fraction = phase.fraction {
                     ProgressView(value: fraction).frame(width: 80)
                 } else {
                     ProgressView().controlSize(.small)
                 }
-                Text(phase.label())
-                    .font(.caption)
-                    .monospacedDigit()
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityHidden(true)
+            Text(phase.label())
+                .font(.caption)
+                .monospacedDigit()
             Button(L10n.string(.controlCancelAutoSync)) { controller.cancelAutoSync() }
         }
     }
 
     // MARK: - Result
 
-    @ViewBuilder
+    /// Sized outside the `if`, so the popover keeps its frame while it
+    /// animates closed after the proposal is gone.
     private var result: some View {
+        resultContent
+            .padding(14)
+            .frame(width: 320)
+    }
+
+    @ViewBuilder
+    private var resultContent: some View {
         if let proposal = review.autoSyncState.proposal {
             VStack(alignment: .leading, spacing: 8) {
                 Label(proposal.headline(), systemImage: proposal.isApplicable ? "waveform" : "questionmark.circle")
@@ -98,8 +112,6 @@ struct AutoSyncControl: View {
                     }
                 }
             }
-            .padding(14)
-            .frame(width: 320)
         }
     }
 }

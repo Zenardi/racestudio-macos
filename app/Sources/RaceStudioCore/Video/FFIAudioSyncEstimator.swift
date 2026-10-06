@@ -32,14 +32,17 @@ public struct FFIAudioSyncEstimator: AudioSyncEstimating, @unchecked Sendable {
 }
 
 extension AudioSyncFailure {
-    /// Translate the FFI's `AnalysisError` from an audio-sync call.
+    /// Translate the FFI's `AnalysisError` from an audio-sync call. Every case
+    /// is named, so a new core refusal must be mapped here before it builds.
     init(_ error: AnalysisError) {
         switch error {
         case .AudioTooShort: self = .tooShort
         case .NoEnginePitch: self = .silentAudio
         case .NoUsableRpm, .MissingChannel: self = .noRPM
         case .FlatRpm: self = .flatRPM
-        default: self = .estimationFailed
+        case .InvalidAudio, .WindowOutOfBounds, .EmptyLap, .DistanceNotMonotonic, .EmptyRange,
+             .InvalidExpression, .LapOutOfRange:
+            self = .estimationFailed
         }
     }
 }

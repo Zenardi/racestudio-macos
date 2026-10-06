@@ -118,7 +118,7 @@ The study's rows:
 | --- | --- | --- | --- | --- |
 | k = 1/120, 1/60, 1/30 (9 lap session) | −37.3 s | 5.1–5.4 | 2.42–2.92 | confident, ≤ 12 ms |
 | offsets −120, −3.2, 0, +47.5 s (8 kHz) | as given | 5.0–5.1 | 1.94–3.09 | confident, ≤ 8 ms |
-| random offsets (property sweep) | as drawn | 5.0–5.3 | 1.83–2.73 | confident, ≤ 9 ms |
+| random offsets (property sweep, 5 draws) | as drawn | 5.0–5.8 | 1.83–3.36 | confident, ≤ 10 ms |
 | public sample RPM, k = 1/60, 1/120 | −200, −350 s | 3.7–3.9 | 2.06–2.59 | confident, ≤ 14 ms |
 | weak engine (level 0.012) | −60 s | 1.85 | 2.16 | confident, 5 ms |
 | 75 s clip (≈ 2 laps) | −200 s | 5.16 | 1.70 | confident, 6 ms |
@@ -157,12 +157,15 @@ silent or engine-less clip whatever its ratio.
   are typed errors, never a guess.
 - **Corrupt or hostile input.** The core never trusts what it is handed:
   - RPM samples are filtered to finite, positive values and sorted; only the
-    longest run without a gap over 30 min is kept, so a stray timestamp
-    (`1e12` s) cannot stretch the trace into a giant allocation;
-  - the stall floor is set from the 99th percentile, not the maximum, so a
-    single glitch spike cannot mark the whole trace as stalled;
+    longest run (by time covered) without a gap over 30 min is kept, so a
+    stray timestamp (`1e12` s) cannot stretch the trace into a giant
+    allocation;
+  - readings more than a decade either side of the 99th-percentile RPM are
+    dropped: below it a stalled engine, above it a glitch spike, which would
+    otherwise widen the search's log-RPM range (its time and memory). Spikes
+    in up to 1 % of the readings cannot move that reference;
   - audio over 3 h, an RPM trace spanning over 3 h, a sample rate over
-    384 kHz, or a NaN or inverted search window are refused as invalid input
+    96 kHz, or a NaN or inverted search window are refused as invalid input
     (an infinite bound means "unbounded");
   - a non-finite audio sample reads as silence, and the refined offset is
     clamped back into the search window.
@@ -181,14 +184,18 @@ silent or engine-less clip whatever its ratio.
     harmonic of the 400 Hz band, and at least 55 dB down from the output
     Nyquist. The source-rate track is never held; the 8–8.8 kHz mono output costs
     about 2 MB per minute. Progress is reported in whole percents, at most a
-    hundred updates per clip.
+    hundred updates per clip. A corrupt format (a non-finite or absurd rate,
+    over 64 channels) reads as no audio, and cancelling also cancels the
+    reader.
   - `AudioSyncCoordinator` moves the result onto the video clock and checks
     cancellation between steps; a cancelled run throws rather than reporting
     a failure. A non-finite offset from the core becomes "could not estimate".
   - `VideoReviewModel` owns the run (`startAutoSync`): the decode and match
     run on a detached task, every stop cancels it, and a superseded run never
-    writes its progress or result. It publishes `autoSyncState` and applies a
-    proposal only on `applyAudioSync`.
+    writes its progress or result. Progress only moves forward. Dismissing
+    acts only on a finished result, so a popover closing late cannot cancel
+    a run just started. It publishes `autoSyncState` and applies a proposal
+    only on `applyAudioSync`, with the confidence held to `0…1`.
 - **Performance** (release, Apple silicon): the real 606 s clip is decoded,
   decimated and matched in **0.87 s** (decode 0.31 s, match 0.63 s), well inside
   the 5 s budget.

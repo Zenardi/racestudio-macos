@@ -38,8 +38,8 @@ const HARMONIC_DECAY: f64 = 0.84;
 const MAGNITUDE_FLOOR: f32 = 1e-12;
 
 /// The most pitch candidates a grid may hold (a 15–400 Hz band at 0.5 % is
-/// 657).
-const MAX_CANDIDATES: usize = 100_000;
+/// 657), which bounds the harmonic taps at 4 096 × [`MAX_HARMONICS`].
+const MAX_CANDIDATES: usize = 4_096;
 
 /// The most harmonics summed per candidate.
 const MAX_HARMONICS: usize = 64;
@@ -452,8 +452,12 @@ mod tests {
         assert!(LogGrid::new(15.0, 400.0, 0.01).is_some());
         assert!(LogGrid::new(0.0, 400.0, 0.01).is_none());
         assert!(
-            LogGrid::new(1e-320, 400.0, 0.01).is_none(),
+            LogGrid::new(1e-20, 400.0, 0.01).is_none(),
             "too many candidates"
+        );
+        assert!(
+            LogGrid::new(1e-320, 400.0, 0.01).is_none(),
+            "a span too wide to represent"
         );
         assert!(LogGrid::new(15.0, f64::INFINITY, 0.01).is_none());
         assert!(LogGrid::new(15.0, 10.0, 0.01).is_none());

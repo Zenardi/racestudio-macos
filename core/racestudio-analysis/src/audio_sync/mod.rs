@@ -48,10 +48,11 @@ pub const MIN_OVERLAP_S: f64 = 20.0;
 /// clip plus the trace) stays bounded whatever the input.
 pub const MAX_DURATION_S: f64 = 10_800.0;
 
-/// The highest sample rate accepted (Hz) — above any real audio, so a garbage
-/// rate is rejected before it can size a frame (0.5 s of `u32::MAX` Hz would be
-/// a 2³⁰-sample FFT).
-pub const MAX_SAMPLE_RATE: u32 = 384_000;
+/// The highest sample rate accepted (Hz) — any camera's native rate, so
+/// undecimated audio still works, while a garbage rate is rejected before it
+/// can size a frame (0.5 s of `u32::MAX` Hz would be a 2³⁰-sample FFT) and the
+/// work for a three-hour clip stays bounded. The app decimates to ~8 kHz.
+pub const MAX_SAMPLE_RATE: u32 = 96_000;
 
 /// How far (seconds) the best rival peak must sit from the winner to count as a
 /// different alignment rather than the winner's own shoulder.
@@ -90,7 +91,8 @@ const RIVAL_FLOOR: f64 = 0.1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AudioSyncError {
     /// The audio, the RPM trace, or every overlap the search window allows is
-    /// shorter than [`MIN_OVERLAP_S`].
+    /// shorter than [`MIN_OVERLAP_S`] — counting only stretches where the
+    /// audio carries pitch and the RPM has no logging hole.
     TooShort,
     /// The audio is silent throughout.
     NoPitch,
@@ -111,7 +113,7 @@ impl fmt::Display for AudioSyncError {
             Self::NoPitch => "no engine pitch found in the audio",
             Self::NoRpm => "the RPM channel has no usable samples",
             Self::FlatSignal => "the RPM never changes, so there is nothing to align",
-            Self::InvalidInput => "invalid sample rate or search window",
+            Self::InvalidInput => "unsupported sample rate, search window or length",
         })
     }
 }
@@ -225,7 +227,9 @@ pub fn estimate_offset(
         .map_or(1.0, |rival| coarse.peak / rival.max(RIVAL_FLOOR));
     Ok(SyncEstimate {
         // The refinement may step up to ±0.2 s off the coarse lag; the window
-        // is a promise, so the answer stays inside it.
+        // is a promise, so the answer stays inside it. Clamped, the score and
+        // ratio still describe the evidence just outside — a confident result
+        // pinned to a bound says the truth lies a hair beyond it.
         offset_s: fine.offset_s.clamp(search.0, search.1),
         score: fine.score,
         peak_ratio,
@@ -276,6 +280,39 @@ fn session_rpm(rpm: &[(f64, f64)]) -> Result<Vec<(f64, f64)>, AudioSyncError> {
         return Err(AudioSyncError::FlatSignal);
     }
     Ok(points)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn checked_input_accepts_exactly_the_supported_rates_and_lengths() {
+        let cfg = PitchConfig::default();
+        let window = (-10.0, 10.0);
+        let thirty_s = |rate: u32| vec![0.0_f32; rate as usize * 30];
+
+        assert_eq!(checked_input(&thirty_s(801), 801, window, &cfg), Ok(801.0));
+        assert_eq!(
+            checked_input(&thirty_s(800), 800, window, &cfg),
+            Err(AudioSyncError::InvalidInput)
+        );
+        assert_eq!(
+            checked_input(&thirty_s(MAX_SAMPLE_RATE), MAX_SAMPLE_RATE, window, &cfg),
+            Ok(f64::from(MAX_SAMPLE_RATE))
+        );
+        assert_eq!(
+            checked_input(&[0.0; 16], MAX_SAMPLE_RATE + 1, window, &cfg),
+            Err(AudioSyncError::InvalidInput)
+        );
+        let three_hours = vec![0.0_f32; 801 * MAX_DURATION_S as usize];
+        assert_eq!(checked_input(&three_hours, 801, window, &cfg), Ok(801.0));
+        let longer = vec![0.0_f32; 801 * (MAX_DURATION_S as usize + 1)];
+        assert_eq!(
+            checked_input(&longer, 801, window, &cfg),
+            Err(AudioSyncError::InvalidInput)
+        );
+    }
 }
 
 /// The pitch front end's framing and search band.

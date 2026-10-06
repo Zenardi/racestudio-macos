@@ -3,13 +3,18 @@
 
 use crate::resample::resample_uniform_max_gap;
 
-/// Readings below this fraction of the session's top RPM are a stalled engine
-/// or a sensor glitch, never a running engine's pitch, so they are masked.
+/// Readings below this fraction of the session's reference RPM are a stalled
+/// engine or a sensor glitch, never a running engine's pitch, so they are
+/// masked; so are readings above the reference divided by it (10×), which no
+/// engine reaches — a spike that would otherwise widen the search's log-RPM
+/// range, and with it its time and memory.
 const RPM_FLOOR_FRACTION: f64 = 0.1;
 
-/// The quantile taken as the session's "top" RPM — robust to a glitch spike,
-/// which an absolute maximum is not.
-const TOP_QUANTILE: f64 = 0.99;
+/// The quantile taken as the session's reference ("top") RPM — robust to
+/// glitch spikes in up to 1 % of the readings, which an absolute maximum is
+/// not. (Denser corruption can make a spike the reference and mask the real
+/// trace; that ends in a typed refusal, never a wrong offset.)
+const REFERENCE_QUANTILE: f64 = 0.99;
 
 /// A gap (seconds) between readings longer than this splits the trace; only
 /// the longest run is kept, so a stray timestamp (a corrupt sample stamped days
@@ -32,8 +37,9 @@ const SLOPE_FLOOR: f64 = 0.05;
 const SLOPE_HALF_WINDOW_S: f64 = 0.25;
 
 /// The usable readings of `rpm`, sorted by time: finite and positive, from the
-/// longest run without a gap over [`MAX_RUN_GAP_S`], and above the stall floor
-/// ([`RPM_FLOOR_FRACTION`] of that run's [`TOP_QUANTILE`] reading).
+/// longest run without a gap over [`MAX_RUN_GAP_S`], and within a decade
+/// either side of that run's reference ([`REFERENCE_QUANTILE`]) reading — see
+/// [`RPM_FLOOR_FRACTION`].
 pub(crate) fn usable(rpm: &[(f64, f64)]) -> Vec<(f64, f64)> {
     let mut points: Vec<(f64, f64)> = rpm
         .iter()
@@ -42,30 +48,37 @@ pub(crate) fn usable(rpm: &[(f64, f64)]) -> Vec<(f64, f64)> {
         .collect();
     points.sort_by(|a, b| a.0.total_cmp(&b.0));
     let run = longest_run(&points);
+    if run.is_empty() {
+        return Vec::new();
+    }
     let mut values: Vec<f64> = run.iter().map(|&(_, v)| v).collect();
     values.sort_by(f64::total_cmp);
-    let top = values
-        .get(
-            ((values.len() as f64 - 1.0) * TOP_QUANTILE)
-                .round()
-                .max(0.0) as usize,
-        )
+    let reference = values[((values.len() - 1) as f64 * REFERENCE_QUANTILE).round() as usize];
+    let (floor, ceiling) = (
+        reference * RPM_FLOOR_FRACTION,
+        reference / RPM_FLOOR_FRACTION,
+    );
+    run.iter()
         .copied()
-        .unwrap_or(0.0);
-    let floor = top * RPM_FLOOR_FRACTION;
-    run.iter().copied().filter(|&(_, v)| v >= floor).collect()
+        .filter(|&(_, v)| (floor..=ceiling).contains(&v))
+        .collect()
 }
 
-/// The longest stretch (by sample count) of time-sorted `points` in which no
-/// two neighbours are more than [`MAX_RUN_GAP_S`] apart.
+/// The longest stretch — by time covered, then by sample count — of
+/// time-sorted `points` in which no two neighbours are more than
+/// [`MAX_RUN_GAP_S`] apart. Time first, so a dense cluster of corrupt samples
+/// stamped at one instant cannot outvote a real trace.
 fn longest_run(points: &[(f64, f64)]) -> &[(f64, f64)] {
     let mut best = 0..0;
+    let mut best_key = (f64::NEG_INFINITY, 0);
     let mut start = 0;
     for i in 1..=points.len() {
         let split = i == points.len() || points[i].0 - points[i - 1].0 > MAX_RUN_GAP_S;
         if split {
-            if i - start > best.len() {
+            let key = (points[i - 1].0 - points[start].0, i - start);
+            if key > best_key {
                 best = start..i;
+                best_key = key;
             }
             start = i;
         }
@@ -167,10 +180,30 @@ mod tests {
     }
 
     #[test]
-    fn a_glitch_spike_does_not_raise_the_stall_floor() {
-        let mut raw: Vec<(f64, f64)> = (0..200).map(|i| (f64::from(i) * 0.05, 3_000.0)).collect();
-        raw[100].1 = 1e9;
-        assert_eq!(usable(&raw).len(), 200);
+    fn glitch_spikes_neither_raise_the_stall_floor_nor_survive() {
+        let mut raw: Vec<(f64, f64)> = (0..400).map(|i| (f64::from(i) * 0.05, 3_000.0)).collect();
+        raw[100].1 = 1e300;
+        raw[200].1 = 1e9;
+        raw[300].1 = 45_000.0;
+        let kept = usable(&raw);
+        assert_eq!(kept.len(), 397);
+        assert!(kept.iter().all(|&(_, v)| v == 3_000.0));
+    }
+
+    #[test]
+    fn a_dense_cluster_at_one_instant_does_not_outvote_the_trace() {
+        let mut raw: Vec<(f64, f64)> = (0..40).map(|i| (f64::from(i), 4_000.0)).collect();
+        raw.extend((0..1_000).map(|_| (1e9, 5_000.0)));
+        let kept = usable(&raw);
+        assert_eq!(kept.len(), 40);
+        assert_eq!(span(&kept), 39.0);
+    }
+
+    #[test]
+    fn a_stray_timestamp_within_the_gap_limit_is_kept() {
+        let mut raw: Vec<(f64, f64)> = (0..40).map(|i| (f64::from(i), 4_000.0)).collect();
+        raw.push((39.0 + 1_000.0, 4_000.0));
+        assert_eq!(span(&usable(&raw)), 1_039.0);
     }
 
     #[test]

@@ -48,6 +48,8 @@ public struct AudioSyncCoordinator: Sendable {
     private let estimator: AudioSyncEstimating
     private let rpmChannel: String
 
+    /// A run reading `source` and matching it with `estimator` against the
+    /// session channel named `rpmChannel`.
     public init(source: AudioPCMSource, estimator: AudioSyncEstimating, rpmChannel: String) {
         self.source = source
         self.estimator = estimator

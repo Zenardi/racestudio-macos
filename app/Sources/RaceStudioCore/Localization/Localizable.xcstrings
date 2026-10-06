@@ -1799,18 +1799,18 @@
       }
     },
     "video.autoSync.silent": {
-      "comment": "Auto-sync from engine sound (issue 9.8): failure when the video's audio is silent.",
+      "comment": "Auto-sync from engine sound (issue 9.8): failure when no engine pitch is heard in the video's audio (silence, or only wind or music).",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The video's audio is silent."
+            "value": "No engine sound was found in the video's audio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O áudio do vídeo está em silêncio."
+            "value": "Nenhum som de motor foi encontrado no áudio do vídeo."
           }
         }
       }

@@ -81,20 +81,54 @@ import Foundation
         #expect(review.autoSyncState == .finished(.confident(offset: -9.5, confidence: 0.9)))
     }
 
-    /// Progress a retired run reports late never overwrites the run after it.
-    @Test func test_a_retired_runs_late_progress_is_ignored() async {
+    /// Progress from a retired run never lands, and progress never runs
+    /// backwards: reading only grows, and matching never returns to reading
+    /// (each report hops to the main actor on its own, unordered task).
+    @Test func test_progress_only_moves_forward_and_only_for_the_current_run() async {
         let review = stint()
-        let stale = review.startAutoSync(fakeCoordinator(LateReporter()), searchRange: -9...9)
-        review.cancelAutoSync()
-        let current = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
+        let run = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
         await eventually { review.autoSyncState == .running(.reading(0.5)) }
+        let current = review.autoSyncGeneration
 
-        await stale.value
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
+        review.report(.reading(0.9), generation: current - 1)
         #expect(review.autoSyncState == .running(.reading(0.5)))
+        review.report(.reading(0.3), generation: current)
+        #expect(review.autoSyncState == .running(.reading(0.5)))
+        review.report(.reading(0.6), generation: current)
+        #expect(review.autoSyncState == .running(.reading(0.6)))
+        review.report(.matching, generation: current)
+        review.report(.reading(0.95), generation: current)
+        #expect(review.autoSyncState == .running(.matching))
+
         review.cancelAutoSync()
-        await current.value
+        await run.value
+        review.report(.reading(0.99), generation: current)
+        #expect(review.autoSyncState == .idle)
+    }
+
+    /// Closing the result popover can land after a new run started; it
+    /// dismisses only a result, never the run.
+    @Test func test_dismissing_while_running_leaves_the_run_alone() async {
+        let review = stint()
+        let run = review.startAutoSync(fakeCoordinator(FakeSource(hangs: true)), searchRange: -9...9)
+
+        review.dismissAutoSync()
+
+        #expect(review.autoSyncState.isRunning)
+        #expect(!run.isCancelled)
+        review.cancelAutoSync()
+        await run.value
+    }
+
+    /// VoiceOver hears a finished run's headline and detail, and nothing before.
+    @Test func test_a_finished_run_is_announced() {
+        let en = Locale(identifier: "en")
+
+        #expect(AutoSyncState.running(.matching).announcement(locale: en) == nil)
+        #expect(AutoSyncState.finished(.confident(offset: -9.5, confidence: 0.96)).announcement(locale: en)
+                == "Engine sound matches the RPM at −9.500 s. Confidence: 96%")
+        #expect(AutoSyncState.finished(.unavailable(.flatRPM)).announcement(locale: en)
+                == AudioSyncFailure.flatRPM.message(locale: en))
     }
 
     /// Only a finished run carries a proposal.
@@ -135,10 +169,21 @@ import Foundation
         #expect(!review.applyAudioSync(.unavailable(.flatRPM)))
         #expect(!review.applyAudioSync(.confident(offset: .nan, confidence: 0.9)))
         #expect(!review.applyAudioSync(.confident(offset: .infinity, confidence: 0.9)))
+        #expect(!review.applyAudioSync(.confident(offset: -9, confidence: .nan)))
         #expect(!empty.applyAudioSync(.confident(offset: -9, confidence: 0.9)))
         #expect(review.sync.offset == 4)
         #expect(review.status == .anchored(lap: nil))
         #expect(empty.status == .notSynced)
+    }
+
+    /// A hand-built proposal's confidence is held to the range a saved status
+    /// decodes, so the status survives a reload.
+    @Test func test_an_applied_confidence_is_held_in_range() {
+        let review = stint()
+
+        review.applyAudioSync(.confident(offset: -2, confidence: 1.7))
+
+        #expect(review.status == .autoAudio(confidence: 1))
     }
 
     /// An audio sync is an offset at equal clocks: it replaces a two-point rate.

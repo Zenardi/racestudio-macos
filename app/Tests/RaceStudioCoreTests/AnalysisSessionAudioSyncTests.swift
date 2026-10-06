@@ -76,6 +76,15 @@ import Foundation
         #expect(memo.channelName(in: withRPM) == "RPM")
     }
 
+    /// An RPM channel whose samples cannot be read spans no session time, so
+    /// the memo reports none and the button is disabled rather than dead.
+    @Test func test_the_rpm_memo_skips_a_channel_without_readable_samples() {
+        let unreadable = session(channels: [speed, rpm], banks: [speedSamples, []])
+
+        #expect(unreadable.rpmChannel?.channelName == "RPM")
+        #expect(RPMChannelMemo().channelName(in: unreadable) == nil)
+    }
+
     /// Without the Rust core there is no estimator, hence no coordinator.
     @Test func test_a_build_without_an_estimator_cannot_auto_sync() {
         let analysis = session(channels: [rpm], banks: [rpmSamples])
