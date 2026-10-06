@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 7
+    public static let currentSchemaVersion = 8
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -42,6 +42,10 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// with. Added in schema v7; a migrated pre-9.10 project has no overlay, so
     /// the HUD is off until one is chosen.
     public var overlay: OverlayLayout?
+    /// How the Video + Data panel shares its space — its split fractions and
+    /// which panes are shown (issue 9.12). Added in schema v8; a migrated pre-9.12
+    /// project opens with ``VideoDataPaneLayout/default``.
+    public var videoData: VideoDataPaneLayout
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -59,7 +63,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         activeLayout: WindowLayout = .timeDistance,
         logSheet: LogSheet = LogSheet(),
         video: VideoAttachment? = nil,
-        overlay: OverlayLayout? = nil
+        overlay: OverlayLayout? = nil,
+        videoData: VideoDataPaneLayout = .default
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
@@ -70,12 +75,14 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.logSheet = logSheet
         self.video = video
         self.overlay = overlay
+        self.videoData = videoData
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet, video, overlay
+        case videoData
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -91,6 +98,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.logSheet == rhs.logSheet
             && lhs.video == rhs.video
             && lhs.overlay == rhs.overlay
+            && lhs.videoData == rhs.videoData
     }
 }
 
@@ -106,11 +114,15 @@ extension ProjectDocument {
     }
 
     /// Decodes every field exactly as the synthesized conformance would, except
-    /// the 9.10 ``overlay``: it is cosmetic next to the analysis it sits on, so a
-    /// value that isn't a layout at all costs only the overlay — the workspace
-    /// opens with it off and records ``unreadableOverlayWarning`` — rather than
-    /// making the whole project unopenable. (A layout's own fields are already
-    /// read leniently; see ``OverlayLayout``.)
+    /// the cosmetic ones, which never make the whole project unopenable:
+    ///
+    /// - the 9.10 ``overlay``: a value that isn't a layout at all costs only the
+    ///   overlay — the workspace opens with it off and records
+    ///   ``unreadableOverlayWarning``. (A layout's own fields are already read
+    ///   leniently; see ``OverlayLayout``.)
+    /// - the 9.12 ``videoData``: missing (a v7 file) or unreadable, the panel
+    ///   opens at ``VideoDataPaneLayout/default``. Its fields are read leniently
+    ///   too, so it never needs a warning.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -125,6 +137,9 @@ extension ProjectDocument {
             overlay = try container.decodeIfPresent(OverlayLayout.self, forKey: .overlay)
         } catch {
             warnings.append(Self.unreadableOverlayWarning)
+        }
+        if let panes = try? container.decodeIfPresent(VideoDataPaneLayout.self, forKey: .videoData) {
+            videoData = panes
         }
     }
 }

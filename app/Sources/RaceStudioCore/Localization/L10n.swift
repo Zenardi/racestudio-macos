@@ -213,6 +213,7 @@ public enum L10n {
         case menuFileImport = "menu.file.import"
         case menuHelp = "menu.help"
         case menuView = "menu.view"
+        case overlayEditorUndoAction = "overlay.editor.undoAction"
         case overlayLabelBest = "overlay.label.best"
         case overlayLabelBrake = "overlay.label.brake"
         case overlayLabelExhaust = "overlay.label.exhaust"

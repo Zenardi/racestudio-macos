@@ -107,14 +107,11 @@ public final class ProjectStore {
     private static func decode(_ data: Data, version: Int) throws -> ProjectDocument {
         switch version {
         case ProjectDocument.currentSchemaVersion:
-            // Only the current shape carries a video overlay, whose unreadable
-            // entries are skipped leniently — count them, so the load says so.
-            let counter = SkippedElementCounter()
-            var document = try shape(ProjectDocument.self, from: data, counting: counter)
-            if counter.total > 0 {
-                document.warnings.append(ProjectDocument.skippedOverlayEntriesWarning(counter.total))
-            }
-            return document
+            return try decodeWithOverlay(data, keepingVideoData: true)
+        case 7:
+            // v7 is the current shape without the 9.12 pane layout, which the
+            // current decoder already reads as its default when absent.
+            return try decodeWithOverlay(data, keepingVideoData: false)
         case 6:
             return migrate(try shape(ProjectDocumentV6.self, from: data))
         case 5:
@@ -128,6 +125,22 @@ public final class ProjectStore {
         default: // version == 1 — the caller has already bounded it to 1…current.
             return migrate(try shape(ProjectDocumentV1.self, from: data))
         }
+    }
+
+    /// Decode `data` in the current shape (v7 and later carry a video overlay,
+    /// whose unreadable entries are skipped leniently — count them, so the load
+    /// says so), stamped with the current schema. A v7 file's pane layout key
+    /// means nothing at that version, so `keepingVideoData` is `false` for it and
+    /// the panel opens at its default.
+    private static func decodeWithOverlay(_ data: Data, keepingVideoData: Bool) throws -> ProjectDocument {
+        let counter = SkippedElementCounter()
+        var document = try shape(ProjectDocument.self, from: data, counting: counter)
+        if counter.total > 0 {
+            document.warnings.append(ProjectDocument.skippedOverlayEntriesWarning(counter.total))
+        }
+        document.schemaVersion = ProjectDocument.currentSchemaVersion
+        if !keepingVideoData { document.videoData = .default }
+        return document
     }
 
     /// Decode `data` as one version's on-disk `type`, or throw
@@ -222,8 +235,10 @@ public final class ProjectStore {
     }
 
     /// Upgrade a decoded v6 document to the current shape: v6 predates the video
-    /// overlay (issue 9.10), so it opens with none — the HUD is off. Everything
-    /// else, including the 9.7 video attachment, is carried over unchanged.
+    /// overlay (issue 9.10), so it opens with none — the HUD is off — and the
+    /// Video + Data pane layout (issue 9.12), so the panel opens at its default.
+    /// Everything else, including the 9.7 video attachment, is carried over
+    /// unchanged.
     static func migrate(_ raw: ProjectDocumentV6) -> ProjectDocument {
         ProjectDocument(
             schemaVersion: ProjectDocument.currentSchemaVersion,

@@ -15,7 +15,8 @@ public extension AnalysisWindowModel {
     /// Capture the window's current workspace as a ``ProjectDocument`` (issue 8.13):
     /// the selected channels as one pane (in selection order), the selected lap
     /// indices under the session's content id, the active layout, the window's
-    /// 9.10 ``AnalysisWindowModel/videoOverlay``, and the supplied `mathChannels`
+    /// 9.10 ``AnalysisWindowModel/videoOverlay`` and 9.12
+    /// ``AnalysisWindowModel/videoDataPanes``, and the supplied `mathChannels`
     /// + `logSheet` + `video` (all owned outside the window — the 8.8 manager, the
     /// 8.17 log-sheet model, and the 9.6 video-review player — so they are passed
     /// in). The result is what the 5.4 ``ProjectStore`` saves.
@@ -33,12 +34,14 @@ public extension AnalysisWindowModel {
             activeLayout: activeLayout,
             logSheet: logSheet,
             video: video,
-            overlay: videoOverlay)
+            overlay: videoOverlay,
+            videoData: videoDataPanes)
     }
 
     /// Restore the window from a loaded ``ProjectDocument`` (issue 8.13): re-select
     /// the persisted channels + laps that exist in this session, switch to the
-    /// saved active layout, and take the saved video overlay (or none). The lap
+    /// saved active layout, and take the saved video overlay (or none) and Video +
+    /// Data pane layout. The lap
     /// selection for this session is matched by content id, falling back to the
     /// document's first lap selection when the ids differ (e.g. a project reopened
     /// against a re-imported session). Math channels are restored by the caller
@@ -51,6 +54,7 @@ public extension AnalysisWindowModel {
                      reference: lapSelection?.reference)
         select(layout: document.activeLayout)
         videoOverlay = document.overlay
+        videoDataPanes = document.videoData
     }
 
     /// A human-readable label for the session reference: the first non-empty of the

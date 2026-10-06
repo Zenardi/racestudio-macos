@@ -37,9 +37,11 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
     /// The RS3 Split Times report — per-lap/segment split times with the best
     /// theoretical/rolling lap and split editing (issue 8.11).
     case splitTimes
-    /// The session-video review panel — the attached footage tied to the shared
-    /// cursor, with lap and sector navigation over the 8.11 split grid, so a
-    /// section can be watched and replayed lap after lap (issue 9.6).
+    /// The **Video + Data** workspace (issue 9.12; the 9.6 review panel it
+    /// replaced) — the attached footage tied to the shared cursor with a live
+    /// telemetry HUD drawn over it, a lap strip plot, the track map and the lap ×
+    /// sector grid, all on one clock. The raw value is kept from 9.6, so a
+    /// workspace saved on the review panel opens here.
     case videoReview
     /// The 4.6 math-channel editor + manager — author/validate an expression, add
     /// it as a channel, browse the function library (issue 8.8).
@@ -65,7 +67,7 @@ public enum WindowLayout: String, CaseIterable, Codable, Sendable, Identifiable 
         case .suspension: return "Suspension"
         case .channelsReport: return "Report"
         case .splitTimes: return "Splits"
-        case .videoReview: return "Video"
+        case .videoReview: return "Video + Data"
         case .mathChannels: return "Math"
         case .summary: return "Summary"
         case .logSheet: return "Log Sheet"

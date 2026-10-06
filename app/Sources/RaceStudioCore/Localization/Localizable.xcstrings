@@ -1011,6 +1011,23 @@
         }
       }
     },
+    "overlay.editor.undoAction": {
+      "comment": "Edit menu action name for any overlay-editor change (Undo / Redo Overlay Edit).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlay Edit"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edição da sobreposição"
+          }
+        }
+      }
+    },
     "overlay.label.best": {
       "comment": "Video overlay label beside the best lap time so far (capitals, short).",
       "localizations": {

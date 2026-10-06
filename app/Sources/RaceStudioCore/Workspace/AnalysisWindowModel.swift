@@ -50,6 +50,11 @@ public final class AnalysisWindowModel: ObservableObject {
     /// workspace and restored on reopen whoever edits it.
     @Published public var videoOverlay: OverlayLayout?
 
+    /// How the Video + Data panel shares its space (issue 9.12) — owned by the
+    /// window like ``videoOverlay``, so it survives layout switches and is saved
+    /// with the workspace.
+    @Published public var videoDataPanes: VideoDataPaneLayout = .default
+
     /// The window-level shared cursor every panel links against.
     public let linkedCursor: LinkedCursor
 

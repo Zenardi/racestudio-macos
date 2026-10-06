@@ -17,7 +17,8 @@ import Testing
         #expect(WindowLayout.suspension.title == "Suspension")
         #expect(WindowLayout.channelsReport.title == "Report")
         #expect(WindowLayout.splitTimes.title == "Splits")
-        #expect(WindowLayout.videoReview.title == "Video")
+        // Issue 9.12: the review panel became the Video + Data workspace.
+        #expect(WindowLayout.videoReview.title == "Video + Data")
         #expect(WindowLayout.mathChannels.title == "Math")
         #expect(WindowLayout.summary.title == "Summary")
         #expect(WindowLayout.logSheet.title == "Log Sheet")
@@ -51,6 +52,7 @@ import Testing
         #expect(WindowLayout.suspension.id == "suspension")
         #expect(WindowLayout.channelsReport.id == "channelsReport")
         #expect(WindowLayout.splitTimes.id == "splitTimes")
+        // Kept from 9.6, so a saved workspace on the old panel opens Video + Data.
         #expect(WindowLayout.videoReview.id == "videoReview")
         #expect(WindowLayout.mathChannels.id == "mathChannels")
         #expect(WindowLayout.summary.id == "summary")
