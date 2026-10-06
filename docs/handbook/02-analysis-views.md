@@ -29,7 +29,7 @@ engine and **M4** analysis UI, issues 3.1–3.8 and 4.1–4.7).
 | **XY scatter** | One channel against another, with a fitted trend line. |
 | **Spectrum** | A windowed FFT amplitude-vs-frequency plot (e.g. for suspension/vibration). |
 | **Math editor** | Author a derived channel live — see [Math channels](03-math-channels.md). |
-| **Video review** | The session's onboard video tied to the cursor, reviewed lap by lap and sector by sector — see below. |
+| **Video + Data** | The session's onboard video with a live telemetry HUD over it, the lap's speed and RPM, and the track map, all on one clock — see below. |
 
 Statistics (min/max/mean/standard deviation, per lap or over a selected range) are
 computed with a numerically stable (Welford) method and shown alongside the tables.
@@ -58,36 +58,66 @@ laps to compare the lines you took.
   The imagery scales with the zoom, so it stays under the line at any zoom, getting
   softer once you zoom in past the detail the satellite images have.
 
-## Video review
+## Video + Data
 
-Attach the onboard video for a session and review it against the data, one
-section at a time.
+Watch a lap on video and in numbers at the same time. **Video + Data** puts the
+onboard footage, a live telemetry **HUD** drawn over it, a **strip plot** of
+the lap's speed and RPM, the **track map** and the **lap × sector grid** in one
+view, all on one clock.
 
-1. **Attach the footage.** Pick **Video** in the left rail, then **Import
-   Video…** and choose the file. It is remembered by bookmark, so saving the
-   workspace (`.rsproj`) and reopening it later brings the same video back,
-   aligned exactly as you left it.
+![Video + Data: the player with the HUD on the visible picture, the strip plot under it, and the track map over the lap and sector grid.](img/video-data-view.svg)
+
+1. **Attach the footage.** Pick **Video + Data** in the left rail (or the
+   workspace bar), then **Import Video…** and choose the file. It is remembered
+   by bookmark, so saving the workspace (`.rsproj`) and reopening it later brings
+   the same video back, aligned exactly as you left it. A workspace saved on the
+   old *Video* panel opens here.
 2. **Sync it to the track data.** If the camera stamped a creation time and the
    log carries a date, an opening alignment is proposed automatically from those
    two clocks. Otherwise — or to correct it — select a lap or sector, scrub the
    footage to the frame where that section actually begins, and press **Sync to
    Section**. The offset is exact and unbounded, so a camera started minutes
    before the logger aligns fine; the slider then trims ±60 s around it. See
-   [Syncing the video precisely](#syncing-the-video-precisely) below.
-3. **Review section by section.** The grid on the right is one row per lap and
-   one cell per split, showing the time spent in each (the same numbers the
-   **Splits** report shows — both are summed from one base grid,
-   so they cannot disagree). Click a cell to send the cursor **and** the playhead
-   to that section; the fastest time in each column is highlighted.
-4. **Compare one section across laps.** With a sector selected, **Lap +** /
+   [Syncing the video precisely](#syncing-the-video-precisely) below. The sync
+   controls sit under the header; **Sync** in the header hides or shows them.
+3. **Play.** While the footage plays, it drives everything: the HUD values, the
+   cursor line on the strip plot, the kart's dot on the map and the lap/sector
+   readout all move with every frame of the footage, and every other panel
+   follows the shared cursor. The HUD shows exactly what the session logged at
+   that frame's moment, with the sync's offset and clock rate applied.
+4. **Scrub.** Click or drag on the strip plot, or on the map, and the footage
+   jumps to that moment. Playback pauses first, so the footage follows the
+   cursor. While the footage is paused, any cursor move seeks it — the measures
+   bar's scrubber too.
+5. **Review lap by lap.** The grid on the right is one row per lap and one cell
+   per split, showing the time spent in each (the same numbers the **Splits**
+   report shows — both are summed from one base grid, so they cannot disagree).
+   Click a lap or a cell to send the cursor **and** the footage there; the strip
+   plot and the map switch to that lap, and the fastest time in each column is
+   highlighted.
+6. **Play a lap.** **Play Lap** (⌥⌘P) plays exactly the selected lap — or the
+   lap under the cursor — from its first frame and stops at its end. A selected
+   sector widens to its whole lap. Turn on **Loop Lap** (⌥⌘L) to replay it. With
+   a sector selected, **Play Section** plays just that sector, and **Lap +** /
    **Lap −** hold that section and move through the laps — the same corner, lap
-   after lap. **Play Section** plays exactly the selected window, and **Loop
-   Section** repeats it.
+   after lap.
 
-While the footage plays it drives the shared cursor, so every other panel
-follows; while it is paused, scrubbing the plot seeks the video instead. A
-section the footage does not cover is dimmed and cannot be played, rather than
-seeking to a wrong frame.
+- **No footage here.** When the footage doesn't cover the cursor (before the
+  camera started, after it stopped), the picture dims and says *No footage
+  here*. The HUD, the plot and the map keep working on the telemetry alone. A
+  section the footage does not cover is dimmed in the grid and cannot be played.
+- **The HUD sits on the picture.** It is drawn on the part of the player that
+  shows video, not on the black bars of a letterboxed or pillarboxed window, so
+  what you see placed is where the export places it.
+- **Arrange the panes.** Drag the dividers between the player, the plot, the
+  map and the grid. **Plot**, **Map** and **Laps** in the header hide or show
+  those panes. The arrangement is saved with the workspace.
+- **VoiceOver.** The HUD reads as one sentence, for example *Lap 7, 1:02.3,
+  speed 84 km/h, delta minus 0.21*, leaving out anything the session cannot say
+  at that moment.
+- **Show HUD** (⇧⌘H) hides or shows the overlay without losing its layout. A
+  workspace with no overlay yet starts with the HUD off, on the *Kart coaching*
+  preset.
 
 ### Syncing the video precisely
 
@@ -148,14 +178,41 @@ seeking to a wrong frame.
   sync action. Saving the workspace keeps the offset, the clock rate and the
   status.
 
+### The overlay editor
+
+**Edit Overlay** (⇧⌘E) arranges the HUD on the video itself. The side column
+becomes the editor:
+
+- **Show HUD**, a **Preset** menu (the three built-in presets and your own),
+  and the **Units** (metric or imperial).
+- **Widgets**: a toggle for each widget. A widget the session cannot feed shows
+  a warning sign; its tooltip says why (for example *No RPM channel*).
+- **Options** for the selected widget: the RPM bar's full scale and shift light,
+  the delta bar's range, the G-ball's range, the map's rotation, and the
+  **throttle and brake full scales** of the pedals.
+
+On the video, every widget is outlined (dashed when it won't draw for this
+session). Click one to select it.
+
+- **Drag** it to move it, or drag one of its eight handles to resize it.
+  Positions and sizes snap to a 1% grid. A widget stays inside the 3%
+  title-safe margin and can't be made smaller than 3% of the frame.
+- **Arrow keys** nudge the selected widget by 1%; with ⇧, by 5%.
+- **Undo** (⌘Z) and **Redo** (⇧⌘Z) in the Edit menu step through your edits —
+  a whole drag is one step. The last 100 edits are kept.
+- Every edit is saved with the workspace. Opening another workspace starts its
+  overlay with a fresh undo history.
+
+The **Video** menu lists Play Lap, Loop Lap, Show HUD and Edit Overlay with
+their shortcuts.
+
 ## Video overlay layouts
 
 A **video overlay** is a layout of telemetry widgets drawn over the footage:
 speed, an RPM bar, the lap timer, a delta bar, a G-ball, a mini track map, your
-kart's badge and more. One layout drives both the live display over the player
-and the exported MP4, so what you preview is what you export. *Picking, editing
-and exporting an overlay arrive with the Video + Data view and the overlay
-export; this section describes the layouts they share.*
+kart's badge and more. One layout drives both the live HUD in
+[Video + Data](#video--data) and the exported MP4, so what you preview is what
+you export. Pick and arrange it in [the overlay editor](#the-overlay-editor).
 
 ![The three built-in overlay presets in a 16:9 frame, inside the 3% safe area, with the anchor each widget keeps its margin to.](img/video-overlay-presets.svg)
 
@@ -196,14 +253,17 @@ Three presets are built in:
   - The delta bar fills right in red while you lose time and left in green
     while you gain it.
   - The RPM bar's shift light comes on at the widget's shift RPM.
-  - A pedal bar is full at 100, so it reads its channel as a percentage of
-    travel. A layout can store another full scale for each pedal, such as the
-    pressure at full braking for a brake logged in bar. Until the overlay
-    editor offers that setting, a brake logged in bar is drawn against 100.
+  - A pedal bar is full at 100 by default, so it reads its channel as a
+    percentage of travel. For a brake logged in bar, or a throttle in mm, set
+    the pedals' **Brake full scale** or **Throttle full scale** in the overlay
+    editor — for example the pressure at full braking.
   - The G-ball shows lateral G across and acceleration upwards (braking
     downwards), with rings at 0.5 g and 1 g and a one-second trail.
 - **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
-  workspace saved before overlays existed opens with the overlay off.
+  workspace saved before overlays existed opens with the overlay off. If part
+  of a saved overlay can't be read (say, a widget a newer version added), the
+  rest opens and the workspace bar says *Opened with 1 warning*; click it to
+  see what was skipped.
 - **Your own presets.** Your own layouts are kept in `OverlayPresets.json` in
   RaceStudio's Application Support folder; for the sandboxed app that is
   `~/Library/Containers/com.racestudio.RaceStudio/Data/Library/Application Support/RaceStudio/`.
@@ -218,8 +278,9 @@ Three presets are built in:
   min/max decimation, so a tile only fetches the samples it needs to draw.
 - The exact mapping of RS3 analysis features to what has shipped here is tracked
   in the [parity matrix](../PARITY_MATRIX.md).
-- Video review uses the split layout from the **Splits** report, so changing the
-  split count there re-cuts the review grid too.
+- Video + Data uses the split layout from the **Splits** report, so changing
+  the split count there re-cuts the review grid, the map's sector marks and the
+  HUD's sector times too.
 
 ## Next
 

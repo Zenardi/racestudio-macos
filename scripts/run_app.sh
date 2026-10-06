@@ -57,6 +57,11 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 mkdir -p "$APP/Contents/Resources"
 cp AppIcon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# Install the string catalog's resource bundle (as build_app.sh does), so the
+# dev app shows its localized strings rather than "⚠️MISSING:" sentinels.
+RESOURCES="$(dirname "$BIN")/RaceStudio_RaceStudioCore.bundle"
+[ -d "$RESOURCES" ] && cp -R "$RESOURCES" "$APP/Contents/Resources/"
+
 # Sign with a self-signed certificate: macOS 26 silently blocks an ad-hoc
 # (linker-signed) app from the local network, so the MyChron download would
 # fail. No entitlements -- the dev bundle stays unsandboxed.
