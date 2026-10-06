@@ -20,6 +20,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
+use racestudio_analysis::audio_sync::{
+    estimate_offset as estimate_audio_offset, AudioSyncError as CoreAudioSyncError,
+};
 use racestudio_analysis::expr::{channels_referenced, eval_series, parse_str};
 use racestudio_analysis::{
     bundled_tracks, cumulative_distance, delta_t, match_track, resample_uniform, segment_laps,
@@ -338,6 +341,25 @@ pub struct SpectrumDto {
     pub amps: Vec<f64>,
 }
 
+/// A proposed video↔session alignment from engine sound (issue 9.8) — the
+/// analysis crate's [`SyncEstimate`](racestudio_analysis::audio_sync::SyncEstimate)
+/// plus its confidence verdict, so Swift never re-derives the thresholds.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct AudioSyncEstimate {
+    /// `video time = session time + offset_s` (seconds; the `VideoSyncModel`
+    /// convention).
+    pub offset_s: f64,
+    /// Mean salience along the matched pitch curve (≈ 0 for chance).
+    pub score: f64,
+    /// The winning peak over the best rival alignment ≥ 2 s away.
+    pub peak_ratio: f64,
+    /// The fitted `k` of `pitch = k·RPM` (e.g. `1/120` for a four-stroke).
+    pub pitch_per_rpm: f64,
+    /// Whether the estimate clears both confidence thresholds — only then may
+    /// the app offer it for one-click apply.
+    pub confident: bool,
+}
+
 /// The window function applied before an [`SessionHandle::fft_spectrum`] transform.
 #[derive(Debug, Clone, Copy, uniffi::Enum)]
 pub enum SpectrumWindow {
@@ -403,6 +425,17 @@ pub enum AnalysisError {
         /// The window end.
         end: f64,
     },
+    /// Audio sync (9.8): the audio, the RPM trace, or every overlap the search
+    /// window allows is under 20 s.
+    AudioTooShort,
+    /// Audio sync (9.8): the audio is silent throughout.
+    NoEnginePitch,
+    /// Audio sync (9.8): the RPM channel has no usable samples.
+    NoUsableRpm,
+    /// Audio sync (9.8): the RPM never changes, so there is nothing to align.
+    FlatRpm,
+    /// Audio sync (9.8): the sample rate is too low for the pitch band.
+    InvalidAudio,
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -426,11 +459,28 @@ impl std::fmt::Display for AnalysisError {
             AnalysisError::WindowOutOfBounds { start, end } => {
                 write!(f, "window out of bounds: [{start}, {end})")
             }
+            AnalysisError::AudioTooShort => CoreAudioSyncError::TooShort.fmt(f),
+            AnalysisError::NoEnginePitch => CoreAudioSyncError::NoPitch.fmt(f),
+            AnalysisError::NoUsableRpm => CoreAudioSyncError::NoRpm.fmt(f),
+            AnalysisError::FlatRpm => CoreAudioSyncError::FlatSignal.fmt(f),
+            AnalysisError::InvalidAudio => CoreAudioSyncError::InvalidInput.fmt(f),
         }
     }
 }
 
 impl std::error::Error for AnalysisError {}
+
+impl From<CoreAudioSyncError> for AnalysisError {
+    fn from(err: CoreAudioSyncError) -> Self {
+        match err {
+            CoreAudioSyncError::TooShort => AnalysisError::AudioTooShort,
+            CoreAudioSyncError::NoPitch => AnalysisError::NoEnginePitch,
+            CoreAudioSyncError::NoRpm => AnalysisError::NoUsableRpm,
+            CoreAudioSyncError::FlatSignal => AnalysisError::FlatRpm,
+            CoreAudioSyncError::InvalidInput => AnalysisError::InvalidAudio,
+        }
+    }
+}
 
 impl From<CoreAnalysisError> for AnalysisError {
     fn from(err: CoreAnalysisError) -> Self {
@@ -1053,6 +1103,52 @@ impl SessionHandle {
         Ok(SpectrumDto {
             freqs: spec.freqs().to_vec(),
             amps: spec.amps().to_vec(),
+        })
+    }
+
+    /// Propose the offset between the camera audio `pcm` (mono, `sample_rate`
+    /// Hz — decimate to ~8 kHz first) and this session, by matching the engine
+    /// pitch against the `rpm_channel` (issue 9.8). Offsets are searched in
+    /// `[min_offset_s, max_offset_s]`, in the `VideoSyncModel` convention:
+    /// `video time = session time + offset`, the session clock being the
+    /// channel's timecode in seconds.
+    ///
+    /// The estimate is a **proposal**: it carries its score, its ratio to the
+    /// best rival alignment and whether it clears the confidence thresholds,
+    /// and is never applied by the core.
+    ///
+    /// # Errors
+    /// - [`AnalysisError::MissingChannel`] if `rpm_channel` is not in the session.
+    /// - [`AnalysisError::WindowOutOfBounds`] for a `NaN` or inverted window.
+    /// - [`AnalysisError::AudioTooShort`], [`AnalysisError::NoEnginePitch`],
+    ///   [`AnalysisError::NoUsableRpm`], [`AnalysisError::FlatRpm`],
+    ///   [`AnalysisError::InvalidAudio`] — the estimator's typed refusals.
+    pub fn estimate_audio_sync(
+        &self,
+        rpm_channel: String,
+        pcm: Vec<f32>,
+        sample_rate: u32,
+        min_offset_s: f64,
+        max_offset_s: f64,
+    ) -> Result<AudioSyncEstimate, AnalysisError> {
+        FfiWindow {
+            start: min_offset_s,
+            end: max_offset_s,
+        }
+        .validate()?;
+        let samples = channel_samples(&self.session, &rpm_channel)
+            .ok_or(AnalysisError::MissingChannel { name: rpm_channel })?;
+        // Channel timecodes are milliseconds; the estimator and the video sync
+        // speak seconds.
+        let rpm: Vec<(f64, f64)> = samples.iter().map(|&(ms, v)| (ms / 1000.0, v)).collect();
+        let estimate =
+            estimate_audio_offset(&pcm, sample_rate, &rpm, (min_offset_s, max_offset_s))?;
+        Ok(AudioSyncEstimate {
+            offset_s: estimate.offset_s,
+            score: estimate.score,
+            peak_ratio: estimate.peak_ratio,
+            pitch_per_rpm: estimate.pitch_per_rpm,
+            confident: estimate.is_confident(),
         })
     }
 }

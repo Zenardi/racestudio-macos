@@ -12,6 +12,8 @@
 #[path = "analysis/support/mod.rs"]
 mod support;
 
+#[path = "analysis/audio_sync.rs"]
+mod audio_sync;
 #[path = "analysis/decimate.rs"]
 mod decimate;
 #[path = "analysis/delta.rs"]

@@ -39,6 +39,12 @@
 //! then reading the auto start/finish and sector splits off the matched track's
 //! geometry instead of from hand-placed beacons.
 //!
+//! The ninth layer (issue 9.8) is **audio sync** ([`mod@audio_sync`]): the
+//! video↔session offset estimated from the camera's engine sound against the
+//! session's `RPM` channel ([`audio_sync::estimate_offset`]), invariant to the
+//! unknown pitch/RPM ratio, with a confidence verdict the app gates one-click
+//! apply on.
+//!
 //! Every fallible entry point returns [`Result`] and never panics on caller
 //! input — the [`AnalysisError`] enum for the numeric layers, and the dedicated
 //! [`ExprError`](expr::ExprError) for the expression engine.
@@ -50,6 +56,7 @@
     deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
 )]
 
+pub mod audio_sync;
 pub mod decimate;
 pub mod delta;
 pub mod derived;

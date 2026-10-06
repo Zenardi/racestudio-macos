@@ -259,6 +259,12 @@ import RaceStudioFFIBindings
         #expect(ExpressionEngineError(AnalysisError.EmptyRange(message: "c")) == .other(message: "c"))
         #expect(ExpressionEngineError(AnalysisError.LapOutOfRange(message: "d")) == .other(message: "d"))
         #expect(ExpressionEngineError(AnalysisError.WindowOutOfBounds(message: "e")) == .other(message: "e"))
+        // The audio-sync refusals (issue 9.8) never come from an expression, but
+        // the mapping stays total.
+        for error in [AnalysisError.AudioTooShort(message: "f"), .NoEnginePitch(message: "f"),
+                      .NoUsableRpm(message: "f"), .FlatRpm(message: "f"), .InvalidAudio(message: "f")] {
+            #expect(ExpressionEngineError(error) == .other(message: "f"))
+        }
     }
 
     @MainActor @Test func test_ffi_evaluator_maps_engine_errors() async throws {
