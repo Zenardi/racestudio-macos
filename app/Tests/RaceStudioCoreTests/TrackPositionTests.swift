@@ -100,6 +100,18 @@ import CoreGraphics
         }
     }
 
+    /// A kart that sits still before it first moves already faces the way it
+    /// sets off.
+    @Test func test_a_stationary_start_takes_the_first_heading() throws {
+        let start = (0..<3).map { GPSTrackPoint(coordinate: GPSCoord(latitude: 45, longitude: 12),
+                                                distance: 0, time: Double($0) / 10) }
+        let off = GPSTrackPoint(coordinate: GPSCoord(latitude: 45, longitude: 12.0001), distance: 0, time: 0.3)
+
+        let reading = try #require(TrackPosition(track: start + [off], laps: []).reading(at: 0.05)?.heading)
+
+        #expect(abs(reading - 90) < 1e-6, "it sets off east")
+    }
+
     /// A kart that never moves has no direction of travel.
     @Test func test_a_kart_that_never_moves_has_no_heading() throws {
         let still = (0..<5).map { GPSTrackPoint(coordinate: GPSCoord(latitude: 45, longitude: 12),

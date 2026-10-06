@@ -107,6 +107,39 @@ independent reference.
   GPS-speed golden (~5e-7 m/s); accumulated over a sub-hour session this stays far
   inside a centimetre.
 
+## Telemetry frames (9.9)
+
+The `<name>.telemetry.json` golden is the oracle for the Swift
+`TelemetryTimeline` (the per-frame sampler the video overlay draws from),
+asserted by `app/Tests/RaceStudioCoreTests/TelemetryTimelineGoldenTests.swift`
+over the real FFI. `scripts/gen_telemetry_golden.py` computes it independently of
+the code under test: libxrk decodes the sample values and numpy evaluates the
+frame contract at 10 instants — linear interpolation of each channel, the beacon
+lap table, and the live delta (a numpy port of `delta_t`, read at the fraction of
+the lap covered).
+
+| Aspect | Field | Comparison | Tolerance |
+| --- | --- | --- | --- |
+| **frame** | speed (km/h), lateral / longitudinal G (g), live delta (s) | value, golden rounded to 6 dp | **1e-6** (½ quantum + noise) |
+| **frame** | rpm | value, golden rounded to 3 dp | **1e-3** |
+| **frame** | lap number, out-lap / in-lap flags | integer / bool | **exact** |
+| **frame** | elapsed lap time, last / best-so-far / best lap time | seconds | **1e-3** (millisecond beacon markers) |
+
+- **One clock.** Each instant is `(lap, seconds past its beacon)` and both sides
+  sample on the raw logger clock the app's session time uses. libxrk's constant
+  `time_offset` is added back (recovered from the first GPS record, which no
+  repair moves), and the GPS timecodes are taken from the raw records with the
+  issue-164 out-of-order repair the decoder documents. libxrk repairs that record
+  with a different step, which otherwise offsets the whole GPS stream from the CHS
+  channels by ~85 ms on `aim_official_test.xrk`.
+- **Laps are the beacon table**, as in the `laps` golden — not libxrk's
+  `log.laps`, which on this file is GPS-detected and differs by tens of
+  milliseconds.
+- **RPM is interpolated**, although libxrk flags this channel sample-held: the
+  frame contract interpolates every continuous role and step-holds only gear.
+- Measured on `aim_official_test.xrk`: speed, G and delta agree to < 5e-7, rpm
+  to < 4e-4 — the golden's own rounding.
+
 ## Adding a fixture
 
 The harness is **data-driven**: drop a new `<name>.xrk` into `fixtures/` and its

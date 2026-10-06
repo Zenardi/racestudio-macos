@@ -244,7 +244,9 @@ public final class AnalysisSession {
     /// The decoded session snapshot this pump serves.
     public let session: Session
 
-    private let dataSource: SessionDataSource
+    /// The source windowed reads go through — internal so a loader can read
+    /// whole channels off the main actor (the telemetry timeline, issue 9.9).
+    let dataSource: SessionDataSource
 
     /// - Parameters:
     ///   - session: the decoded session (metadata/channels/laps).

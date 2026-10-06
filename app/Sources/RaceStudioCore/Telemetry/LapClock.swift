@@ -121,11 +121,6 @@ public struct LapClock: Equatable, Sendable {
             sector: entry.sectors.flatMap { LapSectorTimeline.sector(in: $0, at: t) })
     }
 
-    /// The lap holding `t` — the shared lookup ``LiveDelta`` keys its curves by.
-    func lap(at t: Double, hint: inout Int) -> LapID? {
-        entryIndex(at: t, hint: &hint).map { entries[$0].lap }
-    }
-
     // MARK: - Internals
 
     /// The entry whose window holds `t`: the hinted entry or its successor when

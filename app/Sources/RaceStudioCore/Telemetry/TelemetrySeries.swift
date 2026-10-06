@@ -109,35 +109,12 @@ public struct TelemetrySeries: Equatable, Sendable {
 
     // MARK: - Internals
 
-    /// How many samples a forward hint walks before falling back to the binary
-    /// search: covers a frame step at any realistic channel rate.
-    private static let hintWalk = 8
-
-    /// The index of the last sample at or before `t`, or `nil` when `t` is not
-    /// finite or lies outside `[first, last]`. Updates `hint` to it.
+    /// The index of the last sample at or before `t` (the shared hinted search),
+    /// or `nil` when `t` is not finite or lies outside `[first, last]`.
     private func bracket(at t: Double, hint: inout Int) -> Int? {
-        guard t.isFinite, let first = times.first, let last = times.last,
-              t >= first, t <= last else { return nil }
-        if hint >= 0, hint < times.count, times[hint] <= t {
-            var index = hint
-            var steps = 0
-            while index + 1 < times.count, times[index + 1] <= t, steps < Self.hintWalk {
-                index += 1
-                steps += 1
-            }
-            if index + 1 == times.count || times[index + 1] > t {
-                hint = index
-                return index
-            }
-        }
-        // First index whose time is > t, minus one: the last sample at or before t.
-        var low = 0, high = times.count
-        while low < high {
-            let mid = (low + high) / 2
-            if times[mid] <= t { low = mid + 1 } else { high = mid }
-        }
-        hint = low - 1
-        return low - 1
+        guard t.isFinite, let last = times.last, t <= last else { return nil }
+        let index = lastIndex(atOrBefore: t, in: times, hint: &hint)
+        return index >= 0 ? index : nil
     }
 
     private func finite(_ value: Double) -> Double? {

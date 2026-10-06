@@ -130,6 +130,20 @@ import Foundation
         #expect(delta().delta(at: 15, lap: LapID(7)) == nil, "an unknown lap")
     }
 
+    /// A lap holding no odometer fix, or an odometer running backwards across a
+    /// lap, has no lap distance to read the series by.
+    @Test func test_a_lap_without_usable_fixes_reads_nil() {
+        let sliver = Lap(index: 3, startTimeS: 5.01, durationS: 0.05, endTimeS: 5.06)
+        let between = LiveDelta(reference: LapID(0), laps: laps() + [sliver], distance: odometer()) { _, _ in
+            Self.lapOneVsZero
+        }
+        let backwards = TelemetrySeries(times: [10, 10.1, 10.2, 21], values: [150, 100, 120, 130])
+        let reversed = LiveDelta(reference: LapID(0), laps: laps(), distance: backwards) { _, _ in Self.lapOneVsZero }
+
+        #expect(between.delta(at: 5.03, lap: LapID(3)) == nil, "no fix inside the lap window")
+        #expect(reversed.delta(at: 10.05, lap: LapID(1)) == nil, "the odometer ran backwards")
+    }
+
     // MARK: - Caching and reference switching
 
     /// Each lap's series is fetched once, however many frames read it.

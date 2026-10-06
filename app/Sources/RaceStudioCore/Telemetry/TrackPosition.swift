@@ -65,6 +65,16 @@ public struct TrackPosition: Sendable {
     /// Whether the session has no GPS fix to place the kart by.
     public var isEmpty: Bool { x.isEmpty }
 
+    /// The span the fixes cover, or `nil` without GPS.
+    public var timeRange: ClosedRange<Double>? { x.timeRange }
+
+    /// The bytes the projected track retains (the three series share one time
+    /// axis, counted once).
+    var byteCount: Int {
+        (x.times.count + x.values.count + y.values.count + heading.values.count + racingLine.count * 2)
+            * MemoryLayout<Double>.stride
+    }
+
     /// The kart's position at session time `t`, or `nil` outside the fixes or
     /// inside a GPS gap.
     public func reading(at t: Double) -> TrackPositionReading? {

@@ -123,6 +123,11 @@ public final class LiveDelta: Sendable {
         }
     }
 
+    /// The bytes retained: the odometer and every cached curve.
+    var byteCount: Int {
+        distance.byteCount + cache.withLock { $0.values.reduce(0) { $0 + ($1?.series.byteCount ?? 0) } }
+    }
+
     // MARK: - Internals
 
     /// `lap`'s cached curve, fetched and built on first use. Built outside the

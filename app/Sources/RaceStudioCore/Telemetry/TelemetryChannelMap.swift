@@ -49,14 +49,15 @@ public struct TelemetryChannelMap: Equatable, Sendable {
     public let channels: [Channel]
     private var bindings: [TelemetryRole: TelemetryChannelBinding]
 
-    /// The logger delta channels this session carries, in preference order.
+    /// The logger delta channels this session carries (as the session names
+    /// them), in preference order.
     public let loggerDeltaChannels: [String]
 
     private init(channels: [Channel], bindings: [TelemetryRole: TelemetryChannelBinding]) {
         self.channels = channels
         self.bindings = bindings
-        self.loggerDeltaChannels = Self.loggerDeltaCandidates.filter { candidate in
-            channels.contains { Self.normalized($0.name) == Self.normalized(candidate) && $0.sampleCount > 0 }
+        self.loggerDeltaChannels = Self.loggerDeltaCandidates.compactMap { candidate in
+            channels.first { Self.normalized($0.name) == Self.normalized(candidate) && $0.sampleCount > 0 }?.name
         }
     }
 

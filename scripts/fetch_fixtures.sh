@@ -63,4 +63,6 @@ fi
 "$VENV/bin/python3" -m pip install --quiet libxrk
 "$VENV/bin/python3" "$SCRIPT_DIR/gen_goldens.py" "$GOLDEN" \
   "$FIX/aim_official_test.xrk" "$FIX/fuji_0033.xrk"
+# Telemetry-frame oracle (issue 9.9): the MyChron kart sample only.
+"$VENV/bin/python3" "$SCRIPT_DIR/gen_telemetry_golden.py" "$GOLDEN" "$FIX/aim_official_test.xrk"
 echo "Done."

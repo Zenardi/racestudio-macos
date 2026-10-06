@@ -123,6 +123,8 @@ import Foundation
 
         #expect(series.times == [0, 0.1, 0.2, 0.3])
         #expect(series.values == [0, 1, 2, 3])
+        #expect(TelemetrySeries(times: [0, 0.2, 0.1], values: [1, 2, 3]).times == [0, 0.2],
+                "equal-length arrays are sanitised too")
     }
 
     // MARK: - Hint cursor
