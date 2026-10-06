@@ -36,6 +36,21 @@ import RaceStudioFFIBindings
         #expect(AudioSyncFailure(AnalysisError.WindowOutOfBounds(message: "")) == .estimationFailed)
     }
 
+    /// The production estimator surfaces the core's refusal as its typed
+    /// failure: a clip under 20 s is too short to align.
+    @MainActor
+    @Test func test_the_estimator_throws_the_core_refusal() async throws {
+        guard let xrk = xrkOrSkip() else { return }
+        let loaded = try await FFISessionLoader().load(xrk) { _ in }
+        let provider = try #require(loaded.dataSource as? AudioSyncEstimatorProviding)
+        let estimator = try #require(provider.audioSyncEstimator)
+
+        #expect(throws: AudioSyncFailure.tooShort) {
+            _ = try estimator.estimate(pcm: [Float](repeating: 0.1, count: 8_000), sampleRate: 8_000,
+                                       rpmChannel: "RPM", searchRange: -100...100)
+        }
+    }
+
     /// Engine audio rendered from the public sample's RPM at a known offset is
     /// aligned to within one 29.97 fps frame, end to end.
     @MainActor

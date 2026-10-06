@@ -48,6 +48,16 @@ import Foundation
         await run.value
     }
 
+    /// Only a finished run carries a proposal.
+    @Test func test_only_a_finished_state_carries_a_proposal() {
+        let proposal = AudioSyncProposal.weak(offset: 2, confidence: 0.1)
+
+        #expect(AutoSyncState.finished(proposal).proposal == proposal)
+        #expect(AutoSyncState.idle.proposal == nil)
+        #expect(AutoSyncState.running(.matching).proposal == nil)
+        #expect(!AutoSyncState.finished(proposal).isRunning)
+    }
+
     // MARK: - Applying
 
     /// Applying a confident proposal syncs the footage at unit rate and marks it

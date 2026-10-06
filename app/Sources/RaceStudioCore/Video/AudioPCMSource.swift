@@ -57,11 +57,8 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
         let track = try await audioTrack(of: asset)
         let duration = (try? await asset.load(.duration).seconds) ?? 0
         try Task.checkCancellation()
-        let reader = try Self.reader(for: asset, track: track)
+        let (reader, output) = try Self.reader(for: asset, track: track)
         defer { if reader.status == .reading { reader.cancelReading() } }
-        guard let output = reader.outputs.first as? AVAssetReaderTrackOutput else {
-            throw AudioSyncFailure.unreadableAudio
-        }
         var decoding = Decoding(targetRate: targetRate, duration: duration)
         while let buffer = output.copyNextSampleBuffer() {
             try Task.checkCancellation()
@@ -85,8 +82,10 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
         return track
     }
 
-    /// A started reader decoding `track` to interleaved native-endian float32.
-    private static func reader(for asset: AVURLAsset, track: AVAssetTrack) throws -> AVAssetReader {
+    /// A started reader decoding `track` to interleaved native-endian float32,
+    /// with the output it reads from.
+    private static func reader(for asset: AVURLAsset,
+                               track: AVAssetTrack) throws -> (AVAssetReader, AVAssetReaderTrackOutput) {
         guard let reader = try? AVAssetReader(asset: asset) else { throw AudioSyncFailure.unreadableAudio }
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
             AVFormatIDKey: kAudioFormatLinearPCM,
@@ -99,7 +98,7 @@ public struct AVAssetAudioPCMSource: AudioPCMSource {
         guard reader.canAdd(output) else { throw AudioSyncFailure.unreadableAudio }
         reader.add(output)
         guard reader.startReading() else { throw AudioSyncFailure.unreadableAudio }
-        return reader
+        return (reader, output)
     }
 }
 

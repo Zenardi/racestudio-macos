@@ -82,6 +82,21 @@ import Foundation
         }
     }
 
+    /// A file whose audio header promises samples it does not hold reads as
+    /// unreadable, never as an empty clip.
+    @Test func test_a_truncated_file_is_unreadable() async throws {
+        let dir = try MediaFixtures.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("cut.wav")
+        try MediaFixtures.writeTone(to: url, freq: 100, seconds: 1)
+        let whole = try Data(contentsOf: url)
+        try whole.prefix(64).write(to: url)
+
+        await #expect(throws: AudioSyncFailure.self) {
+            _ = try await AVAssetAudioPCMSource(url: url).monoPCM(targetRate: 8_000) { _ in }
+        }
+    }
+
     /// Cancelling mid-read stops at the next chunk with `CancellationError`.
     @Test func test_cancelling_mid_read_throws_cancellation() async throws {
         let dir = try MediaFixtures.tempDirectory()
