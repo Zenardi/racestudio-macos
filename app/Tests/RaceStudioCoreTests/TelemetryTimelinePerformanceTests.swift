@@ -23,9 +23,11 @@ import Foundation
     private static let frameCount = 18_000
 
     #if DEBUG
-    // ~10x the instrumented debug run measured locally (~0.1 s / ~0.15 s).
-    private static let sequentialBudget = Duration.seconds(1)
-    private static let randomBudget = Duration.seconds(2)
+    // The instrumented debug run takes ~0.1 s / ~0.15 s locally and ~0.31 s /
+    // ~0.36 s on the CI runner, beside the other suites running in parallel;
+    // these leave >6x for a loaded runner and still catch a per-frame scan.
+    private static let sequentialBudget = Duration.seconds(2)
+    private static let randomBudget = Duration.seconds(3)
     #else
     private static let sequentialBudget = Duration.milliseconds(50)
     private static let randomBudget = Duration.milliseconds(200)
