@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" role="img" aria-label="Export Video with Overlay (schematic): sync the video in Video + Data, open the export sheet with Option-Command-E, pick the range, overlay, resolution, codec and sound while the live estimate updates, choose where to save, then watch the progress with Cancel and Hide, and finally Reveal in Finder or Open.">
+  <style>
+    .tile{fill:#f4f7fc;stroke:#3b6bd6;stroke-width:1.5}
+    .warn{fill:#fdf1e3;stroke:#e08a1e;stroke-width:1.2}
+    .video{fill:#1d2a40;stroke:#3b6bd6;stroke-width:1.5}
+    .hud{fill:#ffffff;fill-opacity:.18;stroke:#ffffff;stroke-width:1}
+    .bar{fill:#3b6bd6}
+    .track{fill:#dbe3f1}
+    .t{font:13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .s{font:11px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .w{font:11px -apple-system,Segoe UI,sans-serif;fill:#ffffff}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .h{font:bold 13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .arrow{stroke:#3b6bd6;stroke-width:2;fill:none;marker-end:url(#tip)}
+  </style>
+  <defs>
+    <marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#3b6bd6"/>
+    </marker>
+  </defs>
+  <text class="lbl" x="20" y="22">Export Video with Overlay — from a synced video to a shareable MP4 (schematic)</text>
+
+  <!-- 1. Synced video -->
+  <text class="h" x="20" y="48">1 · Sync in Video + Data</text>
+  <rect class="video" x="20" y="58" width="200" height="112" rx="4"/>
+  <rect class="hud" x="30" y="66" width="62" height="14"/><text class="w" x="34" y="77">kart badge</text>
+  <rect class="hud" x="150" y="66" width="60" height="26"/><text class="w" x="156" y="82">lap info</text>
+  <rect class="hud" x="30" y="140" width="42" height="22"/><text class="w" x="34" y="155">speed</text>
+  <rect class="hud" x="84" y="148" width="80" height="12"/><text class="w" x="104" y="158">RPM</text>
+  <rect class="hud" x="170" y="118" width="40" height="44"/><text class="w" x="174" y="144">map</text>
+  <rect class="tile" x="20" y="176" width="200" height="22" rx="3"/>
+  <text class="s" x="28" y="191">Synced on lap 3 + lap 14 · ⌥⌘E</text>
+  <path class="arrow" d="M224 118 L262 118"/>
+
+  <!-- 2. The export sheet -->
+  <text class="h" x="268" y="48">2 · Choose what to export</text>
+  <rect class="tile" x="268" y="58" width="252" height="232" rx="6"/>
+  <text class="t" x="280" y="80">Export Video with Overlay</text>
+  <rect class="warn" x="278" y="88" width="232" height="30" rx="3"/>
+  <text class="s" x="286" y="101">⚠ Not synced? The sheet warns,</text>
+  <text class="s" x="286" y="113">with Sync First.</text>
+  <text class="s" x="280" y="138">Export:  Best lap — lap 9 (0:49.765)</text>
+  <text class="s" x="280" y="156">Overlay:  Kart coaching</text>
+  <text class="s" x="280" y="174">Resolution:  1080p</text>
+  <text class="s" x="280" y="192">Codec:  H.264 — plays everywhere</text>
+  <text class="s" x="280" y="210">☑ Include the video’s sound</text>
+  <text class="s" x="280" y="232">Estimate:  0:50 · about 79 MB · 1920 × 1080</text>
+  <rect class="tile" x="384" y="252" width="56" height="24" rx="4"/><text class="s" x="392" y="268">Cancel</text>
+  <rect class="bar" x="448" y="252" width="62" height="24" rx="4"/><text class="w" x="456" y="268">Export…</text>
+  <path class="arrow" d="M524 174 L562 174"/>
+
+  <!-- 3. Save, then progress -->
+  <text class="h" x="568" y="48">3 · Save and watch</text>
+  <rect class="tile" x="568" y="58" width="172" height="58" rx="4"/>
+  <text class="s" x="578" y="78">Save as:</text>
+  <text class="s" x="578" y="94">Adria Kart – 2016-01-23 –</text>
+  <text class="s" x="578" y="108">Lap 9 (0'49.765).mp4</text>
+  <rect class="tile" x="568" y="126" width="172" height="104" rx="4"/>
+  <text class="s" x="578" y="144">Exporting “… Lap 9 ….mp4”</text>
+  <rect class="track" x="578" y="152" width="152" height="8" rx="4"/>
+  <rect class="bar" x="578" y="152" width="64" height="8" rx="4"/>
+  <text class="s" x="578" y="176">42% · frame 627 of 1,493</text>
+  <text class="s" x="578" y="190">0:12 elapsed · about 0:17 left</text>
+  <rect class="tile" x="604" y="200" width="52" height="22" rx="4"/><text class="s" x="614" y="215">Hide</text>
+  <rect class="tile" x="664" y="200" width="66" height="22" rx="4"/><text class="s" x="674" y="215">Cancel</text>
+  <rect class="tile" x="568" y="240" width="172" height="50" rx="4"/>
+  <text class="s" x="578" y="258">✓ Exported</text>
+  <text class="s" x="578" y="278">Reveal in Finder · Open</text>
+
+  <!-- Footer -->
+  <text class="lbl" x="20" y="320">The overlay is drawn by the same renderer as the live HUD, so what you preview is what you export.</text>
+  <text class="lbl" x="20" y="340">Cancel, a failure or quitting never leaves a partial file: the export writes beside its destination and moves into place only when done.</text>
+  <text class="lbl" x="20" y="360">Quitting, closing the window or closing the session while an export runs asks first.</text>
+</svg>

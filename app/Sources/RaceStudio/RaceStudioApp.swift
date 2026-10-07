@@ -17,6 +17,8 @@ import RaceStudioCore
 /// launch instead of presenting the document open panel.
 @main
 struct RaceStudioApp: App {
+    /// Owns the app's overlay export and asks before quitting mid-export (issue 9.14).
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
     @Environment(\.openWindow) private var openWindow
 
@@ -26,6 +28,8 @@ struct RaceStudioApp: App {
                 .environment(\.theme, .raceStudio)  // brand design tokens (issue 7.3)
                 .environmentObject(model)
                 .environmentObject(model.store)
+                .environmentObject(appDelegate.videoExport)
+                .environment(\.videoExport, appDelegate.videoExport)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
@@ -57,12 +61,16 @@ struct RaceStudioApp: App {
 
             // The Video + Data panel's commands and shortcuts (issue 9.12).
             VideoDataCommands()
+            // File ▸ Export Video with Overlay… (⌥⌘E, issue 9.14).
+            ExportVideoCommands()
         }
 
         DocumentGroup(viewing: XRKDocument.self) { _ in
             ContentView()
                 .environmentObject(model)
                 .environmentObject(model.store)
+                .environmentObject(appDelegate.videoExport)
+                .environment(\.videoExport, appDelegate.videoExport)
         }
 
         #if canImport(RaceStudioFFIBindings)

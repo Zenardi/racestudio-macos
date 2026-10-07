@@ -7,7 +7,9 @@
 # (core/racestudio-decode/tests/golden_e2e_test.rs): it decodes every
 # fixtures/*.xrk with `decode_session` and asserts metadata/channels/gps/laps
 # match fixtures/golden/*.json within the documented tolerances
-# (docs/DECODE_TOLERANCES.md), exiting non-zero on any mismatch.
+# (docs/DECODE_TOLERANCES.md), exiting non-zero on any mismatch. The full gate
+# then runs the CSV corpus conformance and (issue 9.14) the headless Export
+# Video with Overlay smoke (OverlayExportEndToEndTests).
 #
 # Usage:
 #   scripts/e2e.sh                 full gate: build pipeline + run harness
@@ -73,6 +75,20 @@ else
   echo "==> [e2e 4b/4] CSV import/export corpus conformance (require fixtures)"
   RS_REQUIRE_CORPUS=1 \
     cargo test -p racestudio-io --test csv_export_test --test csv_import_test
+
+  # Export Video with Overlay, end to end (issue 9.14): the public sample
+  # session plus synthetic onboard footage of its best lap, synced on the lap's
+  # start, exported from the export sheet at 320×180 with the Kart coaching
+  # overlay — the output's duration and every checked frame's overlay timing
+  # asserted. RS_REQUIRE_CORPUS makes a missing sample a failure, not a skip;
+  # --enable-code-coverage matches the coverage gate's build, so its test
+  # bundle is reused rather than rebuilt. It runs even where the video tests
+  # are skipped (issue 200: GitHub's VMs paravirtualize VideoToolbox), alone,
+  # so the VM serves this one export; the watchdog bounds it.
+  echo "==> [e2e 4c/4] overlay export end to end (OverlayExportEndToEndTests)"
+  # On CI a hung export's samples join the crash reports the job uploads.
+  export WATCHDOG_SAMPLE_DIR="${WATCHDOG_SAMPLE_DIR:-${RUNNER_TEMP:+$RUNNER_TEMP/crash-reports}}"
+  RACESTUDIO_VIDEO_TESTS=1 RS_REQUIRE_CORPUS=1 bash "$SCRIPT_DIR/watchdog.sh" "${SWIFT_TEST_TIMEOUT:-900}" bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage --filter OverlayExportEndToEndTests
 fi
 
 if [ "$GOLDENS_ONLY" -eq 1 ]; then

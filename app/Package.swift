@@ -84,6 +84,7 @@ if ffiEnabled {
     testExcludes.append("TelemetryTimelineGoldenTests.swift")
     testExcludes.append("AudioSyncFFITests.swift")
     testExcludes.append("OverlayExportRealFootageTests.swift")
+    testExcludes.append("OverlayExportEndToEndTests.swift")
 }
 
 let package = Package(

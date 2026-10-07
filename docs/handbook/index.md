@@ -22,6 +22,9 @@ says so.
    and download sessions over WiFi, with the legal/redistribution notes (M6).
 5. [Troubleshooting](05-troubleshooting.md) — what to check when import, discovery,
    download, or an expression does not behave.
+6. [Video sync and overlay export](06-video-overlay-export.md) — sync the onboard
+   video to the session and export it as an MP4 with the telemetry overlay
+   burned in (epic #145).
 
 ## Scope & conventions
 

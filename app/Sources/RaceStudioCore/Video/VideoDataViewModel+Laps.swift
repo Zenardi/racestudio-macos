@@ -78,10 +78,7 @@ public extension VideoDataViewModel {
     /// What this session can feed the overlay, with the garage `kart` and the
     /// session's `metadata`; `nil` before the telemetry is in.
     func overlayContext(kart: Kart?, metadata: SessionMetadata?) -> OverlaySessionContext? {
-        guard let telemetry else { return nil }
-        return OverlaySessionContext(channelMap: telemetry.channelMap, hasLaps: !review.timeline.isEmpty,
-                                     hasSectors: !review.timeline.sectors.isEmpty,
-                                     hasTrackPosition: !telemetry.position.isEmpty, kart: kart, metadata: metadata)
+        telemetry.map { overlayContext(kart: kart, metadata: metadata, telemetry: $0) }
     }
 
     /// The shared renderer drawing `layout` for this session — the same one the
@@ -89,9 +86,27 @@ public extension VideoDataViewModel {
     /// `locale`. `nil` before the telemetry is in.
     func makeRenderer(layout: OverlayLayout, kart: Kart?, metadata: SessionMetadata?,
                       locale: Locale = .current) -> OverlayRenderer? {
-        guard let telemetry, let session = overlayContext(kart: kart, metadata: metadata) else { return nil }
-        return OverlayRenderer(layout: layout, formatter: OverlayFormatter(locale: locale), session: session,
-                               track: OverlayTrackMap(timeline: telemetry, sectors: review.timeline),
-                               sectors: review.timeline)
+        telemetry.map { makeRenderer(layout: layout, kart: kart, metadata: metadata, locale: locale, telemetry: $0) }
+    }
+}
+
+extension VideoDataViewModel {
+
+    /// What `telemetry` — this session's — can feed the overlay.
+    func overlayContext(kart: Kart?, metadata: SessionMetadata?,
+                        telemetry: TelemetryTimeline) -> OverlaySessionContext {
+        OverlaySessionContext(channelMap: telemetry.channelMap, hasLaps: !review.timeline.isEmpty,
+                              hasSectors: !review.timeline.sectors.isEmpty,
+                              hasTrackPosition: !telemetry.position.isEmpty, kart: kart, metadata: metadata)
+    }
+
+    /// The shared renderer drawing `layout` over `telemetry` — the HUD's, or
+    /// an export's own load of the same session (issue 9.14).
+    func makeRenderer(layout: OverlayLayout, kart: Kart?, metadata: SessionMetadata?, locale: Locale,
+                      telemetry: TelemetryTimeline) -> OverlayRenderer {
+        OverlayRenderer(layout: layout, formatter: OverlayFormatter(locale: locale),
+                        session: overlayContext(kart: kart, metadata: metadata, telemetry: telemetry),
+                        track: OverlayTrackMap(timeline: telemetry, sectors: review.timeline),
+                        sectors: review.timeline)
     }
 }

@@ -128,6 +128,34 @@ test_feature_issue_template_has_six_sections() {
   fi
 }
 
+test_e2e_runs_overlay_export_smoke() {
+  # Given the full e2e gate (issue 9.14), Then it runs the headless Export
+  # Video with Overlay smoke — the OverlayExportEndToEndTests suite — through
+  # the Swift test wrapper with the public sample required, so a missing
+  # fixture fails the gate instead of skipping it.
+  local line
+  line="$(grep -F -- '--filter OverlayExportEndToEndTests' "$ROOT/scripts/e2e.sh" | head -1)"
+  if grep -Fq 'RS_REQUIRE_CORPUS=1' <<<"$line" && grep -Fq 'swift_test.sh' <<<"$line"; then
+    ok "test_e2e_runs_overlay_export_smoke"
+  else
+    bad "test_e2e_runs_overlay_export_smoke" "no required-corpus OverlayExportEndToEndTests run in scripts/e2e.sh"
+  fi
+}
+
+test_e2e_smoke_exports_even_in_a_vm_and_is_bounded() {
+  # Given the e2e smoke (issue 191: "the e2e smoke runs in CI"), Then it runs
+  # even where the video tests are skipped — a CI virtual machine (issue 200),
+  # alone so the VM's VideoToolbox serves one export — and under the watchdog,
+  # so a hung export fails the gate instead of holding the job.
+  local line
+  line="$(grep -F -- '--filter OverlayExportEndToEndTests' "$ROOT/scripts/e2e.sh" | head -1)"
+  if grep -Fq 'RACESTUDIO_VIDEO_TESTS=1' <<<"$line" && grep -Fq 'watchdog.sh' <<<"$line"; then
+    ok "test_e2e_smoke_exports_even_in_a_vm_and_is_bounded"
+  else
+    bad "test_e2e_smoke_exports_even_in_a_vm_and_is_bounded" "line: $line"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 
 echo "Running make/DoD/template tests"
@@ -137,6 +165,8 @@ test_make_setup_fetches_fixtures
 test_dod_doc_matches_issue_checklist
 test_pr_template_embeds_dod
 test_feature_issue_template_has_six_sections
+test_e2e_runs_overlay_export_smoke
+test_e2e_smoke_exports_even_in_a_vm_and_is_bounded
 
 echo
 echo "make tests: $PASS passed, $FAIL failed"

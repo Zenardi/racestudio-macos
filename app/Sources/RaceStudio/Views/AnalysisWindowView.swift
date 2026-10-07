@@ -34,6 +34,9 @@ struct AnalysisWindowView: View {
     // its undo history survive layout switches and can be captured into /
     // restored from the project.
     @StateObject private var video = VideoWorkspace()
+    // Export Video with Overlay (issue 9.14): the sheets this window shows for the
+    // app's export. The export itself is the app's, so it outlives the window.
+    @StateObject private var exporter = VideoExportCoordinator()
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -49,8 +52,12 @@ struct AnalysisWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
-                         video: video.controller, overlayEditor: video.editor)
+            HStack(spacing: 0) {
+                WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
+                             video: video.controller, overlayEditor: video.editor)
+                ExportStatusButton(flow: exporter.flow)
+                    .padding(.trailing, 10)
+            }
             Divider()
             HStack(spacing: 0) {
                 LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
@@ -61,7 +68,11 @@ struct AnalysisWindowView: View {
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
-                              logSheet: logSheet, video: video, analysis: analysis)
+                              logSheet: logSheet, video: video, analysis: analysis,
+                              onExportVideo: { [weak exporter, weak model, video] in
+                                  guard let exporter, let model else { return }
+                                  exporter.open(video: video, window: model)
+                              })
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -69,6 +80,8 @@ struct AnalysisWindowView: View {
             }
         }
         .accessibilityLabel(L10n.string(.chartAnalysisWindow))
+        .modifier(ExportHost(coordinator: exporter, flow: exporter.flow, controller: video.controller,
+                             review: video.review, video: video, window: model, analysis: analysis))
         .onAppear {
             // The window keeps the workspace's copy of the overlay the editor edits,
             // so a save captures every committed edit.
@@ -135,6 +148,8 @@ private struct PanelHost: View {
     /// Not observed: the Video + Data panel observes what it draws.
     let video: VideoWorkspace
     let analysis: AnalysisSession?
+    /// Opens the Export Video with Overlay sheet (issue 9.14).
+    let onExportVideo: () -> Void
 
     var body: some View {
         Group {
@@ -168,7 +183,7 @@ private struct PanelHost: View {
             case .videoReview:
                 VideoDataPanel(model: model, data: video.data, review: video.review, editor: video.editor,
                                splitReport: splitReport, cursor: model.linkedCursor, controller: video.controller,
-                               analysis: analysis)
+                               analysis: analysis, onExportVideo: onExportVideo)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
