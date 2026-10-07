@@ -82,9 +82,11 @@ else
   # overlay — the output's duration and every checked frame's overlay timing
   # asserted. RS_REQUIRE_CORPUS makes a missing sample a failure, not a skip;
   # --enable-code-coverage matches the coverage gate's build, so its test
-  # bundle is reused rather than rebuilt.
+  # bundle is reused rather than rebuilt. It runs even where the video tests
+  # are skipped (issue 200: GitHub's VMs paravirtualize VideoToolbox), alone,
+  # so the VM serves this one export; the watchdog bounds it.
   echo "==> [e2e 4c/4] overlay export end to end (OverlayExportEndToEndTests)"
-  RS_REQUIRE_CORPUS=1 bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage --filter OverlayExportEndToEndTests
+  RACESTUDIO_VIDEO_TESTS=1 RS_REQUIRE_CORPUS=1 bash "$SCRIPT_DIR/watchdog.sh" "${SWIFT_TEST_TIMEOUT:-900}" bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage --filter OverlayExportEndToEndTests
 fi
 
 if [ "$GOLDENS_ONLY" -eq 1 ]; then

@@ -20,8 +20,10 @@ import Testing
 /// timing bar drawn over the overlay shows it, as in the engine's tests.
 ///
 /// Without the sample the test is skipped, unless `RS_REQUIRE_CORPUS` is set
-/// (`scripts/e2e.sh` sets it), when its absence fails the run.
-@Suite struct OverlayExportEndToEndTests {
+/// (`scripts/e2e.sh` sets it), when its absence fails the run. In a virtual
+/// machine the full suite skips it with the other video tests (issue 200);
+/// `scripts/e2e.sh` still runs it there, alone.
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct OverlayExportEndToEndTests {
 
     private static let english = Locale(identifier: "en")
     private static let frame = 1 / SyncedSample.frameRate
