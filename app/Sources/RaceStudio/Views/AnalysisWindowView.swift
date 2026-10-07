@@ -55,7 +55,7 @@ struct AnalysisWindowView: View {
             HStack(spacing: 0) {
                 WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
                              video: video.controller, overlayEditor: video.editor)
-                ExportStatusButton(coordinator: exporter)
+                ExportStatusButton(flow: exporter.flow)
                     .padding(.trailing, 10)
             }
             Divider()
@@ -80,8 +80,8 @@ struct AnalysisWindowView: View {
             }
         }
         .accessibilityLabel(L10n.string(.chartAnalysisWindow))
-        .modifier(ExportHost(coordinator: exporter, controller: video.controller, review: video.review,
-                             video: video, window: model, analysis: analysis))
+        .modifier(ExportHost(coordinator: exporter, flow: exporter.flow, controller: video.controller,
+                             review: video.review, video: video, window: model, analysis: analysis))
         .onAppear {
             // The window keeps the workspace's copy of the overlay the editor edits,
             // so a save captures every committed edit.

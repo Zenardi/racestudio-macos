@@ -29,6 +29,7 @@ struct RaceStudioApp: App {
                 .environmentObject(model)
                 .environmentObject(model.store)
                 .environmentObject(appDelegate.videoExport)
+                .environment(\.videoExport, appDelegate.videoExport)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
@@ -69,6 +70,7 @@ struct RaceStudioApp: App {
                 .environmentObject(model)
                 .environmentObject(model.store)
                 .environmentObject(appDelegate.videoExport)
+                .environment(\.videoExport, appDelegate.videoExport)
         }
 
         #if canImport(RaceStudioFFIBindings)

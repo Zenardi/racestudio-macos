@@ -12,81 +12,57 @@ struct ExportSessionContext {
     let analysis: AnalysisSession?
 }
 
-/// The analysis window's glue for *Export Video with Overlay* (issue 9.14):
-/// it opens the export sheet on the window's footage and session, runs the
-/// save panel, starts the app's export, and says which sheet is up.
+/// The analysis window's AppKit glue for *Export Video with Overlay* (issue
+/// 9.14): probing the footage, `NSSavePanel`, the footage's security scope,
+/// and starting the app's export.
 ///
-/// It holds no rules. What the sheet offers and checks is
-/// ``ExportSheetModel``'s; the progress, its states and its messages are
+/// It holds no rules. Which sheet is up and what this window owns is
+/// ``ExportFlowModel``'s; what the sheet offers and checks is
+/// ``ExportSheetModel``'s; the progress and its messages are
 /// ``ExportProgressModel``'s; the overlay is drawn by the HUD's own renderer
 /// (``VideoDataViewModel/exportOverlay(layout:kart:metadata:analysis:locale:)``)
-/// — all in `RaceStudioCore`. This applies them to AppKit: probing the file,
-/// `NSSavePanel`, the footage's security scope, Finder.
+/// — all in `RaceStudioCore`.
 @MainActor
 final class VideoExportCoordinator: ObservableObject {
 
-    /// The sheet on screen.
-    enum Route: Identifiable {
-        /// The export's settings.
-        case settings(ExportSheetModel)
-        /// The running or ended export.
-        case progress
-
-        var id: String {
-            switch self {
-            case .settings: return "settings"
-            case .progress: return "progress"
-            }
-        }
-    }
-
-    /// The sheet on screen, if any.
-    @Published var route: Route?
-    /// Why the export could not start, before any progress — shown in the
-    /// progress sheet.
-    @Published private(set) var failure: ExportUserMessage?
-    /// Whether the export's overlay is being prepared (the telemetry loaded
-    /// for its channels) before the first frame.
-    @Published private(set) var isPreparing = false
-    /// Whether the app's running — or last — export was started in this window.
-    @Published private(set) var startedHere = false
-    /// The exported file's name, for the progress sheet.
-    private(set) var fileName = ""
+    /// The window's part in the app's export — what the sheets observe.
+    let flow = ExportFlowModel()
 
     private let settingsStore = ExportSettingsStore(store: UserDefaultsKeyValueStore())
+    /// The preparation under way — the overlay's telemetry loading — so a
+    /// cancel can stop it.
+    private var preparation: Task<Void, Never>?
 
     // MARK: - Opening
 
-    /// Probe the window's footage and open the sheet on it, with the last-used
-    /// settings. A file that can't be read is said, not swallowed.
+    /// Probe the window's footage and open the sheet on it with the last-used
+    /// settings. Ignored while one is opening or a sheet is up; a file that
+    /// can't be read is said, not swallowed.
     func open(video: VideoWorkspace, window: AnalysisWindowModel) {
-        guard let url = video.controller.videoURL else { return }
+        guard let url = video.controller.videoURL, flow.beginOpening() else { return }
         Task {
             do {
-                let footage = try await FootageProbe.probe(url)
+                let footage = try await Self.withAccess(to: url) { try await FootageProbe.probe(url) }
                 guard let input = video.data.exportSheetInput(
                     source: url, footage: footage, session: window.session,
                     selectedLaps: window.selection.laps.selected,
-                    hasWorkspaceOverlay: window.videoOverlay != nil) else { return }
-                failure = nil
-                route = .settings(ExportSheetModel(input: input, preferences: settingsStore.load()))
+                    hasWorkspaceOverlay: window.videoOverlay != nil) else {
+                    flow.failed(ExportProgressModel.telemetryMissingMessage())
+                    return
+                }
+                flow.opened(ExportSheetModel(input: input, preferences: settingsStore.load()))
             } catch {
-                showFailure(ExportProgressModel.userMessage(for: OverlayExportError(mapping: error,
+                flow.failed(ExportProgressModel.userMessage(for: OverlayExportError(mapping: error,
                                                                                     requiredBytes: 0)))
             }
         }
     }
 
-    /// Close the sheet; a running export carries on.
-    func dismiss() {
-        route = nil
-    }
-
     // MARK: - Exporting
 
-    /// *Export…*: remember the settings, ask where to save, and start the
-    /// export there with the chosen overlay. Cancelling the save panel keeps
-    /// the sheet.
+    /// *Export…*: remember the settings, ask where to save, and prepare and
+    /// start the export there with the chosen overlay. Cancelling the save
+    /// panel keeps the sheet.
     func export(_ sheet: ExportSheetModel, video: VideoWorkspace, session: ExportSessionContext,
                 progress: ExportProgressModel) {
         settingsStore.save(sheet.preferences)
@@ -94,54 +70,48 @@ final class VideoExportCoordinator: ObservableObject {
         let plan: ExportPlan
         switch sheet.makePlan() {
         case .success(let made): plan = made
-        case .failure(let error): showFailure(ExportProgressModel.userMessage(for: error)); return
+        case .failure(let error): flow.failed(ExportProgressModel.userMessage(for: error)); return
         }
+        guard flow.beginExport(to: destination, progress: progress) else { return }
         let layout = sheet.layout(workspace: video.editor.layout)
-        fileName = destination.lastPathComponent
-        failure = nil
-        startedHere = true
-        isPreparing = true
-        route = .progress
-        Task {
-            defer { isPreparing = false }
+        preparation = Task {
             do {
-                guard let overlay = try await video.data.exportOverlay(
-                    layout: layout, kart: session.kart, metadata: session.metadata,
-                    analysis: session.analysis) else {
-                    showFailure(ExportUserMessage(title: ExportCommandAvailability.unavailable(.noTelemetry).help(),
-                                                  fix: L10n.string(.exportFixWriterFailed)))
-                    return
-                }
+                let overlay = try await video.data.exportOverlay(layout: layout, kart: session.kart,
+                                                                 metadata: session.metadata,
+                                                                 analysis: session.analysis)
+                guard flow.endPreparation() else { return }  // cancelled meanwhile
+                guard let overlay else { return flow.failed(ExportProgressModel.telemetryMissingMessage()) }
                 run(plan, overlay: overlay, to: destination, progress: progress)
             } catch {
-                showFailure(ExportProgressModel.userMessage(for: OverlayExportError(mapping: error,
+                guard flow.isPreparing else { return }  // cancelled
+                flow.failed(ExportProgressModel.userMessage(for: OverlayExportError(mapping: error,
                                                                                     requiredBytes: 0)))
             }
         }
     }
 
-    /// Show the progress sheet again.
-    func showProgress() {
-        route = .progress
-    }
-
-    /// Put an ended export away.
-    func finish(progress: ExportProgressModel) {
-        progress.dismiss()
-        failure = nil
-        route = nil
+    /// Cancel the export still being prepared: nothing is written.
+    func cancelPreparation() {
+        preparation?.cancel()
+        preparation = nil
+        flow.cancelPreparation()
     }
 
     // MARK: - Internals
 
     /// Start `plan` with `overlay` to `destination`, holding the footage's
-    /// security scope until the export ends.
+    /// security scope until the export ends. An exporter's stream starts its
+    /// export as soon as it is made, so it is made only once the app's export
+    /// is known to be free.
     private func run(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL,
                      progress: ExportProgressModel) {
+        guard !progress.isActive else {
+            return flow.failed(ExportProgressModel.userMessage(for: .writerFailed(
+                ExportCommandAvailability.unavailable(.exportRunning).help())))
+        }
         let exporter = OverlayVideoExporter()
         let source = plan.request.source
         let scoped = source.startAccessingSecurityScopedResource()
-        isPreparing = false
         progress.start(exporter.export(plan, overlay: overlay, to: destination), to: destination,
                        cancel: { await exporter.cancel() })
         Task {
@@ -163,9 +133,11 @@ final class VideoExportCoordinator: ObservableObject {
         return panel.url
     }
 
-    private func showFailure(_ message: ExportUserMessage) {
-        isPreparing = false
-        failure = message
-        route = .progress
+    /// Run `body` holding `url`'s security scope — a workspace video reopened
+    /// from its bookmark is readable only inside it.
+    private static func withAccess<T>(to url: URL, _ body: () async throws -> T) async rethrows -> T {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        return try await body()
     }
 }

@@ -9,18 +9,21 @@ import RaceStudioCore
 /// its fix.
 ///
 /// Thin: the states, the progress line and every message are
-/// ``ExportProgressModel``'s. The export runs off the main thread, so the
-/// window keeps drawing while the sheet is up, and after **Hide** the window
-/// can be used as usual.
+/// ``ExportProgressModel``'s, and what this window shows is its
+/// ``ExportFlowModel``'s. The export runs off the main thread, so the window
+/// keeps drawing while the sheet is up, and after **Hide** it can be used as
+/// usual. Esc hides the sheet; it never cancels an export.
 struct ExportProgressSheet: View {
     @Environment(\.theme) private var theme
     @Environment(\.colorScheme) private var scheme
     @ObservedObject var progress: ExportProgressModel
-    @ObservedObject var coordinator: VideoExportCoordinator
+    @ObservedObject var flow: ExportFlowModel
+    /// Stops an export still being prepared.
+    let cancelPreparation: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: theme.spacing.md) {
-            if let failure = coordinator.failure {
+            if let failure = flow.failure {
                 failed(failure)
             } else {
                 switch progress.state {
@@ -32,17 +35,16 @@ struct ExportProgressSheet: View {
         }
         .padding(theme.spacing.lg)
         .frame(width: 460)
-        .onChange(of: progress.state) { announce($0) }
     }
 
     // MARK: - States
 
     private var running: some View {
         VStack(alignment: .leading, spacing: theme.spacing.sm) {
-            Text(L10n.format(.exportProgressTitle, coordinator.fileName))
+            Text(L10n.format(.exportProgressTitle, flow.fileName))
                 .font(.token(theme.typography.headline))
                 .lineLimit(2)
-            if coordinator.isPreparing || progress.progress == nil {
+            if flow.isPreparing || progress.progress == nil {
                 ProgressView()
                     .progressViewStyle(.linear)
             } else {
@@ -55,10 +57,10 @@ struct ExportProgressSheet: View {
                 .foregroundStyle(theme.palette.textSecondary.color(scheme))
             HStack {
                 Spacer()
-                Button(L10n.string(.exportControlHide)) { coordinator.dismiss() }
-                Button(L10n.string(.exportControlCancel)) { progress.cancel() }
+                Button(L10n.string(.exportControlCancel), action: cancel)
+                    .disabled(!(flow.isPreparing || progress.state == .running))
+                Button(L10n.string(.exportControlHide), action: flow.dismiss)
                     .keyboardShortcut(.cancelAction)
-                    .disabled(progress.state != .running)
             }
         }
     }
@@ -75,7 +77,7 @@ struct ExportProgressSheet: View {
                 }
                 Button(L10n.string(.exportControlOpen)) { NSWorkspace.shared.open(url) }
                 Spacer()
-                Button(L10n.string(.exportControlDone)) { coordinator.finish(progress: progress) }
+                Button(L10n.string(.exportControlDone)) { flow.finish(progress: progress) }
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -92,35 +94,27 @@ struct ExportProgressSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
                 Spacer()
-                Button(L10n.string(.exportControlDone)) { coordinator.finish(progress: progress) }
+                Button(L10n.string(.exportControlDone)) { flow.finish(progress: progress) }
                     .keyboardShortcut(.defaultAction)
             }
         }
     }
 
-    /// Say the end of the export to VoiceOver users, who may have hidden the sheet.
-    private func announce(_ state: ExportProgressModel.State) {
-        let message: String
-        switch state {
-        case .finished(let url): message = L10n.format(.exportProgressFinished, url.lastPathComponent)
-        case .failed: message = progress.failureMessage()?.title ?? ""
-        case .idle, .running, .cancelling: return
-        }
-        NSAccessibility.post(element: NSApp.mainWindow ?? NSApp as Any, notification: .announcementRequested,
-                             userInfo: [.announcement: message,
-                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    /// Cancel the export — or, before its first frame, its preparation.
+    private func cancel() {
+        if flow.isPreparing { cancelPreparation() } else { progress.cancel() }
     }
 }
 
-/// The workspace bar's button for an export whose sheet is hidden (issue
-/// 9.14): the percent while it runs — click to show the sheet again.
+/// The workspace bar's button for this window's export while its sheet is
+/// hidden (issue 9.14): the percent — click to show the sheet again.
 struct ExportStatusButton: View {
     @EnvironmentObject private var progress: ExportProgressModel
-    @ObservedObject var coordinator: VideoExportCoordinator
+    @ObservedObject var flow: ExportFlowModel
 
     var body: some View {
-        if coordinator.startedHere, progress.isActive, coordinator.route == nil {
-            Button { coordinator.showProgress() } label: {
+        if flow.showsBadge(progress: progress) {
+            Button { flow.showProgress() } label: {
                 Label(L10n.format(.exportProgressBadge, "\(Int(progress.fraction * 100))%"),
                       systemImage: "film.stack")
                     .monospacedDigit()

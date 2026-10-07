@@ -3,63 +3,77 @@ import AppKit
 import RaceStudioCore
 
 /// Hosts *Export Video with Overlay* on the analysis window (issue 9.14): the
-/// menu command's state, the settings and progress sheets, the progress
-/// sheet's return when an export it hid ends, and the question before the
-/// window closes mid-export.
+/// menu command's state, the settings and progress sheets, and the question
+/// before the window closes over this window's export.
 ///
-/// A modifier, so the app's export — which publishes several times a second
-/// while it runs — redraws only this, never the window's panels.
+/// The app's export publishes several times a second while it runs; this
+/// follows only its state (`$state`), so the window's menus and panels are
+/// not redrawn on every tick. Which sheet is up, and what this window owns,
+/// is the window's ``ExportFlowModel``.
 struct ExportHost: ViewModifier {
     @EnvironmentObject private var app: AppModel
-    @EnvironmentObject private var progress: ExportProgressModel
-    @ObservedObject var coordinator: VideoExportCoordinator
+    @Environment(\.videoExport) private var videoExport
+    let coordinator: VideoExportCoordinator
+    @ObservedObject var flow: ExportFlowModel
     @ObservedObject var controller: VideoReviewController
     @ObservedObject var review: VideoReviewModel
     let video: VideoWorkspace
     let window: AnalysisWindowModel
     let analysis: AnalysisSession?
     @State private var hasTelemetry = false
+    @State private var exportState: ExportProgressModel.State = .idle
 
+    @ViewBuilder
     func body(content: Content) -> some View {
+        if let progress = videoExport {
+            hosted(content, progress: progress)
+        } else {
+            content
+        }
+    }
+
+    private func hosted(_ content: Content, progress: ExportProgressModel) -> some View {
         content
             .onReceive(video.data.$telemetry) { hasTelemetry = $0 != nil }
+            .onReceive(progress.$state) { state in
+                exportState = state
+                guard flow.owns(progress) else { return }
+                announce(state, progress: progress)
+                flow.exportChanged(to: state, progress: progress)
+            }
             .focusedSceneValue(\.exportVideoAction, ExportVideoAction(availability: availability, open: open))
-            .sheet(item: $coordinator.route) { route in
-                sheet(route)
+            // One sheet modifier; a new sheet comes up only once the last has
+            // gone (`sheetDismissed`), so one is never swapped for another in place.
+            .sheet(item: $flow.route, onDismiss: flow.sheetDismissed) { route in
+                sheet(route, progress: progress)
                     .environment(\.theme, .raceStudio)
-                    .environmentObject(progress)
             }
-            .onChange(of: progress.state) { state in
-                // An export ending while its sheet is hidden brings the result back.
-                guard coordinator.startedHere, coordinator.route == nil else { return }
-                switch state {
-                case .finished, .failed: coordinator.showProgress()
-                case .idle, .running, .cancelling: break
-                }
-            }
-            .background(WindowCloseGuard(isActive: coordinator.startedHere && progress.isActive,
-                                         shouldClose: confirmClose))
+            .background(WindowCloseGuard(isActive: (exportState.isActive || flow.isPreparing)
+                                            && flow.guardsClose(progress: progress),
+                                         shouldClose: { confirmClose($0, progress: progress) }))
     }
 
     // MARK: - Sheets
 
     @ViewBuilder
-    private func sheet(_ route: VideoExportCoordinator.Route) -> some View {
+    private func sheet(_ route: ExportFlowModel.Route, progress: ExportProgressModel) -> some View {
         switch route {
         case .settings(let model):
             ExportSheet(model: model,
-                        onExport: { export(model) },
-                        onCancel: coordinator.dismiss,
+                        onExport: { export(model, progress: progress) },
+                        onCancel: flow.dismiss,
                         onSyncFirst: syncFirst)
         case .progress:
-            ExportProgressSheet(progress: progress, coordinator: coordinator)
+            ExportProgressSheet(progress: progress, flow: flow,
+                                cancelPreparation: coordinator.cancelPreparation)
         }
     }
 
     // MARK: - Actions
 
     private var availability: ExportCommandAvailability {
-        .of(controller: controller, review: review, hasTelemetry: hasTelemetry, progress: progress)
+        .of(controller: controller, review: review, hasTelemetry: hasTelemetry,
+            isExporting: exportState.isActive || flow.isBusy)
     }
 
     private func open() {
@@ -67,7 +81,7 @@ struct ExportHost: ViewModifier {
         coordinator.open(video: video, window: window)
     }
 
-    private func export(_ model: ExportSheetModel) {
+    private func export(_ model: ExportSheetModel, progress: ExportProgressModel) {
         coordinator.export(model, video: video,
                            session: ExportSessionContext(kart: app.library.kart(forSession: window.contentID),
                                                          metadata: window.session.metadata, analysis: analysis),
@@ -76,21 +90,37 @@ struct ExportHost: ViewModifier {
 
     /// *Sync First*: close the sheet and show the sync controls in Video + Data.
     private func syncFirst() {
-        coordinator.dismiss()
+        flow.dismiss()
         window.select(layout: .videoReview)
         controller.syncRequest += 1
     }
 
-    /// Ask before the window closes mid-export; a confirmed close cancels the
-    /// export, waits for it to clean up, then closes.
-    private func confirmClose(_ nsWindow: NSWindow) -> Bool {
-        guard progress.isActive else { return true }
+    /// Ask before the window closes over this window's export; a confirmed
+    /// close cancels it — or its preparation — waits for it to clean up, then
+    /// closes.
+    private func confirmClose(_ nsWindow: NSWindow, progress: ExportProgressModel) -> Bool {
+        guard flow.guardsClose(progress: progress) else { return true }
         guard ExportGuardAlert.confirmCancel(message: L10n.string(.exportCloseMessage),
                                              confirm: L10n.string(.exportCloseConfirm)) else { return false }
+        coordinator.cancelPreparation()
         Task { @MainActor in
             await progress.cancelAndWait()
             nsWindow.close()
         }
         return false
+    }
+
+    /// Say the end of this window's export to VoiceOver users — here, not in
+    /// the sheet, so an export whose sheet was hidden is announced too.
+    private func announce(_ state: ExportProgressModel.State, progress: ExportProgressModel) {
+        let message: String
+        switch state {
+        case .finished(let url): message = L10n.format(.exportProgressFinished, url.lastPathComponent)
+        case .failed: message = progress.failureMessage()?.title ?? ""
+        case .idle, .running, .cancelling: return
+        }
+        NSAccessibility.post(element: NSApp.mainWindow ?? NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: message,
+                                        .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 }

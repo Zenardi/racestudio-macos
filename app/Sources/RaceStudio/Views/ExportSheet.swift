@@ -67,7 +67,9 @@ struct ExportSheet: View {
         .padding(theme.spacing.sm)
         .background(theme.palette.surfaceElevated.color(scheme))
         .cornerRadius(theme.radius.sm)
-        .accessibilityElement(children: .combine)
+        // `.contain`, not `.combine`: VoiceOver reads the warning and still
+        // reaches Sync First as its own button.
+        .accessibilityElement(children: .contain)
     }
 
     private var rangePicker: some View {
@@ -130,8 +132,9 @@ struct ExportSheet: View {
             }
         }
         Toggle(L10n.string(.exportSheetAudio), isOn: Binding(
-            get: { model.settings.audio == .keep },
+            get: { model.footageHasAudio && model.settings.audio == .keep },
             set: { model.settings.audio = $0 ? .keep : .drop }))
+            .disabled(!model.footageHasAudio)
         Toggle(L10n.string(.exportSheetOutsideSession), isOn: Binding(
             get: { model.settings.outsideSession == .noData },
             set: { model.settings.outsideSession = $0 ? .noData : .hidden }))
