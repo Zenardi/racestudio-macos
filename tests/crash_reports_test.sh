@@ -118,6 +118,27 @@ test_an_unreadable_report_is_still_copied() {
   fi
 }
 
+test_a_report_that_cannot_be_copied_does_not_stop_the_rest() {
+  # Given a report the runner's user cannot read (a system one) beside a
+  # readable one, When the collector runs, Then it says so, still copies the
+  # readable one, and succeeds.
+  local reports="$WORK/reports5" dest="$WORK/dest5" out rc
+  mkdir -p "$reports"
+  write_report "$reports/a-locked.ips"
+  chmod 000 "$reports/a-locked.ips"
+  write_report "$reports/b-readable.ips"
+
+  out="$(CRASH_REPORT_WAIT=0 bash "$COLLECT" "$dest" "$reports" 2>&1)"
+  rc=$?
+  chmod 600 "$reports/a-locked.ips"
+
+  if [ "$rc" -eq 0 ] && [ -f "$dest/b-readable.ips" ] && grep -q 'could not be copied' <<<"$out"; then
+    ok "test_a_report_that_cannot_be_copied_does_not_stop_the_rest"
+  else
+    bad "test_a_report_that_cannot_be_copied_does_not_stop_the_rest" "rc=$rc out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_ci_and_release_upload_crash_reports_on_failure() {
   # Given the two workflows that run `make ci`, Then each collects and uploads
   # the crash reports when the job fails.
@@ -141,6 +162,7 @@ test_reports_are_copied_and_their_faulting_thread_printed
 test_no_report_is_not_an_error
 test_reports_older_than_the_job_are_left_out
 test_an_unreadable_report_is_still_copied
+test_a_report_that_cannot_be_copied_does_not_stop_the_rest
 test_ci_and_release_upload_crash_reports_on_failure
 
 echo

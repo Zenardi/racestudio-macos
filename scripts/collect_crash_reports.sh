@@ -50,8 +50,9 @@ found=0
 while IFS= read -r report; do
   [ -n "$report" ] || continue
   found=$((found + 1))
-  cp "$report" "$DEST/"
   echo "=== $(basename "$report")"
+  # A system report can be unreadable to the runner's user: say so, go on.
+  cp "$report" "$DEST/" || { echo "  (could not be copied)"; continue; }
   # The faulting thread: its queue, the signal, and its frames, symbolicated
   # where the report is. `-I` keeps the interpreter off this script's folder.
   python3 -I - "$report" <<'PY' || echo "  (could not be read; see the uploaded file)"
