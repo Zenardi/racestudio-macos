@@ -8,6 +8,17 @@ import Testing
 @MainActor
 @Suite struct ExportFlowModelTests: ExportFlowTesting {
 
+    /// A fresh flow owns nothing, names no file, and has nothing to cancel.
+    @Test func test_a_fresh_flow_is_quiet() {
+        let flow = ExportFlowModel()
+
+        flow.cancelPreparation()
+
+        #expect(flow.fileName == "")
+        #expect(flow.route == nil)
+        #expect(!flow.isBusy)
+    }
+
     // MARK: - Opening
 
     /// One open at a time: a second ⌥⌘E while the footage is probed, or

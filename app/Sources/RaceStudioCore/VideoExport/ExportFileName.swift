@@ -66,16 +66,16 @@ public enum ExportFileName {
     /// its start, else `nil`.
     public static func date(logDate: String, datetimeUtc: Int64) -> String? {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
+        calendar.timeZone = .gmt
         let fields = logDate.split(separator: "/").compactMap { Int($0) }
         if fields.count == 3, (1_000...9_999).contains(fields[2]),
            DateComponents(calendar: calendar, year: fields[2], month: fields[0], day: fields[1]).isValidDate {
             return text(year: fields[2], month: fields[0], day: fields[1])
         }
         guard datetimeUtc > 0 else { return nil }
-        let day = calendar.dateComponents([.year, .month, .day],
-                                          from: Date(timeIntervalSince1970: TimeInterval(datetimeUtc)))
-        return text(year: day.year ?? 0, month: day.month ?? 0, day: day.day ?? 0)
+        let start = Date(timeIntervalSince1970: TimeInterval(datetimeUtc))
+        return text(year: calendar.component(.year, from: start), month: calendar.component(.month, from: start),
+                    day: calendar.component(.day, from: start))
     }
 
     /// `yyyy-MM-dd`.

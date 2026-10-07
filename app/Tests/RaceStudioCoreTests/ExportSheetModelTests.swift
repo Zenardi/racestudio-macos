@@ -169,6 +169,30 @@ import Testing
         #expect(options[2].title(locale: english) == "Best lap — lap 2 (0:19.000)")
     }
 
+    /// A best lap the video holds only in part can't be exported as the best
+    /// lap: the session is the default instead. (Synced 15 s ahead, the video
+    /// covers session time −15…35 s; the best lap runs to 40 s.)
+    @Test func test_a_partly_filmed_best_lap_is_unavailable() {
+        let model = ExportSheetFixture.model(offset: 15)
+
+        #expect(model.range == .session)
+        #expect(model.rangeOptions[2].reason(locale: english) == "Only partly in the video")
+    }
+
+    /// A section under review the video doesn't reach can't be exported.
+    @Test func test_a_selection_outside_the_video_is_unavailable() {
+        let model = ExportSheetFixture.model(selection: SessionTimeSpan(start: 100, end: 110))
+
+        #expect(model.rangeOptions[4].reason(locale: english) == "Not in the video")
+    }
+
+    /// A remembered workspace overlay is kept when the workspace has one.
+    @Test func test_a_remembered_workspace_overlay_is_kept() {
+        let model = ExportSheetFixture.model(preferences: ExportPreferences(overlay: .workspace))
+
+        #expect(model.overlay == .workspace)
+    }
+
     /// The section under review can be exported once there is one.
     @Test func test_the_section_under_review_is_offered() {
         let model = ExportSheetFixture.model(selection: SessionTimeSpan(start: 25, end: 30))
