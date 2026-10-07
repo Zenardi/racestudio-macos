@@ -162,3 +162,31 @@ Scope: `scripts/watchdog.sh` and `tests/watchdog_test.sh` (added); `scripts/cove
 | Export, footage and volume suites (CLT route) | 75 passed, none skipped, no volume left mounted |
 | swiftlint | 0 violations |
 | The watchdog with the real `/usr/bin/sample` on a hung process | Sampled, stopped, exit 124 |
+
+## Review of 03a9647: the video tests run on a Mac, not in a VM
+
+Scope: `VideoTests` and `VideoTestsTests` (added); the six video suites, two audio-source tests,
+the HEVC and disk-mount conditions; `scripts/coverage.sh`, `tests/swift_gate_test.sh` and ADR 0008.
+
+- The Swift decision (`VideoTests.run`) and the shell one (`video_tests_enabled`) agree: `1` and
+  `0` exactly, otherwise `kern.hv_vmm_present`. The swift gate tests pin all three cases.
+- The scoping tests (`test_swift_gate_measures_core_only`, `test_shell_target_excluded_from_metric`)
+  assert nothing about the five left-out files, so they hold on a VM.
+- **MEDIUM, kept — the left-out files and the skipped suites are listed separately.** A file only
+  the video tests reach shows up as lower CI coverage. A listed file that later gains VM-runnable
+  tests would stay unmeasured on CI. This is the trade-off the user chose, recorded in ADR 0008
+  and at `VIDEO_ONLY_FILES`. The Mac's pre-commit gate measures every file.
+- **LOW, to verify on CI — the runners must report `kern.hv_vmm_present` 1.** Their VideoToolbox
+  is paravirtualized (the hang samples show `VTParavirtualization…`). The CI log must show the
+  skip reasons and "video tests skipped here".
+- **LOW, kept — two skipped audio-source tests drop the "video-only movie" path from CI.** It is
+  covered on the Mac.
+
+| Check | Result |
+|---|---|
+| Full suite on this Mac (video tests on) | 2255 passed in 10.1 s |
+| Full suite with `RACESTUDIO_VIDEO_TESTS=0` (as on CI) | 2255 passed in 10.8 s; video suites skipped |
+| RaceStudioCore coverage with the video tests skipped | 97.16% with the five files left out (93.70% counted) |
+| `tests/swift_gate_test.sh` (failure-summary and coverage-filter tests) | 5 passed |
+| `tests/gate_test.sh`, watchdog, crash-reports and make self-tests | Pass |
+| swiftlint | 0 violations |
