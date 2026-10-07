@@ -133,6 +133,7 @@ import Testing
     @Test func test_impossible_log_dates_are_ignored() {
         #expect(ExportFileName.date(logDate: "02/31/2026", datetimeUtc: 0) == nil)
         #expect(ExportFileName.date(logDate: "09/25/26", datetimeUtc: 0) == nil)
+        #expect(ExportFileName.date(logDate: "09/25/20260", datetimeUtc: 0) == nil)
         #expect(ExportFileName.date(logDate: "02/31/2026", datetimeUtc: 1_453_550_944) == "2016-01-23")
         #expect(ExportFileName.date(logDate: "02/29/2024", datetimeUtc: 0) == "2024-02-29")
     }

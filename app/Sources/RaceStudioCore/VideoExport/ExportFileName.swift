@@ -68,7 +68,7 @@ public enum ExportFileName {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
         let fields = logDate.split(separator: "/").compactMap { Int($0) }
-        if fields.count == 3, fields[2] >= 1_000,
+        if fields.count == 3, (1_000...9_999).contains(fields[2]),
            DateComponents(calendar: calendar, year: fields[2], month: fields[0], day: fields[1]).isValidDate {
             return text(year: fields[2], month: fields[0], day: fields[1])
         }

@@ -1686,6 +1686,23 @@
         }
       }
     },
+    "export.fix.running": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix when an export is refused because another one runs.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait for it to finish, or cancel it, then export again."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espere ela terminar, ou cancele-a, e exporte de novo."
+          }
+        }
+      }
+    },
     "export.fix.sourceUnreadable": {
       "comment": "Export Video with Overlay (issue 9.14): failure fix.",
       "localizations": {

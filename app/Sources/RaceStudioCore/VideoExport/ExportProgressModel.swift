@@ -211,6 +211,12 @@ public final class ExportProgressModel: ObservableObject {
                           fix: L10n.string(.exportFixNoTelemetry, locale: locale))
     }
 
+    /// An export refused because another one is already running.
+    public static func exportRunningMessage(locale: Locale = .current) -> ExportUserMessage {
+        ExportUserMessage(title: L10n.string(.exportUnavailableRunning, locale: locale),
+                          fix: L10n.string(.exportFixRunning, locale: locale))
+    }
+
     // MARK: - Internals
 
     private static func message(for reason: UnsupportedOutputReason, locale: Locale) -> ExportUserMessage {

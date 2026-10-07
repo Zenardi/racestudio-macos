@@ -53,8 +53,22 @@ public final class ExportFlowModel: ObservableObject {
     /// Where this window's export writes, while the window owns one.
     @Published public private(set) var destination: URL?
 
+    /// One export's preparation (issue 9.14 review): what lets a preparation
+    /// cancelled and then replaced by a new export be told from the new one,
+    /// however late it returns.
+    public struct Preparation: Equatable, Sendable {
+        let number: Int
+    }
+
     /// The sheet to show once the one on screen has gone.
     private var pendingRoute: Route?
+    /// The preparation under way, if any.
+    private var preparation: Preparation?
+    /// How many preparations were begun.
+    private var preparations = 0
+    /// The app export's state last acted on — a replay of it is not acted on
+    /// twice.
+    private var lastState: ExportProgressModel.State?
 
     public init() {}
 
@@ -85,6 +99,7 @@ public final class ExportFlowModel: ObservableObject {
     public func failed(_ message: ExportUserMessage) {
         isOpening = false
         isPreparing = false
+        preparation = nil
         destination = nil
         failure = message
         show(.progress)
@@ -93,29 +108,43 @@ public final class ExportFlowModel: ObservableObject {
     // MARK: - Starting
 
     /// The save panel chose `destination`: this window's export is prepared,
-    /// and its progress shown once the settings sheet has gone. `false`,
-    /// changing nothing, while the app's export runs or one is prepared here.
-    public func beginExport(to destination: URL, progress: ExportProgressModel) -> Bool {
-        guard !progress.isActive, !isPreparing else { return false }
+    /// and its progress shown once the settings sheet has gone.
+    ///
+    /// - Returns: the preparation, to end (``endPreparation(_:)``) or fail
+    ///   (``failPreparation(_:_:)``) — or `nil`, changing nothing, while the
+    ///   app's export runs or one is prepared here.
+    public func beginExport(to destination: URL, progress: ExportProgressModel) -> Preparation? {
+        guard !progress.isActive, !isPreparing else { return nil }
+        preparations += 1
+        let begun = Preparation(number: preparations)
+        preparation = begun
         self.destination = destination
         failure = nil
         isPreparing = true
         show(.progress)
+        return begun
+    }
+
+    /// `preparation` is over: `true` when the export may start — `false` when
+    /// it was cancelled meanwhile, or is not the one under way.
+    public func endPreparation(_ preparation: Preparation) -> Bool {
+        guard isPreparing, preparation == self.preparation else { return false }
+        isPreparing = false
+        self.preparation = nil
         return true
     }
 
-    /// The preparation is over: `true` when the export may start, `false`
-    /// when it was cancelled meanwhile.
-    public func endPreparation() -> Bool {
-        guard isPreparing else { return false }
-        isPreparing = false
-        return true
+    /// `preparation` failed: show why — unless it is no longer the one under way.
+    public func failPreparation(_ preparation: Preparation, _ message: ExportUserMessage) {
+        guard isPreparing, preparation == self.preparation else { return }
+        failed(message)
     }
 
     /// Cancel the export being prepared: nothing starts, and the sheet goes.
     public func cancelPreparation() {
         guard isPreparing else { return }
         isPreparing = false
+        preparation = nil
         destination = nil
         dismiss()
     }
@@ -147,11 +176,22 @@ public final class ExportFlowModel: ObservableObject {
         destination != nil && progress.destination == destination
     }
 
-    /// The app's export moved to `state`. In the window that started it, an
-    /// end brings a hidden result back, and a cleaned-up cancel closes the
-    /// progress sheet and ends the window's ownership.
+    /// The app's export moved to `state` — acted on once, however often it is
+    /// told.
+    ///
+    /// - In the window that started it, an end brings a hidden result back,
+    ///   and a cleaned-up cancel closes the progress sheet and ends the
+    ///   window's ownership.
+    /// - In any other window, an export starting closes an old result still on
+    ///   screen, rather than showing that export's progress in its sheet; a
+    ///   failure or a preparation on screen stays.
     public func exportChanged(to state: ExportProgressModel.State, progress: ExportProgressModel) {
-        guard owns(progress) else { return }
+        guard state != lastState else { return }
+        lastState = state
+        guard owns(progress) else {
+            if state == .running, case .progress = route, failure == nil, !isPreparing { dismiss() }
+            return
+        }
         switch state {
         case .finished, .failed:
             if route == nil { show(.progress) }
@@ -187,9 +227,14 @@ public final class ExportFlowModel: ObservableObject {
 
     // MARK: - Internals
 
-    /// Show `route` now, or once the sheet on screen has gone.
+    /// Show `route` now, or once the sheet on screen has gone — replacing any
+    /// sheet already waiting for it. The progress sheet already up stays up:
+    /// it shows whatever comes next itself.
     private func show(_ route: Route) {
-        if self.route == nil {
+        if case .progress = route, case .progress? = self.route { return }
+        if pendingRoute != nil {
+            pendingRoute = route
+        } else if self.route == nil {
             self.route = route
         } else {
             pendingRoute = route

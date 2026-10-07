@@ -110,6 +110,7 @@ extension L10n {
         case exportFixNoTelemetry = "export.fix.noTelemetry"
         case exportFixNoVideoTrack = "export.fix.noVideoTrack"
         case exportFixRangeOutsideFootage = "export.fix.rangeOutsideFootage"
+        case exportFixRunning = "export.fix.running"
         case exportFixSourceUnreadable = "export.fix.sourceUnreadable"
         case exportFixTooLarge = "export.fix.tooLarge"
         case exportFixTooSmall = "export.fix.tooSmall"

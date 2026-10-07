@@ -295,6 +295,15 @@ import Testing
                 == "Os dados da sessão não estão carregados")
     }
 
+    /// An export refused because another one runs says to wait for it.
+    @Test func test_a_refused_export_says_to_wait() {
+        #expect(ExportProgressModel.exportRunningMessage(locale: english)
+                == ExportUserMessage(title: "An export is already running.",
+                                     fix: "Wait for it to finish, or cancel it, then export again."))
+        #expect(ExportProgressModel.exportRunningMessage(locale: portuguese).fix
+                == "Espere ela terminar, ou cancele-a, e exporte de novo.")
+    }
+
     /// The writer's own words are kept.
     @Test func test_a_writer_failure_keeps_the_system_message() {
         let message = ExportProgressModel.userMessage(for: .writerFailed("Encoder busy"), locale: english)

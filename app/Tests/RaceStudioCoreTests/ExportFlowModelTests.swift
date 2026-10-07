@@ -6,23 +6,7 @@ import Testing
 /// is up, whether this window's export is being prepared or running, and what
 /// the window does when that export ends — so the shell only applies it.
 @MainActor
-@Suite struct ExportFlowModelTests {
-
-    private let destination = URL(fileURLWithPath: "/tmp/lap.mp4")
-    private let message = ExportUserMessage(title: "The video can’t be read", fix: "Attach it again.")
-
-    /// A sheet model to open.
-    private func sheet() -> ExportSheetModel { ExportSheetFixture.model() }
-
-    private typealias Feed = AsyncThrowingStream<ExportProgress, Error>.Continuation
-
-    /// An app export, running to `url`.
-    private func running(to url: URL) -> (ExportProgressModel, Feed) {
-        let progress = ExportProgressModel()
-        let (stream, continuation) = AsyncThrowingStream<ExportProgress, Error>.makeStream()
-        progress.start(stream, to: url, cancel: {})
-        return (progress, continuation)
-    }
+@Suite struct ExportFlowModelTests: ExportFlowTesting {
 
     // MARK: - Opening
 
@@ -70,7 +54,7 @@ import Testing
         _ = flow.beginOpening()
         flow.opened(sheet())
 
-        #expect(flow.beginExport(to: destination, progress: ExportProgressModel()))
+        #expect(flow.beginExport(to: destination, progress: ExportProgressModel()) != nil)
         #expect(flow.route == nil, "the settings sheet goes first")
         flow.sheetDismissed()
 
@@ -83,7 +67,7 @@ import Testing
     @Test func test_an_export_with_no_sheet_up_shows_progress_at_once() {
         let flow = ExportFlowModel()
 
-        #expect(flow.beginExport(to: destination, progress: ExportProgressModel()))
+        #expect(flow.beginExport(to: destination, progress: ExportProgressModel()) != nil)
 
         #expect(flow.route == .progress)
     }
@@ -96,32 +80,61 @@ import Testing
         let preparing = ExportFlowModel()
         _ = preparing.beginExport(to: destination, progress: ExportProgressModel())
 
-        #expect(!flow.beginExport(to: destination, progress: progress))
-        #expect(!preparing.beginExport(to: destination, progress: ExportProgressModel()))
+        #expect(flow.beginExport(to: destination, progress: progress) == nil)
+        #expect(preparing.beginExport(to: destination, progress: ExportProgressModel()) == nil)
         #expect(flow.route == nil)
     }
 
     /// The preparation ends, and the export may start…
-    @Test func test_a_prepared_export_may_start() {
+    @Test func test_a_prepared_export_may_start() throws {
         let flow = ExportFlowModel()
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
+        let preparation = try #require(flow.beginExport(to: destination, progress: ExportProgressModel()))
 
-        #expect(flow.endPreparation())
+        #expect(flow.endPreparation(preparation))
         #expect(!flow.isPreparing)
     }
 
     /// …unless it was cancelled meanwhile: then nothing starts and the sheet
     /// goes.
-    @Test func test_a_cancelled_preparation_starts_nothing() {
+    @Test func test_a_cancelled_preparation_starts_nothing() throws {
         let flow = ExportFlowModel()
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
+        let preparation = try #require(flow.beginExport(to: destination, progress: ExportProgressModel()))
 
         flow.cancelPreparation()
 
         #expect(!flow.isPreparing)
         #expect(flow.route == nil)
-        #expect(!flow.endPreparation())
+        #expect(!flow.endPreparation(preparation))
         #expect(!flow.owns(ExportProgressModel()))
+    }
+
+    /// A preparation cancelled and then replaced by a new export can neither
+    /// start nor fail the new one, however late it returns.
+    @Test func test_a_stale_preparation_cannot_start_or_fail_the_next_export() throws {
+        let flow = ExportFlowModel()
+        let stale = try #require(flow.beginExport(to: URL(fileURLWithPath: "/tmp/old.mp4"),
+                                                  progress: ExportProgressModel()))
+        flow.cancelPreparation()
+        let current = try #require(flow.beginExport(to: destination, progress: ExportProgressModel()))
+
+        flow.failPreparation(stale, message)
+        #expect(!flow.endPreparation(stale))
+
+        #expect(flow.failure == nil)
+        #expect(flow.isPreparing)
+        #expect(flow.fileName == "lap.mp4")
+        #expect(flow.endPreparation(current))
+    }
+
+    /// The current preparation's failure is shown.
+    @Test func test_the_current_preparation_can_fail() throws {
+        let flow = ExportFlowModel()
+        let preparation = try #require(flow.beginExport(to: destination, progress: ExportProgressModel()))
+
+        flow.failPreparation(preparation, message)
+
+        #expect(flow.failure == message)
+        #expect(!flow.isPreparing)
     }
 
     /// A failure while preparing — the overlay's telemetry would not load —
@@ -137,159 +150,17 @@ import Testing
         #expect(!flow.isPreparing)
     }
 
-    // MARK: - Following the app's export
-
-    /// The window owns the export it started — not another window's.
-    @Test func test_a_window_owns_only_the_export_it_started() {
-        let (progress, _) = running(to: destination)
-        let starter = ExportFlowModel()
-        _ = starter.beginExport(to: destination, progress: ExportProgressModel())
-        let other = ExportFlowModel()
-
-        #expect(starter.owns(progress))
-        #expect(!other.owns(progress))
-    }
-
-    /// An export ending while its sheet is hidden brings the result back —
-    /// in the window that started it only.
-    @Test func test_an_ended_export_shows_its_result_in_its_window() {
-        let (progress, _) = running(to: destination)
-        let starter = ExportFlowModel()
-        _ = starter.beginExport(to: destination, progress: ExportProgressModel())
-        starter.dismiss()
-        let other = ExportFlowModel()
-
-        starter.exportChanged(to: .finished(destination), progress: progress)
-        other.exportChanged(to: .finished(destination), progress: progress)
-
-        #expect(starter.route == .progress)
-        #expect(other.route == nil)
-    }
-
-    /// The badge brings a hidden sheet back; progress while it runs changes
-    /// nothing on screen.
-    @Test func test_the_badge_brings_the_sheet_back_and_progress_changes_nothing() {
-        let (progress, _) = running(to: destination)
+    /// A failure while the progress sheet is up shows in that sheet — it is
+    /// not taken down and put up again.
+    @Test func test_a_failure_shows_in_the_progress_sheet_already_up() {
         let flow = ExportFlowModel()
         _ = flow.beginExport(to: destination, progress: ExportProgressModel())
-        _ = flow.endPreparation()
-        flow.dismiss()
 
-        flow.exportChanged(to: .running, progress: progress)
-        #expect(flow.route == nil)
-        flow.showProgress()
-
-        #expect(flow.route == .progress)
-        #expect(flow.owns(progress))
-    }
-
-    /// A cancel that has cleaned up closes the progress sheet, and the window
-    /// no longer owns an export.
-    @Test func test_a_cleaned_up_cancel_closes_the_sheet() {
-        let (progress, _) = running(to: destination)
-        let flow = ExportFlowModel()
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
-        _ = flow.endPreparation()
-
-        flow.exportChanged(to: .idle, progress: progress)
-
-        #expect(flow.route == nil)
-        #expect(!flow.owns(progress))
-    }
-
-    /// A failure shown before the export started stays on screen.
-    @Test func test_a_shown_failure_stays_when_the_export_is_idle() {
-        let flow = ExportFlowModel()
         flow.failed(message)
 
-        flow.exportChanged(to: .idle, progress: ExportProgressModel())
-
-        #expect(flow.route == .progress)
-    }
-
-    /// *Done* puts the ended export away.
-    @Test func test_done_puts_the_export_away() async {
-        let (progress, continuation) = running(to: destination)
-        let flow = ExportFlowModel()
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
-        continuation.finish()
-        await progress.wait()
-
-        flow.finish(progress: progress)
-
-        #expect(progress.state == .idle)
-        #expect(flow.route == nil)
-        #expect(flow.failure == nil)
-        #expect(!flow.owns(progress))
-    }
-
-    /// Dismissing forgets a sheet waiting to come up.
-    @Test func test_dismiss_forgets_a_waiting_sheet() {
-        let flow = ExportFlowModel()
-        _ = flow.beginOpening()
-        flow.opened(sheet())
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
-
-        flow.dismiss()
+        #expect(flow.route == .progress, "still up")
         flow.sheetDismissed()
-
-        #expect(flow.route == nil)
+        #expect(flow.route == .progress, "nothing waiting to come up")
     }
 
-    // MARK: - Guards
-
-    /// Closing the window asks first while this window's export is prepared
-    /// or runs; never for another window's, nor when none runs.
-    @Test func test_closing_is_guarded_while_this_windows_export_runs() {
-        let (progress, _) = running(to: destination)
-        let preparing = ExportFlowModel()
-        _ = preparing.beginExport(to: URL(fileURLWithPath: "/tmp/next.mp4"), progress: ExportProgressModel())
-        let starter = ExportFlowModel()
-        _ = starter.beginExport(to: destination, progress: ExportProgressModel())
-        _ = starter.endPreparation()
-
-        #expect(preparing.guardsClose(progress: ExportProgressModel()))
-        #expect(starter.guardsClose(progress: progress))
-        #expect(!ExportFlowModel().guardsClose(progress: progress))
-        #expect(!starter.guardsClose(progress: ExportProgressModel()))
-    }
-
-    /// The workspace bar's badge shows this window's running export while
-    /// its sheet is hidden.
-    @Test func test_the_badge_shows_a_hidden_running_export() {
-        let (progress, _) = running(to: destination)
-        let flow = ExportFlowModel()
-        _ = flow.beginExport(to: destination, progress: ExportProgressModel())
-        _ = flow.endPreparation()
-
-        #expect(!flow.showsBadge(progress: progress), "the sheet is up")
-        flow.dismiss()
-        #expect(flow.showsBadge(progress: progress))
-        #expect(!ExportFlowModel().showsBadge(progress: progress))
-    }
-
-    /// The command counts an export being opened or prepared as busy.
-    @Test func test_opening_or_preparing_is_busy() {
-        let opening = ExportFlowModel()
-        _ = opening.beginOpening()
-        let preparing = ExportFlowModel()
-        _ = preparing.beginExport(to: destination, progress: ExportProgressModel())
-
-        #expect(opening.isBusy)
-        #expect(preparing.isBusy)
-        #expect(!ExportFlowModel().isBusy)
-    }
-
-    /// Routes are told apart by what they show.
-    @Test func test_routes_are_identified_by_what_they_show() {
-        #expect(ExportFlowModel.Route.settings(sheet()).id == "settings")
-        #expect(ExportFlowModel.Route.progress.id == "progress")
-    }
-}
-
-extension ExportFlowModel.Route: Equatable {
-    /// Test-only: routes compare by what they show.
-    public static func == (lhs: ExportFlowModel.Route, rhs: ExportFlowModel.Route) -> Bool {
-        lhs.id == rhs.id
-    }
 }
