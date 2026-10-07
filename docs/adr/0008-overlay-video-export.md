@@ -242,9 +242,10 @@ startup disk and on an external drive.
     `OverlayVideoExporter`, `ExportPipeline`, `OverlayCompositor`, `FootageProbe` and
     `OverlayComposition`. Without them, RaceStudioCore measured 97.16%; with them unmeasured but
     counted, 93.70%. On a Mac nothing is left out, and the full gate runs before every commit.
-  - Running the video tests one at a time instead was tried and dropped. With Swift 6.4 on
-    macOS 27, any serial run of this suite (even `--no-parallel` on unchanged code) hangs on an
-    await that is never resumed, so it could not pass locally.
+  - Running the video tests one at a time instead was tried and dropped: every serial run hung.
+    The cause was found later (issue 205), and it was the engine, not the test runner. A cancel
+    landing just as the writer began finishing could stop the export from ever ending (below).
+    Since the fix, `swift test --no-parallel` passes.
 - A read can end short without failing. AVFoundation drops a frame whose composition request is
   finished as cancelled, or that the decoder cannot produce, and still ends the read
   `.completed`. On a CI virtual machine an export once wrote 4 of 45 frames and reported success.
@@ -258,6 +259,15 @@ startup disk and on an external drive.
   Before, a generation counter let the cancel return with up to four requests still in flight,
   finished after AVFoundation had torn the read down. On macOS 27 `AVAssetReader.cancelReading()`
   waits for the frame anyway; the contract does not promise that elsewhere.
+- A writer already told to finish is never cancelled (issue 205). On macOS 27, `cancelWriting()`
+  landing just after `finishWriting` starts left the writer `.writing` for good, and its completion
+  handler was never called. The run waited for that handler, so the export never ended. It hung
+  every time the test ran on its own; only other tests running beside it made the timing safe.
+  - A cancel while finishing now ends the run as `cancelled` at once. The writer finishes, or
+    fails, in the export's scratch directory, which the exporter removes; the destination is
+    never touched.
+  - The run's wait for the finish is resumed once, by the writer's completion or by a cancel.
+  - A cancel before finishing starts still cancels the writer.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

@@ -35,6 +35,9 @@ final class ExportPipeline: @unchecked Sendable {
         var cancelled = false
         var finishing = false
         var frames = 0
+        /// The run waiting for the file to be finished: resumed once, by the
+        /// writer's completion or by a cancel, whichever comes first.
+        var finished: CheckedContinuation<Void, Error>?
     }
 
     /// A pipeline encoding `composition` as `plan` says into a new file at `url`.
@@ -94,16 +97,20 @@ final class ExportPipeline: @unchecked Sendable {
     var writerStatus: AVAssetWriter.Status { writer.status }
 
     /// Stop the export: the encode at its next frame, or — while the file is
-    /// being finished — the writer itself. ``run()`` then throws
+    /// being finished — the run, at once. ``run()`` then throws
     /// ``OverlayExportError/cancelled``.
     ///
-    /// The writer is only ever cancelled on the pipeline's queue, where
-    /// finishing starts too, so a cancel either stops the finish before it
-    /// starts or reaches a writer already told to finish — never one in
-    /// between.
+    /// A writer already told to finish is left to finish (issue 205). Cancelled
+    /// that early in its finish, it could stay `.writing` for good and never
+    /// call the finish's completion handler, which the run waited for. Its file
+    /// is in the export's scratch directory, which the exporter removes.
+    ///
+    /// The cancel and the finish meet on the pipeline's queue, so a cancel
+    /// either cancels the writer before it is told to finish, or ends a run
+    /// already waiting for the finish — never one in between.
     func cancel() {
         if state.withLock({ $0.cancelled = true; return $0.finishing }) {
-            queue.async { if self.writer.status == .writing { self.writer.cancelWriting() } }
+            queue.async { self.resumeFinished() }
         }
     }
 
@@ -132,13 +139,26 @@ final class ExportPipeline: @unchecked Sendable {
     /// cancel the writer instead. A cancel arriving after this point is queued
     /// behind it (see ``cancel()``).
     private func finish(then done: CheckedContinuation<Void, Error>) {
-        if state.withLock({ $0.finishing = true; return $0.cancelled }) {
+        let cancelled = state.withLock { state -> Bool in
+            state.finishing = true
+            if !state.cancelled { state.finished = done }
+            return state.cancelled
+        }
+        if cancelled {
             writer.cancelWriting()
             done.resume(throwing: OverlayExportError.cancelled)
             return
         }
-        writer.finishWriting { done.resume() }
+        writer.finishWriting { self.resumeFinished() }
         didStartFinishing()
+    }
+
+    /// Resume the run waiting for the finish — once, whoever asks first.
+    private func resumeFinished() {
+        state.withLock { state -> CheckedContinuation<Void, Error>? in
+            defer { state.finished = nil }
+            return state.finished
+        }?.resume()
     }
 
     /// Pull every sample through, or stop both ends and rethrow.
