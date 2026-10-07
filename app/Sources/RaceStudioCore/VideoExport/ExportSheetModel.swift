@@ -109,6 +109,9 @@ public final class ExportSheetModel: ObservableObject {
         (input.hasWorkspaceOverlay ? [.workspace] : []) + OverlayPreset.allCases.map { .preset($0) }
     }
 
+    /// Whether the footage has sound — the sound choice applies only then.
+    public var footageHasAudio: Bool { input.footage.hasAudio }
+
     /// The choices to remember for the next export.
     public var preferences: ExportPreferences {
         ExportPreferences(range: range, overlay: overlay, settings: settings)
@@ -273,8 +276,15 @@ public final class ExportSheetModel: ObservableObject {
         return plan
     }
 
-    /// A choice changed: re-plan the estimate once the changes settle.
+    /// A choice changed: re-plan the estimate once the changes settle — or,
+    /// when nothing can be exported now, drop it at once, so no stale figure
+    /// stands beside a disabled *Export…*.
     private func changed() {
+        guard validationMessage(locale: locale) == nil else {
+            pendingEstimate = nil
+            estimate = nil
+            return
+        }
         pendingEstimate = scheduler.schedule(after: Self.estimateDelay) { [weak self] in
             guard let self else { return }
             estimate = currentPlan().map(ExportEstimate.init(plan:))

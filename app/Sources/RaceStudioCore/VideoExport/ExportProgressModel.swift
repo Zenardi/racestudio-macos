@@ -84,10 +84,14 @@ public final class ExportProgressModel: ObservableObject {
 
     /// Follow `stream` — an export writing to `destination` — to its end.
     /// `cancel` asks the exporter to stop (``OverlayVideoExporter/cancel()``).
-    /// Ignored while another export is running.
+    ///
+    /// - Returns: `false`, following nothing, while another export is running
+    ///   — check ``isActive`` before making a stream, since an exporter's
+    ///   stream starts its export as soon as it is made.
+    @discardableResult
     public func start(_ stream: AsyncThrowingStream<ExportProgress, Error>, to destination: URL,
-                      cancel: @escaping @Sendable () async -> Void) {
-        guard !isActive else { return }
+                      cancel: @escaping @Sendable () async -> Void) -> Bool {
+        guard !isActive else { return false }
         self.destination = destination
         cancelExport = cancel
         progress = nil
@@ -102,10 +106,15 @@ public final class ExportProgressModel: ObservableObject {
                 self?.fail(error)
             }
         }
+        return true
     }
 
     /// Ask the running export to stop. The sheet shows "Cancelling…" until
     /// the exporter reports it has; then it is idle.
+    ///
+    /// The request is sent from its own task and not awaited: the exporter
+    /// takes it whenever it comes (a cancel covers every export asked for
+    /// before it), and what ends the wait is the stream reporting the cancel.
     public func cancel() {
         guard state == .running, let cancelExport else { return }
         state = .cancelling
@@ -193,6 +202,13 @@ public final class ExportProgressModel: ObservableObject {
         case .cancelled:
             return ExportUserMessage(title: text(.exportErrorCancelled), fix: text(.exportFixCancelled))
         }
+    }
+
+    /// The export was asked for before the session's telemetry — what the
+    /// overlay is drawn from — was loaded.
+    public static func telemetryMissingMessage(locale: Locale = .current) -> ExportUserMessage {
+        ExportUserMessage(title: L10n.string(.exportErrorNoTelemetry, locale: locale),
+                          fix: L10n.string(.exportFixNoTelemetry, locale: locale))
     }
 
     // MARK: - Internals

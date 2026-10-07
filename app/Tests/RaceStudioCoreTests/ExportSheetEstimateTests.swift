@@ -91,6 +91,18 @@ import Testing
         #expect(model.estimateText(locale: english) == "—")
     }
 
+    /// A change that leaves nothing to export clears the estimate at once — no
+    /// stale figure beside a disabled *Export…* while the debounce runs.
+    @Test func test_an_invalid_choice_clears_the_estimate_at_once() {
+        let clock = ManualScheduler()
+        let model = ExportSheetFixture.model(scheduler: clock)
+
+        model.range = .selection
+
+        #expect(model.estimate == nil)
+        #expect(clock.delays.isEmpty, "nothing to re-plan")
+    }
+
     // MARK: - Menus
 
     /// The resolution menu names the footage's own size for *Source*.
@@ -100,6 +112,17 @@ import Testing
         #expect(ExportResolution.allCases.map { model.resolutionTitle($0, locale: english) }
                 == ["Source (1920 × 1080)", "4K (2160p)", "1080p", "720p"])
         #expect(model.resolutionTitle(.source, locale: Locale(identifier: "pt-BR")) == "Original (1920 × 1080)")
+    }
+
+    /// The sound toggle applies only to footage with sound.
+    @Test func test_the_sound_choice_follows_the_footage() {
+        var silent = ExportSheetFixture.input()
+        silent.footage = FootageInfo(duration: 50, frameRate: FrameGrid(numerator: 30, denominator: 1),
+                                     naturalSize: CGSize(width: 1_920, height: 1_080), rotation: .none, audio: nil,
+                                     codec: "avc1")
+
+        #expect(ExportSheetFixture.model().footageHasAudio)
+        #expect(!ExportSheetModel(input: silent, encoders: .all, scheduler: ManualScheduler()).footageHasAudio)
     }
 
     /// The codec menu says what each codec is for.

@@ -118,8 +118,8 @@ import Testing
         let (second, _) = AsyncThrowingStream<ExportProgress, Error>.makeStream()
         let other = URL(fileURLWithPath: "/tmp/other.mp4")
 
-        model.start(first, to: destination, cancel: {})
-        model.start(second, to: other, cancel: {})
+        #expect(model.start(first, to: destination, cancel: {}))
+        #expect(!model.start(second, to: other, cancel: {}), "refused")
         firstContinuation.finish()
         await model.wait()
 
@@ -284,6 +284,15 @@ import Testing
         #expect(hevc == ExportUserMessage(title: "This Mac can’t encode HEVC", fix: "Choose H.264."))
         #expect(large.title == "7680 × 4320 is too large for H.264")
         #expect(large.fix == "Choose a lower resolution, or HEVC.")
+    }
+
+    /// An export opened before the session's data is loaded says what to do.
+    @Test func test_missing_telemetry_says_what_to_do() {
+        #expect(ExportProgressModel.telemetryMissingMessage(locale: english)
+                == ExportUserMessage(title: "The session’s data isn’t loaded",
+                                     fix: "Open Video + Data, then export again."))
+        #expect(ExportProgressModel.telemetryMissingMessage(locale: portuguese).title
+                == "Os dados da sessão não estão carregados")
     }
 
     /// The writer's own words are kept.

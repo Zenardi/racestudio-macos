@@ -1346,6 +1346,23 @@
         }
       }
     },
+    "export.error.noTelemetry": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title: the export was asked for before the session's telemetry loaded.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session’s data isn’t loaded"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os dados da sessão não estão carregados"
+          }
+        }
+      }
+    },
     "export.error.noVideoTrack": {
       "comment": "Export Video with Overlay (issue 9.14): failure title.",
       "localizations": {
@@ -1618,6 +1635,23 @@
         }
       }
     },
+    "export.fix.noTelemetry": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Video + Data, then export again."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra Vídeo + Dados e exporte de novo."
+          }
+        }
+      }
+    },
     "export.fix.noVideoTrack": {
       "comment": "Export Video with Overlay (issue 9.14): failure fix.",
       "localizations": {
@@ -1835,23 +1869,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "estimando o tempo restante…"
-          }
-        }
-      }
-    },
-    "export.progress.failed": {
-      "comment": "Export Video with Overlay (issue 9.14): progress sheet title on failure. %1$@ = file name.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t export “%1$@”"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível exportar “%1$@”"
           }
         }
       }

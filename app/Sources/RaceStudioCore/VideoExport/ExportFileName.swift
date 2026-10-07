@@ -62,18 +62,25 @@ public enum ExportFileName {
     }
 
     /// The session's date as `yyyy-MM-dd`: the logger's own `MM/DD/YYYY`
-    /// date, else the UTC day of its start, else `nil`.
+    /// date when it is a real day of a four-digit year, else the UTC day of
+    /// its start, else `nil`.
     public static func date(logDate: String, datetimeUtc: Int64) -> String? {
-        let fields = logDate.split(separator: "/").compactMap { Int($0) }
-        if fields.count == 3, (1...12).contains(fields[0]), (1...31).contains(fields[1]), fields[2] > 0 {
-            return String(format: "%04d-%02d-%02d", fields[2], fields[0], fields[1])
-        }
-        guard datetimeUtc > 0 else { return nil }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? calendar.timeZone
+        let fields = logDate.split(separator: "/").compactMap { Int($0) }
+        if fields.count == 3, fields[2] >= 1_000,
+           DateComponents(calendar: calendar, year: fields[2], month: fields[0], day: fields[1]).isValidDate {
+            return text(year: fields[2], month: fields[0], day: fields[1])
+        }
+        guard datetimeUtc > 0 else { return nil }
         let day = calendar.dateComponents([.year, .month, .day],
                                           from: Date(timeIntervalSince1970: TimeInterval(datetimeUtc)))
-        return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+        return text(year: day.year ?? 0, month: day.month ?? 0, day: day.day ?? 0)
+    }
+
+    /// `yyyy-MM-dd`.
+    private static func text(year: Int, month: Int, day: Int) -> String {
+        String(format: "%04ld-%02ld-%02ld", year, month, day)
     }
 
     // MARK: - Internals

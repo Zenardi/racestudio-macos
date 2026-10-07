@@ -127,4 +127,13 @@ import Testing
         #expect(ExportFileName.date(logDate: "13/45/2026", datetimeUtc: 0) == nil)
         #expect(ExportFileName.date(logDate: "garbage", datetimeUtc: 0) == nil)
     }
+
+    /// A day the month doesn't have, or a two-digit year, is not a date: the
+    /// UTC day of the start stands in, or none.
+    @Test func test_impossible_log_dates_are_ignored() {
+        #expect(ExportFileName.date(logDate: "02/31/2026", datetimeUtc: 0) == nil)
+        #expect(ExportFileName.date(logDate: "09/25/26", datetimeUtc: 0) == nil)
+        #expect(ExportFileName.date(logDate: "02/31/2026", datetimeUtc: 1_453_550_944) == "2016-01-23")
+        #expect(ExportFileName.date(logDate: "02/29/2024", datetimeUtc: 0) == "2024-02-29")
+    }
 }
