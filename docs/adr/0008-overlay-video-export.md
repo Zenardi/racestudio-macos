@@ -234,6 +234,17 @@ startup disk and on an external drive.
     `EncoderAvailability.system`, before any test had started. CI therefore runs the Swift tests
     under `scripts/watchdog.sh`, which stops a run after 15 minutes and prints the sampled
     frames, and each job has a `timeout-minutes` ceiling.
+  - Even on healthy hosts each video test took 20 to 30 s there, against about one on a Mac. So
+    the video tests run on a Mac and not in a virtual machine. `VideoTests` (test support) skips
+    them where `kern.hv_vmm_present` is 1. `RACESTUDIO_VIDEO_TESTS=1` runs them anywhere, and `0`
+    skips them anywhere.
+  - Where they are skipped, `scripts/coverage.sh` leaves out the five files only they reach:
+    `OverlayVideoExporter`, `ExportPipeline`, `OverlayCompositor`, `FootageProbe` and
+    `OverlayComposition`. Without them, RaceStudioCore measured 97.16%; with them unmeasured but
+    counted, 93.70%. On a Mac nothing is left out, and the full gate runs before every commit.
+  - Running the video tests one at a time instead was tried and dropped. With Swift 6.4 on
+    macOS 27, any serial run of this suite (even `--no-parallel` on unchanged code) hangs on an
+    await that is never resumed, so it could not pass locally.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

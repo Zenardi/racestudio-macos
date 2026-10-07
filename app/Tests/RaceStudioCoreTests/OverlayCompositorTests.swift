@@ -10,7 +10,7 @@ import Testing
 /// `AVAssetImageGenerator` at zero tolerance, on synthetic footage whose
 /// frames encode their index and a test overlay whose bar encodes the
 /// session time.
-@Suite struct OverlayCompositorTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct OverlayCompositorTests {
 
     /// A sync clock: `video = session × rate + offset`.
     struct Clock: Sendable, CustomTestStringConvertible {

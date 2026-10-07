@@ -86,7 +86,8 @@ import Foundation
     }
 
     /// A file with audio says so; a video-only movie and a non-media file do not.
-    @Test func test_has_audio_track_tells_audio_from_none() async throws {
+    @Test(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason))
+    func test_has_audio_track_tells_audio_from_none() async throws {
         let dir = try MediaFixtures.tempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let tone = dir.appendingPathComponent("tone.wav")
@@ -102,7 +103,8 @@ import Foundation
     }
 
     /// Reading footage without audio is a typed failure, not an empty clip.
-    @Test func test_reading_a_video_without_audio_fails_typed() async throws {
+    @Test(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason))
+    func test_reading_a_video_without_audio_fails_typed() async throws {
         let dir = try MediaFixtures.tempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         let movie = dir.appendingPathComponent("silent.mov")

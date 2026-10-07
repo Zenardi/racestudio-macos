@@ -19,7 +19,9 @@
 #
 # Config (env): COVERAGE_THRESHOLD (default 95), RUST_WORKSPACE (default repo
 #   root), SWIFT_APP (default repo-root/app), EMIT_LCOV=1 (Rust lcov artifact),
-#   SWIFT_TEST_TIMEOUT (default 900: seconds before a hung Swift run is stopped).
+#   SWIFT_TEST_TIMEOUT (default 900: seconds before a hung Swift run is stopped),
+#   RACESTUDIO_VIDEO_TESTS (1 or 0: run or skip the video tests and measure or
+#   leave out the files only they reach; by default a virtual machine skips).
 #
 # Internal sub-modes (used by tests/swift_gate_test.sh):
 #   --swift-parse-json <threshold>   parse llvm-cov JSON on stdin, gate on %
@@ -41,6 +43,11 @@ THRESHOLD="${COVERAGE_THRESHOLD:-95}"
 RUST_WORKSPACE="${RUST_WORKSPACE:-$ROOT}"
 SWIFT_APP="${SWIFT_APP:-$ROOT/app}"
 CORE_SCOPE="Sources/RaceStudioCore"
+
+# The files only the video tests reach (issue 200). Those tests are skipped in
+# a virtual machine, where VideoToolbox is paravirtualized, so there the Swift
+# gate leaves these files out; on a Mac it measures them like any other.
+VIDEO_ONLY_FILES='VideoExport/(OverlayVideoExporter|ExportPipeline|OverlayCompositor|FootageProbe|OverlayComposition)\.swift$'
 
 # --------------------------------------------------------------------------- #
 # Swift helpers
@@ -92,6 +99,23 @@ swift_failures() {
   echo "==> end of Swift test failures"
 }
 
+# Whether the video tests run here: the decision of `VideoTests` in
+# app/Tests/RaceStudioCoreTests/Support/VideoTests.swift. RACESTUDIO_VIDEO_TESTS
+# 1 runs them, 0 skips them; otherwise a virtual machine skips them.
+video_tests_enabled() {
+  case "${RACESTUDIO_VIDEO_TESTS:-}" in
+    1) return 0 ;;
+    0) return 1 ;;
+  esac
+  [[ "$(sysctl -n kern.hv_vmm_present 2>/dev/null)" != "1" ]]
+}
+
+# The llvm-cov filename filter of this run: the video-only files where the video
+# tests are skipped, else nothing.
+swift_coverage_ignore() {
+  if ! video_tests_enabled; then echo "$VIDEO_ONLY_FILES"; fi
+}
+
 # $1 = scope path relative to app/, or "ALL" for the full (unscoped) export.
 swift_export() {
   local scope="${1:-$CORE_SCOPE}" bin prof
@@ -101,10 +125,15 @@ swift_export() {
     echo "error: no Swift coverage data found — run --swift-build first" >&2
     return 3
   fi
+  local ignore
+  ignore="$(swift_coverage_ignore)"
   (
     cd "$SWIFT_APP"
     if [[ "$scope" == "ALL" ]]; then
       xcrun llvm-cov export -summary-only "$bin" -instr-profile "$prof"
+    elif [[ -n "$ignore" ]]; then
+      echo "==> video tests skipped here (issue 200): not measuring $ignore" >&2
+      xcrun llvm-cov export -summary-only "$bin" -instr-profile "$prof" -ignore-filename-regex="$ignore" "$scope"
     else
       xcrun llvm-cov export -summary-only "$bin" -instr-profile "$prof" "$scope"
     fi
@@ -194,6 +223,7 @@ case "${1:-}" in
     echo "THRESHOLD=${THRESHOLD}"
     echo "RUST_WORKSPACE=${RUST_WORKSPACE}"
     echo "SWIFT_APP=${SWIFT_APP}"
+    echo "SWIFT_COVERAGE_IGNORE=$(swift_coverage_ignore)"
     exit 0
     ;;
   --swift-parse-json)

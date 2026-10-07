@@ -6,7 +6,7 @@ import Testing
 /// The end of an overlay export (issue 9.13): finishing the file — the
 /// writer's fast-start pass — counts as the last step of the progress, so
 /// 1.0 means done, and a cancel during it stops the writer and leaves no file.
-@Suite struct ExportFinishingTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct ExportFinishingTests {
 
     // MARK: - Progress
 

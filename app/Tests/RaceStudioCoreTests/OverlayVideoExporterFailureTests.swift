@@ -6,7 +6,7 @@ import Testing
 /// with a typed ``OverlayExportError`` and leaves no partial file — neither at
 /// the destination, where an existing file is only ever replaced by a
 /// finished export, nor in its scratch directory.
-@Suite struct OverlayVideoExporterFailureTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct OverlayVideoExporterFailureTests {
 
     private func overlay(_ drawer: any OverlayFrameDrawing = SessionTimeBar(origin: 0)) async throws -> ExportOverlay {
         ExportOverlay(drawer: drawer, telemetry: try await SessionTimeBar.timeline(from: -100, to: 100))
@@ -318,7 +318,7 @@ import Testing
     /// "capacity for important usage" at all (0) — the free space is the
     /// volume's available capacity, so an export to an external drive is not
     /// refused for want of space it has.
-    @Test(.enabled(if: ExternalVolume.canMount, "this machine cannot mount a disk image"))
+    @Test(.enabled(if: VideoTests.isEnabled && ExternalVolume.canMount, "a virtual machine, or no disk images here"))
     func test_an_external_volume_reports_its_free_space() throws {
         let volume = try ExternalVolume()
         defer { volume.detach() }
@@ -331,7 +331,7 @@ import Testing
     /// An export to an external drive, with every production seam — its free
     /// space, its item-replacement directory, the move into place — lands
     /// there, replacing an older file, with nothing else left in the folder.
-    @Test(.enabled(if: ExternalVolume.canMount, "this machine cannot mount a disk image"))
+    @Test(.enabled(if: VideoTests.isEnabled && ExternalVolume.canMount, "a virtual machine, or no disk images here"))
     func test_an_export_to_an_external_volume_lands_there() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }

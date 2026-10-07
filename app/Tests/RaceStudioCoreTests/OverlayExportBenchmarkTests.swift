@@ -87,7 +87,7 @@ struct OverlayExportBenchmark {
 /// exports well inside a ceiling generous enough for a debug, instrumented
 /// build on a slow runner — only something pathological, like rebuilding the
 /// overlay's static layers or a Core Image context every frame, breaks it.
-@Suite struct OverlayExportThroughputTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct OverlayExportThroughputTests {
 
     // Deliberately loose: locally the clip takes about 0.2 s in a debug build,
     // but CI runs it instrumented, beside every other suite, on a shared

@@ -7,7 +7,7 @@ import Testing
 /// Reading what an export needs to know about a piece of footage (issue 9.13)
 /// — its frame rate, size, length, rotation and sound — from synthetic files
 /// written in the test.
-@Suite struct FootageProbeTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct FootageProbeTests {
 
     private func movie(_ spec: TestMediaFactory.Spec = .init(), in dir: URL) async throws -> URL {
         let url = dir.appendingPathComponent("footage.mp4")

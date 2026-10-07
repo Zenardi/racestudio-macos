@@ -203,6 +203,47 @@ LOG
   fi
 }
 
+test_video_only_files_are_left_out_where_the_video_tests_are_off() {
+  # Given the video tests off (a VM, here forced; issue 200), When the gate
+  # reports its config, Then it leaves out exactly the five files only those
+  # tests reach.
+  local out
+  out="$(RACESTUDIO_VIDEO_TESTS=0 bash "$GATE" --print-config 2>&1)"
+  local expected='SWIFT_COVERAGE_IGNORE=VideoExport/(OverlayVideoExporter|ExportPipeline|OverlayCompositor|FootageProbe|OverlayComposition)\.swift$'
+  if grep -qxF "$expected" <<<"$out"; then
+    ok "test_video_only_files_are_left_out_where_the_video_tests_are_off"
+  else
+    bad "test_video_only_files_are_left_out_where_the_video_tests_are_off" "out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_nothing_is_left_out_where_the_video_tests_run() {
+  # Given the video tests on (a Mac, here forced), When the gate reports its
+  # config, Then it measures every file.
+  local out
+  out="$(RACESTUDIO_VIDEO_TESTS=1 bash "$GATE" --print-config 2>&1)"
+  if grep -qx 'SWIFT_COVERAGE_IGNORE=' <<<"$out"; then
+    ok "test_nothing_is_left_out_where_the_video_tests_run"
+  else
+    bad "test_nothing_is_left_out_where_the_video_tests_run" "out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_by_default_only_a_virtual_machine_leaves_them_out() {
+  # Given no override, When the gate reports its config, Then it leaves the
+  # video-only files out exactly when macOS runs under a hypervisor — as the
+  # Swift tests' VideoTests decides.
+  local out vm
+  out="$(env -u RACESTUDIO_VIDEO_TESTS bash "$GATE" --print-config 2>&1)"
+  vm="$(sysctl -n kern.hv_vmm_present 2>/dev/null)"
+  if { [[ "$vm" == "1" ]] && grep -q '^SWIFT_COVERAGE_IGNORE=VideoExport/' <<<"$out"; } \
+    || { [[ "$vm" != "1" ]] && grep -qx 'SWIFT_COVERAGE_IGNORE=' <<<"$out"; }; then
+    ok "test_by_default_only_a_virtual_machine_leaves_them_out"
+  else
+    bad "test_by_default_only_a_virtual_machine_leaves_them_out" "vm=$vm out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_swift_gate_measures_core_only() {
   # Given a real coverage run, When scoped to Sources/RaceStudioCore, Then the
   # measured file set is exactly the Core library (no tests/runner/shell).
@@ -248,6 +289,9 @@ test_swift_gate_fails_below_threshold
 test_swift_gate_passes_at_threshold
 test_swift_failures_are_named_from_the_full_log
 test_a_hung_swift_run_is_named_with_its_frames
+test_video_only_files_are_left_out_where_the_video_tests_are_off
+test_nothing_is_left_out_where_the_video_tests_run
+test_by_default_only_a_virtual_machine_leaves_them_out
 test_swift_gate_measures_core_only
 test_shell_target_excluded_from_metric
 
