@@ -75,10 +75,13 @@ import Testing
         #expect(pipeline.writerStatus == .cancelled)
     }
 
-    /// A cancel that lands once the writer has been told to finish — while its
-    /// fast-start pass runs — cancels the writer itself; the run ends
-    /// cancelled, never with a finished file.
-    @Test func test_a_cancel_while_finishing_cancels_the_writer() async throws {
+    /// A cancel that lands once the writer has been told to finish ends the
+    /// run cancelled at once, and leaves the writer to finish (issue 205).
+    /// Cancelled that early in its finish, a writer could stay `.writing` for
+    /// good and never call back, and the run waited for it for ever. This test,
+    /// run on its own, hung every time.
+    @Test(.timeLimit(.minutes(1)))
+    func test_a_cancel_while_finishing_ends_the_run_at_once() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }
         let file = sandbox.directory.appendingPathComponent("out.mp4")
@@ -86,7 +89,7 @@ import Testing
         let pipeline = try await pipeline(in: sandbox, file: file, spec: busy, didStartFinishing: { $0.cancel() })
 
         await #expect(throws: OverlayExportError.cancelled) { try await pipeline.run() }
-        #expect(pipeline.writerStatus == .cancelled, "the writer was cancelled mid-finish, not left to complete")
+        #expect(pipeline.writerStatus != .cancelled, "a writer told to finish is left to finish")
     }
 
     /// Cancelled while finishing, an export leaves an existing file at its
