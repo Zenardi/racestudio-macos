@@ -44,7 +44,11 @@ ensure_swift_built() {
     # only "swift build/coverage failed" and nothing about why. The tail is enough
     # to diagnose in a CI log; the full log is left on disk and its path printed,
     # so a developer can read the rest.
-    echo "  --- coverage.sh --swift-build failed; last 25 lines ---"
+    # The failing tests first, wherever they sit in the log (issue 200): the
+    # tail alone once showed "5 issues" in a suite and none of their names.
+    echo "  --- coverage.sh --swift-build failed; failing tests ---"
+    sed -n '/^==> Swift test failures/,/^==> end of Swift test failures/p' "$log" | sed 's/^/      /'
+    echo "  --- last 25 lines ---"
     tail -25 "$log" | sed 's/^/      /'
     echo "  --- end (full log: $log) ---"
     return 0
@@ -137,6 +141,38 @@ test_swift_gate_passes_at_threshold() {
   fi
 }
 
+test_swift_failures_are_named_from_the_full_log() {
+  # Given a Swift Testing log where a recorded issue, a failed suite and a
+  # crash sit among passing and skipped tests (issue 200: a caller keeping only
+  # the tail lost the names), When the gate summarises it, Then it names the
+  # failing test, its expectation and the crash, and leaves out the rest.
+  local log out exit
+  log="$(mktemp)"
+  cat > "$log" <<'LOG'
+◇ Test run started.
+✔ Test test_passes() passed after 0.1 seconds.
+✘ Test test_a_bench() skipped: "set RACESTUDIO_EXPORT_BENCH to run it"
+✘ Test test_an_export_matches_its_plan() recorded an issue at OverlayVideoExporterTests.swift:32:9: Expectation failed: (movie.frameTimes.count → 11) == (plan.frameCount → 90)
+✘ Test test_an_export_matches_its_plan() failed after 120.653 seconds with 1 issue.
+✘ Suite OverlayVideoExporterTests failed after 146.661 seconds with 1 issue.
+◇ Passing 2 arguments role → .loss to test_text_over_plate(role:)error: Exited with unexpected signal code 11
+✔ Test test_also_passes() passed after 0.2 seconds.
+LOG
+  out="$(bash "$GATE" --swift-failures "$log" 2>&1)"
+  exit=$?
+  rm -f "$log"
+  if [[ "$exit" -eq 0 ]] \
+    && grep -q 'test_an_export_matches_its_plan() recorded an issue at OverlayVideoExporterTests.swift:32:9' <<<"$out" \
+    && grep -q 'Suite OverlayVideoExporterTests failed' <<<"$out" \
+    && grep -q 'unexpected signal code 11' <<<"$out" \
+    && ! grep -q 'skipped' <<<"$out" \
+    && ! grep -q 'passed after' <<<"$out"; then
+    ok "test_swift_failures_are_named_from_the_full_log"
+  else
+    bad "test_swift_failures_are_named_from_the_full_log" "exit=$exit out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_swift_gate_measures_core_only() {
   # Given a real coverage run, When scoped to Sources/RaceStudioCore, Then the
   # measured file set is exactly the Core library (no tests/runner/shell).
@@ -180,6 +216,7 @@ test_swift_test_injects_clt_framework_paths
 test_swiftlint_clean
 test_swift_gate_fails_below_threshold
 test_swift_gate_passes_at_threshold
+test_swift_failures_are_named_from_the_full_log
 test_swift_gate_measures_core_only
 test_shell_target_excluded_from_metric
 

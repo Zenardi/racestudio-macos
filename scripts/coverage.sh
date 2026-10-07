@@ -23,6 +23,8 @@
 # Internal sub-modes (used by tests/swift_gate_test.sh):
 #   --swift-parse-json <threshold>   parse llvm-cov JSON on stdin, gate on %
 #   --swift-build                    run swift test --enable-code-coverage
+#                                    (naming the failing tests if it fails)
+#   --swift-failures <log>           name the failing tests in a swift test log
 #   --swift-export [scope|ALL]       xcrun llvm-cov export (default scope: Core)
 #   --swift-lint                     run swiftlint on app
 #
@@ -64,7 +66,23 @@ ensure_xcframework() {
 swift_build_coverage() {
   ensure_xcframework
   echo "==> [swift 1/2] swift test --enable-code-coverage (via scripts/swift_test.sh)"
-  bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage
+  local log status=0
+  log="$(mktemp)"
+  bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage 2>&1 | tee "$log" || status=$?
+  [[ "$status" -eq 0 ]] || swift_failures "$log"
+  rm -f "$log"
+  return "$status"
+}
+
+# The failing tests of a Swift Testing run, gathered from its whole log
+# (issue 200): the run interleaves 2,000-odd tests, and a caller that keeps only
+# the tail (tests/swift_gate_test.sh) lost their names. Prints each recorded
+# issue, failed test or suite, and crash; leaves out skipped and passing tests.
+swift_failures() {
+  echo "==> Swift test failures (from the full log):"
+  { grep -E '✘ (Test|Suite) |unexpected signal|^error: ' "$1" || true; } \
+    | grep -v ' skipped' | head -80 | sed 's/^/    /'
+  echo "==> end of Swift test failures"
 }
 
 # $1 = scope path relative to app/, or "ALL" for the full (unscoped) export.
@@ -177,6 +195,10 @@ case "${1:-}" in
     ;;
   --swift-build)
     swift_build_coverage
+    exit $?
+    ;;
+  --swift-failures)
+    swift_failures "${2:?--swift-failures needs a log}"
     exit $?
     ;;
   --swift-export)
