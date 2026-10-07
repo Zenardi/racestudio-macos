@@ -214,11 +214,11 @@ The reviewer confirmed three behaviours as safe:
 Every finding was fixed, or is justified above (L2, L5, the quit-during-preparation case, and
 the DelaySchedulingTests negative wait).
 
-Validation at 07c81fc:
+Validation at a57a191 (after a last commit pinning four rules that the tests had not stated):
 
 - `make lint` is clean.
-- The Swift suite passes: 2381 tests (CLT route).
-- `RaceStudioCore` line coverage is **99.37%**.
+- The Swift suite passes: 2385 tests (CLT route).
+- `RaceStudioCore` line coverage is **99.41%**.
 - `OverlayExportEndToEndTests` passes with `RS_REQUIRE_CORPUS=1`.
 - The golden and CSV corpus gates pass, as do the handbook and parity doc-lints and `make docs`.
 - The shell builds with no new warnings.
