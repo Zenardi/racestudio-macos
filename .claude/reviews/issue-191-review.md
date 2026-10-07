@@ -232,3 +232,25 @@ Validation at a57a191 (after a last commit pinning four rules that the tests had
   and others) while another agent's worktree ran the same export tests and an ASAN build on this
   Mac. The re-run passed: 2348 tests in 14 s. This matches the CI flake under #200, so it is not
   chased here.
+
+## Review of 1e78684, after the rebase onto #201 (issue 200)
+
+Scope: `OverlayExportEndToEndTests` skipped in a VM's full run; `scripts/e2e.sh` runs it alone
+with `RACESTUDIO_VIDEO_TESTS=1` under `scripts/watchdog.sh`; a make test pins it.
+
+- The smoke still runs in CI, as this issue asks, and is still required (`RS_REQUIRE_CORPUS=1`).
+  It now runs alone, so the VM's paravirtualized VideoToolbox serves one export, and a hang fails
+  the gate at `SWIFT_TEST_TIMEOUT` instead of holding the job.
+- **LOW — a hung export's samples went to `$TMPDIR`, which CI does not upload.** **Fixed**:
+  `WATCHDOG_SAMPLE_DIR` defaults to the uploaded crash-reports folder on CI, as in `coverage.sh`.
+- **LOW, kept — e2e's other Swift runs (the corpus goldens) are not under the watchdog.** They
+  decode no video, and the job's `timeout-minutes` bounds them.
+
+| Check | Result |
+|---|---|
+| Full suite on a Mac, rebased | 2390 passed in 10.4 s |
+| Full suite with `RACESTUDIO_VIDEO_TESTS=0` (as on CI) | 2390 passed; video suites skipped |
+| RaceStudioCore coverage, as a VM measures it | 98.73% |
+| The e2e smoke, run as `e2e.sh` runs it | 1 passed in 3.2 s |
+| `tests/make_test.sh` | 8 passed |
+| swiftlint | 0 violations |

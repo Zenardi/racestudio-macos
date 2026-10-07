@@ -86,6 +86,8 @@ else
   # are skipped (issue 200: GitHub's VMs paravirtualize VideoToolbox), alone,
   # so the VM serves this one export; the watchdog bounds it.
   echo "==> [e2e 4c/4] overlay export end to end (OverlayExportEndToEndTests)"
+  # On CI a hung export's samples join the crash reports the job uploads.
+  export WATCHDOG_SAMPLE_DIR="${WATCHDOG_SAMPLE_DIR:-${RUNNER_TEMP:+$RUNNER_TEMP/crash-reports}}"
   RACESTUDIO_VIDEO_TESTS=1 RS_REQUIRE_CORPUS=1 bash "$SCRIPT_DIR/watchdog.sh" "${SWIFT_TEST_TIMEOUT:-900}" bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage --filter OverlayExportEndToEndTests
 fi
 
