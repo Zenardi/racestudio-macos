@@ -245,6 +245,13 @@ startup disk and on an external drive.
   - Running the video tests one at a time instead was tried and dropped. With Swift 6.4 on
     macOS 27, any serial run of this suite (even `--no-parallel` on unchanged code) hangs on an
     await that is never resumed, so it could not pass locally.
+- A read can end short without failing. AVFoundation drops a frame whose composition request is
+  finished as cancelled, or that the decoder cannot produce, and still ends the read
+  `.completed`. On a CI virtual machine an export once wrote 4 of 45 frames and reported success.
+  - So the pipeline counts the frames it writes: more than one short of the plan's `frameCount`
+    fails the export as `sourceUnreadable` (issue 204). One short is within the plan's ±1 frame.
+  - A frame the compositor cannot get from the footage is `sourceUnreadable` too: the footage
+    ended before the plan, or did not decode. It is not reported as a writer failure.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

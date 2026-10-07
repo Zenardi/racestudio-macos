@@ -24,6 +24,8 @@ final class ExportPipeline: @unchecked Sendable {
     private let reader: AVAssetReader
     private let writer: AVAssetWriter
     private let lanes: [Lane]
+    /// The video frames the plan exports (``ExportPlan/frameCount``).
+    private let plannedFrames: Int
     private let queue = DispatchQueue(label: "com.racestudio.overlay-export", qos: .userInitiated)
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let willFinish: @Sendable () async -> Void
@@ -47,6 +49,7 @@ final class ExportPipeline: @unchecked Sendable {
          didStartFinishing: @escaping @Sendable () -> Void = {}) async throws {
         self.willFinish = willFinish
         self.didStartFinishing = didStartFinishing
+        plannedFrames = plan.frameCount
         reader = try AVAssetReader(asset: composition.asset)
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
@@ -155,11 +158,20 @@ final class ExportPipeline: @unchecked Sendable {
                 if writer.status == .failed { throw writer.error ?? Self.unknownFailure }
                 if !moved { usleep(1_000) }
             }
+            try checkEveryFrameWasRead()
         } catch {
             reader.cancelReading()
             if writer.status == .writing { writer.cancelWriting() }
             throw error
         }
+    }
+
+    /// Fail a read that ended short of the plan (issue 204): AVFoundation drops
+    /// a frame whose composition request was cancelled, or that a decoder could
+    /// not produce, and still ends the read `.completed`. The plan promises its
+    /// frame count within one frame, so one frame short passes.
+    private func checkEveryFrameWasRead() throws {
+        guard framesWritten + 1 >= plannedFrames else { throw OverlayExportError.sourceUnreadable }
     }
 
     /// Move one sample along `lane`; `true` once the lane has run dry.

@@ -62,10 +62,18 @@ public final class OverlayCompositor: NSObject, AVVideoCompositing, @unchecked S
     // MARK: - Internals
 
     private func compose(_ request: AVAsynchronousVideoCompositionRequest) {
-        guard let instruction = request.videoCompositionInstruction as? OverlayCompositionInstruction,
-              let source = request.sourceFrame(byTrackID: instruction.trackID),
-              let output = request.renderContext.newPixelBuffer() else {
-            request.finish(with: OverlayExportError.writerFailed("A video frame could not be read for the overlay."))
+        guard let instruction = request.videoCompositionInstruction as? OverlayCompositionInstruction else {
+            request.finish(with: OverlayExportError.writerFailed("The export's video composition is not an overlay's."))
+            return
+        }
+        // No source frame: the footage ended before the plan or could not be
+        // decoded — the video can't be read (issue 204), not a writer failure.
+        guard let source = request.sourceFrame(byTrackID: instruction.trackID) else {
+            request.finish(with: OverlayExportError.sourceUnreadable)
+            return
+        }
+        guard let output = request.renderContext.newPixelBuffer() else {
+            request.finish(with: OverlayExportError.writerFailed("A video frame could not be made for the overlay."))
             return
         }
         do {
