@@ -228,6 +228,12 @@ startup disk and on an external drive.
   - On GitHub's macOS VMs, that race crashed the test process (SIGSEGV in `objc_retain` and in
     `CVPixelBufferPoolCreatePixelBuffer`). CI now prints and uploads every crash report when a
     job fails (`scripts/collect_crash_reports.sh`).
+  - Those VMs paravirtualize VideoToolbox: every encode and decode session is a request to the
+    host's media engine. A request can be slow, can fail ("A video frame could not be read"), or
+    can go unanswered. One sampled run blocked for good in `VTCompressionSessionCreate`, inside
+    `EncoderAvailability.system`, before any test had started. CI therefore runs the Swift tests
+    under `scripts/watchdog.sh`, which stops a run after 15 minutes and prints the sampled
+    frames, and each job has a `timeout-minutes` ceiling.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

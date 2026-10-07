@@ -18,7 +18,8 @@
 #   scripts/coverage.sh --print-config  print resolved config and exit
 #
 # Config (env): COVERAGE_THRESHOLD (default 95), RUST_WORKSPACE (default repo
-#   root), SWIFT_APP (default repo-root/app), EMIT_LCOV=1 (Rust lcov artifact).
+#   root), SWIFT_APP (default repo-root/app), EMIT_LCOV=1 (Rust lcov artifact),
+#   SWIFT_TEST_TIMEOUT (default 900: seconds before a hung Swift run is stopped).
 #
 # Internal sub-modes (used by tests/swift_gate_test.sh):
 #   --swift-parse-json <threshold>   parse llvm-cov JSON on stdin, gate on %
@@ -68,7 +69,13 @@ swift_build_coverage() {
   echo "==> [swift 1/2] swift test --enable-code-coverage (via scripts/swift_test.sh)"
   local log status=0
   log="$(mktemp)"
-  bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage 2>&1 | tee "$log" || status=$?
+  # A run blocked in a call that never returns (issue 200: VideoToolbox on
+  # GitHub's VMs) is stopped after SWIFT_TEST_TIMEOUT seconds and its frames
+  # named, instead of holding the job for hours. On CI the samples join the
+  # crash reports the job uploads.
+  WATCHDOG_SAMPLE_DIR="${WATCHDOG_SAMPLE_DIR:-${RUNNER_TEMP:+$RUNNER_TEMP/crash-reports}}" \
+    bash "$SCRIPT_DIR/watchdog.sh" "${SWIFT_TEST_TIMEOUT:-900}" \
+    bash "$SCRIPT_DIR/swift_test.sh" --enable-code-coverage 2>&1 | tee "$log" || status=$?
   [[ "$status" -eq 0 ]] || swift_failures "$log"
   rm -f "$log"
   return "$status"
@@ -80,8 +87,8 @@ swift_build_coverage() {
 # issue, failed test or suite, and crash; leaves out skipped and passing tests.
 swift_failures() {
   echo "==> Swift test failures (from the full log):"
-  { grep -E '✘ (Test|Suite) |unexpected signal|^error: ' "$1" || true; } \
-    | grep -v ' skipped' | head -80 | sed 's/^/    /'
+  { grep -E '✘ (Test|Suite) |unexpected signal|^error: |^watchdog: ' "$1" || true; } \
+    | { grep -v ' skipped' || true; } | head -80 | sed 's/^/    /'
   echo "==> end of Swift test failures"
 }
 

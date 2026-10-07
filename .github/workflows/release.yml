@@ -42,6 +42,8 @@ jobs:
   verify:
     name: verify (make ci)
     runs-on: macos-15
+    # A ceiling, not the normal stop (about 10 min): see ci.yml (issue 200).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +103,7 @@ jobs:
     name: build & package .dmg
     needs: verify
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       # Full history so `git describe` can find the newest v* tag on a manual run.
       - uses: actions/checkout@v4

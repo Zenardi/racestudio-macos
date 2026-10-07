@@ -173,6 +173,36 @@ LOG
   fi
 }
 
+test_a_hung_swift_run_is_named_with_its_frames() {
+  # Given a Swift Testing log that ends in the watchdog stopping a hung run
+  # (issue 200: a run blocked for ever in a VideoToolbox call), When the gate
+  # summarises it, Then the summary says the run hung and names the frames the
+  # watchdog sampled, and leaves out the passing tests.
+  local log out exit
+  log="$(mktemp)"
+  cat > "$log" <<'LOG'
+◇ Test run started.
+✔ Test test_passes() passed after 0.1 seconds.
+watchdog: still running after 900s, stopping: bash scripts/swift_test.sh --enable-code-coverage
+watchdog:   31264 /usr/libexec/swift/pm/swiftpm-testing-helper --test-bundle-path RaceStudioPackageTests.xctest
+watchdog: sample of 31264 in /tmp/hang-sample-31264.txt; its frames of our code and the media stack:
+watchdog:       VTCompressionSessionCreate + 32
+watchdog:       static EncoderAvailability.openCompressionSession(_:) + 116 ExportEncoding.swift:110
+LOG
+  out="$(bash "$GATE" --swift-failures "$log" 2>&1)"
+  exit=$?
+  rm -f "$log"
+  if [[ "$exit" -eq 0 ]] \
+    && grep -q 'watchdog: still running after 900s' <<<"$out" \
+    && grep -q 'VTCompressionSessionCreate' <<<"$out" \
+    && grep -q 'EncoderAvailability.openCompressionSession(_:) + 116 ExportEncoding.swift:110' <<<"$out" \
+    && ! grep -q 'passed after' <<<"$out"; then
+    ok "test_a_hung_swift_run_is_named_with_its_frames"
+  else
+    bad "test_a_hung_swift_run_is_named_with_its_frames" "exit=$exit out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_swift_gate_measures_core_only() {
   # Given a real coverage run, When scoped to Sources/RaceStudioCore, Then the
   # measured file set is exactly the Core library (no tests/runner/shell).
@@ -217,6 +247,7 @@ test_swiftlint_clean
 test_swift_gate_fails_below_threshold
 test_swift_gate_passes_at_threshold
 test_swift_failures_are_named_from_the_full_log
+test_a_hung_swift_run_is_named_with_its_frames
 test_swift_gate_measures_core_only
 test_shell_target_excluded_from_metric
 

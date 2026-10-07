@@ -16,6 +16,10 @@ jobs:
   ci:
     name: make ci (lint, coverage, e2e)
     runs-on: macos-15
+    # A ceiling, not the normal stop (about 15 min): scripts/watchdog.sh stops a
+    # hung Swift run after 15 min (issue 200); this ends anything else that
+    # hangs before GitHub's six-hour default.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +68,7 @@ jobs:
           bash tests/legal_gate_test.sh
           bash tests/release_test.sh
           bash tests/crash_reports_test.sh
+          bash tests/watchdog_test.sh
 
       # Legal gate (issue 6.1): a device-area PR (M6, 6.2–6.7) cannot merge
       # without a recorded `needs-legal-review` sign-off + a link to ADR 0006 in

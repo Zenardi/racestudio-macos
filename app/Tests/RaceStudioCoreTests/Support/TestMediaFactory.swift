@@ -97,7 +97,9 @@ enum TestMediaFactory {
         writer.startSession(atSourceTime: .zero)
         var feed = Feed(spec: spec, audioFrames: spec.audio ? Int(spec.duration * audioRate) : 0)
         while !feed.isDone {
-            if try feed.appendVideo(to: adaptor, from: frames) || feed.appendAudio(to: audio) { continue }
+            if try writing(writer, { try feed.appendVideo(to: adaptor, from: frames) || feed.appendAudio(to: audio) }) {
+                continue
+            }
             if writer.status == .failed { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             try await Task.sleep(nanoseconds: 1_000_000)
         }
@@ -115,7 +117,7 @@ enum TestMediaFactory {
         writer.startSession(atSourceTime: .zero)
         var feed = Feed(spec: Spec(frames: 0, audio: true), audioFrames: Int(seconds * audioRate))
         while !feed.isDone {
-            if try feed.appendAudio(to: audio) { continue }
+            if try writing(writer, { try feed.appendAudio(to: audio) }) { continue }
             if writer.status == .failed { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             try await Task.sleep(nanoseconds: 1_000_000)
         }
@@ -124,6 +126,17 @@ enum TestMediaFactory {
     }
 
     // MARK: - Internals
+
+    /// Run `append`, rethrowing a refused sample as the writer's own error
+    /// (issue 200): "the file couldn't be saved" alone named nothing when
+    /// VideoToolbox failed on CI's virtual machines.
+    private static func writing(_ writer: AVAssetWriter, _ append: () throws -> Bool) throws -> Bool {
+        do {
+            return try append()
+        } catch {
+            throw writer.error ?? error
+        }
+    }
 
     /// A pool of frames with `attributes`, made once per movie and owned by its caller.
     ///
