@@ -6,8 +6,8 @@
 # report (`.ips`) names the faulting thread, its queue and its frames.
 #
 # ReportCrash writes a report a few seconds after the crash, so this waits a
-# few seconds, and then while ReportCrash is still running, up to
-# CRASH_REPORT_WAIT seconds in all (default 30). It then copies every `.ips`
+# few seconds, and then while ReportCrash runs or no report has appeared yet,
+# up to CRASH_REPORT_WAIT seconds in all (default 30). It then copies every `.ips`
 # written in the last CRASH_REPORT_MAX_AGE_MIN minutes (default 360, a job's
 # longest run; the runner image ships older reports of its own) into DEST,
 # which the workflow uploads as an artifact, and prints each one's faulting
@@ -39,9 +39,11 @@ reports() {
   return 0
 }
 
-# At least a few seconds, for ReportCrash to start; then while it runs.
+# At least a few seconds; then while ReportCrash runs, or no report has been
+# written yet (on a loaded runner it can start late) — WAIT seconds at most.
 waited=0
-while [ "$waited" -lt "$WAIT" ] && { [ "$waited" -lt 5 ] || pgrep -x ReportCrash >/dev/null 2>&1; }; do
+while [ "$waited" -lt "$WAIT" ] \
+  && { [ "$waited" -lt 5 ] || pgrep -x ReportCrash >/dev/null 2>&1 || [ -z "$(reports)" ]; }; do
   sleep 1
   waited=$((waited + 1))
 done

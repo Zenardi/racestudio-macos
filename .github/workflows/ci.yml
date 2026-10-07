@@ -129,11 +129,11 @@ jobs:
       # thread and frames: print them here and keep the reports, one artifact
       # per attempt so a re-run's reports never collide with the first's.
       - name: Collect crash reports
-        if: failure()
+        if: failure() || cancelled()
         run: bash scripts/collect_crash_reports.sh "${{ runner.temp }}/crash-reports"
 
       - name: Upload crash reports
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: crash-reports-attempt-${{ github.run_attempt }}

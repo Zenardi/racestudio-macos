@@ -85,11 +85,11 @@ jobs:
       # A crashed test process names no test in the log (issue 200): print each
       # crash report's faulting thread and keep the reports. See ci.yml.
       - name: Collect crash reports
-        if: failure()
+        if: failure() || cancelled()
         run: bash scripts/collect_crash_reports.sh "${{ runner.temp }}/crash-reports"
 
       - name: Upload crash reports
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v4
         with:
           name: crash-reports-attempt-${{ github.run_attempt }}

@@ -125,7 +125,7 @@ enum TestMediaFactory {
 
     // MARK: - Internals
 
-    /// A pool of frames with `attributes`, owned by the writer that draws from it.
+    /// A pool of frames with `attributes`, made once per movie and owned by its caller.
     ///
     /// Never the adaptor's own `pixelBufferPool` (issue 200): AVFoundation swaps
     /// that pool for the encoder's a few frames in, releasing the first on its
