@@ -31,6 +31,8 @@ struct VideoDataPanel: View {
     let cursor: LinkedCursor
     @ObservedObject var controller: VideoReviewController
     let analysis: AnalysisSession?
+    /// Opens the Export Video with Overlay sheet (issue 9.14).
+    let onExportVideo: () -> Void
 
     /// The whole-session base grid, read once per base resolution (as the 8.11
     /// panel reads it) and re-cut into absolute windows by the timeline.
@@ -63,6 +65,8 @@ struct VideoDataPanel: View {
         .onChange(of: undoManager) { editor.undoManager = $0 }
         .onReceive(cursor.$timePosition) { controller.seekFromCursor(to: $0) }
         .onReceive(data.$telemetry) { hasTelemetry = $0 != nil }
+        // The export sheet's *Sync First* (issue 9.14) brings the sync controls back.
+        .onChange(of: controller.syncRequest) { _ in showsSync = true }
         .focusedSceneValue(\.videoDataActions, actions)
     }
 
@@ -156,6 +160,7 @@ struct VideoDataPanel: View {
             Button(L10n.string(.controlImportVideo), action: pickVideo)
             if controller.attachment != nil {
                 Button(L10n.string(.controlRemoveVideo)) { controller.removeVideo() }
+                ExportVideoButton(controller: controller, review: review, data: data, open: onExportVideo)
             }
         }
         .toggleStyle(.button)

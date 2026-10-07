@@ -27,12 +27,32 @@ struct LibraryRootView: View {
                 ContentView()
                     .toolbar {
                         ToolbarItem(placement: .navigation) {
-                            Button { landing = .home; store.reset() } label: {
-                                Label("Home", systemImage: "chevron.backward")
-                            }
-                            .help("Close this session and return to the Home dashboard")
+                            CloseSessionButton { landing = .home; store.reset() }
                         }
                     }
+            }
+        }
+    }
+
+    /// The toolbar's **Home** button: closes the session — asking first, and
+    /// cancelling the export, while one runs (issue 9.14). Its own view, so the
+    /// export's progress redraws only the button.
+    private struct CloseSessionButton: View {
+        @EnvironmentObject private var progress: ExportProgressModel
+        let close: () -> Void
+
+        var body: some View {
+            Button(action: attemptClose) { Label("Home", systemImage: "chevron.backward") }
+                .help("Close this session and return to the Home dashboard")
+        }
+
+        private func attemptClose() {
+            guard progress.isActive else { return close() }
+            guard ExportGuardAlert.confirmCancel(message: L10n.string(.exportCloseMessage),
+                                                 confirm: L10n.string(.exportCloseConfirm)) else { return }
+            Task { @MainActor in
+                await progress.cancelAndWait()
+                close()
             }
         }
     }

@@ -50,6 +50,10 @@ final class VideoReviewController: ObservableObject {
     /// 9.8) — `nil` while it is being checked.
     @Published var hasAudioTrack: Bool?
 
+    /// Bumped by the export sheet's *Sync First* (issue 9.14), so the Video +
+    /// Data panel shows its sync controls.
+    @Published var syncRequest = 0
+
     /// The session's RPM channel, resolved once per session rather than on
     /// every render of the auto-sync button (issue 9.8).
     let rpmChannels: RPMChannelMemo
