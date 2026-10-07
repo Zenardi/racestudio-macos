@@ -38,6 +38,16 @@ enum ExportEncoding {
         ]
     }
 
+    /// The timescale every frame time of `grid` is exact in: the smallest
+    /// multiple of its rate's numerator that is at least 600 — 30000 for
+    /// 29.97 fps, 600 for 25, 30 or 60. The writer's default, 600, cannot
+    /// hold 1001/30000 s, and would round NTSC frame times by up to a
+    /// millisecond.
+    static func timescale(for grid: FrameGrid) -> CMTimeScale {
+        let numerator = max(grid.numerator, 1)
+        return CMTimeScale(clamping: numerator * max((600 + numerator - 1) / numerator, 1))
+    }
+
     /// The AAC encoder's settings for `audio`: its rate where AAC takes it
     /// (44.1 or 48 kHz, else 48 kHz), mono or stereo, at `bitRate`.
     static func audio(for audio: FootageAudio, bitRate: Int) -> [String: Any] {

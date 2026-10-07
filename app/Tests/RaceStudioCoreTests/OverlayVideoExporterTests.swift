@@ -42,8 +42,8 @@ import Testing
         #expect(!sandbox.scratchExists, "the scratch directory is removed")
     }
 
-    /// A lap-like span of 29.97 fps footage exports exactly its frames, timed
-    /// from zero at the NTSC rate.
+    /// A lap-like span of 29.97 fps footage exports exactly its frames, each
+    /// at exactly `k × 1001 / 30000` s — no rounding to a coarse timescale.
     @Test func test_a_span_of_ntsc_footage_exports_exactly_its_frames() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }
@@ -55,10 +55,11 @@ import Testing
 
         let movie = try await MovieReadback.read(sandbox.destination, decoding: [0])
         #expect(plan.firstFrame == 15 && plan.frameCount == 45)
+        let exact = (0..<45).map { Double($0 * 1_001) / 30_000 }
         #expect(movie.frameTimes.count == 45)
-        #expect(abs(movie.duration - plan.duration) <= 1_001 / 30_000.0)
+        #expect(zip(movie.frameTimes, exact).allSatisfy { abs($0 - $1) < 1e-9 }, "\(movie.frameTimes)")
+        #expect(abs(movie.duration - plan.duration) < 1e-9)
         #expect(abs(Double(movie.frameRate) - 29.97) < 0.01)
-        #expect(movie.frameTimes.first == 0, "the output starts at zero")
         #expect(try #require(movie.frames[0]).sourcePixel.frameIndex == 15)
     }
 

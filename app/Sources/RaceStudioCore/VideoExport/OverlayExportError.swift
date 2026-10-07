@@ -22,8 +22,9 @@ public enum OverlayExportError: Error, Equatable, Sendable {
     case rangeOutsideFootage
     /// The output settings cannot be encoded.
     case unsupportedOutput(UnsupportedOutputReason)
-    /// The destination's volume lacks room for the estimated file plus a 10%
-    /// margin: `required` and `available` bytes.
+    /// The destination's volume lacks room for the export
+    /// (``ExportPlan/requiredBytes``: the estimated file twice over, for the
+    /// fast-start copy, plus margins): `required` and `available` bytes.
     case insufficientDiskSpace(required: Int64, available: Int64)
     /// Encoding or writing the output failed; the message says why.
     case writerFailed(String)

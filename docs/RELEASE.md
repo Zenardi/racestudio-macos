@@ -61,6 +61,9 @@ The user-selected grant is **read-write** because *Export Video with Overlay* wr
 MP4 into the folder you pick. Earlier builds only read sessions and footage, and had the read-only
 grant. An export is written to a temporary file on the same volume first, and moved into place
 only when it is complete, so a cancelled or failed export never leaves a partial file behind.
+While it finishes, the export briefly needs room for its file **twice**: the fast-start pass,
+which lets a shared file start playing before it has downloaded, rewrites it into a second copy.
+The export checks for that much free space, plus a margin, before it starts.
 
 Networking (`network.client`, `network.server`) is there for the MyChron download only.
 

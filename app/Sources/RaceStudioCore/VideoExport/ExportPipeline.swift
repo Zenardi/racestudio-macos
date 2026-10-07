@@ -33,14 +33,16 @@ final class ExportPipeline: @unchecked Sendable {
         reader = try AVAssetReader(asset: composition.asset)
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
+        let timescale = ExportEncoding.timescale(for: plan.footage.frameRate)
+        writer.movieTimeScale = timescale
         let frames = AVAssetReaderVideoCompositionOutput(
             videoTracks: try await composition.asset.loadTracks(withMediaType: .video),
             videoSettings: OverlayCompositor.bgraAttributes)
         frames.videoComposition = composition.videoComposition
         frames.alwaysCopiesSampleData = false
-        var lanes = [Lane(output: frames, input: AVAssetWriterInput(mediaType: .video,
-                                                                    outputSettings: ExportEncoding.video(for: plan)),
-                          countsFrames: true)]
+        let video = AVAssetWriterInput(mediaType: .video, outputSettings: ExportEncoding.video(for: plan))
+        video.mediaTimeScale = timescale
+        var lanes = [Lane(output: frames, input: video, countsFrames: true)]
         if let track = try await composition.asset.loadTracks(withMediaType: .audio).first,
            let audio = plan.footage.audio {
             let sound = AVAssetReaderTrackOutput(track: track, outputSettings: ExportEncoding.pcm(for: audio))

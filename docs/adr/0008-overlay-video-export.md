@@ -61,7 +61,7 @@ not the driver. They differ in control:
   the preset and the content, and is undocumented. The writer hit the requested average within
   1–3%.
 - **The estimate:** without a known bit rate there is no honest size estimate. The ±15% target
-  of #191 and the disk-space pre-check ("estimate + 10%") both depend on it.
+  of #191 and the disk-space pre-check (see below) both depend on it.
 - **Codec details:** the writer takes the profile (H.264 High, HEVC Main), the keyframe interval
   (2 s), the Rec. 709 colour tags and the encoder specification (hardware preferred, software
   fallback). A preset fixes all of these.
@@ -110,9 +110,17 @@ custom compositor stays exactly as planned.
     writer interleave the tracks, and naps 1 ms when neither is. Memory is therefore bounded by
     the writer's queues.
   - It sees a cancel within a frame.
-- **`OverlayVideoExporter`** (an actor) checks the free space where it writes against the
-  estimate + 10%, and reports progress as an `AsyncThrowingStream<ExportProgress, Error>` every
-  250 ms.
+- **`OverlayVideoExporter`** (an actor) checks the free space where it writes against
+  `ExportPlan.requiredBytes`, and reports progress as an
+  `AsyncThrowingStream<ExportProgress, Error>` every 250 ms.
+  - **The space rule is twice the estimate, each copy with 10% margin.** The writer keeps
+    **fast start** on (`shouldOptimizeForNetworkUse`, as the issue asked): it moves the `moov`
+    index ahead of `mdat`, so a shared or uploaded file starts playing before it has fully
+    downloaded. It does this by rewriting the finished file into a second copy, so both are on
+    disk for a moment.
+  - Dropping fast start would halve the peak, but every shared file would then have to download
+    fully before playing. A 10-minute 1080p export is about 1 GB, so briefly needing about
+    2.2 GB free is the better trade.
   - It writes into the **item replacement directory** of the destination's volume. That is the
     sandbox's sanctioned safe-save location; the app's user-selected grant is now read-write.
   - It moves the finished file into place in one step with `replaceItemAt`, so an existing file

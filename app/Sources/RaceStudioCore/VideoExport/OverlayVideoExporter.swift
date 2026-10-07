@@ -11,8 +11,10 @@ import os
 /// }                                             // done: the file is at `url`
 /// ```
 ///
-/// - **Checks first:** the destination's volume must hold the plan's estimate
-///   plus 10% (``DiskSpaceChecking``), or the export fails before writing.
+/// - **Checks first:** the destination's volume must hold
+///   ``ExportPlan/requiredBytes`` — the estimate twice over, for the writer's
+///   fast-start copy, plus margins (``DiskSpaceChecking``) — or the export
+///   fails before writing.
 ///   The space is read in the export's scratch directory — on that volume, and
 ///   readable inside the sandbox, where the destination's folder may not be;
 ///   a space that cannot be read does not block the export.

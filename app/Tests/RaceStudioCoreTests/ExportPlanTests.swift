@@ -293,11 +293,13 @@ import Testing
         #expect(dropped.estimatedBytes < kept.estimatedBytes)
     }
 
-    /// The disk-space check asks for the estimate plus a 10% margin.
-    @Test func test_the_required_space_is_the_estimate_plus_ten_percent() throws {
+    /// The disk-space check asks for room for the file twice over — the
+    /// writer's fast-start pass copies the finished file to move its index to
+    /// the front — each with a 10% margin.
+    @Test func test_the_required_space_covers_the_fast_start_copy() throws {
         let plan = try plan(Self.footage(width: 1_920, height: 1_080)).get()
 
-        #expect(plan.requiredBytes == plan.estimatedBytes + plan.estimatedBytes / 10)
+        #expect(plan.requiredBytes == 2 * (plan.estimatedBytes + plan.estimatedBytes / 10))
     }
 }
 

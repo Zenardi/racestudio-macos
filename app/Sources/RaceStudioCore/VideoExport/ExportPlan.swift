@@ -59,8 +59,12 @@ public struct ExportPlan: Equatable, Sendable {
         CMTimeRange(start: time(ofFrames: firstFrame), duration: time(ofFrames: frameCount))
     }
 
-    /// The free space the export needs: the estimate plus a 10% margin.
-    public var requiredBytes: Int64 { estimatedBytes + estimatedBytes / 10 }
+    /// The free space the export needs: room for the file **twice**, each copy
+    /// with a 10% margin. The writer's fast-start pass (`moov` ahead of
+    /// `mdat`, so a shared file starts playing before it has downloaded)
+    /// rewrites the finished file into a second copy, so for a moment both are
+    /// on disk.
+    public var requiredBytes: Int64 { 2 * (estimatedBytes + estimatedBytes / 10) }
 
     /// Plan `request` against `footage`.
     ///
