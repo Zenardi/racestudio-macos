@@ -80,6 +80,27 @@ test_no_report_is_not_an_error() {
   fi
 }
 
+test_reports_older_than_the_job_are_left_out() {
+  # Given a report from before the job (the runner image ships some) and a
+  # fresh one, When the collector runs, Then only the fresh one is copied and
+  # printed.
+  local reports="$WORK/reports4" dest="$WORK/dest4" out rc
+  mkdir -p "$reports"
+  write_report "$reports/coreaudiod-2026-08-30-210857.ips"
+  touch -t 202608302108 "$reports/coreaudiod-2026-08-30-210857.ips"
+  write_report "$reports/swiftpm-testing-helper-fresh.ips"
+
+  out="$(CRASH_REPORT_WAIT=0 bash "$COLLECT" "$dest" "$reports" 2>&1)"
+  rc=$?
+
+  if [ "$rc" -eq 0 ] && [ "$(ls "$dest")" = "swiftpm-testing-helper-fresh.ips" ] \
+    && ! grep -q 'coreaudiod' <<<"$out"; then
+    ok "test_reports_older_than_the_job_are_left_out"
+  else
+    bad "test_reports_older_than_the_job_are_left_out" "rc=$rc dest=$(ls "$dest" | tr '\n' ' ') out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_an_unreadable_report_is_still_copied() {
   # Given a report that is not valid JSON (cut short), When the collector runs,
   # Then the file is still copied and the run still succeeds.
@@ -118,6 +139,7 @@ test_ci_and_release_upload_crash_reports_on_failure() {
 echo "Running crash-report collector tests"
 test_reports_are_copied_and_their_faulting_thread_printed
 test_no_report_is_not_an_error
+test_reports_older_than_the_job_are_left_out
 test_an_unreadable_report_is_still_copied
 test_ci_and_release_upload_crash_reports_on_failure
 

@@ -5,10 +5,13 @@
 # in the log: Swift Testing buffers its output, so no test is named. The crash
 # report (`.ips`) names the faulting thread, its queue and its frames.
 #
-# ReportCrash writes a report a few seconds after the crash, so this waits up
-# to CRASH_REPORT_WAIT seconds (default 20) for one to appear. It then copies
-# every `.ips` from the report folders into DEST, which the workflow uploads
-# as an artifact, and prints each report's faulting thread to the log.
+# ReportCrash writes a report a few seconds after the crash, so this waits a
+# few seconds, and then while ReportCrash is still running, up to
+# CRASH_REPORT_WAIT seconds in all (default 30). It then copies every `.ips`
+# written in the last CRASH_REPORT_MAX_AGE_MIN minutes (default 360, a job's
+# longest run; the runner image ships older reports of its own) into DEST,
+# which the workflow uploads as an artifact, and prints each one's faulting
+# thread to the log.
 #
 # Usage: scripts/collect_crash_reports.sh DEST [REPORT_DIR ...]
 #   REPORT_DIR defaults to ~/Library/Logs/DiagnosticReports and
@@ -22,26 +25,26 @@ if [ $# -gt 0 ]; then
 else
   DIRS=("$HOME/Library/Logs/DiagnosticReports" "/Library/Logs/DiagnosticReports")
 fi
-WAIT="${CRASH_REPORT_WAIT:-20}"
+WAIT="${CRASH_REPORT_WAIT:-30}"
+MAX_AGE_MIN="${CRASH_REPORT_MAX_AGE_MIN:-360}"
 
 mkdir -p "$DEST"
 
-# Every crash report in the report folders (bash 3.2: no mapfile).
+# Every recent crash report in the report folders (bash 3.2: no mapfile).
 reports() {
   local dir
   for dir in "${DIRS[@]}"; do
-    [ -d "$dir" ] && find "$dir" -maxdepth 1 -type f -name '*.ips' -print
+    [ -d "$dir" ] && find "$dir" -maxdepth 1 -type f -name '*.ips' -mmin "-$MAX_AGE_MIN" -print
   done
   return 0
 }
 
+# At least a few seconds, for ReportCrash to start; then while it runs.
 waited=0
-while [ -z "$(reports)" ] && [ "$waited" -lt "$WAIT" ]; do
+while [ "$waited" -lt "$WAIT" ] && { [ "$waited" -lt 5 ] || pgrep -x ReportCrash >/dev/null 2>&1; }; do
   sleep 1
   waited=$((waited + 1))
 done
-# A report that has just appeared may still be being written.
-[ "$WAIT" -gt 0 ] && [ -n "$(reports)" ] && sleep 2
 
 found=0
 while IFS= read -r report; do
