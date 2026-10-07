@@ -136,6 +136,14 @@ Results on the development Mac (Apple silicon, macOS 26, release build):
 | Output size vs the plan's estimate | **937 MB vs 946 MB (−0.9%)** | ±15% (#191) |
 | Writing the synthetic source itself (not part of the export) | 187 s, 4.23 GB | — |
 
+`ffprobe` on the output confirms what the engine wrote:
+
+- H.264 High (`avc1`), 1920×1080, Rec. 709 colour tags;
+- 30000/1001 fps, exactly 17,982 frames, 600.000 s;
+- 12.44 Mb/s, the planned rate to within 1 kb/s;
+- AAC LC sound of the same length;
+- `moov` ahead of `mdat`, so the file starts playing before it has fully downloaded.
+
 The budget is ≤ 1× real time (600 s) and ≤ 1.5 GB peak. CI runs a three-second export against a
 generous ceiling instead (`OverlayExportThroughputTests`), and does not wait ten minutes.
 
