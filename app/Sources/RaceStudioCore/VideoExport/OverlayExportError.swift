@@ -27,8 +27,9 @@ public enum OverlayExportError: Error, Equatable, Sendable {
     case unsupportedOutput(UnsupportedOutputReason)
     /// The destination's volume lacks room for the export
     /// (``ExportPlan/requiredBytes``: the estimated file twice over, for the
-    /// fast-start copy, plus margins): `required` and `available` bytes.
-    case insufficientDiskSpace(required: Int64, available: Int64)
+    /// fast-start copy, plus margins): `required` bytes, and the `available`
+    /// bytes when known — `nil` when the disk filled up mid-export.
+    case insufficientDiskSpace(required: Int64, available: Int64?)
     /// Encoding or writing the output failed; the message says why.
     case writerFailed(String)
     /// The export was cancelled.
@@ -43,7 +44,7 @@ extension OverlayExportError {
     ///   operation is ``cancelled``.
     /// - A full disk — AVFoundation's, Cocoa's or POSIX's, at any depth of
     ///   underlying errors — is ``insufficientDiskSpace(required:available:)``
-    ///   naming `requiredBytes`.
+    ///   naming `requiredBytes`, the free space unknown.
     /// - Footage AVFoundation cannot parse or decode is ``sourceUnreadable``.
     /// - Anything else is ``writerFailed(_:)`` with the system's message.
     public init(mapping error: Error, requiredBytes: Int64) {
@@ -52,7 +53,7 @@ extension OverlayExportError {
         } else if error is CancellationError {
             self = .cancelled
         } else if Self.isDiskFull(error as NSError) {
-            self = .insufficientDiskSpace(required: requiredBytes, available: 0)
+            self = .insufficientDiskSpace(required: requiredBytes, available: nil)
         } else {
             self = Self.mapping(error as NSError)
         }

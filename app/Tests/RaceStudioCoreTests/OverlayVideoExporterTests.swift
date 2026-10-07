@@ -126,6 +126,33 @@ import Testing
         #expect(events.contains { $0.fraction > 0 && $0.fraction < 1 && $0.estimatedRemaining != nil })
     }
 
+    /// A timeline whose lap deltas are still to be fetched (a new reference
+    /// lap) has them fetched before the first frame — never from the core on
+    /// the compositor's queue, in the middle of the encode.
+    @Test func test_lap_deltas_are_fetched_before_the_frames_are_composed() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let plan = try await exportPlan(try await sandbox.footage(), session: SessionTimeSpan(start: 0, end: 3))
+        let laps = [Lap(index: 0, startTimeS: 0, durationS: 1.5, endTimeS: 1.5),
+                    Lap(index: 1, startTimeS: 1.5, durationS: 1.5, endTimeS: 3)]
+        let fetches = QueueLabels()
+        let delta = LiveDelta(reference: LapID(0), laps: laps,
+                              distance: TelemetrySeries(times: [0, 3], values: [0, 30], maxGap: .infinity)) { _, _ in
+            fetches.record()
+            return [DeltaSample(distance: 0, dt: 0), DeltaSample(distance: 15, dt: 0.2)]
+        }
+        let telemetry = TelemetryTimeline(channelMap: TelemetryChannelMap.resolve(channels: []), series: [:],
+                                          clock: LapClock(laps: laps), position: TrackPosition(track: [], laps: laps),
+                                          liveDelta: delta)
+
+        _ = try await collect(sandbox.exporter().export(plan, overlay: ExportOverlay(drawer: Self.bar,
+                                                                                     telemetry: telemetry),
+                                                        to: sandbox.destination))
+
+        #expect(!fetches.labels.isEmpty, "the deltas were fetched")
+        #expect(!fetches.labels.contains("com.racestudio.overlay-compositor"), "\(fetches.labels)")
+    }
+
     /// The app's own renderer draws the overlay of a real layout into the export.
     @Test func test_the_overlay_renderer_draws_into_the_export() async throws {
         let sandbox = try ExportSandbox()

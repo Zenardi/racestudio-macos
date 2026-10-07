@@ -1,11 +1,10 @@
-import CoreGraphics
 import CoreMedia
 import Foundation
 
 /// Everything the compositor needs to draw one export's frames (issue 9.13),
 /// carried to it inside the composition instruction: the overlay, the sync
 /// that maps each frame to session time, the session's span, and how the
-/// footage is placed in the output.
+/// footage is turned upright. The output size is the output buffer's.
 struct OverlayRenderContext: Sendable {
     /// This export's identity: a compositor re-prepares when it changes.
     let id = UUID()
@@ -20,25 +19,22 @@ struct OverlayRenderContext: Sendable {
     let sourceStart: Double
     /// The turn that shows the footage upright.
     let rotation: FootageRotation
-    /// The output frame's size, in pixels.
-    let outputSize: CGSize
 
     init(overlay: ExportOverlay, sync: VideoSyncModel, session: SessionTimeSpan, outsideSession: OutsideSessionOverlay,
-         sourceStart: Double, rotation: FootageRotation, outputSize: CGSize) {
+         sourceStart: Double, rotation: FootageRotation) {
         self.overlay = overlay
         self.sync = sync
         self.session = session
         self.outsideSession = outsideSession
         self.sourceStart = sourceStart
         self.rotation = rotation
-        self.outputSize = outputSize
     }
 
     /// The context that draws `plan`'s frames with `overlay`.
     init(plan: ExportPlan, overlay: ExportOverlay) {
         self.init(overlay: overlay, sync: plan.request.sync, session: plan.request.session,
                   outsideSession: plan.request.settings.outsideSession, sourceStart: plan.sourceRange.start.seconds,
-                  rotation: plan.footage.rotation, outputSize: plan.outputSize)
+                  rotation: plan.footage.rotation)
     }
 
     /// The session time of the composition frame at `compositionTime`: its

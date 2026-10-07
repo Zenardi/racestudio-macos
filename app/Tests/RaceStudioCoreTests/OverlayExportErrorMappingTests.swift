@@ -29,7 +29,7 @@ import Testing
     }
 
     /// A full disk — however it is reported — is a disk-space failure naming
-    /// the space the export needed.
+    /// the space the export needed; how much was free is unknown, not zero.
     @Test func test_a_full_disk_maps_to_insufficient_disk_space() {
         let reports: [Error] = [
             avError(.diskFull),
@@ -41,7 +41,7 @@ import Testing
 
         for report in reports {
             #expect(OverlayExportError(mapping: report, requiredBytes: 4_096)
-                    == .insufficientDiskSpace(required: 4_096, available: 0), "\(report)")
+                    == .insufficientDiskSpace(required: 4_096, available: nil), "\(report)")
         }
     }
 

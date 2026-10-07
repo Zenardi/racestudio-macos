@@ -16,19 +16,27 @@ import Testing
                          telemetry: TelemetryTimeline, offset: Double = 0, rate: Double = 1,
                          session: SessionTimeSpan = SessionTimeSpan(start: -100, end: 100),
                          outside: OutsideSessionOverlay = .hidden, sourceStart: Double = 0,
-                         rotation: FootageRotation = .none, size: CGSize = output) -> OverlayRenderContext {
-        OverlayRenderContext(overlay: ExportOverlay(drawer: drawer, telemetry: telemetry),
-                             sync: VideoSyncModel(videoDuration: 600, offset: offset, rate: rate), session: session,
-                             outsideSession: outside, sourceStart: sourceStart, rotation: rotation, outputSize: size)
+                         rotation: FootageRotation = .none, size: CGSize = output) -> Framing {
+        Framing(context: OverlayRenderContext(overlay: ExportOverlay(drawer: drawer, telemetry: telemetry),
+                                              sync: VideoSyncModel(videoDuration: 600, offset: offset, rate: rate),
+                                              session: session, outsideSession: outside, sourceStart: sourceStart,
+                                              rotation: rotation),
+                size: size)
     }
 
-    private func compose(_ source: CVPixelBuffer?, at seconds: Double, _ context: OverlayRenderContext,
+    /// A render context and the output size its frames are composed at.
+    private struct Framing {
+        let context: OverlayRenderContext
+        let size: CGSize
+    }
+
+    private func compose(_ source: CVPixelBuffer?, at seconds: Double, _ framing: Framing,
                          composer: OverlayFrameComposer = OverlayFrameComposer()) throws -> FrameReadback {
         let source = try #require(source)
-        let output = try #require(TestPixelBuffers.empty(width: Int(context.outputSize.width),
-                                                         height: Int(context.outputSize.height)))
+        let output = try #require(TestPixelBuffers.empty(width: Int(framing.size.width),
+                                                         height: Int(framing.size.height)))
         try composer.compose(source: source, at: CMTime(seconds: seconds, preferredTimescale: 30_000),
-                             context: context, into: output)
+                             context: framing.context, into: output)
         return FrameReadback(output)
     }
 

@@ -22,7 +22,10 @@ extension OverlayRenderer: OverlayFrameDrawing {}
 public struct ExportOverlay: Sendable {
     /// What draws the overlay — the app's ``OverlayRenderer``.
     public let drawer: any OverlayFrameDrawing
-    /// The session's telemetry.
+    /// The session's telemetry. The exporter fetches its lap deltas before the
+    /// first frame (``TelemetryTimeline/prefetchDeltas()``), so a timeline
+    /// re-referenced with ``TelemetryTimeline/withDeltaReference(_:)`` never
+    /// calls into the core from the compositor mid-encode.
     public let telemetry: TelemetryTimeline
 
     public init(drawer: any OverlayFrameDrawing, telemetry: TelemetryTimeline) {

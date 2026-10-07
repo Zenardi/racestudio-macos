@@ -61,6 +61,20 @@ struct FakeDiskSpace: DiskSpaceChecking {
     func availableCapacity(for url: URL) throws -> Int64? { available }
 }
 
+/// The dispatch queues a callback ran on, by label.
+final class QueueLabels: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    var labels: [String] { lock.withLock { recorded } }
+
+    /// Record the label of the queue this is called on.
+    func record() {
+        let label = String(cString: __dispatch_queue_get_label(nil))
+        lock.withLock { recorded.append(label) }
+    }
+}
+
 /// A disk whose free space cannot be read; it records where it was asked.
 final class UnreadableDiskSpace: DiskSpaceChecking, @unchecked Sendable {
     private let lock = NSLock()

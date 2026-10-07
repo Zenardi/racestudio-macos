@@ -100,8 +100,10 @@ public struct TelemetryTimeline: Sendable {
     /// This timeline with the computed delta compared against `reference`
     /// instead (`nil` for none). Its curves are fetched afresh and **lazily**: the
     /// first frame of each lap fetches that lap's series from the core,
-    /// synchronously, on the caller's thread. From the main actor, or before an
-    /// export, use ``prefetchingDeltaReference(_:)`` instead.
+    /// synchronously, on the caller's thread. From the main actor use
+    /// ``prefetchingDeltaReference(_:)`` instead. An overlay export
+    /// (``OverlayVideoExporter``) prefetches the deltas itself before its first
+    /// frame, so either form can be handed to it.
     public func withDeltaReference(_ reference: LapID?) -> TelemetryTimeline {
         TelemetryTimeline(channelMap: channelMap, roles: roles, clock: clock, position: position,
                           liveDelta: liveDelta.referencing(reference), loggerDeltas: loggerDeltas,

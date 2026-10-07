@@ -135,6 +135,9 @@ public actor OverlayVideoExporter {
             throw OverlayExportError.insufficientDiskSpace(required: plan.requiredBytes, available: available)
         }
         let file = scratch.appendingPathComponent("\(UUID().uuidString).mp4")
+        // A timeline with a new reference lap fetches each lap's delta lazily;
+        // fetch them now, not from the core on the compositor's queue mid-encode.
+        try await overlay.telemetry.prefetchDeltas()
         let composition: OverlayComposition
         do {
             composition = try await OverlayComposition.make(plan: plan, overlay: overlay)
