@@ -126,7 +126,8 @@ jobs:
 
       # A test process that crashes leaves only "Exited with unexpected signal
       # code 11" in the log (issue 200). Its crash report names the faulting
-      # thread and frames: print them here and keep the reports.
+      # thread and frames: print them here and keep the reports, one artifact
+      # per attempt so a re-run's reports never collide with the first's.
       - name: Collect crash reports
         if: failure()
         run: bash scripts/collect_crash_reports.sh "${{ runner.temp }}/crash-reports"
@@ -135,7 +136,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: crash-reports
+          name: crash-reports-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/crash-reports
           if-no-files-found: ignore
           retention-days: 14

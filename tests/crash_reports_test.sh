@@ -123,6 +123,10 @@ test_a_report_that_cannot_be_copied_does_not_stop_the_rest() {
   # readable one, When the collector runs, Then it says so, still copies the
   # readable one, and succeeds.
   local reports="$WORK/reports5" dest="$WORK/dest5" out rc
+  if [ "$(id -u)" -eq 0 ]; then
+    ok "test_a_report_that_cannot_be_copied_does_not_stop_the_rest (skipped: root reads any file)"
+    return
+  fi
   mkdir -p "$reports"
   write_report "$reports/a-locked.ips"
   chmod 000 "$reports/a-locked.ips"
