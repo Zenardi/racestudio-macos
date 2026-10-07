@@ -49,6 +49,14 @@ struct ExportHost: ViewModifier {
                 sheet(route, progress: progress)
                     .environment(\.theme, .raceStudio)
             }
+            // A fallback for the hand-off: should `onDismiss` ever not fire
+            // after a programmatic dismissal, the waiting sheet still comes up
+            // once the old one has had time to go. `sheetDismissed` does
+            // nothing when nothing waits, so the usual path is unaffected.
+            .onChange(of: flow.route == nil) { isGone in
+                guard isGone else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { flow.sheetDismissed() }
+            }
             // Re-evaluated whenever the export's state (mirrored above) or the
             // flow changes.
             .background(WindowCloseGuard(isActive: flow.guardsClose(progress: progress),

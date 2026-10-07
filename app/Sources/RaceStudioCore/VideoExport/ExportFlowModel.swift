@@ -189,7 +189,11 @@ public final class ExportFlowModel: ObservableObject {
         guard state != lastState else { return }
         lastState = state
         guard owns(progress) else {
-            if state == .running, case .progress = route, failure == nil, !isPreparing { dismiss() }
+            // Another export started: this window's old one, if any, is over
+            // and no longer its own — a later export to the same file is not.
+            guard state == .running, !isPreparing else { return }
+            destination = nil
+            if case .progress = route, failure == nil { dismiss() }
             return
         }
         switch state {

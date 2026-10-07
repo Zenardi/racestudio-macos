@@ -132,6 +132,23 @@ import Testing
         #expect(flow.route == nil)
     }
 
+    /// Once another window's export has started, this window's old export is
+    /// no longer its own — even if a later export writes to the same file.
+    @Test func test_another_windows_export_ends_this_windows_ownership() async {
+        let (mine, feed) = running(to: destination)
+        let flow = ExportFlowModel()
+        started(flow)
+        feed.finish()
+        await mine.wait()
+        flow.exportChanged(to: .finished(destination), progress: mine)
+        let (other, _) = running(to: URL(fileURLWithPath: "/tmp/other.mp4"))
+        flow.exportChanged(to: .running, progress: other)
+        let (sameFile, _) = running(to: destination)
+
+        #expect(!flow.owns(sameFile))
+        #expect(!flow.guardsClose(progress: sameFile))
+    }
+
     /// …but never this window's failure, nor its own preparation.
     @Test func test_another_windows_export_leaves_a_failure_or_a_preparation() {
         let (progress, _) = running(to: URL(fileURLWithPath: "/tmp/other.mp4"))
