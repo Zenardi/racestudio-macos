@@ -128,6 +128,20 @@ test_feature_issue_template_has_six_sections() {
   fi
 }
 
+test_e2e_runs_overlay_export_smoke() {
+  # Given the full e2e gate (issue 9.14), Then it runs the headless Export
+  # Video with Overlay smoke — the OverlayExportEndToEndTests suite — through
+  # the Swift test wrapper with the public sample required, so a missing
+  # fixture fails the gate instead of skipping it.
+  local line
+  line="$(grep -F -- '--filter OverlayExportEndToEndTests' "$ROOT/scripts/e2e.sh" | head -1)"
+  if grep -Fq 'RS_REQUIRE_CORPUS=1' <<<"$line" && grep -Fq 'swift_test.sh' <<<"$line"; then
+    ok "test_e2e_runs_overlay_export_smoke"
+  else
+    bad "test_e2e_runs_overlay_export_smoke" "no required-corpus OverlayExportEndToEndTests run in scripts/e2e.sh"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 
 echo "Running make/DoD/template tests"
@@ -137,6 +151,7 @@ test_make_setup_fetches_fixtures
 test_dod_doc_matches_issue_checklist
 test_pr_template_embeds_dod
 test_feature_issue_template_has_six_sections
+test_e2e_runs_overlay_export_smoke
 
 echo
 echo "make tests: $PASS passed, $FAIL failed"
