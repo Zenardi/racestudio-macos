@@ -264,6 +264,47 @@ import Testing
         #expect(sandbox.destinationExists)
     }
 
+    /// Cancelled half-way through encoding, an export leaves an existing file
+    /// at its destination exactly as it was.
+    @Test func test_an_existing_destination_survives_a_cancel_mid_encode() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let plan = try await exportPlan(try await sandbox.footage())
+        let older = Data("an older export".utf8)
+        try older.write(to: sandbox.destination)
+        let exporter = sandbox.exporter(progressInterval: .milliseconds(50))
+        let stream = exporter.export(plan, overlay: try await overlay(SlowSessionTimeBar()), to: sandbox.destination)
+
+        var error: Error?
+        do {
+            for try await progress in stream where progress.fraction >= 0.5 { await exporter.cancel() }
+        } catch let thrown {
+            error = thrown
+        }
+
+        #expect(error as? OverlayExportError == .cancelled)
+        #expect(try Data(contentsOf: sandbox.destination) == older)
+        #expect(!sandbox.scratchExists)
+    }
+
+    /// The production scratch directory cannot be made for a folder that does
+    /// not exist: the export fails as a writer error, having written nothing.
+    @Test func test_a_scratch_directory_that_cannot_be_made_fails_as_a_writer_error() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let plan = try await exportPlan(try await sandbox.footage())
+        let nowhere = sandbox.directory.appendingPathComponent("missing/export.mp4")
+        let exporter = OverlayVideoExporter(diskSpace: FakeDiskSpace(available: nil))
+
+        let error = await failure(of: exporter.export(plan, overlay: try await overlay(), to: nowhere))
+
+        guard case .writerFailed = error else {
+            Issue.record("expected a writer failure, got \(String(describing: error))")
+            return
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: sandbox.directory.path) == ["footage.mp4"])
+    }
+
     // MARK: - Production seams
 
     /// The production disk-space check reads the volume's free space.

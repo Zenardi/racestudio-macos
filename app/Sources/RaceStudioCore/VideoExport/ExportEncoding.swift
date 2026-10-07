@@ -91,12 +91,27 @@ enum ExportEncoding {
 }
 
 extension EncoderAvailability {
-    /// The encoders VideoToolbox lists on this Mac (hardware or software).
-    public static let system = EncoderAvailability(supportsHEVC: hasEncoder(for: kCMVideoCodecType_HEVC))
+    /// The encoders this Mac can actually use (hardware or software), checked
+    /// once: a codec counts only if a 1080p compression session for it can be
+    /// made — an encoder listed but unusable, as in a virtual machine without
+    /// the media engine, does not.
+    public static let system = EncoderAvailability(supportsHEVC: canEncode(kCMVideoCodecType_HEVC))
 
-    private static func hasEncoder(for codec: CMVideoCodecType) -> Bool {
-        var list: CFArray?
-        guard VTCopyVideoEncoderList(nil, &list) == noErr, let encoders = list as? [[String: Any]] else { return false }
-        return encoders.contains { ($0[kVTVideoEncoderList_CodecType as String] as? NSNumber)?.uint32Value == codec }
+    /// Whether `makeSession` — VideoToolbox by default — can open a
+    /// compression session for `codec`.
+    static func canEncode(_ codec: CMVideoCodecType,
+                          makeSession: (CMVideoCodecType) -> OSStatus = openCompressionSession) -> Bool {
+        makeSession(codec) == noErr
+    }
+
+    /// Open, and at once close, a 1080p compression session for `codec`.
+    private static func openCompressionSession(_ codec: CMVideoCodecType) -> OSStatus {
+        var session: VTCompressionSession?
+        let status = VTCompressionSessionCreate(allocator: nil, width: 1_920, height: 1_080, codecType: codec,
+                                                encoderSpecification: nil, imageBufferAttributes: nil,
+                                                compressedDataAllocator: nil, outputCallback: nil, refcon: nil,
+                                                compressionSessionOut: &session)
+        if let session { VTCompressionSessionInvalidate(session) }
+        return status
     }
 }

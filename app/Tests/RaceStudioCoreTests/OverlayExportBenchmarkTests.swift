@@ -89,6 +89,13 @@ struct OverlayExportBenchmark {
 /// overlay's static layers or a Core Image context every frame, breaks it.
 @Suite struct OverlayExportThroughputTests {
 
+    // Deliberately loose: locally the clip takes about 0.2 s in a debug build,
+    // but CI runs it instrumented, beside every other suite, on a shared
+    // virtual machine with no media engine (software decode and encode) about
+    // three times slower — and a flaky gate is worse than none. 30 s still
+    // catches what matters: per-frame work that should be per-export, or a
+    // pull loop that stalls, which take minutes. The real budget is the local
+    // OverlayExportBenchmark.
     #if DEBUG
     private static let ceiling = Duration.seconds(30)
     #else

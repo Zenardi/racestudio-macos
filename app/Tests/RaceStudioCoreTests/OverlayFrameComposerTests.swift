@@ -127,19 +127,23 @@ import Testing
         #expect(frame.barLength() == 90, "the overlay is drawn at the output size")
     }
 
-    /// Footage stored landscape and turned a quarter clockwise comes out
-    /// upright: the stored top-left corner lands top-right.
-    @Test func test_rotated_footage_is_turned_upright() async throws {
+    /// Footage stored with any quarter turn comes out upright: the stored
+    /// top-left corner lands where the turn takes it, the frame's sides swap
+    /// for a quarter turn, and the opposite corner shows the footage.
+    @Test(arguments: FootageRotation.allCases)
+    func test_rotated_footage_is_turned_upright(_ rotation: FootageRotation) async throws {
         let telemetry = try await SessionTimeBar.timeline(from: 50, to: 60)
-        let upright = CGSize(width: 180, height: 320)
+        let upright = rotation.swapsDimensions ? CGSize(width: 180, height: 320) : CGSize(width: 320, height: 180)
+        let corner = MarkerCorner(rotation)
 
         let frame = try compose(TestPixelBuffers.frame(9, marker: true), at: 1,
                                 context(telemetry: telemetry, session: SessionTimeSpan(start: 50, end: 60),
-                                        rotation: .clockwise90, size: upright))
+                                        rotation: rotation, size: upright))
 
-        #expect(frame.pixel(x: 175, row: 4).isBar, "the white corner marker, top-right")
-        #expect(frame.pixel(x: 4, row: 4).isNear(TestPixelBuffers.colour(ofFrame: 9), tolerance: 2))
-        #expect(frame.pixel(x: 4, row: 315).isNear(TestPixelBuffers.colour(ofFrame: 9), tolerance: 2))
+        let marker = corner.pixel(in: frame), opposite = corner.opposite.pixel(in: frame)
+        #expect(frame.pixel(x: marker.x, row: marker.row).isBar, "the white marker, \(corner)")
+        #expect(frame.pixel(x: opposite.x, row: opposite.row).isNear(TestPixelBuffers.colour(ofFrame: 9),
+                                                                     tolerance: 2))
     }
 
     /// The overlay's static layers are prepared once per output size, not per frame.

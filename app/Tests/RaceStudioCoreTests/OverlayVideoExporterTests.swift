@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
+import VideoToolbox
 @testable import RaceStudioCore
 
 /// The overlay MP4 export end to end (issue 9.13): synthetic footage in, an
@@ -36,7 +37,8 @@ import Testing
         for index in [0, 45, 89] {
             let decoded = try #require(movie.frames[index])
             #expect(decoded.sourcePixel.frameIndex == index)
-            #expect(abs(decoded.barLength() - Self.bar.length(at: Double(index) / 30)) <= 1, "frame \(index)")
+            // ±2 px absorbs codec edge blur; a one-frame error moves the bar 3 px.
+            #expect(abs(decoded.barLength() - Self.bar.length(at: Double(index) / 30)) <= 2, "frame \(index)")
         }
         #expect(events.last?.fraction == 1)
         #expect(!sandbox.scratchExists, "the scratch directory is removed")
@@ -61,6 +63,25 @@ import Testing
         #expect(abs(movie.duration - plan.duration) < 1e-9)
         #expect(abs(Double(movie.frameRate) - 29.97) < 0.01)
         #expect(try #require(movie.frames[0]).sourcePixel.frameIndex == 15)
+    }
+
+    /// Portrait phone footage — stored landscape, turned a quarter
+    /// counter-clockwise — exports upright: sides swapped, the stored top-left
+    /// corner bottom-left.
+    @Test func test_rotated_footage_exports_upright() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let footage = try await sandbox.footage(TestMediaFactory.Spec(rotation: .counterclockwise90, marker: true))
+        let plan = try await exportPlan(footage, session: SessionTimeSpan(start: 50, end: 60))
+
+        _ = try await collect(sandbox.exporter().export(plan, overlay: try await overlay(), to: sandbox.destination))
+
+        let movie = try await MovieReadback.read(sandbox.destination, decoding: [20])
+        let frame = try #require(movie.frames[20])
+        let marker = MarkerCorner.bottomLeft.pixel(in: frame), opposite = MarkerCorner.topRight.pixel(in: frame)
+        #expect(movie.size == CGSize(width: 180, height: 320))
+        #expect(frame.pixel(x: marker.x, row: marker.row).isBar, "the white marker, bottom-left")
+        #expect(frame.pixel(x: opposite.x, row: opposite.row).frameIndex == 20)
     }
 
     /// Dropping the sound leaves the output without an audio track.
@@ -104,6 +125,15 @@ import Testing
         let result = ExportPlan.make(request: request, footage: footage, timeline: .empty)
 
         #expect((result.failureValue == nil) == EncoderAvailability.system.supportsHEVC)
+    }
+
+    /// A codec is offered only where a compression session for it can be
+    /// made — an encoder listed but unusable (a virtual machine without the
+    /// media engine) does not count.
+    @Test func test_a_codec_is_offered_only_where_its_session_can_be_made() {
+        #expect(EncoderAvailability.canEncode(kCMVideoCodecType_HEVC) { _ in noErr })
+        #expect(!EncoderAvailability.canEncode(kCMVideoCodecType_HEVC) { _ in kVTCouldNotFindVideoEncoderErr })
+        #expect(EncoderAvailability.system.supportsHEVC == EncoderAvailability.canEncode(kCMVideoCodecType_HEVC))
     }
 
     /// Progress arrives while the export runs, never goes backwards, and ends

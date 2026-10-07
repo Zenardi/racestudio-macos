@@ -61,6 +61,51 @@ struct FakeDiskSpace: DiskSpaceChecking {
     func availableCapacity(for url: URL) throws -> Int64? { available }
 }
 
+/// Where the white marker in a stored frame's top-left corner shows once the
+/// footage is turned upright.
+enum MarkerCorner: CustomStringConvertible {
+    case topLeft, topRight, bottomRight, bottomLeft
+
+    init(_ rotation: FootageRotation) {
+        switch rotation {
+        case .none: self = .topLeft
+        case .clockwise90: self = .topRight
+        case .upsideDown: self = .bottomRight
+        case .counterclockwise90: self = .bottomLeft
+        }
+    }
+
+    /// The corner across the frame.
+    var opposite: MarkerCorner {
+        switch self {
+        case .topLeft: return .bottomRight
+        case .topRight: return .bottomLeft
+        case .bottomRight: return .topLeft
+        case .bottomLeft: return .topRight
+        }
+    }
+
+    /// A pixel 8 px in from this corner of `frame`, well inside a 40 px marker.
+    func pixel(in frame: FrameReadback) -> (x: Int, row: Int) {
+        let left = 8, right = frame.width - 9, top = 8, bottom = frame.height - 9
+        switch self {
+        case .topLeft: return (left, top)
+        case .topRight: return (right, top)
+        case .bottomRight: return (right, bottom)
+        case .bottomLeft: return (left, bottom)
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .topLeft: return "top-left"
+        case .topRight: return "top-right"
+        case .bottomRight: return "bottom-right"
+        case .bottomLeft: return "bottom-left"
+        }
+    }
+}
+
 /// The dispatch queues a callback ran on, by label.
 final class QueueLabels: @unchecked Sendable {
     private let lock = NSLock()

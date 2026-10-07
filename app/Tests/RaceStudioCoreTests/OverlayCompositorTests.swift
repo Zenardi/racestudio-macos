@@ -70,7 +70,8 @@ import Testing
             let frame = try await frame(index, of: composition, plan: plan)
 
             let expected = bar.length(at: clock.sessionTime(atVideoTime: Double(index) / 30))
-            #expect(abs(frame.barLength() - expected) <= 1, "frame \(index): bar \(frame.barLength()) ≠ \(expected)")
+            // ±2 px absorbs codec edge blur; a one-frame error moves the bar 3 px.
+            #expect(abs(frame.barLength() - expected) <= 2, "frame \(index): bar \(frame.barLength()) ≠ \(expected)")
             #expect(frame.sourcePixel.frameIndex == index, "frame \(index) shows \(frame.sourcePixel)")
         }
     }
@@ -91,7 +92,7 @@ import Testing
 
         #expect(plan.firstFrame == 45 && plan.frameCount == 30, "video 1.5 … 2.5 s")
         #expect(frame.sourcePixel.frameIndex == 55)
-        #expect(abs(frame.barLength() - bar.length(at: clock.sessionTime(atVideoTime: 55.0 / 30))) <= 1)
+        #expect(abs(frame.barLength() - bar.length(at: clock.sessionTime(atVideoTime: 55.0 / 30))) <= 2)
         #expect(try await composition.asset.load(.duration) == plan.sourceRange.duration)
     }
 
