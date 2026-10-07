@@ -141,10 +141,16 @@ struct ExternalVolume {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// Run `hdiutil` with its output discarded (issue 200): an `attach` leaves
+    /// a `diskimages-helper` running that inherits hdiutil's output, and one
+    /// left by a stopped run held the test log's pipe open, so the log never
+    /// ended.
     private static func hdiutil(_ arguments: [String]) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
         process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }

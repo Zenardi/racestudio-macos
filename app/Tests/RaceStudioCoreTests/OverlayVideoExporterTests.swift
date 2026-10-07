@@ -7,7 +7,7 @@ import VideoToolbox
 /// The overlay MP4 export end to end (issue 9.13): synthetic footage in, an
 /// MP4 out whose duration, frame count, rate, size, codec and sound match the
 /// plan, with every frame carrying the overlay of its own session time.
-@Suite struct OverlayVideoExporterTests {
+@Suite(.enabled(if: VideoTests.isEnabled, VideoTests.skipReason)) struct OverlayVideoExporterTests {
 
     private static let bar = SessionTimeBar(origin: 0)
 
@@ -97,8 +97,11 @@ import VideoToolbox
     }
 
     /// HEVC, where this Mac can encode it, comes out as `hvc1` — the tag
-    /// QuickTime and Safari play.
-    @Test(.enabled(if: EncoderAvailability.system.supportsHEVC, "this Mac has no HEVC encoder"))
+    /// QuickTime and Safari play. Where the video tests are off it never
+    /// probes the encoders: in a virtual machine that probe once blocked for
+    /// good (issue 200).
+    @Test(.enabled(if: VideoTests.isEnabled && EncoderAvailability.system.supportsHEVC,
+                   "a virtual machine, or no HEVC encoder on this Mac"))
     func test_an_hevc_export_is_tagged_hvc1() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }

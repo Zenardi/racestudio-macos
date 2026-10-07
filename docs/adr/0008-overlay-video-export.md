@@ -221,6 +221,30 @@ startup disk and on an external drive.
 - The engine owns the pull loop the export session would have hidden: back-pressure,
   interleaving, cancel and teardown on failure. All of it is covered by tests on synthetic media
   generated at test time (`TestMediaFactory`).
+  - `TestMediaFactory` draws its frames from a `CVPixelBufferPool` it owns, never from the
+    adaptor's `pixelBufferPool` (issue 200). AVFoundation swaps the adaptor's pool for the
+    encoder's a few frames into a write, and releases the first one on its own queue. The getter
+    returns the pool unretained, so reading it for every frame raced that release.
+  - On GitHub's macOS VMs, that race crashed the test process (SIGSEGV in `objc_retain` and in
+    `CVPixelBufferPoolCreatePixelBuffer`). CI now prints and uploads every crash report when a
+    job fails (`scripts/collect_crash_reports.sh`).
+  - Those VMs paravirtualize VideoToolbox: every encode and decode session is a request to the
+    host's media engine. A request can be slow, can fail ("A video frame could not be read"), or
+    can go unanswered. One sampled run blocked for good in `VTCompressionSessionCreate`, inside
+    `EncoderAvailability.system`, before any test had started. CI therefore runs the Swift tests
+    under `scripts/watchdog.sh`, which stops a run after 15 minutes and prints the sampled
+    frames, and each job has a `timeout-minutes` ceiling.
+  - Even on healthy hosts each video test took 20 to 30 s there, against about one on a Mac. So
+    the video tests run on a Mac and not in a virtual machine. `VideoTests` (test support) skips
+    them where `kern.hv_vmm_present` is 1. `RACESTUDIO_VIDEO_TESTS=1` runs them anywhere, and `0`
+    skips them anywhere.
+  - Where they are skipped, `scripts/coverage.sh` leaves out the five files only they reach:
+    `OverlayVideoExporter`, `ExportPipeline`, `OverlayCompositor`, `FootageProbe` and
+    `OverlayComposition`. Without them, RaceStudioCore measured 97.16%; with them unmeasured but
+    counted, 93.70%. On a Mac nothing is left out, and the full gate runs before every commit.
+  - Running the video tests one at a time instead was tried and dropped. With Swift 6.4 on
+    macOS 27, any serial run of this suite (even `--no-parallel` on unchanged code) hangs on an
+    await that is never resumed, so it could not pass locally.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

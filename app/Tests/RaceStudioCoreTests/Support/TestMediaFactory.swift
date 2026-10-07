@@ -82,11 +82,14 @@ enum TestMediaFactory {
         // (600) cannot hold 1001/30000 s, and would round the frame times.
         video.mediaTimeScale = 30_000
         video.transform = transform(for: spec.rotation, width: spec.width, height: spec.height)
-        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: video, sourcePixelBufferAttributes: [
+        let frameAttributes: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey as String: spec.width, kCVPixelBufferHeightKey as String: spec.height,
             kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()
-        ])
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: video,
+                                                           sourcePixelBufferAttributes: frameAttributes)
+        let frames = try framePool(frameAttributes)
         writer.add(video)
         let audio = spec.audio ? audioInput() : nil
         if let audio { writer.add(audio) }
@@ -94,7 +97,9 @@ enum TestMediaFactory {
         writer.startSession(atSourceTime: .zero)
         var feed = Feed(spec: spec, audioFrames: spec.audio ? Int(spec.duration * audioRate) : 0)
         while !feed.isDone {
-            if try feed.appendVideo(to: adaptor) || feed.appendAudio(to: audio) { continue }
+            if try writing(writer, { try feed.appendVideo(to: adaptor, from: frames) || feed.appendAudio(to: audio) }) {
+                continue
+            }
             if writer.status == .failed { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             try await Task.sleep(nanoseconds: 1_000_000)
         }
@@ -112,7 +117,7 @@ enum TestMediaFactory {
         writer.startSession(atSourceTime: .zero)
         var feed = Feed(spec: Spec(frames: 0, audio: true), audioFrames: Int(seconds * audioRate))
         while !feed.isDone {
-            if try feed.appendAudio(to: audio) { continue }
+            if try writing(writer, { try feed.appendAudio(to: audio) }) { continue }
             if writer.status == .failed { throw writer.error ?? CocoaError(.fileWriteUnknown) }
             try await Task.sleep(nanoseconds: 1_000_000)
         }
@@ -121,6 +126,30 @@ enum TestMediaFactory {
     }
 
     // MARK: - Internals
+
+    /// Run `append`, rethrowing a refused sample as the writer's own error
+    /// (issue 200): "the file couldn't be saved" alone named nothing when
+    /// VideoToolbox failed on CI's virtual machines.
+    private static func writing(_ writer: AVAssetWriter, _ append: () throws -> Bool) throws -> Bool {
+        do {
+            return try append()
+        } catch {
+            throw writer.error ?? error
+        }
+    }
+
+    /// A pool of frames with `attributes`, made once per movie and owned by its caller.
+    ///
+    /// Never the adaptor's own `pixelBufferPool` (issue 200): AVFoundation swaps
+    /// that pool for the encoder's a few frames in, releasing the first on its
+    /// own queue, and the getter returns it unretained — read once per frame, it
+    /// raced that release and crashed the test process on CI's virtual machines.
+    private static func framePool(_ attributes: [String: Any]) throws -> CVPixelBufferPool {
+        var pool: CVPixelBufferPool?
+        CVPixelBufferPoolCreate(nil, nil, attributes as CFDictionary, &pool)
+        guard let pool else { throw CocoaError(.featureUnsupported) }
+        return pool
+    }
 
     private static func audioInput() -> AVAssetWriterInput {
         let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
@@ -156,9 +185,9 @@ enum TestMediaFactory {
         /// the interleaving (holding video back for the encoder's look-ahead
         /// would deadlock both inputs) — and marks the input finished after its
         /// last sample, or the writer waits on it for the other track forever.
-        mutating func appendVideo(to adaptor: AVAssetWriterInputPixelBufferAdaptor) throws -> Bool {
+        mutating func appendVideo(to adaptor: AVAssetWriterInputPixelBufferAdaptor,
+                                  from pool: CVPixelBufferPool) throws -> Bool {
             guard videoFrame < spec.frames, adaptor.assetWriterInput.isReadyForMoreMediaData else { return false }
-            guard let pool = adaptor.pixelBufferPool else { throw CocoaError(.featureUnsupported) }
             var buffer: CVPixelBuffer?
             CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
             guard let buffer else { throw CocoaError(.featureUnsupported) }

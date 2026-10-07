@@ -44,7 +44,11 @@ ensure_swift_built() {
     # only "swift build/coverage failed" and nothing about why. The tail is enough
     # to diagnose in a CI log; the full log is left on disk and its path printed,
     # so a developer can read the rest.
-    echo "  --- coverage.sh --swift-build failed; last 25 lines ---"
+    # The failing tests first, wherever they sit in the log (issue 200): the
+    # tail alone once showed "5 issues" in a suite and none of their names.
+    echo "  --- coverage.sh --swift-build failed; failing tests ---"
+    sed -n '/^==> Swift test failures/,/^==> end of Swift test failures/p' "$log" | sed 's/^/      /'
+    echo "  --- last 25 lines ---"
     tail -25 "$log" | sed 's/^/      /'
     echo "  --- end (full log: $log) ---"
     return 0
@@ -137,6 +141,109 @@ test_swift_gate_passes_at_threshold() {
   fi
 }
 
+test_swift_failures_are_named_from_the_full_log() {
+  # Given a Swift Testing log where a recorded issue, a failed suite and a
+  # crash sit among passing and skipped tests (issue 200: a caller keeping only
+  # the tail lost the names), When the gate summarises it, Then it names the
+  # failing test, its expectation and the crash, and leaves out the rest.
+  local log out exit
+  log="$(mktemp)"
+  cat > "$log" <<'LOG'
+◇ Test run started.
+✔ Test test_passes() passed after 0.1 seconds.
+✘ Test test_a_bench() skipped: "set RACESTUDIO_EXPORT_BENCH to run it"
+✘ Test test_an_export_matches_its_plan() recorded an issue at OverlayVideoExporterTests.swift:32:9: Expectation failed: (movie.frameTimes.count → 11) == (plan.frameCount → 90)
+✘ Test test_an_export_matches_its_plan() failed after 120.653 seconds with 1 issue.
+✘ Suite OverlayVideoExporterTests failed after 146.661 seconds with 1 issue.
+◇ Passing 2 arguments role → .loss to test_text_over_plate(role:)error: Exited with unexpected signal code 11
+✔ Test test_also_passes() passed after 0.2 seconds.
+LOG
+  out="$(bash "$GATE" --swift-failures "$log" 2>&1)"
+  exit=$?
+  rm -f "$log"
+  if [[ "$exit" -eq 0 ]] \
+    && grep -q 'test_an_export_matches_its_plan() recorded an issue at OverlayVideoExporterTests.swift:32:9' <<<"$out" \
+    && grep -q 'Suite OverlayVideoExporterTests failed' <<<"$out" \
+    && grep -q 'unexpected signal code 11' <<<"$out" \
+    && ! grep -q 'skipped' <<<"$out" \
+    && ! grep -q 'passed after' <<<"$out"; then
+    ok "test_swift_failures_are_named_from_the_full_log"
+  else
+    bad "test_swift_failures_are_named_from_the_full_log" "exit=$exit out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_a_hung_swift_run_is_named_with_its_frames() {
+  # Given a Swift Testing log that ends in the watchdog stopping a hung run
+  # (issue 200: a run blocked for ever in a VideoToolbox call), When the gate
+  # summarises it, Then the summary says the run hung and names the frames the
+  # watchdog sampled, and leaves out the passing tests.
+  local log out exit
+  log="$(mktemp)"
+  cat > "$log" <<'LOG'
+◇ Test run started.
+✔ Test test_passes() passed after 0.1 seconds.
+watchdog: still running after 900s, stopping: bash scripts/swift_test.sh --enable-code-coverage
+watchdog:   31264 /usr/libexec/swift/pm/swiftpm-testing-helper --test-bundle-path RaceStudioPackageTests.xctest
+watchdog: sample of 31264 in /tmp/hang-sample-31264.txt; its frames of our code and the media stack:
+watchdog:       VTCompressionSessionCreate + 32
+watchdog:       static EncoderAvailability.openCompressionSession(_:) + 116 ExportEncoding.swift:110
+LOG
+  out="$(bash "$GATE" --swift-failures "$log" 2>&1)"
+  exit=$?
+  rm -f "$log"
+  if [[ "$exit" -eq 0 ]] \
+    && grep -q 'watchdog: still running after 900s' <<<"$out" \
+    && grep -q 'VTCompressionSessionCreate' <<<"$out" \
+    && grep -q 'EncoderAvailability.openCompressionSession(_:) + 116 ExportEncoding.swift:110' <<<"$out" \
+    && ! grep -q 'passed after' <<<"$out"; then
+    ok "test_a_hung_swift_run_is_named_with_its_frames"
+  else
+    bad "test_a_hung_swift_run_is_named_with_its_frames" "exit=$exit out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_video_only_files_are_left_out_where_the_video_tests_are_off() {
+  # Given the video tests off (a VM, here forced; issue 200), When the gate
+  # reports its config, Then it leaves out exactly the five files only those
+  # tests reach.
+  local out
+  out="$(RACESTUDIO_VIDEO_TESTS=0 bash "$GATE" --print-config 2>&1)"
+  local expected='SWIFT_COVERAGE_IGNORE=VideoExport/(OverlayVideoExporter|ExportPipeline|OverlayCompositor|FootageProbe|OverlayComposition)\.swift$'
+  if grep -qxF "$expected" <<<"$out"; then
+    ok "test_video_only_files_are_left_out_where_the_video_tests_are_off"
+  else
+    bad "test_video_only_files_are_left_out_where_the_video_tests_are_off" "out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_nothing_is_left_out_where_the_video_tests_run() {
+  # Given the video tests on (a Mac, here forced), When the gate reports its
+  # config, Then it measures every file.
+  local out
+  out="$(RACESTUDIO_VIDEO_TESTS=1 bash "$GATE" --print-config 2>&1)"
+  if grep -qx 'SWIFT_COVERAGE_IGNORE=' <<<"$out"; then
+    ok "test_nothing_is_left_out_where_the_video_tests_run"
+  else
+    bad "test_nothing_is_left_out_where_the_video_tests_run" "out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
+test_by_default_only_a_virtual_machine_leaves_them_out() {
+  # Given no override, When the gate reports its config, Then it leaves the
+  # video-only files out exactly when macOS runs under a hypervisor — as the
+  # Swift tests' VideoTests decides.
+  local out vm
+  out="$(env -u RACESTUDIO_VIDEO_TESTS bash "$GATE" --print-config 2>&1)"
+  vm="$(sysctl -n kern.hv_vmm_present 2>/dev/null)"
+  if { [[ "$vm" == "1" ]] && grep -q '^SWIFT_COVERAGE_IGNORE=VideoExport/' <<<"$out"; } \
+    || { [[ "$vm" != "1" ]] && grep -qx 'SWIFT_COVERAGE_IGNORE=' <<<"$out"; }; then
+    ok "test_by_default_only_a_virtual_machine_leaves_them_out"
+  else
+    bad "test_by_default_only_a_virtual_machine_leaves_them_out" "vm=$vm out=$(tr '\n' '|' <<<"$out")"
+  fi
+}
+
 test_swift_gate_measures_core_only() {
   # Given a real coverage run, When scoped to Sources/RaceStudioCore, Then the
   # measured file set is exactly the Core library (no tests/runner/shell).
@@ -180,6 +287,11 @@ test_swift_test_injects_clt_framework_paths
 test_swiftlint_clean
 test_swift_gate_fails_below_threshold
 test_swift_gate_passes_at_threshold
+test_swift_failures_are_named_from_the_full_log
+test_a_hung_swift_run_is_named_with_its_frames
+test_video_only_files_are_left_out_where_the_video_tests_are_off
+test_nothing_is_left_out_where_the_video_tests_run
+test_by_default_only_a_virtual_machine_leaves_them_out
 test_swift_gate_measures_core_only
 test_shell_target_excluded_from_metric
 
