@@ -209,6 +209,10 @@ session). Click one to select it.
 The **Video** menu lists Play Lap, Loop Lap, Show HUD and Edit Overlay with
 their shortcuts.
 
+To share the footage with the overlay burned in, use **File ▸ Export Video
+with Overlay…** (⌥⌘E) or **Export Video…** in the header — see
+[Video sync and overlay export](06-video-overlay-export.md).
+
 ## Video overlay layouts
 
 A **video overlay** is a layout of telemetry widgets drawn over the footage:

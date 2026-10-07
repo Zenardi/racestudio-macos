@@ -53,6 +53,19 @@ state. This chapter maps the common symptoms to a check and a fix.
 3. Remember division by zero is **not** an error — it yields `±∞`/`NaN` by design;
    if a derived channel shows infinities, look for a zero in a divisor channel.
 
+## A video export is greyed out, warns, or fails
+
+1. **Greyed out?** Hover over **File ▸ Export Video with Overlay…** or the
+   **Export Video…** button: the tooltip says what is missing — usually no video
+   attached yet, or the session's data not loaded (open **Video + Data** once).
+2. **"This video hasn't been synced"?** The overlay would not match the footage.
+   Press **Sync First** and sync it on a lap start, with two points, or from the
+   engine sound.
+3. **It failed?** The message says why and what to do — not enough disk space
+   (an export briefly needs room for its file twice), an HEVC encoder this Mac
+   lacks, or a video that can't be read. Every fix is listed in
+   [Video sync and overlay export](06-video-overlay-export.md#troubleshooting).
+
 ## VoiceOver / Dynamic Type
 
 Accessibility behavior (VoiceOver labels, Dynamic Type, localization) is documented

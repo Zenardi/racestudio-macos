@@ -26,14 +26,17 @@ use std::process::Command;
 
 use racestudio_analysis::expr::{eval_scalar, parse_str, Env, Func};
 
-/// The five chapters plus the landing page the issue requires, in reading order.
-const CHAPTERS: [&str; 6] = [
+/// The chapters plus the landing page, in reading order: the five the
+/// handbook issue (7.5) required, and the video sync and overlay export
+/// chapter (issue 9.14).
+const CHAPTERS: [&str; 7] = [
     "index.md",
     "01-getting-started-import.md",
     "02-analysis-views.md",
     "03-math-channels.md",
     "04-device-download.md",
     "05-troubleshooting.md",
+    "06-video-overlay-export.md",
 ];
 
 /// Header of the built-in-function reference table in the math-channels chapter.
