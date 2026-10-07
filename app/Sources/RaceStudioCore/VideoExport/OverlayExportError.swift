@@ -20,6 +20,9 @@ public enum OverlayExportError: Error, Equatable, Sendable {
     case noVideoTrack
     /// The range holds no frame of the footage.
     case rangeOutsideFootage
+    /// The destination is the footage itself — by path, symbolic link or hard
+    /// link. Replacing it would destroy the source while it is read.
+    case destinationIsSource
     /// The output settings cannot be encoded.
     case unsupportedOutput(UnsupportedOutputReason)
     /// The destination's volume lacks room for the export

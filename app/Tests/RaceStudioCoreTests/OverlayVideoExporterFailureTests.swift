@@ -165,6 +165,55 @@ import Testing
         #expect(!sandbox.scratchExists)
     }
 
+    // MARK: - Exporting onto the footage
+
+    /// The footage itself — however its path is spelled — is never an export's
+    /// destination: replacing it would destroy the source mid-read.
+    @Test func test_the_footage_cannot_be_the_destination() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let footage = try await sandbox.footage()
+        let plan = try await exportPlan(footage)
+        let original = try Data(contentsOf: footage)
+        let respelled = sandbox.directory.appendingPathComponent("scratch/../footage.mp4", isDirectory: false)
+
+        let error = await failure(of: sandbox.exporter().export(plan, overlay: try await overlay(), to: respelled))
+
+        #expect(error == .destinationIsSource)
+        #expect(try Data(contentsOf: footage) == original)
+        #expect(!sandbox.scratchExists)
+    }
+
+    /// A symbolic link to the footage resolves to it, and is refused.
+    @Test func test_a_symlink_to_the_footage_cannot_be_the_destination() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let footage = try await sandbox.footage()
+        let link = sandbox.directory.appendingPathComponent("link.mp4")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: footage)
+
+        let error = await failure(of: sandbox.exporter().export(try await exportPlan(footage),
+                                                                overlay: try await overlay(), to: link))
+
+        #expect(error == .destinationIsSource)
+    }
+
+    /// A hard link — another path to the same file — is caught by the file's
+    /// identity, not its path.
+    @Test func test_a_hard_link_to_the_footage_cannot_be_the_destination() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let footage = try await sandbox.footage()
+        let other = sandbox.directory.appendingPathComponent("same-file.mp4")
+        try FileManager.default.linkItem(at: footage, to: other)
+
+        let error = await failure(of: sandbox.exporter().export(try await exportPlan(footage),
+                                                                overlay: try await overlay(), to: other))
+
+        #expect(error == .destinationIsSource)
+        #expect(try await FootageProbe.probe(footage).frameCount == 90, "the footage is untouched")
+    }
+
     // MARK: - Replacing an existing file
 
     /// An existing file at the destination is replaced by the finished export.

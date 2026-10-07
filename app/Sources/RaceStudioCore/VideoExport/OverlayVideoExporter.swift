@@ -44,6 +44,7 @@ public actor OverlayVideoExporter {
     private let diskSpace: any DiskSpaceChecking
     private let progressInterval: Duration
     private let scratchDirectory: @Sendable (URL) throws -> URL
+    private let willFinish: @Sendable () async -> Void
     private var jobs: [UUID: ExportJob] = [:]
     /// Every export is numbered when it is asked for; a cancel covers every
     /// number issued before it, even an export whose job has not started yet.
@@ -58,9 +59,19 @@ public actor OverlayVideoExporter {
                 progressInterval: Duration = .milliseconds(250),
                 scratchDirectory: @escaping @Sendable (URL) throws -> URL
                     = OverlayVideoExporter.itemReplacementDirectory) {
+        self.init(diskSpace: diskSpace, progressInterval: progressInterval, scratchDirectory: scratchDirectory,
+                  willFinish: {})
+    }
+
+    /// As the public initializer, with `willFinish` called as each export's
+    /// file is about to be finished — a seam for the tests.
+    init(diskSpace: any DiskSpaceChecking, progressInterval: Duration,
+         scratchDirectory: @escaping @Sendable (URL) throws -> URL,
+         willFinish: @escaping @Sendable () async -> Void) {
         self.diskSpace = diskSpace
         self.progressInterval = progressInterval
         self.scratchDirectory = scratchDirectory
+        self.willFinish = willFinish
     }
 
     /// Export `plan` with `overlay` burned in, to `destination`.
@@ -117,6 +128,7 @@ public actor OverlayVideoExporter {
     private func perform(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL,
                          job: ExportJob) async throws {
         try job.checkCancelled()
+        if Self.isSameFile(destination, as: plan.request.source) { throw OverlayExportError.destinationIsSource }
         let scratch = try scratchDirectory(destination)
         defer { try? FileManager.default.removeItem(at: scratch) }
         if let available = try? diskSpace.availableCapacity(for: scratch), available < plan.requiredBytes {
@@ -130,7 +142,8 @@ public actor OverlayVideoExporter {
             throw Self.readFailure(error)
         }
         try job.checkCancelled()
-        let pipeline = try await ExportPipeline(composition: composition, plan: plan, writingTo: file)
+        let pipeline = try await ExportPipeline(composition: composition, plan: plan, writingTo: file,
+                                                willFinish: willFinish)
         job.attach(pipeline)
         try await pipeline.run()
         try job.checkCancelled()
@@ -142,6 +155,19 @@ public actor OverlayVideoExporter {
     private static func readFailure(_ error: Error) -> Error {
         if error is OverlayExportError || error is CancellationError { return error }
         return OverlayExportError.sourceUnreadable
+    }
+
+    /// Whether `destination` names the file at `source`: the same path once
+    /// symbolic links are resolved and `.`/`..` removed, or — when it exists —
+    /// the same file by its resource identifier (a hard link, or a path in
+    /// another letter case on a case-insensitive volume).
+    static func isSameFile(_ destination: URL, as source: URL) -> Bool {
+        let resolved = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path }
+        if resolved(destination) == resolved(source) { return true }
+        let identity = { (url: URL) in try? url.resourceValues(forKeys: [.fileResourceIdentifierKey])
+            .fileResourceIdentifier }
+        guard let destinationID = identity(destination), let sourceID = identity(source) else { return false }
+        return destinationID.isEqual(sourceID)
     }
 
     /// Move the finished `file` to `destination` in one step, replacing
@@ -183,13 +209,14 @@ final class ExportJob: @unchecked Sendable {
 
     /// The progress so far.
     var progress: ExportProgress {
-        ExportProgress(framesDone: state.withLock { $0.pipeline }?.framesWritten ?? 0, totalFrames: totalFrames,
-                       elapsed: elapsed)
+        let pipeline = state.withLock { $0.pipeline }
+        return ExportProgress(framesDone: pipeline?.framesWritten ?? 0, totalFrames: totalFrames, elapsed: elapsed,
+                              phase: pipeline?.isFinishing == true ? .finishing : .encoding)
     }
 
-    /// The progress of the finished export: every frame done.
+    /// The progress of the finished export: every frame done, the file in place.
     var completed: ExportProgress {
-        ExportProgress(framesDone: totalFrames, totalFrames: totalFrames, elapsed: elapsed)
+        ExportProgress(framesDone: totalFrames, totalFrames: totalFrames, elapsed: elapsed, phase: .complete)
     }
 
     private var elapsed: TimeInterval {
