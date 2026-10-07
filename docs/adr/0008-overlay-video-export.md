@@ -252,6 +252,12 @@ startup disk and on an external drive.
     fails the export as `sourceUnreadable` (issue 204). One short is within the plan's ±1 frame.
   - A frame the compositor cannot get from the footage is `sourceUnreadable` too: the footage
     ended before the plan, or did not decode. It is not reported as a writer failure.
+- A cancel keeps `AVVideoCompositing`'s contract (issue 203). `cancelAllPendingVideoCompositionRequests`
+  finishes every waiting request as cancelled, then blocks until the frame being composed is
+  finished. The waiting requests are a locked FIFO the compositor's queue drains one at a time.
+  Before, a generation counter let the cancel return with up to four requests still in flight,
+  finished after AVFoundation had torn the read down. On macOS 27 `AVAssetReader.cancelReading()`
+  waits for the frame anyway; the contract does not promise that elsewhere.
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR

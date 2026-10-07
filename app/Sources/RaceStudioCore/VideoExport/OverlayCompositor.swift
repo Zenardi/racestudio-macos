@@ -21,6 +21,11 @@ public typealias CompositorPixelBufferAttributes = [String: Any]
 /// inside the ``OverlayCompositionInstruction``. Frames are composed one at a
 /// time, in order, on a private serial queue — the sampling cursor sweeps
 /// forward, and the overlay draw is serialized process-wide anyway.
+///
+/// A cancel keeps AVFoundation’s contract (issue 203): it finishes every
+/// request still waiting as cancelled and **blocks** until the frame being
+/// composed, if any, is finished — so no request outlives the read that
+/// asked for it.
 public final class OverlayCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
 
     /// 32-bit BGRA in IOSurfaces Metal can read: the format the overlay is
@@ -32,10 +37,17 @@ public final class OverlayCompositor: NSObject, AVVideoCompositing, @unchecked S
     ]
 
     private let queue = DispatchQueue(label: "com.racestudio.overlay-compositor", qos: .userInitiated)
+    /// Marks ``queue``, so a cancel made on it does not wait for itself.
+    private let onQueue = DispatchSpecificKey<Void>()
     /// Confined to ``queue``.
     private let composer = OverlayFrameComposer()
-    /// Bumped by a cancel: requests queued before it are finished as cancelled.
-    private let generation = OSAllocatedUnfairLock(initialState: 0)
+    /// The requests started and not yet taken up by ``queue``, oldest first.
+    private let waiting = OSAllocatedUnfairLock(initialState: [PendingRequest]())
+
+    override public init() {
+        super.init()
+        queue.setSpecific(key: onQueue, value: ())
+    }
 
     public var sourcePixelBufferAttributes: CompositorPixelBufferAttributes? { Self.bgraAttributes }
 
@@ -44,22 +56,30 @@ public final class OverlayCompositor: NSObject, AVVideoCompositing, @unchecked S
     public func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {}
 
     public func startRequest(_ request: AVAsynchronousVideoCompositionRequest) {
-        let ticket = generation.withLock { $0 }
-        let pending = PendingRequest(request: request)
-        queue.async {
-            guard self.generation.withLock({ $0 }) == ticket else {
-                pending.request.finishCancelledRequest()
-                return
-            }
-            autoreleasepool { self.compose(pending.request) }
-        }
+        waiting.withLock { $0.append(PendingRequest(request: request)) }
+        queue.async { self.composeNext() }
     }
 
+    /// Finish every waiting request as cancelled, then wait for the frame
+    /// being composed: AVFoundation tears the read down once this returns,
+    /// so it must leave no request unfinished.
     public func cancelAllPendingVideoCompositionRequests() {
-        generation.withLock { $0 += 1 }
+        let cancelled = waiting.withLock { requests in
+            defer { requests.removeAll() }
+            return requests
+        }
+        for pending in cancelled { pending.request.finishCancelledRequest() }
+        if DispatchQueue.getSpecific(key: onQueue) == nil { queue.sync {} }
     }
 
     // MARK: - Internals
+
+    /// Compose the oldest waiting request, on ``queue`` — unless a cancel has
+    /// already finished it.
+    private func composeNext() {
+        guard let next = waiting.withLock({ $0.isEmpty ? nil : $0.removeFirst() }) else { return }
+        autoreleasepool { compose(next.request) }
+    }
 
     private func compose(_ request: AVAsynchronousVideoCompositionRequest) {
         guard let instruction = request.videoCompositionInstruction as? OverlayCompositionInstruction else {
