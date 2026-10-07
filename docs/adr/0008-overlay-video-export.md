@@ -152,6 +152,20 @@ Results on the development Mac (Apple silicon, macOS 26, release build):
 - AAC LC sound of the same length;
 - `moov` ahead of `mdat`, so the file starts playing before it has fully downloaded.
 
+**On real footage.** `OverlayExportRealFootageTests` is local and env-gated; its footage and
+session are personal data and never committed. It ran on a real onboard clip (1080p H.264 at
+29.97 fps, 336 s) with its MyChron session synced at a verified offset, using the *Kart coaching*
+overlay built as the Video + Data HUD builds it:
+
+| Export | Frames | Wall time | File vs estimate |
+| --- | --- | --- | --- |
+| Everything footage and session share | 10,082 at 1920×1080 | 28.6 s, 0.09× real time | 527.3 vs 533.3 MB (−1.1%) |
+| The best lap | 1,220 | 3.5 s | 63.5 vs 64.6 MB (−1.6%) |
+
+Around the best lap's start, the overlay rolls over from the previous lap to the new one between
+two consecutive frames: the lap number, *last lap* and delta all reset. Whether that frame is
+exactly where the kart crosses the timing line is left to the manual check.
+
 The budget is ≤ 1× real time (600 s) and ≤ 1.5 GB peak. CI runs a three-second export against a
 generous ceiling instead (`OverlayExportThroughputTests`), and does not wait ten minutes.
 
