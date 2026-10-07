@@ -82,6 +82,21 @@ jobs:
         env:
           COVERAGE_THRESHOLD: "95"
 
+      # A crashed test process names no test in the log (issue 200): print each
+      # crash report's faulting thread and keep the reports. See ci.yml.
+      - name: Collect crash reports
+        if: failure()
+        run: bash scripts/collect_crash_reports.sh "${{ runner.temp }}/crash-reports"
+
+      - name: Upload crash reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-reports
+          path: ${{ runner.temp }}/crash-reports
+          if-no-files-found: ignore
+          retention-days: 14
+
   build:
     name: build & package .dmg
     needs: verify
