@@ -493,6 +493,23 @@
         }
       }
     },
+    "control.exportVideo": {
+      "comment": "Video + Data header button that opens the export sheet.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Video…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar vídeo…"
+          }
+        }
+      }
+    },
     "control.import": {
       "localizations": {
         "en": {
@@ -1057,6 +1074,1451 @@
         }
       }
     },
+    "export.close.confirm": {
+      "comment": "Export Video with Overlay (issue 9.14): alert button: cancel the export, then close.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Export and Close"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar exportação e fechar"
+          }
+        }
+      }
+    },
+    "export.close.message": {
+      "comment": "Export Video with Overlay (issue 9.14): alert text when closing the window or the session during an export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closing cancels it and removes the unfinished file."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar a cancela e apaga o arquivo inacabado."
+          }
+        }
+      }
+    },
+    "export.codec.h264": {
+      "comment": "Export Video with Overlay (issue 9.14): codec menu item.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 — plays everywhere"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 — toca em qualquer lugar"
+          }
+        }
+      }
+    },
+    "export.codec.hevc": {
+      "comment": "Export Video with Overlay (issue 9.14): codec menu item.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEVC — smaller files"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HEVC — arquivos menores"
+          }
+        }
+      }
+    },
+    "export.control.cancel": {
+      "comment": "Export Video with Overlay (issue 9.14): cancel button (the sheet, or a running export).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      }
+    },
+    "export.control.done": {
+      "comment": "Export Video with Overlay (issue 9.14): close the finished or failed progress sheet.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "export.control.export": {
+      "comment": "Export Video with Overlay (issue 9.14): the sheet's default button: opens the save panel.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar…"
+          }
+        }
+      }
+    },
+    "export.control.hide": {
+      "comment": "Export Video with Overlay (issue 9.14): hide the progress sheet; the export keeps running.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar"
+          }
+        }
+      }
+    },
+    "export.control.open": {
+      "comment": "Export Video with Overlay (issue 9.14): open the exported file.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir"
+          }
+        }
+      }
+    },
+    "export.control.reveal": {
+      "comment": "Export Video with Overlay (issue 9.14): show the exported file in the Finder.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal in Finder"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar no Finder"
+          }
+        }
+      }
+    },
+    "export.control.syncFirst": {
+      "comment": "Export Video with Overlay (issue 9.14): button beside the sync warning: close the sheet and show the sync controls.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync First"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronizar antes"
+          }
+        }
+      }
+    },
+    "export.error.cancelled": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The export was cancelled"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A exportação foi cancelada"
+          }
+        }
+      }
+    },
+    "export.error.codecUnavailable": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac can’t encode HEVC"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este Mac não codifica HEVC"
+          }
+        }
+      }
+    },
+    "export.error.destinationIsSource": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The export can’t replace the original video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A exportação não pode substituir o vídeo original"
+          }
+        }
+      }
+    },
+    "export.error.diskFull": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title. %1$@ = space needed.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The disk filled up during the export — %1$@ needed"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O disco encheu durante a exportação — são necessários %1$@"
+          }
+        }
+      }
+    },
+    "export.error.diskSpace": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title. %1$@ = space needed, %2$@ = space free.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough disk space — %1$@ needed, %2$@ free"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaço em disco insuficiente — são necessários %1$@, há %2$@ livres"
+          }
+        }
+      }
+    },
+    "export.error.noVideoTrack": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file has no video in it"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O arquivo não contém vídeo"
+          }
+        }
+      }
+    },
+    "export.error.rangeOutsideFootage": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video doesn’t cover what you chose to export"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O vídeo não cobre o trecho escolhido"
+          }
+        }
+      }
+    },
+    "export.error.sourceUnreadable": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video can’t be read"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler o vídeo"
+          }
+        }
+      }
+    },
+    "export.error.tooLarge": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title. %1$@ = frame size, %2$@ = codec.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is too large for %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ é grande demais para %2$@"
+          }
+        }
+      }
+    },
+    "export.error.tooSmall": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title. %1$@ = frame size.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ is too small to encode"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ é pequeno demais para codificar"
+          }
+        }
+      }
+    },
+    "export.error.writerFailed": {
+      "comment": "Export Video with Overlay (issue 9.14): failure title. %1$@ = the system's reason.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The export failed: %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A exportação falhou: %1$@"
+          }
+        }
+      }
+    },
+    "export.estimate": {
+      "comment": "Export Video with Overlay (issue 9.14): the live estimate. %1$@ = duration (m:ss), %2$@ = file size, %3$@ = frame size.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · about %2$@ · %3$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · cerca de %2$@ · %3$@"
+          }
+        }
+      }
+    },
+    "export.fileName.lap": {
+      "comment": "Export Video with Overlay (issue 9.14): file name part. %1$@ = 1-based lap number, %2$@ = lap time like 0'40.774.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@ (%2$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "export.fileName.laps": {
+      "comment": "Export Video with Overlay (issue 9.14): file name part. %1$@ = first lap, %2$@ = last lap (1-based).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laps %1$@–%2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltas %1$@–%2$@"
+          }
+        }
+      }
+    },
+    "export.fileName.selection": {
+      "comment": "Export Video with Overlay (issue 9.14): file name part: the lap or sector under review.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selection"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleção"
+          }
+        }
+      }
+    },
+    "export.fileName.session": {
+      "comment": "Export Video with Overlay (issue 9.14): file name part.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessão"
+          }
+        }
+      }
+    },
+    "export.fileName.video": {
+      "comment": "Export Video with Overlay (issue 9.14): file name part: the whole video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo completo"
+          }
+        }
+      }
+    },
+    "export.fix.cancelled": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing was saved. Export again whenever you’re ready."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nada foi salvo. Exporte de novo quando quiser."
+          }
+        }
+      }
+    },
+    "export.fix.codecUnavailable": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose H.264."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha H.264."
+          }
+        }
+      }
+    },
+    "export.fix.destinationIsSource": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another name or folder."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha outro nome ou outra pasta."
+          }
+        }
+      }
+    },
+    "export.fix.diskSpace": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up space on that disk, or save the video to another one."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Libere espaço nesse disco ou salve o vídeo em outro."
+          }
+        }
+      }
+    },
+    "export.fix.noVideoTrack": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the camera’s video file, not a sound recording."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anexe o arquivo de vídeo da câmera, não uma gravação de áudio."
+          }
+        }
+      }
+    },
+    "export.fix.rangeOutsideFootage": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose laps the video covers, or check the sync in Video + Data."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha voltas que o vídeo cubra ou confira a sincronização em Vídeo + Dados."
+          }
+        }
+      }
+    },
+    "export.fix.sourceUnreadable": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check that the file still opens in QuickTime Player, then attach it again in Video + Data."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifique se o arquivo ainda abre no QuickTime Player e anexe-o de novo em Vídeo + Dados."
+          }
+        }
+      }
+    },
+    "export.fix.tooLarge": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a lower resolution, or HEVC."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha uma resolução menor ou HEVC."
+          }
+        }
+      }
+    },
+    "export.fix.tooSmall": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export at the video’s own size (Source)."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporte no tamanho do próprio vídeo (Original)."
+          }
+        }
+      }
+    },
+    "export.fix.writerFailed": {
+      "comment": "Export Video with Overlay (issue 9.14): failure fix.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again. If it fails again, choose a lower resolution or H.264."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tente de novo. Se falhar outra vez, escolha uma resolução menor ou H.264."
+          }
+        }
+      }
+    },
+    "export.help.available": {
+      "comment": "Export Video with Overlay (issue 9.14): tooltip of the enabled command.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export the video with the telemetry overlay burned in (⌥⌘E)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar o vídeo com a sobreposição de telemetria gravada na imagem (⌥⌘E)"
+          }
+        }
+      }
+    },
+    "export.lapsHint": {
+      "comment": "Export Video with Overlay (issue 9.14): note under the lap picker. %1$@ = first lap, %2$@ = last lap (1-based).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laps %1$@–%2$@ are exported as one clip, with anything between them."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As voltas %1$@–%2$@ são exportadas num só clipe, com tudo o que houver entre elas."
+          }
+        }
+      }
+    },
+    "export.overlay.workspace": {
+      "comment": "Export Video with Overlay (issue 9.14): overlay menu item: the workspace's overlay as arranged in the editor.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição atual"
+          }
+        }
+      }
+    },
+    "export.progress.badge": {
+      "comment": "Export Video with Overlay (issue 9.14): workspace bar button while a hidden export runs. %1$@ = percent.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportando %1$@"
+          }
+        }
+      }
+    },
+    "export.progress.cancelling": {
+      "comment": "Export Video with Overlay (issue 9.14): progress sheet while a cancel cleans up.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelling…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelando…"
+          }
+        }
+      }
+    },
+    "export.progress.elapsed": {
+      "comment": "Export Video with Overlay (issue 9.14): progress line part. %1$@ = time elapsed (m:ss).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ elapsed"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ decorridos"
+          }
+        }
+      }
+    },
+    "export.progress.estimating": {
+      "comment": "Export Video with Overlay (issue 9.14): progress line part, before the time left is known.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "estimating time left…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "estimando o tempo restante…"
+          }
+        }
+      }
+    },
+    "export.progress.failed": {
+      "comment": "Export Video with Overlay (issue 9.14): progress sheet title on failure. %1$@ = file name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t export “%1$@”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível exportar “%1$@”"
+          }
+        }
+      }
+    },
+    "export.progress.finished": {
+      "comment": "Export Video with Overlay (issue 9.14): progress sheet title when done. %1$@ = file name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exported “%1$@”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@” exportado"
+          }
+        }
+      }
+    },
+    "export.progress.finishing": {
+      "comment": "Export Video with Overlay (issue 9.14): progress line part, while the file is finished.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "finishing the file…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "finalizando o arquivo…"
+          }
+        }
+      }
+    },
+    "export.progress.frames": {
+      "comment": "Export Video with Overlay (issue 9.14): progress line part. %1$@ = frames done, %2$@ = total frames.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "frame %1$@ of %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quadro %1$@ de %2$@"
+          }
+        }
+      }
+    },
+    "export.progress.remaining": {
+      "comment": "Export Video with Overlay (issue 9.14): progress line part. %1$@ = time left (m:ss).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "about %1$@ left"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "faltam cerca de %1$@"
+          }
+        }
+      }
+    },
+    "export.progress.title": {
+      "comment": "Export Video with Overlay (issue 9.14): progress sheet title. %1$@ = file name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting “%1$@”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportando “%1$@”"
+          }
+        }
+      }
+    },
+    "export.quit.confirm": {
+      "comment": "Export Video with Overlay (issue 9.14): alert button: cancel the export, then quit.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel Export and Quit"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar exportação e sair"
+          }
+        }
+      }
+    },
+    "export.quit.keep": {
+      "comment": "Export Video with Overlay (issue 9.14): alert button: keep the export running.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Exporting"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar exportando"
+          }
+        }
+      }
+    },
+    "export.quit.message": {
+      "comment": "Export Video with Overlay (issue 9.14): alert text when quitting during an export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitting cancels it and removes the unfinished file."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sair a cancela e apaga o arquivo inacabado."
+          }
+        }
+      }
+    },
+    "export.quit.title": {
+      "comment": "Export Video with Overlay (issue 9.14): alert when quitting or closing during an export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An export is still running"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma exportação ainda está em andamento"
+          }
+        }
+      }
+    },
+    "export.range.bestLap": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item, when there is no valid lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melhor volta"
+          }
+        }
+      }
+    },
+    "export.range.bestLapNamed": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item. %1$@ = 1-based lap number, %2$@ = lap time.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Best lap — lap %1$@ (%2$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melhor volta — volta %1$@ (%2$@)"
+          }
+        }
+      }
+    },
+    "export.range.selectedLaps": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item: the laps picked below.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected laps"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltas selecionadas"
+          }
+        }
+      }
+    },
+    "export.range.selection": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item: the lap or sector under review in Video + Data.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current selection"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleção atual"
+          }
+        }
+      }
+    },
+    "export.range.session": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sessão"
+          }
+        }
+      }
+    },
+    "export.range.wholeFootage": {
+      "comment": "Export Video with Overlay (issue 9.14): range menu item.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whole video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo inteiro"
+          }
+        }
+      }
+    },
+    "export.reason.noBestLap": {
+      "comment": "Export Video with Overlay (issue 9.14): why the best lap can't be exported.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The session has no complete lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A sessão não tem volta completa"
+          }
+        }
+      }
+    },
+    "export.reason.noCoveredLap": {
+      "comment": "Export Video with Overlay (issue 9.14): why no lap can be picked.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No lap is wholly in the video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma volta está inteira no vídeo"
+          }
+        }
+      }
+    },
+    "export.reason.noSelection": {
+      "comment": "Export Video with Overlay (issue 9.14): why the current selection can't be exported.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a lap or sector in Video + Data first"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecione antes uma volta ou setor em Vídeo + Dados"
+          }
+        }
+      }
+    },
+    "export.reason.notFilmed": {
+      "comment": "Export Video with Overlay (issue 9.14): why a lap or range can't be picked.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not in the video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fora do vídeo"
+          }
+        }
+      }
+    },
+    "export.reason.partlyFilmed": {
+      "comment": "Export Video with Overlay (issue 9.14): why a lap can't be picked.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only partly in the video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só em parte no vídeo"
+          }
+        }
+      }
+    },
+    "export.reason.sessionNotFilmed": {
+      "comment": "Export Video with Overlay (issue 9.14): why the session can't be exported.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video doesn’t cover the session — check the sync"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O vídeo não cobre a sessão — confira a sincronização"
+          }
+        }
+      }
+    },
+    "export.resolution.source": {
+      "comment": "Export Video with Overlay (issue 9.14): resolution menu item: the footage's own size. %1$@ = e.g. 1920 × 1080.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source (%1$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original (%1$@)"
+          }
+        }
+      }
+    },
+    "export.save.prompt": {
+      "comment": "Export Video with Overlay (issue 9.14): the save panel's button.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar"
+          }
+        }
+      }
+    },
+    "export.sheet.audio": {
+      "comment": "Export Video with Overlay (issue 9.14): toggle: keep the footage's sound.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include the video’s sound"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir o som do vídeo"
+          }
+        }
+      }
+    },
+    "export.sheet.codec": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the codec menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codec"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codec"
+          }
+        }
+      }
+    },
+    "export.sheet.estimate": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the live estimate.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimate"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimativa"
+          }
+        }
+      }
+    },
+    "export.sheet.laps": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the lap picker.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laps"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltas"
+          }
+        }
+      }
+    },
+    "export.sheet.outsideSession": {
+      "comment": "Export Video with Overlay (issue 9.14): toggle: draw the overlay's plates, without data, on footage before or after the session.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the overlay, without data, outside the session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar a sobreposição, sem dados, fora da sessão"
+          }
+        }
+      }
+    },
+    "export.sheet.overlay": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the overlay menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição"
+          }
+        }
+      }
+    },
+    "export.sheet.range": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the range menu (what to export).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar"
+          }
+        }
+      }
+    },
+    "export.sheet.resolution": {
+      "comment": "Export Video with Overlay (issue 9.14): label of the resolution menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolution"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolução"
+          }
+        }
+      }
+    },
+    "export.sheet.title": {
+      "comment": "Export Video with Overlay (issue 9.14): the sheet's title.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Video with Overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar vídeo com sobreposição"
+          }
+        }
+      }
+    },
+    "export.sync.estimated": {
+      "comment": "Export Video with Overlay (issue 9.14): warning for a video synced only from its file date.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video is synced only from its file date — the overlay may not match the footage."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este vídeo foi sincronizado só pela data do arquivo — a sobreposição pode não coincidir com as imagens."
+          }
+        }
+      }
+    },
+    "export.sync.notSynced": {
+      "comment": "Export Video with Overlay (issue 9.14): warning for a video never synced.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This video hasn’t been synced — the overlay may not match the footage."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este vídeo não foi sincronizado — a sobreposição pode não coincidir com as imagens."
+          }
+        }
+      }
+    },
+    "export.unavailable.noTelemetry": {
+      "comment": "Export Video with Overlay (issue 9.14): tooltip of the disabled command: telemetry not loaded yet.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Video + Data to load the session’s data first."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abra Vídeo + Dados para carregar os dados da sessão."
+          }
+        }
+      }
+    },
+    "export.unavailable.noVideo": {
+      "comment": "Export Video with Overlay (issue 9.14): tooltip of the disabled command: no video attached.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the session’s video in Video + Data first."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primeiro anexe o vídeo da sessão em Vídeo + Dados."
+          }
+        }
+      }
+    },
+    "export.unavailable.running": {
+      "comment": "Export Video with Overlay (issue 9.14): tooltip of the disabled command: an export is running.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An export is already running."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Já há uma exportação em andamento."
+          }
+        }
+      }
+    },
+    "export.unavailable.videoMissing": {
+      "comment": "Export Video with Overlay (issue 9.14): tooltip of the disabled command: the attached video doesn't open.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video can’t be opened — attach it again in Video + Data."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível abrir o vídeo — anexe-o de novo em Vídeo + Dados."
+          }
+        }
+      }
+    },
+    "export.validation.noLaps": {
+      "comment": "Export Video with Overlay (issue 9.14): why Export… is disabled with no lap picked.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick at least one lap the video covers."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha ao menos uma volta que o vídeo cubra."
+          }
+        }
+      }
+    },
     "feature.channelsReport": {
       "localizations": {
         "en": {
@@ -1350,6 +2812,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportar…"
+          }
+        }
+      }
+    },
+    "menu.file.exportVideo": {
+      "comment": "File menu command that opens the export sheet (⌥⌘E).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Video with Overlay…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar vídeo com sobreposição…"
           }
         }
       }

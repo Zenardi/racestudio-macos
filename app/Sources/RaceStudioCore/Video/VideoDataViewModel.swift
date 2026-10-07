@@ -132,6 +132,20 @@ public final class VideoDataViewModel: ObservableObject {
         loadedInputs = inputs
     }
 
+    /// The telemetry on show when it samples every one of `channels` and was
+    /// cut by the review's current laps and sectors — what an overlay export
+    /// can draw from without reading the session again (issue 9.14) — else
+    /// `nil`. Telemetry handed in directly (not loaded for any channels)
+    /// serves only a layout naming none.
+    func telemetry(sampling channels: [String]) -> TelemetryTimeline? {
+        guard let telemetry else { return nil }
+        guard let loaded = loadedInputs else { return channels.isEmpty ? telemetry : nil }
+        let sampled = Set(loaded.channels.map(TelemetryChannelMap.key(for:)))
+        guard loaded.sectors == review.timeline,
+              channels.allSatisfy({ sampled.contains(TelemetryChannelMap.key(for: $0)) }) else { return nil }
+        return telemetry
+    }
+
     /// Whether the telemetry must be (re)loaded to sample `channels` — the
     /// overlay's named readouts: it is not in yet, or was loaded for other
     /// channels or for sectors the review has since re-cut. Asked whenever the
