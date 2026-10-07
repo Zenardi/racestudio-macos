@@ -221,6 +221,13 @@ startup disk and on an external drive.
 - The engine owns the pull loop the export session would have hidden: back-pressure,
   interleaving, cancel and teardown on failure. All of it is covered by tests on synthetic media
   generated at test time (`TestMediaFactory`).
+  - `TestMediaFactory` draws its frames from a `CVPixelBufferPool` it owns, never from the
+    adaptor's `pixelBufferPool` (issue 200). AVFoundation swaps the adaptor's pool for the
+    encoder's a few frames into a write, and releases the first one on its own queue. The getter
+    returns the pool unretained, so reading it for every frame raced that release.
+  - On GitHub's macOS VMs, that race crashed the test process (SIGSEGV in `objc_retain` and in
+    `CVPixelBufferPoolCreatePixelBuffer`). CI now prints and uploads every crash report when a
+    job fails (`scripts/collect_crash_reports.sh`).
 - HEVC needs an HEVC encoder. `EncoderAvailability.system` asks VideoToolbox, and the plan
   rejects HEVC up front where there is none. The HEVC test is skipped there with that reason.
 - The output is always 8-bit Rec. 709 SDR. HDR footage is tone-mapped by AVFoundation. An HDR
