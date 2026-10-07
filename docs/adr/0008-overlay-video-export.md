@@ -155,6 +155,50 @@ Results on the development Mac (Apple silicon, macOS 26, release build):
 The budget is ≤ 1× real time (600 s) and ≤ 1.5 GB peak. CI runs a three-second export against a
 generous ceiling instead (`OverlayExportThroughputTests`), and does not wait ten minutes.
 
+## Sandbox check
+
+The unit tests run unsandboxed, so `scripts/sandbox_export_probe.sh` checks the export's file
+operations inside the App Sandbox.
+
+It builds a probe app that makes exactly the exporter's calls:
+
+1. `url(for: .itemReplacementDirectory, …)`;
+2. the free space in that directory;
+3. `moveItem` to a new destination;
+4. `replaceItemAt` over an existing one.
+
+The app is signed with `RaceStudio.entitlements` by a self-signed certificate, as release builds
+are, and launched with `open`.
+
+A save panel's grant cannot be clicked by a script, so the probe stands in for it with
+temporary-exception grants:
+
+- to the **destination file alone** (the save panel's shape);
+- to its **whole folder**.
+
+Each grant is tried on the boot volume and on a freshly mounted APFS disk image (an external
+volume), passing either the folder or the file as `appropriateFor:`.
+
+Result on macOS 27.0.1, 2026-10-07, with the app sandboxed:
+
+| Volume | Scratch directory | Free space read there | `moveItem` / `replaceItemAt` |
+| --- | --- | --- | --- |
+| Boot | the app container's `tmp/TemporaryItems/NSIRD_…` | correct | ok, file-only and folder grants |
+| External | the volume's `.TemporaryItems/folders.501/…/NSIRD_…` | **0 for important usage**; `available` correct | ok, file-only and folder grants |
+
+The probe found a **bug**: on any volume but the startup disk, macOS reports
+`volumeAvailableCapacityForImportantUsage` as 0, so the free-space pre-check would have refused
+every export to an external drive.
+
+- `VolumeDiskSpace` now falls back to `volumeAvailableCapacity` there.
+- `test_an_external_volume_reports_its_free_space` and
+  `test_an_export_to_an_external_volume_lands_there` mount a disk image to keep it fixed. Both
+  are unsandboxed; the same 0 shows there.
+
+**Not verified here:** a real save-panel grant in the shipped app. That is the export UI's (#191)
+manual check, on a signed release build: export to a folder chosen in the save panel, on the
+startup disk and on an external drive.
+
 ## Consequences
 
 - The plan's estimate is the encoder's own target, so the size shown before an export is what it

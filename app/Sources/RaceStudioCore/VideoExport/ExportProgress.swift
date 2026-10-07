@@ -55,12 +55,16 @@ public protocol DiskSpaceChecking: Sendable {
 }
 
 /// The production ``DiskSpaceChecking``: the volume's capacity for important
-/// use — what macOS can free up for a file the user asked to save.
+/// use — what macOS can free up for a file the user asked to save — on the
+/// startup disk. Other volumes (an external drive) report none at all (`0`),
+/// so there the plain available capacity is read instead.
 public struct VolumeDiskSpace: DiskSpaceChecking {
     public init() {}
 
     public func availableCapacity(for url: URL) throws -> Int64? {
-        try url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-            .volumeAvailableCapacityForImportantUsage
+        let values = try url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey,
+                                                      .volumeAvailableCapacityKey])
+        if let important = values.volumeAvailableCapacityForImportantUsage, important > 0 { return important }
+        return values.volumeAvailableCapacity.map(Int64.init)
     }
 }

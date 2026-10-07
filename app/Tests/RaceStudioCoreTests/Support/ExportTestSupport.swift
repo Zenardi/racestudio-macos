@@ -106,6 +106,36 @@ enum MarkerCorner: CustomStringConvertible {
     }
 }
 
+/// A 32 MB APFS disk image mounted as its own volume — an external drive's
+/// stand-in, made with `hdiutil` and removed after the test.
+struct ExternalVolume {
+    let directory: URL
+    let mountPoint: URL
+
+    init() throws {
+        directory = try MediaFixtures.tempDirectory()
+        mountPoint = directory.appendingPathComponent("volume")
+        let image = directory.appendingPathComponent("volume.dmg")
+        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+        try Self.hdiutil(["create", "-quiet", "-size", "32m", "-fs", "APFS", "-volname", "RSExportTest", image.path])
+        try Self.hdiutil(["attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path])
+    }
+
+    func detach() {
+        try? Self.hdiutil(["detach", "-quiet", "-force", mountPoint.path])
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private static func hdiutil(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw CocoaError(.fileWriteUnknown) }
+    }
+}
+
 /// The dispatch queues a callback ran on, by label.
 final class QueueLabels: @unchecked Sendable {
     private let lock = NSLock()

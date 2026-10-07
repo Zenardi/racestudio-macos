@@ -314,6 +314,40 @@ import Testing
         #expect((available ?? 0) > 0)
     }
 
+    /// On a drive other than the startup disk — where macOS reports no
+    /// "capacity for important usage" at all (0) — the free space is the
+    /// volume's available capacity, so an export to an external drive is not
+    /// refused for want of space it has.
+    @Test func test_an_external_volume_reports_its_free_space() throws {
+        let volume = try ExternalVolume()
+        defer { volume.detach() }
+
+        let available = try VolumeDiskSpace().availableCapacity(for: volume.mountPoint)
+
+        #expect((available ?? 0) > 10_000_000, "a 32 MB volume, nearly empty: \(String(describing: available))")
+    }
+
+    /// An export to an external drive, with every production seam — its free
+    /// space, its item-replacement directory, the move into place — lands
+    /// there, replacing an older file, with nothing else left in the folder.
+    @Test func test_an_export_to_an_external_volume_lands_there() async throws {
+        let sandbox = try ExportSandbox()
+        defer { sandbox.remove() }
+        let volume = try ExternalVolume()
+        defer { volume.detach() }
+        let plan = try await exportPlan(try await sandbox.footage())
+        let destination = volume.mountPoint.appendingPathComponent("exports/lap.mp4")
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data("an older export".utf8).write(to: destination)
+
+        _ = try await collect(OverlayVideoExporter().export(plan, overlay: try await overlay(), to: destination))
+
+        #expect(try await MovieReadback.read(destination).frameTimes.count == plan.frameCount)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: destination.deletingLastPathComponent().path)
+                == ["lap.mp4"])
+    }
+
     /// By default the scratch file is written on the destination's volume and
     /// removed afterwards: only the export is left in the destination folder.
     @Test func test_the_default_scratch_directory_is_removed() async throws {
