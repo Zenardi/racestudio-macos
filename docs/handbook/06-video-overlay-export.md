@@ -74,8 +74,10 @@ this happens in [Video + Data](02-analysis-views.md#video--data):
    `0'49.765` because a file name can't contain a colon.
 7. **Watch the progress:** the percent, the frames, the time elapsed and the
    time left. The time left appears after the first few seconds and then
-   settles. **Cancel** stops the export. **Hide** puts the sheet away while the
-   export carries on; **Exporting 42%** in the workspace bar brings it back.
+   settles. **Cancel** stops the export. **Hide** (or Esc — it never cancels)
+   puts the sheet away while the export carries on; **Exporting 42%** in the
+   workspace bar brings it back, and the result comes back on its own when the
+   export ends.
 8. When it's done, **Reveal in Finder** shows the file, and **Open** plays it.
 
 The sheet remembers your last choices — what to export, the overlay,

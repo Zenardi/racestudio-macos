@@ -72,20 +72,21 @@ final class VideoExportCoordinator: ObservableObject {
         case .success(let made): plan = made
         case .failure(let error): flow.failed(ExportProgressModel.userMessage(for: error)); return
         }
-        guard flow.beginExport(to: destination, progress: progress) else { return }
+        guard let begun = flow.beginExport(to: destination, progress: progress) else { return }
         let layout = sheet.layout(workspace: video.editor.layout)
         preparation = Task {
             do {
                 let overlay = try await video.data.exportOverlay(layout: layout, kart: session.kart,
                                                                  metadata: session.metadata,
                                                                  analysis: session.analysis)
-                guard flow.endPreparation() else { return }  // cancelled meanwhile
+                // A preparation cancelled — or since replaced by another
+                // export — starts nothing, however late it returns.
+                guard flow.endPreparation(begun) else { return }
                 guard let overlay else { return flow.failed(ExportProgressModel.telemetryMissingMessage()) }
                 run(plan, overlay: overlay, to: destination, progress: progress)
             } catch {
-                guard flow.isPreparing else { return }  // cancelled
-                flow.failed(ExportProgressModel.userMessage(for: OverlayExportError(mapping: error,
-                                                                                    requiredBytes: 0)))
+                flow.failPreparation(begun, ExportProgressModel.userMessage(for: OverlayExportError(
+                    mapping: error, requiredBytes: 0)))
             }
         }
     }
@@ -105,10 +106,7 @@ final class VideoExportCoordinator: ObservableObject {
     /// is known to be free.
     private func run(_ plan: ExportPlan, overlay: ExportOverlay, to destination: URL,
                      progress: ExportProgressModel) {
-        guard !progress.isActive else {
-            return flow.failed(ExportProgressModel.userMessage(for: .writerFailed(
-                ExportCommandAvailability.unavailable(.exportRunning).help())))
-        }
+        guard !progress.isActive else { return flow.failed(ExportProgressModel.exportRunningMessage()) }
         let exporter = OverlayVideoExporter()
         let source = plan.request.source
         let scoped = source.startAccessingSecurityScopedResource()

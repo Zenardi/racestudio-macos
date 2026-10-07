@@ -35,10 +35,11 @@ struct ExportHost: ViewModifier {
     private func hosted(_ content: Content, progress: ExportProgressModel) -> some View {
         content
             .onReceive(video.data.$telemetry) { hasTelemetry = $0 != nil }
+            // `$state` fires as the state is about to change: read the new
+            // state from the value it delivers, never from the model.
             .onReceive(progress.$state) { state in
                 exportState = state
-                guard flow.owns(progress) else { return }
-                announce(state, progress: progress)
+                if flow.owns(progress) { announce(state) }
                 flow.exportChanged(to: state, progress: progress)
             }
             .focusedSceneValue(\.exportVideoAction, ExportVideoAction(availability: availability, open: open))
@@ -48,9 +49,13 @@ struct ExportHost: ViewModifier {
                 sheet(route, progress: progress)
                     .environment(\.theme, .raceStudio)
             }
-            .background(WindowCloseGuard(isActive: (exportState.isActive || flow.isPreparing)
-                                            && flow.guardsClose(progress: progress),
+            // Re-evaluated whenever the export's state (mirrored above) or the
+            // flow changes.
+            .background(WindowCloseGuard(isActive: flow.guardsClose(progress: progress),
                                          shouldClose: { confirmClose($0, progress: progress) }))
+            // Closing the session or the window mid-preparation writes nothing:
+            // stop the preparation rather than start an export nobody sees.
+            .onDisappear(perform: coordinator.cancelPreparation)
     }
 
     // MARK: - Sheets
@@ -112,11 +117,11 @@ struct ExportHost: ViewModifier {
 
     /// Say the end of this window's export to VoiceOver users — here, not in
     /// the sheet, so an export whose sheet was hidden is announced too.
-    private func announce(_ state: ExportProgressModel.State, progress: ExportProgressModel) {
+    private func announce(_ state: ExportProgressModel.State) {
         let message: String
         switch state {
         case .finished(let url): message = L10n.format(.exportProgressFinished, url.lastPathComponent)
-        case .failed: message = progress.failureMessage()?.title ?? ""
+        case .failed(let error): message = ExportProgressModel.userMessage(for: error).title
         case .idle, .running, .cancelling: return
         }
         NSAccessibility.post(element: NSApp.mainWindow ?? NSApp as Any, notification: .announcementRequested,
