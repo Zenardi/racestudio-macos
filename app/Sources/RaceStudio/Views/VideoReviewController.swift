@@ -5,13 +5,18 @@ import os
 import RaceStudioCore
 
 /// The view-owned glue between one `AVPlayer`, the window's shared
-/// ``LinkedCursor``, and the pure ``VideoReviewModel`` (issue 9.6).
+/// ``LinkedCursor``, and the pure ``VideoDataViewModel`` / ``VideoReviewModel``
+/// (issues 9.6, 9.12).
 ///
 /// It holds no rules of its own. Every decision — where a cursor move seeks, how
-/// a playhead tick maps back, whether a section is playable, and what to do when
-/// one ends — comes from ``VideoReviewModel`` / ``VideoSyncModel`` in
+/// a playhead tick maps back (and which telemetry frame the HUD shows), whether
+/// a section is playable, and what to do when one ends — comes from
+/// ``VideoDataViewModel`` / ``VideoReviewModel`` / ``VideoSyncModel`` in
 /// `RaceStudioCore`, which is why this file (like the rest of the `@main` shell)
 /// is excluded from the coverage metric: it only applies those decisions to AVKit.
+///
+/// The playhead is observed once per frame of the footage (its frame grid), so
+/// the HUD, the plot cursor and the map dot move with every displayed frame.
 ///
 /// A reference type so the periodic playhead observer always reads the *current*
 /// alignment (an offset edit is never stale) and so cursor writes land on the
@@ -39,25 +44,26 @@ final class VideoReviewController: ObservableObject {
 
     /// Why the last two-point sync was refused, shown until the next attempt
     /// (issue 9.7). The previous sync stands meanwhile.
-    @Published private(set) var twoPointError: TwoPointSyncError?
+    @Published var twoPointError: TwoPointSyncError?
 
     /// Whether the open footage has an audio track to auto-sync from (issue
     /// 9.8) — `nil` while it is being checked.
-    @Published private(set) var hasAudioTrack: Bool?
+    @Published var hasAudioTrack: Bool?
 
     /// The session's RPM channel, resolved once per session rather than on
     /// every render of the auto-sync button (issue 9.8).
     let rpmChannels: RPMChannelMemo
 
     /// The open footage, read again by an auto-sync run.
-    private var videoURL: URL?
+    var videoURL: URL?
     /// The auto-sync run the review owns, held so closing the window cancels
     /// it (the review cancels it on Cancel, apply and detach) and so only the
     /// current run's result is announced.
-    private var autoSyncRun: Task<Void, Never>?
+    var autoSyncRun: Task<Void, Never>?
 
-    private let review: VideoReviewModel
-    private weak var cursor: LinkedCursor?
+    let review: VideoReviewModel
+    private let data: VideoDataViewModel
+    weak var cursor: LinkedCursor?
     private var timeObserver: Any?
     private var statusObserver: NSKeyValueObservation?
     /// Bumped by every open and detach, so an `open` still awaiting its asset
@@ -66,8 +72,9 @@ final class VideoReviewController: ObservableObject {
     private let videos = VideoAttachmentStore(bookmarks: SecurityScopedBookmarkStore())
     private static let log = Logger(subsystem: "com.aim.racestudio", category: "VideoReview")
 
-    init(review: VideoReviewModel) {
-        self.review = review
+    init(data: VideoDataViewModel) {
+        self.data = data
+        self.review = data.review
         self.rpmChannels = RPMChannelMemo()
     }
 
@@ -82,7 +89,8 @@ final class VideoReviewController: ObservableObject {
     // MARK: - Attaching
 
     /// Bind the controller to the window's shared cursor and start observing the
-    /// playhead. Called once, when the panel appears.
+    /// playhead. Called each time the panel appears; re-attaching replaces the
+    /// previous observers, so it is safe to repeat.
     func start(driving cursor: LinkedCursor) {
         self.cursor = cursor
         attachObservers()
@@ -171,6 +179,27 @@ final class VideoReviewController: ObservableObject {
 
     func pause() { player.pause() }
 
+    /// *Play lap* (issue 9.12): play exactly the whole lap picked — or the lap at
+    /// the cursor — from its first frame; the review's loop rule replays it.
+    /// Returns `false`, playing nothing, when there is no lap the footage holds.
+    @discardableResult
+    func playLap() -> Bool {
+        guard data.prepareLapPlayback() else { return false }
+        playSelection()
+        return true
+    }
+
+    /// Stop playback at once — before a scrub of the plot or a click on the map —
+    /// so the cursor move that follows seeks the footage (only a paused player
+    /// follows the cursor) instead of being overridden by the next frame.
+    func pauseForScrub() {
+        // Waiting to play (just after Play, or buffering) counts as playing: it
+        // is about to drive the cursor again.
+        guard isPlaying || player.timeControlStatus != .paused else { return }
+        player.pause()
+        isPlaying = false
+    }
+
     /// Move both the cursor and the playhead to the section under review — what a
     /// click in the lap/sector grid does.
     func goToSelection() {
@@ -178,11 +207,12 @@ final class VideoReviewController: ObservableObject {
         if let target = review.seekTarget { seek(to: target) }
     }
 
-    /// Cursor → video while paused: follow the shared cursor. The pure 9.5 gate
-    /// stands this down while the footage is driving the cursor instead.
+    /// Cursor → video while paused: show the cursor's telemetry and follow it
+    /// with the footage. The pure 9.5 gate stands this down while the footage is
+    /// driving the cursor instead.
     func seekFromCursor(to cursorTime: Double) {
-        guard review.sync.shouldSeek(whilePlaying: isPlaying) else { return }
-        seek(to: review.sync.videoTime(forCursorTime: cursorTime))
+        guard let playhead = data.follow(cursorTime: cursorTime, isPlaying: isPlaying) else { return }
+        seek(to: playhead)
     }
 
     /// Re-align to `offset` (the fine-trim slider) and re-seek so the visible
@@ -230,54 +260,6 @@ final class VideoReviewController: ObservableObject {
         }
     }
 
-    // MARK: - Auto-sync from engine sound (issue 9.8)
-
-    /// Start matching the footage's engine sound against `analysis`'s RPM. The
-    /// run's progress and proposal land in the review's `autoSyncState`;
-    /// nothing is applied until ``applyAutoSync()``. VoiceOver hears the result
-    /// when it arrives.
-    func startAutoSync(analysis: AnalysisSession?) {
-        guard let url = videoURL, let analysis,
-              let range = analysis.audioSyncSearchRange(videoDuration: review.sync.videoDuration),
-              let coordinator = analysis.audioSyncCoordinator(source: AVAssetAudioPCMSource(url: url)) else { return }
-        let run = review.startAutoSync(coordinator, searchRange: range)
-        autoSyncRun = run
-        Task { [weak self] in
-            await run.value
-            guard let self, self.autoSyncRun == run, let message = self.review.autoSyncState.announcement() else {
-                return
-            }
-            self.announce(message)
-        }
-    }
-
-    /// Cancel: stop the run at once; the sync in force is untouched.
-    func cancelAutoSync() {
-        autoSyncRun = nil
-        review.cancelAutoSync()
-    }
-
-    /// Apply the confident proposal the operator confirmed, and re-seek so the
-    /// visible frame follows the new alignment.
-    func applyAutoSync() {
-        guard let proposal = review.autoSyncState.proposal, review.applyAudioSync(proposal) else { return }
-        twoPointError = nil
-        seekFromCursor(to: cursor?.timePosition ?? 0)
-        announce(review.status.label())
-    }
-
-    /// Close the result without applying it.
-    func dismissAutoSync() {
-        review.dismissAutoSync()
-    }
-
-    /// Stop any auto-sync work tied to the footage being replaced or removed.
-    private func stopAudioWork() {
-        cancelAutoSync()
-        videoURL = nil
-        hasAudioTrack = nil
-    }
-
     // MARK: - Internals
 
     private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
@@ -305,6 +287,8 @@ final class VideoReviewController: ObservableObject {
         let frameRate = await nominalFrameRate(of: asset)
         guard generation == openGeneration else { return }
         review.setFrameRate(frameRate)
+        // Observe the playhead once per frame of this footage.
+        attachObservers()
         // A camera that stamps its start time gives a usable first alignment for
         // free; without one — or when the date cannot be right for this session —
         // the operator anchors to a lap by hand.
@@ -342,7 +326,7 @@ final class VideoReviewController: ObservableObject {
     /// Speak `message` to VoiceOver users, who cannot see the panel's notice.
     /// Posted on the window (announcements on the application object are
     /// sometimes dropped), falling back to the app.
-    private func announce(_ message: String) {
+    func announce(_ message: String) {
         let element: Any = NSApp.mainWindow ?? NSApp as Any
         NSAccessibility.post(element: element, notification: .announcementRequested,
                              userInfo: [.announcement: message,
@@ -358,25 +342,28 @@ final class VideoReviewController: ObservableObject {
 
     private func attachObservers() {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
-        let interval = CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600)
+        // One tick per frame of the footage (29.97 fps → 1001/30000 s), but no
+        // more than 60 a second: high-speed footage is not shown faster than the
+        // display refreshes.
+        let grid = review.frameGrid
+        let perFrame = CMTime(value: CMTimeValue(grid.denominator), timescale: CMTimeScale(grid.numerator))
+        let interval = CMTimeMaximum(perFrame, CMTime(value: 1, timescale: 60))
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             // Delivered on .main; hop to the main actor so the cursor write is safe.
             Task { @MainActor [weak self] in self?.tick(at: time) }
         }
+        statusObserver?.invalidate()
         statusObserver = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
             Task { @MainActor [weak self] in self?.isPlaying = player.timeControlStatus == .playing }
         }
     }
 
-    /// One playhead tick: drive the shared cursor (9.5), then apply the reviewed
-    /// section's end rule (9.6).
+    /// One playhead tick: show its telemetry frame and drive the shared cursor
+    /// (9.5, 9.12), then apply the reviewed section's end rule (9.6).
     private func tick(at time: CMTime) {
-        let playhead = time.seconds
-        if review.sync.shouldDriveCursor(whilePlaying: isPlaying), let cursor {
-            cursor.moveTime(review.sync.cursorTime(forVideoTime: playhead))
-        }
-        guard isPlaying else { return }
-        switch review.playbackAction(atPlayhead: playhead) {
+        let result = data.tick(playhead: time.seconds, isPlaying: isPlaying)
+        if let cursorTime = result.cursorTime { cursor?.moveTime(cursorTime) }
+        switch result.action {
         case .none:
             break
         case .seek(let target):

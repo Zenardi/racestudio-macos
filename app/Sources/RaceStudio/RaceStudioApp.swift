@@ -54,6 +54,9 @@ struct RaceStudioApp: App {
                 Button("MyChron Device…") { openWindow(id: "device") }
                 #endif
             }
+
+            // The Video + Data panel's commands and shortcuts (issue 9.12).
+            VideoDataCommands()
         }
 
         DocumentGroup(viewing: XRKDocument.self) { _ in

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 380" role="img" aria-label="Video + Data workspace (schematic): the player with the live telemetry HUD drawn on the visible video rect and a transport row, the lap strip plot of speed and RPM under it, and on the right the track map over the lap and sector grid, all sharing one cursor.">
+  <style>
+    .tile{fill:#f4f7fc;stroke:#3b6bd6;stroke-width:1.5}
+    .video{fill:#1d2a40;stroke:#3b6bd6;stroke-width:1.5}
+    .bar{fill:#0b1220}
+    .hud{fill:#ffffff;fill-opacity:.18;stroke:#ffffff;stroke-width:1}
+    .t{font:13px -apple-system,Segoe UI,sans-serif;fill:#12233f}
+    .w{font:11px -apple-system,Segoe UI,sans-serif;fill:#ffffff}
+    .lbl{font:12px -apple-system,Segoe UI,sans-serif;fill:#5a6b85}
+    .cur{stroke:#d64545;stroke-width:2;stroke-dasharray:4 3}
+    .speed{fill:none;stroke:#3b6bd6;stroke-width:1.5}
+    .rpm{fill:none;stroke:#e08a1e;stroke-width:1.5}
+    .div{stroke:#9aa8bf;stroke-width:3}
+  </style>
+  <text class="lbl" x="20" y="22">Video + Data — one clock for the footage, the HUD, the plot and the map (schematic)</text>
+  <rect class="tile" x="20" y="32" width="720" height="26" rx="4"/>
+  <text class="t" x="30" y="50">onboard.mp4 · Plot · Map · Laps · Show HUD · Edit Overlay · Sync · Import Video…</text>
+  <!-- Player column -->
+  <rect class="video" x="20" y="66" width="470" height="200" rx="4"/>
+  <rect class="bar" x="20" y="66" width="470" height="18"/>
+  <rect class="bar" x="20" y="248" width="470" height="18"/>
+  <text class="w" x="30" y="79">letterbox: the HUD stays on the picture</text>
+  <rect class="hud" x="34" y="94" width="104" height="16"/><text class="w" x="38" y="106">kart badge</text>
+  <rect class="hud" x="190" y="94" width="130" height="16"/><text class="w" x="222" y="106">delta bar</text>
+  <rect class="hud" x="380" y="94" width="96" height="30"/><text class="w" x="388" y="112">lap info</text>
+  <rect class="hud" x="34" y="182" width="56" height="34"/><text class="w" x="40" y="202">G-ball</text>
+  <rect class="hud" x="34" y="220" width="64" height="24"/><text class="w" x="40" y="236">speed</text>
+  <rect class="hud" x="160" y="226" width="180" height="18"/><text class="w" x="226" y="239">RPM bar</text>
+  <rect class="hud" x="396" y="168" width="80" height="76"/><text class="w" x="410" y="210">mini map</text>
+  <rect class="tile" x="20" y="270" width="470" height="22" rx="3"/>
+  <text class="t" x="28" y="286">Lap 7 · S2   ◀  Play  ▶   Play Lap   Loop Lap   Lap − / Lap +</text>
+  <line class="div" x1="20" y1="298" x2="490" y2="298"/>
+  <rect class="tile" x="20" y="302" width="470" height="70" rx="4"/>
+  <text class="lbl" x="28" y="318">Lap 7 · Speed 52–118 km/h · RPM 8,900–14,200 rpm</text>
+  <path class="speed" d="M24 362 C70 330 110 326 150 352 S240 330 280 336 S380 358 486 330"/>
+  <path class="rpm" d="M24 356 C70 336 110 330 150 348 S240 338 280 340 S380 352 486 334"/>
+  <line class="cur" x1="250" y1="304" x2="250" y2="370"/>
+  <!-- Side column -->
+  <line class="div" x1="497" y1="66" x2="497" y2="372"/>
+  <rect class="tile" x="504" y="66" width="236" height="160" rx="4"/>
+  <text class="t" x="514" y="86">Track map — the plotted lap</text>
+  <ellipse cx="622" cy="150" rx="88" ry="50" fill="none" stroke="#3b6bd6" stroke-width="2"/>
+  <circle cx="694" cy="126" r="4" fill="#12233f"/>
+  <circle cx="548" cy="176" r="4" fill="#12233f"/>
+  <circle cx="606" cy="101" r="7" fill="#d64545" stroke="#ffffff" stroke-width="2"/>
+  <line class="div" x1="504" y1="232" x2="740" y2="232"/>
+  <rect class="tile" x="504" y="238" width="236" height="134" rx="4"/>
+  <text class="t" x="514" y="258">Laps × sectors</text>
+  <text class="t" x="514" y="282">Lap 6    15.832   16.104</text>
+  <text class="t" x="514" y="304">Lap 7    15.532   16.500</text>
+  <text class="t" x="514" y="326">Lap 8    15.611   15.880</text>
+  <text class="lbl" x="514" y="356">click a lap or a sector to review it</text>
+</svg>

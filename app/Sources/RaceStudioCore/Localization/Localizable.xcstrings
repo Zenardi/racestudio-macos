@@ -393,6 +393,23 @@
         }
       }
     },
+    "control.dismiss": {
+      "comment": "VoiceOver label of a button that dismisses a notice.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispensar"
+          }
+        }
+      }
+    },
     "control.dismissAutoSync": {
       "comment": "Auto-sync from engine sound (issue 9.8): closes the result without applying it.",
       "localizations": {
@@ -410,6 +427,23 @@
         }
       }
     },
+    "control.doneEditing": {
+      "comment": "Video + Data: leave the overlay editor.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluir"
+          }
+        }
+      }
+    },
     "control.download": {
       "localizations": {
         "en": {
@@ -422,6 +456,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Baixar sessão"
+          }
+        }
+      }
+    },
+    "control.editOverlay": {
+      "comment": "Video + Data: arrange the overlay's widgets on the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Overlay"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar sobreposição"
           }
         }
       }
@@ -474,6 +525,57 @@
         }
       }
     },
+    "control.lapMinus": {
+      "comment": "Video + Data transport: the same section on the previous lap (short button title).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap −"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta −"
+          }
+        }
+      }
+    },
+    "control.lapPlus": {
+      "comment": "Video + Data transport: the same section on the next lap (short button title).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap +"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta +"
+          }
+        }
+      }
+    },
+    "control.loopLap": {
+      "comment": "Video + Data: replay the lap under review when it ends.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop Lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetir volta"
+          }
+        }
+      }
+    },
     "control.loopSection": {
       "localizations": {
         "en": {
@@ -486,6 +588,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Repetir trecho"
+          }
+        }
+      }
+    },
+    "control.nextLap": {
+      "comment": "Video + Data transport: the same section on the next lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same section, next lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo trecho, próxima volta"
+          }
+        }
+      }
+    },
+    "control.nextSector": {
+      "comment": "Video + Data transport: review the next sector.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next sector"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próximo setor"
           }
         }
       }
@@ -608,6 +744,40 @@
         }
       }
     },
+    "control.pause": {
+      "comment": "Video + Data transport: pause the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar"
+          }
+        }
+      }
+    },
+    "control.playLap": {
+      "comment": "Video + Data: play exactly the selected lap (or the lap at the cursor).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Play Lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproduzir volta"
+          }
+        }
+      }
+    },
     "control.playSection": {
       "localizations": {
         "en": {
@@ -620,6 +790,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reproduzir trecho"
+          }
+        }
+      }
+    },
+    "control.previousLap": {
+      "comment": "Video + Data transport: the same section on the previous lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same section, previous lap"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo trecho, volta anterior"
+          }
+        }
+      }
+    },
+    "control.previousSector": {
+      "comment": "Video + Data transport: review the previous sector.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous sector"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setor anterior"
           }
         }
       }
@@ -734,6 +938,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Definir âncora B"
+          }
+        }
+      }
+    },
+    "control.showHUD": {
+      "comment": "Video + Data: show or hide the telemetry overlay (HUD) drawn over the video. The layout is kept.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show HUD"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar HUD"
+          }
+        }
+      }
+    },
+    "control.syncControls": {
+      "comment": "Video + Data: show or hide the video sync controls.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronização"
           }
         }
       }
@@ -899,6 +1137,23 @@
         }
       }
     },
+    "feature.videoData": {
+      "comment": "Name of the Video + Data workspace: the onboard video with a live telemetry HUD, a lap strip plot and the track map.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video + Data"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo + Dados"
+          }
+        }
+      }
+    },
     "feature.videoReview": {
       "localizations": {
         "en": {
@@ -927,6 +1182,142 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sincronização de vídeo"
+          }
+        }
+      }
+    },
+    "hud.accessibilityLabel": {
+      "comment": "VoiceOver label of the live telemetry HUD over the video.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telemetry HUD"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HUD de telemetria"
+          }
+        }
+      }
+    },
+    "hud.summary.deltaLevel": {
+      "comment": "VoiceOver HUD summary: level with the reference lap. %1$@ = 0.00 in the reader's decimal mark.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.deltaMinus": {
+      "comment": "VoiceOver HUD summary: gaining on the reference lap. %1$@ = seconds, unsigned.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta minus %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta menos %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.deltaPlus": {
+      "comment": "VoiceOver HUD summary: losing to the reference lap. %1$@ = seconds, unsigned.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta plus %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "delta mais %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.lap": {
+      "comment": "VoiceOver HUD summary: the lap and its running time. %1$@ = lap number, %2$@ = running time (m:ss.d).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@, %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@, %2$@"
+          }
+        }
+      }
+    },
+    "hud.summary.lapNumber": {
+      "comment": "VoiceOver HUD summary: the lap when its running time is unknown. %1$@ = lap number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@"
+          }
+        }
+      }
+    },
+    "hud.summary.noData": {
+      "comment": "VoiceOver value of the live telemetry HUD when the session says nothing at the cursor.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No telemetry here"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem telemetria aqui"
+          }
+        }
+      }
+    },
+    "hud.summary.speed": {
+      "comment": "VoiceOver HUD summary: the speed. %1$@ = value, %2$@ = unit (km/h or mph).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "speed %1$@ %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "velocidade %1$@ %2$@"
           }
         }
       }
@@ -995,6 +1386,23 @@
         }
       }
     },
+    "menu.video": {
+      "comment": "Menu bar: the Video menu (Video + Data commands).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo"
+          }
+        }
+      }
+    },
     "menu.view": {
       "localizations": {
         "en": {
@@ -1007,6 +1415,159 @@
           "stringUnit": {
             "state": "translated",
             "value": "Visualizar"
+          }
+        }
+      }
+    },
+    "overlay.editor.hint": {
+      "comment": "Overlay editor help line.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag a widget to move it, a handle to resize it. Arrow keys nudge 1% (⇧ 5%). ⌘Z undoes."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arraste um widget para movê-lo e uma alça para redimensioná-lo. As setas movem 1% (⇧ 5%). ⌘Z desfaz."
+          }
+        }
+      }
+    },
+    "overlay.editor.noOptions": {
+      "comment": "Overlay editor: the selected widget has no options.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This widget has no options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este widget não tem opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.noSelection": {
+      "comment": "Overlay editor options placeholder.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a widget to see its options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecione um widget para ver as opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.options": {
+      "comment": "Overlay editor: the selected widget's options.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opções"
+          }
+        }
+      }
+    },
+    "overlay.editor.preset": {
+      "comment": "Overlay editor: the preset menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preset"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Predefinição"
+          }
+        }
+      }
+    },
+    "overlay.editor.undoAction": {
+      "comment": "Edit menu action name for any overlay-editor change (Undo / Redo Overlay Edit).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overlay Edit"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edição da sobreposição"
+          }
+        }
+      }
+    },
+    "overlay.editor.units": {
+      "comment": "Overlay editor: the units menu.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Units"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unidades"
+          }
+        }
+      }
+    },
+    "overlay.editor.unsaved": {
+      "comment": "Overlay editor: the overlay was edited since the workspace was last saved.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsaved overlay changes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alterações na sobreposição não salvas"
+          }
+        }
+      }
+    },
+    "overlay.editor.widgets": {
+      "comment": "Overlay editor: the list of widgets with their toggles.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
           }
         }
       }
@@ -1143,6 +1704,125 @@
           "stringUnit": {
             "state": "translated",
             "value": "ÁGUA"
+          }
+        }
+      }
+    },
+    "overlay.option.brakeFullScale": {
+      "comment": "Pedals widget option: the brake reading at a full bar, in the channel's unit.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brake full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total do freio"
+          }
+        }
+      }
+    },
+    "overlay.option.deltaRange": {
+      "comment": "Delta bar option: the seconds a full half-bar stands for.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delta range (± s)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faixa do delta (± s)"
+          }
+        }
+      }
+    },
+    "overlay.option.gForceMax": {
+      "comment": "G-ball option: the g at the outer ring.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G-ball range (g)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faixa da bola de G (g)"
+          }
+        }
+      }
+    },
+    "overlay.option.mapRotation": {
+      "comment": "Track map widget option: rotation in degrees clockwise from north-up.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map rotation (°)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotação do mapa (°)"
+          }
+        }
+      }
+    },
+    "overlay.option.maxRPM": {
+      "comment": "RPM bar option: the rpm at a full bar.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total de RPM"
+          }
+        }
+      }
+    },
+    "overlay.option.shiftLight": {
+      "comment": "RPM bar option: the rpm the shift light comes on at.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift light at (rpm)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Luz de troca em (rpm)"
+          }
+        }
+      }
+    },
+    "overlay.option.throttleFullScale": {
+      "comment": "Pedals widget option: the throttle reading at a full bar, in the channel's unit.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Throttle full scale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total do acelerador"
           }
         }
       }
@@ -1504,6 +2184,448 @@
         }
       }
     },
+    "overlay.units.imperial": {
+      "comment": "Overlay units: mph and °F.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imperial"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imperial"
+          }
+        }
+      }
+    },
+    "overlay.units.metric": {
+      "comment": "Overlay units: km/h and °C.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metric"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métrico"
+          }
+        }
+      }
+    },
+    "overlay.widget.delta": {
+      "comment": "Overlay editor widget list: the delta bar against the reference lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delta bar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barra de delta"
+          }
+        }
+      }
+    },
+    "overlay.widget.gForce": {
+      "comment": "Overlay editor widget list: the G-force ball with its trail.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "G-ball"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bola de G"
+          }
+        }
+      }
+    },
+    "overlay.widget.gear": {
+      "comment": "Overlay editor widget list: the gear indicator.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gear"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcha"
+          }
+        }
+      }
+    },
+    "overlay.widget.kartBadge": {
+      "comment": "Overlay editor widget list: the kart's badge from the garage.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kart badge"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identificação do kart"
+          }
+        }
+      }
+    },
+    "overlay.widget.lapInfo": {
+      "comment": "Overlay editor widget list: lap number, last and best lap.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap info"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dados da volta"
+          }
+        }
+      }
+    },
+    "overlay.widget.lapTimer": {
+      "comment": "Overlay editor widget list: the running lap time.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap timer"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cronômetro da volta"
+          }
+        }
+      }
+    },
+    "overlay.widget.pedals": {
+      "comment": "Overlay editor widget list: throttle and brake bars.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedals"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedais"
+          }
+        }
+      }
+    },
+    "overlay.widget.rpm": {
+      "comment": "Overlay editor widget list: the RPM bar with its shift light.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPM bar"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barra de RPM"
+          }
+        }
+      }
+    },
+    "overlay.widget.sectorTimes": {
+      "comment": "Overlay editor widget list: the current lap's sector times.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sector times"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempos dos setores"
+          }
+        }
+      }
+    },
+    "overlay.widget.sessionInfo": {
+      "comment": "Overlay editor widget list: venue, date and session name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session info"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dados da sessão"
+          }
+        }
+      }
+    },
+    "overlay.widget.speed": {
+      "comment": "Overlay editor widget list: the big speed readout.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidade"
+          }
+        }
+      }
+    },
+    "overlay.widget.temperature": {
+      "comment": "Overlay editor widget list: water and exhaust temperatures.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperatures"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperaturas"
+          }
+        }
+      }
+    },
+    "overlay.widget.trackMap": {
+      "comment": "Overlay editor widget list: the mini track map with the kart's position.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Track map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa da pista"
+          }
+        }
+      }
+    },
+    "project.notice.invalidMathChannel": {
+      "comment": "Project load warning: a saved math channel's expression no longer parses. %1$@ = the channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Math channel “%1$@” has an invalid expression"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O canal matemático “%1$@” tem uma expressão inválida"
+          }
+        }
+      }
+    },
+    "project.notice.one": {
+      "comment": "Workspace bar, after opening a project that loaded with one thing it could not read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opened with 1 warning"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aberto com 1 aviso"
+          }
+        }
+      }
+    },
+    "project.notice.other": {
+      "comment": "Workspace bar, after opening a project that loaded with several things it could not read. %1$@ = how many.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opened with %1$@ warnings"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aberto com %1$@ avisos"
+          }
+        }
+      }
+    },
+    "project.notice.unreadablePart": {
+      "comment": "Project load warning for a part of the workspace that could not be read, when no more specific reason is known.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Part of the workspace could not be read"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parte do espaço de trabalho não pôde ser lida"
+          }
+        }
+      }
+    },
+    "project.saveFailed.message": {
+      "comment": "Alert message when a workspace could not be saved.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The workspace could not be written there."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível gravar o espaço de trabalho nesse local."
+          }
+        }
+      }
+    },
+    "project.saveFailed.title": {
+      "comment": "Alert title when a workspace could not be saved. %1$@ = the file name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save “%1$@”"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar “%1$@”"
+          }
+        }
+      }
+    },
+    "project.warning.clampedLaps": {
+      "comment": "Project load warning: saved lap numbers beyond the session's laps were dropped. %1$@ = the session's content id.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some saved laps of session %1$@ no longer exist and were skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algumas voltas salvas da sessão %1$@ não existem mais e foram ignoradas"
+          }
+        }
+      }
+    },
+    "project.warning.skippedOverlayOne": {
+      "comment": "Project load warning: one widget or setting of the saved video overlay could not be read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video overlay: 1 unreadable entry skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição de vídeo: 1 item ilegível ignorado"
+          }
+        }
+      }
+    },
+    "project.warning.skippedOverlayOther": {
+      "comment": "Project load warning: several widgets or settings of the saved video overlay could not be read. %1$@ = how many.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video overlay: %1$@ unreadable entries skipped"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sobreposição de vídeo: %1$@ itens ilegíveis ignorados"
+          }
+        }
+      }
+    },
+    "project.warning.unreadableOverlay": {
+      "comment": "Project load warning: the saved video overlay could not be read.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video overlay couldn’t be read; it opened with the HUD off"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler a sobreposição de vídeo; ela abriu com o HUD desligado"
+          }
+        }
+      }
+    },
+    "project.warning.unresolvedSession": {
+      "comment": "Project load warning: a session the workspace references is not in the library. %1$@ = its content id.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A session this workspace uses isn’t in the library (%1$@)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma sessão usada por este espaço de trabalho não está na biblioteca (%1$@)"
+          }
+        }
+      }
+    },
     "unit.bar": {
       "comment": "Pressure unit (bar) — same symbol in pt-BR.",
       "localizations": {
@@ -1726,6 +2848,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "definida na volta %1$@"
+          }
+        }
+      }
+    },
+    "video.attachPrompt": {
+      "comment": "Video + Data empty state before a video is attached.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach the onboard video for this session to watch it with its data — a live HUD, the lap plot and the track map, on one clock."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anexe o vídeo onboard desta sessão para assisti-lo com os dados — HUD ao vivo, gráfico da volta e mapa da pista, no mesmo relógio."
           }
         }
       }
@@ -2121,6 +3260,57 @@
         }
       }
     },
+    "video.help.workspaceButton": {
+      "comment": "Tooltip of the workspace bar's Video + Data button.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch the session video with its data — HUD, lap plot and track map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Assista ao vídeo da sessão com os dados — HUD, gráfico da volta e mapa da pista"
+          }
+        }
+      }
+    },
+    "video.lapLabel": {
+      "comment": "A lap named in the Video + Data plot legend and lap grid. %1$@ = the 1-based lap number.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lap %1$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volta %1$@"
+          }
+        }
+      }
+    },
+    "video.loadingTelemetry": {
+      "comment": "Video + Data placeholder while the session's telemetry loads.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading telemetry…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregando telemetria…"
+          }
+        }
+      }
+    },
     "video.message.anchorsTooClose": {
       "comment": "Video Review: the two sync anchors are too close together in session time.",
       "localizations": {
@@ -2202,6 +3392,142 @@
           "stringUnit": {
             "state": "translated",
             "value": "Estas âncoras indicam uma diferença de relógio de %1$@%% — mais do que qualquer câmera desvia, então uma delas está no quadro ou na volta errada. A sincronização anterior foi mantida."
+          }
+        }
+      }
+    },
+    "video.noFootage": {
+      "comment": "Plate over the player when the attached video does not cover the cursor's moment.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No footage here"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem vídeo neste trecho"
+          }
+        }
+      }
+    },
+    "video.noFootageDetail": {
+      "comment": "Second line of the No footage plate.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The video doesn’t cover this moment. The data keeps following the cursor."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O vídeo não cobre este momento. Os dados continuam seguindo o cursor."
+          }
+        }
+      }
+    },
+    "video.noGPS": {
+      "comment": "Video + Data map placeholder for a session without a GPS track.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No GPS track for this session"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem trajeto de GPS nesta sessão"
+          }
+        }
+      }
+    },
+    "video.noLaps": {
+      "comment": "Video + Data placeholder for a session without laps.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session has no laps to review"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta sessão não tem voltas para revisar"
+          }
+        }
+      }
+    },
+    "video.pane.laps": {
+      "comment": "Video + Data toolbar toggle: show the lap list and sector grid.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laps"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltas"
+          }
+        }
+      }
+    },
+    "video.pane.map": {
+      "comment": "Video + Data toolbar toggle: show the track map.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mapa"
+          }
+        }
+      }
+    },
+    "video.pane.plot": {
+      "comment": "Video + Data toolbar toggle: show the lap strip plot.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plot"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gráfico"
+          }
+        }
+      }
+    },
+    "video.sectionAtCursor": {
+      "comment": "VoiceOver label of the lap/sector readout under the player.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section at the cursor"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trecho no cursor"
           }
         }
       }

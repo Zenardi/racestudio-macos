@@ -164,8 +164,10 @@ import Foundation
         #expect(loaded.overlay?.widgets.map(\.id) == ["s"])
     }
 
-    /// The schema was bumped for the overlay: a save is stamped v7 on disk.
-    @Test func test_saved_projects_are_stamped_v7() throws {
+    /// The schema was bumped for the overlay (v7) and is stamped on disk — now
+    /// at the current schema, which issue 9.12 bumped again (see
+    /// `ProjectDocumentVideoDataMigrationTests`).
+    @Test func test_saved_projects_are_stamped_with_the_current_schema() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("stamp.rsproj")
@@ -173,7 +175,8 @@ import Foundation
 
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
 
-        #expect(json?["schemaVersion"] as? Int == 7)
+        #expect(json?["schemaVersion"] as? Int == ProjectDocument.currentSchemaVersion)
+        #expect(ProjectDocument.currentSchemaVersion >= 7)
     }
 
     // MARK: - The workspace save path

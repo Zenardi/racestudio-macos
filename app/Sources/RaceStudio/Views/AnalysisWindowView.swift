@@ -28,12 +28,12 @@ struct AnalysisWindowView: View {
     // the window level like the math-channels manager, so an edited sheet survives
     // layout switches and is captured into / restored from the project.
     @StateObject private var logSheet = LogSheetModel()
-    // The Video Review state (issue 9.6) — the lap/sector timeline, the alignment,
-    // and which section is under review — plus the player that applies it. Owned
-    // here, not in the panel, so the attached footage survives layout switches and
-    // can be captured into / restored from the project.
-    @StateObject private var videoReview: VideoReviewModel
-    @StateObject private var videoController: VideoReviewController
+    // The Video + Data state (issues 9.6, 9.12) — the review, the telemetry on
+    // the shared clock, the overlay editor and the player that applies them.
+    // Owned here, not in the panel, so the attached footage, the HUD layout and
+    // its undo history survive layout switches and can be captured into /
+    // restored from the project.
+    @StateObject private var video = VideoWorkspace()
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -45,15 +45,12 @@ struct AnalysisWindowView: View {
         // (issue 8.8); a non-FFI build/preview falls back to a rejecting evaluator.
         _mathManager = StateObject(wrappedValue: MathChannelsManagerModel(
             evaluator: viewModel.evaluator ?? NoSessionEvaluator()))
-        let review = VideoReviewModel()
-        _videoReview = StateObject(wrappedValue: review)
-        _videoController = StateObject(wrappedValue: VideoReviewController(review: review))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
-                         video: videoController)
+                         video: video.controller, overlayEditor: video.editor)
             Divider()
             HStack(spacing: 0) {
                 LayoutRail(layouts: model.layouts, active: model.activeLayout) { model.select(layout: $0) }
@@ -64,8 +61,7 @@ struct AnalysisWindowView: View {
                 VStack(spacing: 0) {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
-                              logSheet: logSheet, videoReview: videoReview,
-                              videoController: videoController, analysis: analysis)
+                              logSheet: logSheet, video: video, analysis: analysis)
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
                 }
@@ -73,6 +69,11 @@ struct AnalysisWindowView: View {
             }
         }
         .accessibilityLabel(L10n.string(.chartAnalysisWindow))
+        .onAppear {
+            // The window keeps the workspace's copy of the overlay the editor edits,
+            // so a save captures every committed edit.
+            video.editor.onCommit = { [weak model] layout in model?.videoOverlay = layout }
+        }
     }
 }
 
@@ -131,8 +132,8 @@ private struct PanelHost: View {
     @ObservedObject var splitReport: SplitReportModel
     @ObservedObject var spectrum: SpectrumPanelModel
     @ObservedObject var logSheet: LogSheetModel
-    @ObservedObject var videoReview: VideoReviewModel
-    @ObservedObject var videoController: VideoReviewController
+    /// Not observed: the Video + Data panel observes what it draws.
+    let video: VideoWorkspace
     let analysis: AnalysisSession?
 
     var body: some View {
@@ -165,9 +166,9 @@ private struct PanelHost: View {
             case .splitTimes:
                 SplitTimesPanel(model: model, report: splitReport, analysis: analysis)
             case .videoReview:
-                VideoReviewPanel(model: model, review: videoReview, splitReport: splitReport,
-                                 cursor: model.linkedCursor, controller: videoController,
-                                 analysis: analysis)
+                VideoDataPanel(model: model, data: video.data, review: video.review, editor: video.editor,
+                               splitReport: splitReport, cursor: model.linkedCursor, controller: video.controller,
+                               analysis: analysis)
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:
@@ -314,6 +315,24 @@ private struct LapOverlayPanel: View {
                     cursorDistance: $cursorDistance)
             }
         }
+    }
+}
+
+/// The window's Video + Data models (issues 9.6, 9.12), made once and held
+/// together. It never publishes: the data model republishes on every video
+/// frame and the editor on every drag update, so observing them at the window
+/// level would redraw the whole window that often — only the views that draw
+/// them (the HUD, the plot, the map, the editor) observe them.
+@MainActor
+final class VideoWorkspace: ObservableObject {
+    let review = VideoReviewModel()
+    let data: VideoDataViewModel
+    let controller: VideoReviewController
+    let editor = OverlayEditorModel(layout: nil)
+
+    init() {
+        data = VideoDataViewModel(review: review)
+        controller = VideoReviewController(data: data)
     }
 }
 

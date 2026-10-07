@@ -33,6 +33,10 @@ public struct TrackMapView: View {
     private let markers: [TrackMapMarker]
     /// The map imagery drawn under the racing line, or ``TrackMapBackdrop/none``.
     private let backdrop: TrackMapBackdrop
+    /// Fix indices to mark as sector boundaries instead of splitting the lap
+    /// into `sectorSplits` equal distances — the Video + Data map marks the
+    /// review's own split layout (issue 9.12). `nil` keeps the distance split.
+    private let sectorMarks: [Int]?
     @Binding private var cursorIndex: Int?
 
     /// The user's zoom / pan on top of the fit.
@@ -50,6 +54,7 @@ public struct TrackMapView: View {
                 runStarts: [Int] = [0], runSlots: [Int] = [0], runLapNumbers: [Int?] = [nil],
                 colorsByLap: Bool = false, markers: [TrackMapMarker] = [],
                 backdrop: TrackMapBackdrop = .none,
+                sectorMarks: [Int]? = nil,
                 cursorIndex: Binding<Int?>) {
         self.coords = coords
         self.distances = distances
@@ -63,6 +68,7 @@ public struct TrackMapView: View {
         self.colorsByLap = colorsByLap
         self.markers = markers
         self.backdrop = backdrop
+        self.sectorMarks = sectorMarks
         _cursorIndex = cursorIndex
     }
 
@@ -237,6 +243,12 @@ public struct TrackMapView: View {
     /// Dots each interior sector boundary (prominent) and mini-sector boundary
     /// (faint), placing them on the coordinate nearest each boundary distance.
     private func drawBoundaries(_ context: GraphicsContext, projected: [CGPoint]) {
+        if let sectorMarks {
+            for index in sectorMarks where projected.indices.contains(index) {
+                context.fill(dot(at: projected[index], radius: 4), with: .color(.primary.opacity(0.7)))
+            }
+            return
+        }
         let model = SectorModel(lapDistance: lapDistance)
         boundaryDots(context, ranges: model.miniSectors(count: sectorSplits * Self.miniSectorsPerSector),
                      projected: projected, radius: 2, color: .secondary.opacity(0.5))
