@@ -112,13 +112,28 @@ struct ExternalVolume {
     let directory: URL
     let mountPoint: URL
 
+    /// Whether this machine can make and mount a disk image at all (a locked
+    /// down runner may not) — tried once; the tests that need one are skipped
+    /// where it cannot, rather than failed.
+    static let canMount: Bool = {
+        guard let volume = try? ExternalVolume() else { return false }
+        volume.detach()
+        return true
+    }()
+
     init() throws {
         directory = try MediaFixtures.tempDirectory()
         mountPoint = directory.appendingPathComponent("volume")
         let image = directory.appendingPathComponent("volume.dmg")
-        try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
-        try Self.hdiutil(["create", "-quiet", "-size", "32m", "-fs", "APFS", "-volname", "RSExportTest", image.path])
-        try Self.hdiutil(["attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path])
+        do {
+            try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+            try Self.hdiutil(["create", "-quiet", "-size", "32m", "-fs", "APFS", "-volname", "RSExportTest",
+                              image.path])
+            try Self.hdiutil(["attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path])
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
     }
 
     func detach() {

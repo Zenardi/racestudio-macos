@@ -318,7 +318,8 @@ import Testing
     /// "capacity for important usage" at all (0) — the free space is the
     /// volume's available capacity, so an export to an external drive is not
     /// refused for want of space it has.
-    @Test func test_an_external_volume_reports_its_free_space() throws {
+    @Test(.enabled(if: ExternalVolume.canMount, "this machine cannot mount a disk image"))
+    func test_an_external_volume_reports_its_free_space() throws {
         let volume = try ExternalVolume()
         defer { volume.detach() }
 
@@ -330,7 +331,8 @@ import Testing
     /// An export to an external drive, with every production seam — its free
     /// space, its item-replacement directory, the move into place — lands
     /// there, replacing an older file, with nothing else left in the folder.
-    @Test func test_an_export_to_an_external_volume_lands_there() async throws {
+    @Test(.enabled(if: ExternalVolume.canMount, "this machine cannot mount a disk image"))
+    func test_an_export_to_an_external_volume_lands_there() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }
         let volume = try ExternalVolume()

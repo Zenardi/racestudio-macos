@@ -42,15 +42,23 @@ import Testing
 
     /// A pipeline over the synthetic footage writing to `file`, cancelled by
     /// `willFinish` as finishing begins.
-    private func pipeline(in sandbox: ExportSandbox, file: URL,
-                          willFinish: @escaping @Sendable (ExportPipeline) -> Void) async throws -> ExportPipeline {
-        let plan = try await exportPlan(try await sandbox.footage())
+    /// A pipeline over synthetic footage written by `spec`, writing to
+    /// `file`, whose hooks are handed the pipeline: `willFinish` just before
+    /// finishing begins, `didStartFinishing` on its queue once the writer has
+    /// been told to finish.
+    private func pipeline(in sandbox: ExportSandbox, file: URL, spec: TestMediaFactory.Spec = .init(),
+                          willFinish: @escaping @Sendable (ExportPipeline) -> Void = { _ in },
+                          didStartFinishing: @escaping @Sendable (ExportPipeline) -> Void = { _ in })
+        async throws -> ExportPipeline {
+        let plan = try await exportPlan(try await sandbox.footage(spec))
         let overlay = ExportOverlay(drawer: SessionTimeBar(origin: 0),
                                     telemetry: try await SessionTimeBar.timeline(from: -100, to: 100))
         let composition = try await OverlayComposition.make(plan: plan, overlay: overlay)
         let box = PipelineBox()
-        let pipeline = try await ExportPipeline(composition: composition, plan: plan, writingTo: file,
-                                                willFinish: { if let pipeline = box.pipeline { willFinish(pipeline) } })
+        let pipeline = try await ExportPipeline(
+            composition: composition, plan: plan, writingTo: file,
+            willFinish: { if let pipeline = box.pipeline { willFinish(pipeline) } },
+            didStartFinishing: { if let pipeline = box.pipeline { didStartFinishing(pipeline) } })
         box.pipeline = pipeline
         return pipeline
     }
@@ -61,23 +69,24 @@ import Testing
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }
         let file = sandbox.directory.appendingPathComponent("out.mp4")
-        let pipeline = try await pipeline(in: sandbox, file: file) { $0.cancel() }
+        let pipeline = try await pipeline(in: sandbox, file: file, willFinish: { $0.cancel() })
 
         await #expect(throws: OverlayExportError.cancelled) { try await pipeline.run() }
         #expect(pipeline.writerStatus == .cancelled)
     }
 
-    /// A cancel that lands while the writer finishes stops it; the run ends
+    /// A cancel that lands once the writer has been told to finish — while its
+    /// fast-start pass runs — cancels the writer itself; the run ends
     /// cancelled, never with a finished file.
-    @Test func test_a_cancel_while_finishing_ends_cancelled() async throws {
+    @Test func test_a_cancel_while_finishing_cancels_the_writer() async throws {
         let sandbox = try ExportSandbox()
         defer { sandbox.remove() }
         let file = sandbox.directory.appendingPathComponent("out.mp4")
-        let pipeline = try await pipeline(in: sandbox, file: file) { pipeline in
-            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(2)) { pipeline.cancel() }
-        }
+        let busy = TestMediaFactory.Spec(width: 640, height: 360, noise: true, bitRate: 8_000_000)
+        let pipeline = try await pipeline(in: sandbox, file: file, spec: busy, didStartFinishing: { $0.cancel() })
 
         await #expect(throws: OverlayExportError.cancelled) { try await pipeline.run() }
+        #expect(pipeline.writerStatus == .cancelled, "the writer was cancelled mid-finish, not left to complete")
     }
 
     /// Cancelled while finishing, an export leaves an existing file at its

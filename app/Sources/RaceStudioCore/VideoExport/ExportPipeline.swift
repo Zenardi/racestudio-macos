@@ -27,6 +27,7 @@ final class ExportPipeline: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.racestudio.overlay-export", qos: .userInitiated)
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let willFinish: @Sendable () async -> Void
+    private let didStartFinishing: @Sendable () -> Void
 
     private struct State {
         var cancelled = false
@@ -35,12 +36,17 @@ final class ExportPipeline: @unchecked Sendable {
     }
 
     /// A pipeline encoding `composition` as `plan` says into a new file at `url`.
-    /// - Parameter willFinish: called once every sample is written, just
-    ///   before the file is finished — a seam for the tests.
+    /// - Parameters:
+    ///   - willFinish: called once every sample is written, just before the
+    ///     file is finished — a seam for the tests.
+    ///   - didStartFinishing: called on the pipeline's queue once the writer
+    ///     has been told to finish — a seam for the tests.
     /// - Throws: whatever AVFoundation throws creating the reader or writer.
     init(composition: OverlayComposition, plan: ExportPlan, writingTo url: URL,
-         willFinish: @escaping @Sendable () async -> Void = {}) async throws {
+         willFinish: @escaping @Sendable () async -> Void = {},
+         didStartFinishing: @escaping @Sendable () -> Void = {}) async throws {
         self.willFinish = willFinish
+        self.didStartFinishing = didStartFinishing
         reader = try AVAssetReader(asset: composition.asset)
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
@@ -87,9 +93,14 @@ final class ExportPipeline: @unchecked Sendable {
     /// Stop the export: the encode at its next frame, or — while the file is
     /// being finished — the writer itself. ``run()`` then throws
     /// ``OverlayExportError/cancelled``.
+    ///
+    /// The writer is only ever cancelled on the pipeline's queue, where
+    /// finishing starts too, so a cancel either stops the finish before it
+    /// starts or reaches a writer already told to finish — never one in
+    /// between.
     func cancel() {
         if state.withLock({ $0.cancelled = true; return $0.finishing }) {
-            queue.async { self.writer.cancelWriting() }
+            queue.async { if self.writer.status == .writing { self.writer.cancelWriting() } }
         }
     }
 
@@ -101,11 +112,9 @@ final class ExportPipeline: @unchecked Sendable {
             queue.async { done.resume(with: Result { try self.pumpAll() }) }
         }
         await willFinish()
-        if state.withLock({ $0.finishing = true; return $0.cancelled }) {
-            writer.cancelWriting()
-            throw OverlayExportError.cancelled
+        try await withCheckedThrowingContinuation { (done: CheckedContinuation<Void, Error>) in
+            queue.async { self.finish(then: done) }
         }
-        await writer.finishWriting()
         if isCancelled { throw OverlayExportError.cancelled }
         guard writer.status == .completed else { throw writer.error ?? Self.unknownFailure }
     }
@@ -115,6 +124,19 @@ final class ExportPipeline: @unchecked Sendable {
     private static let unknownFailure = OverlayExportError.writerFailed("The video could not be written.")
 
     private var isCancelled: Bool { state.withLock { $0.cancelled } }
+
+    /// Finish the file, on the pipeline's queue — or, cancelled already,
+    /// cancel the writer instead. A cancel arriving after this point is queued
+    /// behind it (see ``cancel()``).
+    private func finish(then done: CheckedContinuation<Void, Error>) {
+        if state.withLock({ $0.finishing = true; return $0.cancelled }) {
+            writer.cancelWriting()
+            done.resume(throwing: OverlayExportError.cancelled)
+            return
+        }
+        writer.finishWriting { done.resume() }
+        didStartFinishing()
+    }
 
     /// Pull every sample through, or stop both ends and rethrow.
     private func pumpAll() throws {
