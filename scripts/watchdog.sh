@@ -64,9 +64,19 @@ sample_tree() {
   done
 }
 
+# Stopped itself, the watchdog stops the command first: a script's background
+# command ignores the terminal's interrupt, and would run on.
+CHILD=""
+on_signal() {
+  [ -n "$CHILD" ] && stop_tree "$CHILD"
+  exit "$1"
+}
+trap 'on_signal 129' HUP
+trap 'on_signal 130' INT
+trap 'on_signal 143' TERM
+
 "$@" &
 CHILD=$!
-trap 'stop_tree "$CHILD"; exit 143' TERM INT HUP
 
 START=$SECONDS
 while kill -0 "$CHILD" 2>/dev/null && [ $((SECONDS - START)) -lt "$LIMIT" ]; do
