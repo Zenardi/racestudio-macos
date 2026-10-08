@@ -1,5 +1,14 @@
 import Foundation
 
+/// How the RPM and speed widgets draw their value (issue 9.15).
+public enum OverlayGaugeStyle: String, Codable, CaseIterable, Sendable {
+    /// The RPM bar with its shift light; the speed in big digits.
+    case classic
+    /// A dial with a needle and the value in digits inside it, like a car's
+    /// instrument cluster.
+    case needle
+}
+
 /// A widget's kind-specific settings (issue 9.10). Each applies to the kinds
 /// that draw it and is ignored by the rest, so one value type serves every
 /// widget and persists the same way.
@@ -15,6 +24,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let defaultGForceMax = 2.0
     /// A pedal's default full scale: a percentage of travel.
     public static let defaultPedalFullScale = 100.0
+    /// The speed dial's default full scale, km/h — room above a fast kart's top speed.
+    public static let defaultMaxSpeed = 160.0
 
     /// The RPM bar's full scales it can draw.
     public static let maxRPMLimits: ClosedRange<Double> = 1_000...30_000
@@ -24,6 +35,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let gForceMaxLimits: ClosedRange<Double> = 0.5...5
     /// The pedal full scales it can draw, in the pedal channel's unit.
     public static let pedalFullScaleLimits: ClosedRange<Double> = 0.1...10_000
+    /// The speed dial's full scales it can draw, km/h.
+    public static let maxSpeedLimits: ClosedRange<Double> = 20...400
 
     /// RPM bar: the rpm at the full bar.
     public var maxRPM: Double
@@ -41,6 +54,10 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     /// Pedals: the brake reading at a full bar, in its channel's unit — `100`
     /// for a percentage, the pressure at full braking for one logged in bar.
     public var brakeFullScale: Double
+    /// RPM and speed: the classic bar and digits, or a needle dial (issue 9.15).
+    public var gaugeStyle: OverlayGaugeStyle
+    /// Speed dial: the speed at full scale, km/h (shown in the layout's units).
+    public var maxSpeed: Double
 
     public init(maxRPM: Double = OverlayWidgetOptions.defaultMaxRPM,
                 shiftLightRPM: Double = OverlayWidgetOptions.defaultShiftLightRPM,
@@ -48,7 +65,9 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
                 gForceMax: Double = OverlayWidgetOptions.defaultGForceMax,
                 trackMapRotation: Double = 0,
                 throttleFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
-                brakeFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale) {
+                brakeFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
+                gaugeStyle: OverlayGaugeStyle = .classic,
+                maxSpeed: Double = OverlayWidgetOptions.defaultMaxSpeed) {
         self.maxRPM = maxRPM
         self.shiftLightRPM = shiftLightRPM
         self.deltaRange = deltaRange
@@ -56,6 +75,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
         self.trackMapRotation = trackMapRotation
         self.throttleFullScale = throttleFullScale
         self.brakeFullScale = brakeFullScale
+        self.gaugeStyle = gaugeStyle
+        self.maxSpeed = maxSpeed
     }
 
     /// These options with every value drawable: a non-finite value takes its
@@ -72,7 +93,9 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
             throttleFullScale: Self.usable(throttleFullScale, default: Self.defaultPedalFullScale,
                                            in: Self.pedalFullScaleLimits),
             brakeFullScale: Self.usable(brakeFullScale, default: Self.defaultPedalFullScale,
-                                        in: Self.pedalFullScaleLimits))
+                                        in: Self.pedalFullScaleLimits),
+            gaugeStyle: gaugeStyle,
+            maxSpeed: Self.usable(maxSpeed, default: Self.defaultMaxSpeed, in: Self.maxSpeedLimits))
     }
 
     /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below
@@ -94,10 +117,12 @@ extension OverlayWidgetOptions: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case maxRPM, shiftLightRPM, deltaRange, gForceMax, trackMapRotation, throttleFullScale, brakeFullScale
+        case gaugeStyle, maxSpeed
     }
 
     /// Each option is read on its own — missing or malformed takes its default —
-    /// so options added later, or one a hand edit broke, cost nothing else.
+    /// so options added later, or one a hand edit broke, cost nothing else. A
+    /// widget saved before the gauge style existed keeps the classic look.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(maxRPM: container.lenient(Double.self, forKey: .maxRPM) ?? Self.defaultMaxRPM,
@@ -107,6 +132,8 @@ extension OverlayWidgetOptions: Codable {
                   trackMapRotation: container.lenient(Double.self, forKey: .trackMapRotation) ?? 0,
                   throttleFullScale: container.lenient(Double.self, forKey: .throttleFullScale)
                     ?? Self.defaultPedalFullScale,
-                  brakeFullScale: container.lenient(Double.self, forKey: .brakeFullScale) ?? Self.defaultPedalFullScale)
+                  brakeFullScale: container.lenient(Double.self, forKey: .brakeFullScale) ?? Self.defaultPedalFullScale,
+                  gaugeStyle: container.lenient(OverlayGaugeStyle.self, forKey: .gaugeStyle) ?? .classic,
+                  maxSpeed: container.lenient(Double.self, forKey: .maxSpeed) ?? Self.defaultMaxSpeed)
     }
 }
