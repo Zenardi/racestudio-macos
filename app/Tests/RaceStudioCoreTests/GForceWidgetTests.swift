@@ -160,6 +160,15 @@ import Testing
         #expect(layout.axisLabels.count == 2 && layout.axisValues.count == 2)
     }
 
+    /// A crash spike reads two whole digits of G; even those fit their slots.
+    @Test func test_a_two_digit_g_still_fits_its_slots() {
+        let context = context(width: 179, height: 223)
+        let layout = widget.layout(in: context)
+
+        #expect(layout.combinedStyle.width(of: "23.45 g") <= layout.combined.width - 2 * context.outline)
+        #expect(layout.axisValueStyle.width(of: "\u{2212}23.45") <= layout.axisValues[0].width - 2 * context.outline)
+    }
+
     /// The lateral and longitudinal halves keep a clear gap, so a value never
     /// runs into the next label.
     @Test func test_the_lateral_and_longitudinal_halves_keep_apart() {

@@ -77,10 +77,10 @@ struct GForceWidget: OverlayWidgetDrawer {
         let widestAxisLabel = Self.labels(context).max { $0.count < $1.count } ?? ""
         return Layout(centre: centre, radius: radius, dot: max(2, (radius * 0.09).rounded()), ringLabels: labels,
                       ringLabelStyle: context.style(for: labels.first?.slot ?? .zero, fitting: widestLabel),
-                      combined: combined, combinedStyle: context.style(for: combined, fitting: "8.88 g"),
+                      combined: combined, combinedStyle: context.style(for: combined, fitting: "88.88 g"),
                       axisLabels: rows.map(\.slice), axisValues: rows.map(\.remainder),
                       axisLabelStyle: context.style(for: rows[0].slice, fitting: widestAxisLabel),
-                      axisValueStyle: context.style(for: rows[0].remainder, fitting: "\u{2212}8.88"))
+                      axisValueStyle: context.style(for: rows[0].remainder, fitting: "\u{2212}88.88"))
     }
 
     func drawStatic(_ layout: Layout, in graphics: CGContext, context: OverlayWidgetContext) {
