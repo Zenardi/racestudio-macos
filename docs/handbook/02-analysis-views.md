@@ -187,9 +187,13 @@ becomes the editor:
   and the **Units** (metric or imperial).
 - **Widgets**: a toggle for each widget. A widget the session cannot feed shows
   a warning sign; its tooltip says why (for example *No RPM channel*).
-- **Options** for the selected widget: the RPM bar's full scale and shift light,
-  the delta bar's range, the G-ball's range, the map's rotation, and the
-  **throttle and brake full scales** of the pedals.
+- **Options** for the selected widget:
+  - for speed and RPM, **Needle gauge**, which draws the widget as a dial
+    instead of digits or a bar;
+  - the RPM widget's full scale and shift light, and the speed dial's full
+    scale (in km/h);
+  - the delta bar's range, the G-ball's range and the map's rotation;
+  - the **throttle and brake full scales** of the pedals.
 
 On the video, every widget is outlined (dashed when it won't draw for this
 session). Click one to select it.
@@ -216,8 +220,8 @@ with Overlay…** (⌥⌘E) or **Export Video…** in the header — see
 ## Video overlay layouts
 
 A **video overlay** is a layout of telemetry widgets drawn over the footage:
-speed, an RPM bar, the lap timer, a delta bar, a G-ball, a mini track map, your
-kart's badge and more. One layout drives both the live HUD in
+speed and RPM (as digits, a bar or needle dials), the lap timer, a delta bar, a
+G-ball, a mini track map, your kart's badge and more. One layout drives both the live HUD in
 [Video + Data](#video--data) and the exported MP4, so what you preview is what
 you export. Pick and arrange it in [the overlay editor](#the-overlay-editor).
 
@@ -228,7 +232,7 @@ Three presets are built in:
 | Preset | Widgets |
 |---|---|
 | **Minimal** | speed, lap timer, delta bar |
-| **Kart coaching** | speed, RPM bar, delta bar, the running lap timer over lap info (lap n · last · best), G-ball, mini track map, kart badge |
+| **Kart coaching** | speed and RPM as needle dials side by side, delta bar, the running lap timer over lap info (lap n · last · best), G-ball, mini track map, kart badge |
 | **Full telemetry** | everything in Kart coaching, plus session info, sector times, temperatures and pedals |
 
 - **Any frame shape.** Layouts are drawn in a 16:9 frame. For a 4:3, square
@@ -264,6 +268,17 @@ Three presets are built in:
   - The delta bar fills right in red while you lose time and left in green
     while you gain it.
   - The RPM bar's shift light comes on at the widget's shift RPM.
+  - The speed and RPM dials work like a car's instrument cluster.
+    - The needle sweeps from lower left, over the top, to lower right.
+    - The exact value is written in digits inside each dial.
+    - The rev counter is marked in thousands of RPM. Its red zone runs from
+      the shift RPM to full scale, and its shift light comes on at the shift
+      RPM.
+    - The speed dial is marked in the layout's units, up to its full scale.
+    - Past full scale, the needle stops at the end of the scale while the
+      digits show the real value.
+    - In *Kart coaching* and *Full telemetry* the two dials sit together at
+      the bottom centre. *Minimal* keeps the speed in digits.
   - A pedal bar is full at 100 by default, so it reads its channel as a
     percentage of travel. For a brake logged in bar, or a throttle in mm, set
     the pedals' **Brake full scale** or **Throttle full scale** in the overlay

@@ -16,7 +16,7 @@ import Foundation
         #expect(OverlayWidgetKind.delta.editableOptions == [.deltaRange])
         #expect(OverlayWidgetKind.gForce.editableOptions == [.gForceMax])
         #expect(OverlayWidgetKind.trackMap.editableOptions == [.trackMapRotation])
-        #expect(OverlayWidgetKind.speed.editableOptions.isEmpty)
+        #expect(OverlayWidgetKind.speed.editableOptions == [.maxSpeed])
         #expect(OverlayWidgetKind.channelValue(.role(.rpm)).editableOptions.isEmpty)
     }
 

@@ -36,7 +36,34 @@ import Foundation
         #expect(kinds(.kartCoaching) == [.kartBadge, .delta, .lapTimer, .lapInfo, .gForce, .speed, .rpm, .trackMap])
         #expect(anchors(.kartCoaching) == ["kartBadge": .topLeading, "delta": .top, "lapTimer": .topTrailing,
                                            "lapInfo": .topTrailing, "gForce": .bottomLeading,
-                                           "speed": .bottomLeading, "rpm": .bottom, "trackMap": .bottomTrailing])
+                                           "speed": .bottom, "rpm": .bottom, "trackMap": .bottomTrailing])
+    }
+
+    /// Kart coaching and Full telemetry (issue 9.15): speed and RPM are needle
+    /// dials side by side at the bottom centre — round, the same size and
+    /// close together, like a car's instrument cluster.
+    @Test(arguments: [OverlayPreset.kartCoaching, .fullTelemetry])
+    func test_speed_and_rpm_are_a_cluster_of_round_dials(preset: OverlayPreset) throws {
+        let widgets = preset.layout(locale: en).widgets
+        let speed = try #require(widgets.first { $0.kind == .speed })
+        let rpm = try #require(widgets.first { $0.kind == .rpm })
+
+        #expect(speed.options.gaugeStyle == .needle && rpm.options.gaugeStyle == .needle)
+        for dial in [speed, rpm] {
+            #expect(abs(dial.frame.width * 16 - dial.frame.height * 9) < 1e-9, "\(dial.id) is round at 16:9")
+            #expect(dial.anchor == .bottom)
+        }
+        #expect(speed.frame.width == rpm.frame.width && speed.frame.y == rpm.frame.y, "the same size, level")
+        #expect(speed.frame.x + speed.frame.width <= rpm.frame.x, "speed on the left")
+        #expect(rpm.frame.x - (speed.frame.x + speed.frame.width) <= 0.02, "close together")
+        #expect(abs((speed.frame.x + rpm.frame.x + rpm.frame.width) / 2 - 0.5) < 1e-9, "centred")
+    }
+
+    /// Minimal keeps the speed as digits.
+    @Test func test_minimal_keeps_the_speed_digits() throws {
+        let speed = try #require(OverlayPreset.minimal.layout(locale: en).widgets.first { $0.kind == .speed })
+
+        #expect(speed.options.gaugeStyle == .classic)
     }
 
     /// Kart coaching and Full telemetry (issue 9.16): the running lap time sits

@@ -13,6 +13,8 @@ public enum OverlayWidgetOption: String, CaseIterable, Sendable {
     case throttleFullScale
     /// The brake reading at a full bar — for a brake logged in bar.
     case brakeFullScale
+    /// The speed dial's full scale, km/h (issue 9.15).
+    case maxSpeed
 
     /// The setting this option reads and writes.
     public var keyPath: WritableKeyPath<OverlayWidgetOptions, Double> {
@@ -24,6 +26,7 @@ public enum OverlayWidgetOption: String, CaseIterable, Sendable {
         case .trackMapRotation: return \.trackMapRotation
         case .throttleFullScale: return \.throttleFullScale
         case .brakeFullScale: return \.brakeFullScale
+        case .maxSpeed: return \.maxSpeed
         }
     }
 
@@ -37,23 +40,40 @@ public enum OverlayWidgetOption: String, CaseIterable, Sendable {
         case .trackMapRotation: return L10n.string(.overlayOptionMapRotation, locale: locale)
         case .throttleFullScale: return L10n.string(.overlayOptionThrottleFullScale, locale: locale)
         case .brakeFullScale: return L10n.string(.overlayOptionBrakeFullScale, locale: locale)
+        case .maxSpeed: return L10n.string(.overlayOptionMaxSpeed, locale: locale)
         }
     }
 }
 
 public extension OverlayWidgetKind {
 
-    /// The settings a widget of this kind draws with, in the editor's order —
-    /// none for a kind with nothing to set.
+    /// The settings a widget of this kind can draw with, in the editor's order —
+    /// none for a kind with nothing to set. ``OverlayWidget/editableOptions``
+    /// narrows them to the widget's gauge style.
     var editableOptions: [OverlayWidgetOption] {
         switch self {
         case .rpm: return [.maxRPM, .shiftLightRPM]
+        case .speed: return [.maxSpeed]
         case .delta: return [.deltaRange]
         case .gForce: return [.gForceMax]
         case .trackMap: return [.trackMapRotation]
         case .pedals: return [.throttleFullScale, .brakeFullScale]
         default: return []
         }
+    }
+
+    /// Whether a widget of this kind can be drawn as a needle dial (issue 9.15).
+    var offersGaugeStyle: Bool {
+        self == .rpm || self == .speed
+    }
+}
+
+public extension OverlayWidget {
+
+    /// The settings this widget draws with, in the editor's order: its kind's,
+    /// less the speed dial's full scale while the speed shows as digits.
+    var editableOptions: [OverlayWidgetOption] {
+        kind.editableOptions.filter { $0 != .maxSpeed || options.gaugeStyle == .needle }
     }
 }
 
@@ -64,6 +84,14 @@ public extension OverlayEditorModel {
     func setOption(_ option: OverlayWidgetOption, to value: Double, for id: OverlayWidget.ID) {
         guard var options = layout.widgets.first(where: { $0.id == id })?.options else { return }
         options[keyPath: option.keyPath] = value
+        setOptions(options, for: id)
+    }
+
+    /// Draw widget `id` in `style` — a needle dial or the classic bar and
+    /// digits — as one undoable step (issue 9.15).
+    func setGaugeStyle(_ style: OverlayGaugeStyle, for id: OverlayWidget.ID) {
+        guard var options = layout.widgets.first(where: { $0.id == id })?.options else { return }
+        options.gaugeStyle = style
         setOptions(options, for: id)
     }
 }

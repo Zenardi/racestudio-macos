@@ -9,8 +9,8 @@ import Foundation
 public enum OverlayPreset: String, CaseIterable, Sendable {
     /// Speed, the lap timer and the delta — the least on screen.
     case minimal
-    /// Speed, RPM bar, delta bar, the running lap time over lap info, G-ball,
-    /// mini map and the kart badge.
+    /// The speed and RPM dials side by side, delta bar, the running lap time
+    /// over lap info, G-ball, mini map and the kart badge.
     case kartCoaching
     /// Kart coaching plus session info, sector times, temperatures and pedals.
     case fullTelemetry
@@ -46,7 +46,7 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
         }
     }
 
-    private static let coaching = [kartBadge, delta, lapTimer, lapInfo, gForce, speed, rpm, trackMap]
+    private static let coaching = [kartBadge, delta, lapTimer, lapInfo, gForce, speedDial, rpmDial, trackMap]
 
     // Top row: the kart, the delta bar centred, the lap readouts on the right —
     // the running lap time over lap info, in one column (issue 9.16). Minimal's
@@ -60,17 +60,24 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
     private static let sessionInfo = widget(.sessionInfo, .topLeading, box(0.03, 0.10, 0.24, 0.05))
     private static let sectorTimes = widget(.sectorTimes, .topTrailing, box(0.79, 0.27, 0.18, 0.16))
     private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.45, 0.12, 0.10))
-    // Bottom row: G-ball over the speed and pedals, the RPM bar centred, the map.
-    // The G-ball is taller than wide: its numbers go under the ball (issue 9.18).
-    private static let gForce = widget(.gForce, .bottomLeading, box(0.03, 0.49, 0.14, 0.31))
-    private static let speed = widget(.speed, .bottomLeading, box(0.03, 0.82, 0.14, 0.15))
+    // Bottom row: the G-ball and the pedals on the left, the speed and RPM dials
+    // side by side in the centre like a car's instrument cluster (issue 9.15) —
+    // each square at 16:9, so round — and the map on the right. The G-ball is
+    // taller than wide: its numbers go under the ball (issue 9.18).
+    private static let gForce = widget(.gForce, .bottomLeading, box(0.03, 0.66, 0.14, 0.31))
     private static let pedals = widget(.pedals, .bottomLeading, box(0.19, 0.82, 0.06, 0.15))
-    private static let rpm = widget(.rpm, .bottom, box(0.30, 0.89, 0.40, 0.08))
+    private static let speedDial = widget(.speed, .bottom, box(0.315, 0.65, 0.18, 0.32), options: needle)
+    private static let rpmDial = widget(.rpm, .bottom, box(0.505, 0.65, 0.18, 0.32), options: needle)
     private static let trackMap = widget(.trackMap, .bottomTrailing, box(0.79, 0.65, 0.18, 0.32))
+    // Minimal's speed stays in digits, in the corner.
+    private static let speed = widget(.speed, .bottomLeading, box(0.03, 0.82, 0.14, 0.15))
+
+    private static let needle = OverlayWidgetOptions(gaugeStyle: .needle)
 
     private static func widget(_ kind: OverlayWidgetKind, _ anchor: OverlayAnchor, _ frame: NormalizedRect,
-                               plate: OverlayPlateStyle = .translucent) -> OverlayWidget {
-        OverlayWidget(kind: kind, frame: frame, anchor: anchor, plate: plate)
+                               plate: OverlayPlateStyle = .translucent,
+                               options: OverlayWidgetOptions = OverlayWidgetOptions()) -> OverlayWidget {
+        OverlayWidget(kind: kind, frame: frame, anchor: anchor, plate: plate, options: options)
     }
 
     private static func box(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> NormalizedRect {

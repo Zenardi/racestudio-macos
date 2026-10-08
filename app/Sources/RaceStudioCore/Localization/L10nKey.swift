@@ -208,6 +208,8 @@ extension L10n {
         case overlayOptionGForceMax = "overlay.option.gForceMax"
         case overlayOptionMapRotation = "overlay.option.mapRotation"
         case overlayOptionMaxRPM = "overlay.option.maxRPM"
+        case overlayOptionMaxSpeed = "overlay.option.maxSpeed"
+        case overlayOptionNeedleGauge = "overlay.option.needleGauge"
         case overlayOptionShiftLight = "overlay.option.shiftLight"
         case overlayOptionThrottleFullScale = "overlay.option.throttleFullScale"
         case overlayPresetFullTelemetry = "overlay.preset.fullTelemetry"

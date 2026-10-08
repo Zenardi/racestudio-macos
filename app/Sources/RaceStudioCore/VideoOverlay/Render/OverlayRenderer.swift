@@ -199,10 +199,22 @@ extension OverlayWidgetKind {
         Self.drawers[key]
     }
 
+    /// What draws a widget of this kind with `options`: the RPM and speed
+    /// widgets' needle dials when their gauge style asks for one (issue 9.15),
+    /// else the kind's own drawer.
+    func drawer(for options: OverlayWidgetOptions) -> (any OverlayWidgetDrawer)? {
+        guard options.gaugeStyle == .needle else { return drawer }
+        switch self {
+        case .rpm: return TachometerWidget()
+        case .speed: return SpeedometerWidget()
+        default: return drawer
+        }
+    }
+
     /// A widget of this kind laid out and pre-rendered in `context`, or `nil`
     /// for a kind with no drawer.
     func prepared(in context: OverlayWidgetContext) -> PreparedOverlayWidget? {
-        drawer.map { Self.prepare($0, in: context) }
+        drawer(for: context.options).map { Self.prepare($0, in: context) }
     }
 
     private static func prepare<Drawer: OverlayWidgetDrawer>(

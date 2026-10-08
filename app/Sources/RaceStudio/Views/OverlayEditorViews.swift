@@ -253,17 +253,22 @@ struct OverlayEditorInspector: View {
     }
 }
 
-/// The selected widget's own settings (``OverlayWidgetKind/editableOptions``),
-/// each an undoable step.
+/// The selected widget's own settings (``OverlayWidget/editableOptions``) and,
+/// for speed and RPM, whether it is a needle dial — each an undoable step.
 private struct OverlayWidgetOptionsEditor: View {
     @ObservedObject var editor: OverlayEditorModel
 
     var body: some View {
         if let id = editor.selection, let widget = editor.layout.widgets.first(where: { $0.id == id }) {
-            if widget.kind.editableOptions.isEmpty {
+            if widget.kind.offersGaugeStyle {
+                Toggle(L10n.string(.overlayOptionNeedleGauge), isOn: Binding(
+                    get: { widget.options.gaugeStyle == .needle },
+                    set: { editor.setGaugeStyle($0 ? .needle : .classic, for: id) }))
+            }
+            if widget.editableOptions.isEmpty && !widget.kind.offersGaugeStyle {
                 Text(L10n.string(.overlayEditorNoOptions)).foregroundStyle(.secondary)
             } else {
-                ForEach(widget.kind.editableOptions, id: \.self) { option in
+                ForEach(widget.editableOptions, id: \.self) { option in
                     TextField(option.title(), value: Binding(
                         get: { widget.options[keyPath: option.keyPath] },
                         set: { editor.setOption(option, to: $0, for: id) }), format: .number)

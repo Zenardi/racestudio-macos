@@ -3340,6 +3340,40 @@
         }
       }
     },
+    "overlay.option.maxSpeed": {
+      "comment": "Speed dial option: the speed at the dial's full scale, in km/h.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speed dial full scale (km/h)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala total do velocímetro (km/h)"
+          }
+        }
+      }
+    },
+    "overlay.option.needleGauge": {
+      "comment": "RPM and speed option: draw the widget as a dial with a needle instead of a bar or digits.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needle gauge"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrador com ponteiro"
+          }
+        }
+      }
+    },
     "overlay.option.shiftLight": {
       "comment": "RPM bar option: the rpm the shift light comes on at.",
       "localizations": {
