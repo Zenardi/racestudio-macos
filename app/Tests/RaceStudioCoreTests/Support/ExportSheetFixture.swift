@@ -16,24 +16,38 @@ enum ExportSheetFixture {
     static let metadata = SessionMetadata(vehicle: "", track: "Adria Kart", driver: "", session: "", series: "",
                                           logDate: "01/23/2016", logTime: "12:09:04", datetimeUtc: 1_453_550_944)
 
+    /// The workspace's overlay unless a test brings its own: Minimal.
+    static let workspaceOverlay = OverlayPreset.minimal.layout(locale: Locale(identifier: "en"))
+
+    /// - Parameters:
+    ///   - hasWorkspaceOverlay: whether the workspace has an overlay —
+    ///     `workspaceOverlay`, or ``workspaceOverlay`` without one.
+    ///   - overlaySession: what the session can feed the overlay; `nil` for
+    ///     everything.
     static func input(offset: Double = 5, status: SyncStatus = .anchored(lap: LapID(1)),
                       selection: SessionTimeSpan? = nil, selectedLaps: [LapID] = [],
-                      hasWorkspaceOverlay: Bool = true) -> ExportSheetInput {
+                      hasWorkspaceOverlay: Bool = true, workspaceOverlay: OverlayLayout? = nil,
+                      overlaySession: OverlaySessionContext? = nil) -> ExportSheetInput {
         ExportSheetInput(source: URL(fileURLWithPath: "/footage/onboard.mp4"), footage: footage,
                          sync: VideoSyncModel(videoDuration: footage.duration, offset: offset), status: status,
                          timeline: LapSectorTimeline.make(laps: laps, segments: [], layout: .even(base: 2, count: 2)),
                          laps: laps, session: SessionTimeSpan(start: 0, end: 62), selection: selection,
-                         selectedLaps: selectedLaps, metadata: metadata, hasWorkspaceOverlay: hasWorkspaceOverlay)
+                         selectedLaps: selectedLaps, metadata: metadata,
+                         workspaceOverlay: hasWorkspaceOverlay ? workspaceOverlay ?? Self.workspaceOverlay : nil,
+                         overlaySession: overlaySession)
     }
 
     @MainActor
     static func model(offset: Double = 5, status: SyncStatus = .anchored(lap: LapID(1)),
                       selection: SessionTimeSpan? = nil, selectedLaps: [LapID] = [],
-                      hasWorkspaceOverlay: Bool = true, preferences: ExportPreferences = ExportPreferences(),
+                      hasWorkspaceOverlay: Bool = true, workspaceOverlay: OverlayLayout? = nil,
+                      overlaySession: OverlaySessionContext? = nil,
+                      preferences: ExportPreferences = ExportPreferences(),
                       encoders: EncoderAvailability = .all, locale: Locale = Locale(identifier: "en"),
                       scheduler: any DelayScheduling = ManualScheduler()) -> ExportSheetModel {
         ExportSheetModel(input: input(offset: offset, status: status, selection: selection,
-                                      selectedLaps: selectedLaps, hasWorkspaceOverlay: hasWorkspaceOverlay),
+                                      selectedLaps: selectedLaps, hasWorkspaceOverlay: hasWorkspaceOverlay,
+                                      workspaceOverlay: workspaceOverlay, overlaySession: overlaySession),
                          preferences: preferences, encoders: encoders, locale: locale, scheduler: scheduler)
     }
 

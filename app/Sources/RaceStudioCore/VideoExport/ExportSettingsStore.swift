@@ -72,22 +72,30 @@ public struct ExportPreferences: Equatable, Sendable {
     public var range: ExportRangeChoice?
     public var overlay: ExportOverlayChoice?
     public var settings: ExportSettings
+    /// The widgets switched on or off for export, per overlay choice, by
+    /// widget id (issue 9.19) — only where the switch differs from the
+    /// overlay's own state.
+    public var widgetSwitches: [ExportOverlayChoice: [OverlayWidget.ID: Bool]]
 
     public init(range: ExportRangeChoice? = nil, overlay: ExportOverlayChoice? = nil,
-                settings: ExportSettings = ExportSettings()) {
+                settings: ExportSettings = ExportSettings(),
+                widgetSwitches: [ExportOverlayChoice: [OverlayWidget.ID: Bool]] = [:]) {
         self.range = range
         self.overlay = overlay
         self.settings = settings
+        self.widgetSwitches = widgetSwitches
     }
 }
 
 /// Keeps the export sheet's last-used choices per user (issue 9.14) — in
 /// `UserDefaults` in the app, behind the ``KeyValueStoring`` seam.
 ///
-/// Stored as a flat JSON object of strings. Reading is lenient, field by
-/// field: a value this build doesn't know (a newer build's codec, a hand
-/// edit), or one of the wrong type, reads as that field's default; bytes that
-/// aren't such an object read as all defaults. Nothing here throws.
+/// Stored as a JSON object of strings, plus the widget switches as an object
+/// of on/off values per overlay choice. Reading is lenient, field by field: a
+/// value this build doesn't know (a newer build's codec, a hand edit), or one
+/// of the wrong type, reads as that field's default — and a switch for an
+/// unknown overlay, or one that isn't on/off, is dropped; bytes that aren't
+/// such an object read as all defaults. Nothing here throws.
 public struct ExportSettingsStore {
 
     /// Where the choices are kept unless told otherwise.
@@ -117,12 +125,13 @@ public struct ExportSettingsStore {
                 codec: text(.codec).flatMap(ExportCodec.init(rawValue:)) ?? defaults.codec,
                 audio: text(.audio).flatMap(ExportAudio.init(rawValue:)) ?? defaults.audio,
                 outsideSession: text(.outsideSession).flatMap(OutsideSessionOverlay.init(rawValue:))
-                    ?? defaults.outsideSession))
+                    ?? defaults.outsideSession),
+            widgetSwitches: Self.switches(object[Field.widgets.rawValue]))
     }
 
     /// Remember `preferences` for the next export.
     public func save(_ preferences: ExportPreferences) {
-        var object: [String: String] = [
+        var object: [String: Any] = [
             Field.resolution.rawValue: preferences.settings.resolution.rawValue,
             Field.codec.rawValue: preferences.settings.codec.rawValue,
             Field.audio.rawValue: preferences.settings.audio.rawValue,
@@ -130,10 +139,31 @@ public struct ExportSettingsStore {
         ]
         object[Field.range.rawValue] = preferences.range?.rawValue
         object[Field.overlay.rawValue] = preferences.overlay?.storageValue
+        if !preferences.widgetSwitches.isEmpty {
+            object[Field.widgets.rawValue] = Dictionary(uniqueKeysWithValues: preferences.widgetSwitches.map {
+                ($0.key.storageValue, $0.value)
+            })
+        }
         store.set(try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]), forKey: key)
     }
 
     private enum Field: String {
-        case range, overlay, resolution, codec, audio, outsideSession
+        case range, overlay, resolution, codec, audio, outsideSession, widgets
+    }
+
+    /// The widget switches stored as `value`: each known overlay choice's
+    /// on/off values, the rest dropped.
+    private static func switches(_ value: Any?) -> [ExportOverlayChoice: [OverlayWidget.ID: Bool]] {
+        guard let stored = value as? [String: Any] else { return [:] }
+        var switches: [ExportOverlayChoice: [OverlayWidget.ID: Bool]] = [:]
+        for (spelling, widgets) in stored {
+            guard let choice = ExportOverlayChoice(storageValue: spelling),
+                  let widgets = widgets as? [String: Any] else { continue }
+            // JSON reads `true` and `1` alike as a number: only a boolean is on/off.
+            let onOff = widgets.compactMapValues { $0 as? NSNumber }
+                .filter { CFGetTypeID($0.value) == CFBooleanGetTypeID() }
+            if !onOff.isEmpty { switches[choice] = onOff.mapValues(\.boolValue) }
+        }
+        return switches
     }
 }

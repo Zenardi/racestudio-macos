@@ -97,6 +97,36 @@ import Testing
         #expect(ExportOverlayChoice(storageValue: "unknown") == nil)
     }
 
+    /// The widget switches (issue 9.19) are remembered per overlay choice.
+    @Test func test_widget_switches_are_restored_per_overlay_choice() {
+        let backing = InMemoryKeyValueStore()
+        let saved = ExportPreferences(overlay: .preset(.kartCoaching), widgetSwitches: [
+            .preset(.kartCoaching): ["gForce": false, "trackMap": false],
+            .workspace: ["kartBadge": true]
+        ])
+
+        ExportSettingsStore(store: backing).save(saved)
+
+        #expect(ExportSettingsStore(store: backing).load() == saved)
+    }
+
+    /// Settings saved before the switches existed read with none; switches
+    /// for an overlay this build doesn't know, or that aren't on/off values,
+    /// are dropped and the others kept.
+    @Test func test_older_or_unknown_widget_switches_are_ignored() {
+        let older = #"{"overlay": "minimal", "codec": "hevc"}"#
+        let mixed = """
+        {"widgets": {"neonGlow": {"speed": false}, "minimal": {"speed": false, "delta": "off", "lapTimer": 1},
+                     "workspace": [true]}}
+        """
+        let olderStore = ExportSettingsStore(store: InMemoryKeyValueStore(seed: [key: Data(older.utf8)]))
+        let mixedStore = ExportSettingsStore(store: InMemoryKeyValueStore(seed: [key: Data(mixed.utf8)]))
+
+        #expect(olderStore.load().widgetSwitches.isEmpty)
+        #expect(olderStore.load().overlay == .preset(.minimal))
+        #expect(mixedStore.load().widgetSwitches == [.preset(.minimal): ["speed": false]])
+    }
+
     /// Two stores under different keys never see each other's settings.
     @Test func test_the_key_scopes_the_settings() {
         let backing = InMemoryKeyValueStore()

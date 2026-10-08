@@ -55,6 +55,19 @@ this happens in [Video + Data](02-analysis-views.md#video--data):
    *Full telemetry*. Without an overlay of its own, the workspace starts on
    *Kart coaching*. The overlay is drawn even if the HUD is hidden in Video +
    Data.
+   - **Turn widgets on or off.** Under the overlay, **Widgets** lists its
+     widgets — *Speed*, *RPM bar*, *Lap timer*, *G-ball*, *Track map* and so on —
+     each with a switch. Turn one off to leave it out of this export; every
+     other widget is drawn exactly where and as it was. A widget the overlay
+     hides starts off, and can be turned on.
+   - A widget the session can't feed is greyed out with the reason, for
+     example *No throttle or brake channel*, and can't be turned on.
+   - **Show All** turns on every widget the session can feed, **Hide All**
+     turns them all off. With every widget off, the sheet says *No overlay
+     will be drawn*, and the export is the plain footage of the chosen range.
+   - The switches change this export only. The workspace's overlay, the
+     presets and the HUD in Video + Data stay as they are. To change the
+     overlay for good, use [the overlay editor](02-analysis-views.md#the-overlay-editor).
 4. **Choose the output:**
    - **Resolution:** *Source* (the video's own size), *4K (2160p)*, *1080p* or
      *720p*. A video is never made larger than it is: a 1080p video exported at
@@ -80,10 +93,12 @@ this happens in [Video + Data](02-analysis-views.md#video--data):
    export ends.
 8. When it's done, **Reveal in Finder** shows the file, and **Open** plays it.
 
-The sheet remembers your last choices — what to export, the overlay,
-resolution, codec and sound — for the next export. A choice that doesn't fit
-the next session (a best lap the video doesn't hold, say) falls back to the
-default.
+The sheet remembers your last choices — what to export, the overlay, its
+widget switches (for each overlay), resolution, codec and sound — for the
+next export. A widget switch is remembered only while it differs from the
+overlay's own state, and one for a widget the overlay no longer has is
+ignored. A choice that doesn't fit the next session (a best lap the video
+doesn't hold, say) falls back to the default.
 
 ## What you can count on
 

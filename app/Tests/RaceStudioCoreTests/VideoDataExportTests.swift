@@ -17,15 +17,17 @@ import Testing
     // MARK: - The sheet's input
 
     /// The input carries the review's sync, status, laps and section under
-    /// review, and the session's span from its telemetry.
+    /// review, the session's span from its telemetry, the workspace's overlay,
+    /// and what the session can feed it — the kart included (issue 9.19).
     @Test func test_the_sheet_input_is_read_off_the_review() async throws {
         let loaded = try await VideoDataFixture.loaded(offset: 5)
         loaded.model.review.select(lap: LapID(1))
         loaded.model.review.anchorSelection(toPlayhead: 26)
+        let workspace = OverlayPreset.fullTelemetry.layout(locale: Locale(identifier: "en"))
 
         let input = try #require(loaded.model.exportSheetInput(
             source: source, footage: footage, session: loaded.built.session, selectedLaps: [LapID(2)],
-            hasWorkspaceOverlay: true))
+            workspaceOverlay: workspace, kart: OverlayRenderFixture.kart))
 
         #expect(input.source == source)
         #expect(input.footage == footage)
@@ -38,7 +40,11 @@ import Testing
         #expect(input.selection == SessionTimeSpan(start: 21, end: 40))
         #expect(input.selectedLaps == [LapID(2)])
         #expect(input.metadata == loaded.built.session.metadata)
-        #expect(input.hasWorkspaceOverlay)
+        #expect(input.hasWorkspaceOverlay && input.workspaceOverlay == workspace)
+        #expect(input.overlaySession == loaded.model.overlayContext(kart: OverlayRenderFixture.kart,
+                                                                    metadata: loaded.built.session.metadata,
+                                                                    telemetry: loaded.telemetry))
+        #expect(input.overlaySession?.kart == OverlayRenderFixture.kart)
     }
 
     /// Before the telemetry is in, there is no session span to export against.
@@ -46,7 +52,7 @@ import Testing
         let model = VideoDataViewModel(review: VideoReviewModel())
 
         #expect(model.exportSheetInput(source: source, footage: footage, session: TelemetryFixture.make().session,
-                                       selectedLaps: [], hasWorkspaceOverlay: false) == nil)
+                                       selectedLaps: [], workspaceOverlay: nil) == nil)
     }
 
     // MARK: - The overlay

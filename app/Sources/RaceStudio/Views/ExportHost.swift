@@ -91,7 +91,7 @@ struct ExportHost: ViewModifier {
 
     private func open() {
         guard availability.isEnabled else { return }
-        coordinator.open(video: video, window: window)
+        coordinator.open(video: video, window: window, kart: app.library.kart(forSession: window.contentID))
     }
 
     private func export(_ model: ExportSheetModel, progress: ExportProgressModel) {

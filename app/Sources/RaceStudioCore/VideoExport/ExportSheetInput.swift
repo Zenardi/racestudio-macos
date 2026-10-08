@@ -25,12 +25,20 @@ public struct ExportSheetInput: Sendable {
     public var selectedLaps: [LapID]
     /// The session's track and date, for the file name.
     public var metadata: SessionMetadata
+    /// The workspace's own overlay, as the overlay editor holds it, or `nil`
+    /// when the workspace has none.
+    public var workspaceOverlay: OverlayLayout?
+    /// What the session can feed an overlay — which widgets the sheet can
+    /// switch on (issue 9.19); `nil` counts every widget as fed.
+    public var overlaySession: OverlaySessionContext?
+
     /// Whether the workspace has an overlay of its own to export.
-    public var hasWorkspaceOverlay: Bool
+    public var hasWorkspaceOverlay: Bool { workspaceOverlay != nil }
 
     public init(source: URL, footage: FootageInfo, sync: VideoSyncModel, status: SyncStatus,
                 timeline: LapSectorTimeline, laps: [Lap], session: SessionTimeSpan, selection: SessionTimeSpan?,
-                selectedLaps: [LapID], metadata: SessionMetadata, hasWorkspaceOverlay: Bool) {
+                selectedLaps: [LapID], metadata: SessionMetadata, workspaceOverlay: OverlayLayout?,
+                overlaySession: OverlaySessionContext? = nil) {
         self.source = source
         self.footage = footage
         self.sync = sync
@@ -41,7 +49,34 @@ public struct ExportSheetInput: Sendable {
         self.selection = selection
         self.selectedLaps = selectedLaps
         self.metadata = metadata
-        self.hasWorkspaceOverlay = hasWorkspaceOverlay
+        self.workspaceOverlay = workspaceOverlay
+        self.overlaySession = overlaySession
+    }
+}
+
+/// One widget of the chosen overlay in the export sheet's list (issue 9.19),
+/// with the switch that draws it in this export or leaves it out.
+public struct ExportWidgetItem: Equatable, Identifiable, Sendable {
+    /// The widget's id in its layout.
+    public let id: OverlayWidget.ID
+    public let kind: OverlayWidgetKind
+    /// Whether this export draws it.
+    public let isOn: Bool
+    /// Whether the session can feed it.
+    public let availability: WidgetAvailability
+
+    /// Whether its switch can turn it on: only a widget the session can feed.
+    public var canSwitchOn: Bool { availability.isDrawable }
+
+    /// The widget's name, as the overlay editor names it.
+    public func title(locale: Locale = .current) -> String {
+        kind.title(locale: locale)
+    }
+
+    /// Why the session can't feed the widget — or feeds only part of it — or
+    /// `nil` when it feeds it all.
+    public func reason(locale: Locale = .current) -> String? {
+        availability.reason?.label(locale: locale)
     }
 }
 

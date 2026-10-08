@@ -175,13 +175,14 @@ import Testing
     /// The overlay drawn: the workspace's, or a preset — always shown, even
     /// when the HUD is hidden in Video + Data.
     @Test func test_the_overlay_layout_is_always_shown() {
-        let model = ExportSheetFixture.model()
         var hidden = OverlayPreset.minimal.layout(locale: english)
         hidden.isEnabled = false
+        let model = ExportSheetFixture.model(workspaceOverlay: hidden,
+                                             preferences: ExportPreferences(overlay: .workspace))
 
-        let workspace = model.layout(workspace: hidden, locale: english)
+        let workspace = model.layout(locale: english)
         model.overlay = .preset(.fullTelemetry)
-        let preset = model.layout(workspace: hidden, locale: english)
+        let preset = model.layout(locale: english)
 
         #expect(workspace.widgets == hidden.widgets)
         #expect(workspace.isEnabled)
@@ -190,9 +191,10 @@ import Testing
 
     /// The workspace choice without a workspace overlay draws Kart coaching.
     @Test func test_a_missing_workspace_overlay_draws_kart_coaching() {
-        let model = ExportSheetFixture.model()
+        let model = ExportSheetFixture.model(hasWorkspaceOverlay: false)
+        model.overlay = .workspace
 
-        #expect(model.layout(workspace: nil, locale: english) == OverlayPreset.kartCoaching.layout(locale: english))
+        #expect(model.layout(locale: english) == OverlayPreset.kartCoaching.layout(locale: english))
     }
 
     /// What is remembered for next time: the choices on screen.

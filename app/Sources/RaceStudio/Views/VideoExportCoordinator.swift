@@ -36,9 +36,10 @@ final class VideoExportCoordinator: ObservableObject {
     // MARK: - Opening
 
     /// Probe the window's footage and open the sheet on it with the last-used
-    /// settings. Ignored while one is opening or a sheet is up; a file that
-    /// can't be read is said, not swallowed.
-    func open(video: VideoWorkspace, window: AnalysisWindowModel) {
+    /// settings — listing the overlay's widgets against what the session, and
+    /// its garage `kart`, can feed. Ignored while one is opening or a sheet is
+    /// up; a file that can't be read is said, not swallowed.
+    func open(video: VideoWorkspace, window: AnalysisWindowModel, kart: Kart?) {
         guard let url = video.controller.videoURL, flow.beginOpening() else { return }
         Task {
             do {
@@ -46,7 +47,7 @@ final class VideoExportCoordinator: ObservableObject {
                 guard let input = video.data.exportSheetInput(
                     source: url, footage: footage, session: window.session,
                     selectedLaps: window.selection.laps.selected,
-                    hasWorkspaceOverlay: window.videoOverlay != nil) else {
+                    workspaceOverlay: window.videoOverlay != nil ? video.editor.layout : nil, kart: kart) else {
                     flow.failed(ExportProgressModel.telemetryMissingMessage())
                     return
                 }
@@ -73,7 +74,7 @@ final class VideoExportCoordinator: ObservableObject {
         case .failure(let error): flow.failed(ExportProgressModel.userMessage(for: error)); return
         }
         guard let begun = flow.beginExport(to: destination, progress: progress) else { return }
-        let layout = sheet.layout(workspace: video.editor.layout)
+        let layout = sheet.layout()
         preparation = Task {
             do {
                 let overlay = try await video.data.exportOverlay(layout: layout, kart: session.kart,
