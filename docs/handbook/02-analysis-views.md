@@ -274,7 +274,11 @@ Three presets are built in:
   workspace saved before overlays existed opens with the overlay off. If part
   of a saved overlay can't be read (say, a widget a newer version added), the
   rest opens and the workspace bar says *Opened with 1 warning*; click it to
-  see what was skipped.
+  see what was skipped. A saved overlay keeps the widgets it was saved with,
+  even when a newer version changes a built-in preset. For example, an overlay
+  saved before the running lap timer joined *Kart coaching* has no lap timer.
+  To pick up a preset's changes, choose it again from the overlay editor's
+  **Preset** menu, or choose the preset in the export sheet.
 - **Your own presets.** Your own layouts are kept in `OverlayPresets.json` in
   RaceStudio's Application Support folder; for the sandboxed app that is
   `~/Library/Containers/com.racestudio.RaceStudio/Data/Library/Application Support/RaceStudio/`.
