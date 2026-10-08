@@ -91,14 +91,14 @@ struct OverlayExportRealFootageTests {
         await data.loadTelemetry(from: analysis)
         let input = try #require(data.exportSheetInput(source: real.footage, footage: footage,
                                                        session: loaded.session, selectedLaps: [],
-                                                       hasWorkspaceOverlay: false))
+                                                       workspaceOverlay: nil))
         let sheet = ExportSheetModel(input: input, locale: Locale(identifier: "en"))
         #expect(sheet.range == .bestLap && sheet.overlay == .preset(.kartCoaching))
         #expect(sheet.settings == ExportSettings(resolution: .p1080, codec: .h264, audio: .keep))
         let estimate = try #require(sheet.estimate)
         let plan = try sheet.makePlan().get()
         let overlay = try #require(try await data.exportOverlay(
-            layout: sheet.layout(workspace: nil, locale: Locale(identifier: "en")), kart: nil,
+            layout: sheet.layout(locale: Locale(identifier: "en")), kart: nil,
             metadata: loaded.session.metadata, analysis: analysis, locale: Locale(identifier: "en")))
         let destination = real.output.appendingPathComponent(sheet.suggestedFileName)
 

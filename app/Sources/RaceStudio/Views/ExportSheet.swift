@@ -2,7 +2,8 @@ import SwiftUI
 import RaceStudioCore
 
 /// The **Export Video with Overlay** sheet (issue 9.14): what to export, the
-/// overlay and the output settings, the live estimate, and *Export…*.
+/// overlay and its widgets' switches (issue 9.19), the output settings, the
+/// live estimate, and *Export…*.
 ///
 /// Thin: every choice, rule and string is ``ExportSheetModel``'s; this lays
 /// them out. A choice that doesn't apply stays in its menu, disabled, with the
@@ -26,6 +27,7 @@ struct ExportSheet: View {
                 rangePicker
                 if model.range == .selectedLaps { lapPicker }
                 overlayPicker
+                widgetSwitches
                 outputPickers
                 LabeledContent(L10n.string(.exportSheetEstimate)) {
                     Text(model.estimateText())
@@ -116,6 +118,40 @@ struct ExportSheet: View {
         Picker(L10n.string(.exportSheetOverlay), selection: $model.overlay) {
             ForEach(model.overlayOptions, id: \.self) { choice in
                 Text(choice.title()).tag(choice)
+            }
+        }
+    }
+
+    /// The chosen overlay's widgets, each switched on or off for this export;
+    /// one the session can't feed is disabled, with the reason beside it.
+    private var widgetSwitches: some View {
+        Section {
+            ForEach(model.widgetItems) { item in
+                Toggle(isOn: Binding(get: { item.isOn }, set: { model.setWidget(item.id, isOn: $0) })) {
+                    HStack {
+                        Text(item.title())
+                            .font(.token(theme.typography.body))
+                        if let reason = item.reason() {
+                            Text(reason)
+                                .font(.token(theme.typography.caption))
+                                .foregroundStyle(theme.palette.textSecondary.color(scheme))
+                        }
+                    }
+                }
+                .disabled(!item.canSwitchOn)
+                .help(item.reason() ?? "")
+            }
+            if let note = model.noOverlayMessage() {
+                Text(note)
+                    .font(.token(theme.typography.caption))
+                    .foregroundStyle(theme.palette.textSecondary.color(scheme))
+            }
+        } header: {
+            HStack {
+                Text(L10n.string(.exportSheetWidgets))
+                Spacer()
+                Button(L10n.string(.exportControlShowAll), action: model.showAllWidgets)
+                Button(L10n.string(.exportControlHideAll), action: model.hideAllWidgets)
             }
         }
     }

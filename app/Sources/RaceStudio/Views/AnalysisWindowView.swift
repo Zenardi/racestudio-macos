@@ -69,9 +69,9 @@ struct AnalysisWindowView: View {
                     PanelHost(model: model, mathManager: mathManager, stats: stats,
                               report: report, splitReport: splitReport, spectrum: spectrum,
                               logSheet: logSheet, video: video, analysis: analysis,
-                              onExportVideo: { [weak exporter, weak model, video] in
+                              onExportVideo: { [weak exporter, weak model, video] kart in
                                   guard let exporter, let model else { return }
-                                  exporter.open(video: video, window: model)
+                                  exporter.open(video: video, window: model, kart: kart)
                               })
                     Divider()
                     MeasuresBar(model: model, cursor: model.linkedCursor)
@@ -148,8 +148,9 @@ private struct PanelHost: View {
     /// Not observed: the Video + Data panel observes what it draws.
     let video: VideoWorkspace
     let analysis: AnalysisSession?
-    /// Opens the Export Video with Overlay sheet (issue 9.14).
-    let onExportVideo: () -> Void
+    /// Opens the Export Video with Overlay sheet (issue 9.14) for the
+    /// session's garage kart.
+    let onExportVideo: (Kart?) -> Void
 
     var body: some View {
         Group {
@@ -183,7 +184,8 @@ private struct PanelHost: View {
             case .videoReview:
                 VideoDataPanel(model: model, data: video.data, review: video.review, editor: video.editor,
                                splitReport: splitReport, cursor: model.linkedCursor, controller: video.controller,
-                               analysis: analysis, onExportVideo: onExportVideo)
+                               analysis: analysis,
+                               onExportVideo: { onExportVideo(app.library.kart(forSession: model.contentID)) })
             case .mathChannels:
                 MathChannelsPanel(manager: mathManager, channelNames: model.session.channels.map(\.name))
             case .summary:

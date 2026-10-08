@@ -1210,6 +1210,23 @@
         }
       }
     },
+    "export.control.hideAll": {
+      "comment": "Export Video with Overlay (issue 9.19): switch every widget of the chosen overlay off for this export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide All"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar todos"
+          }
+        }
+      }
+    },
     "export.control.open": {
       "comment": "Export Video with Overlay (issue 9.14): open the exported file.",
       "localizations": {
@@ -1240,6 +1257,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar no Finder"
+          }
+        }
+      }
+    },
+    "export.control.showAll": {
+      "comment": "Export Video with Overlay (issue 9.19): switch on every widget of the chosen overlay the session can feed, for this export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show All"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar todos"
           }
         }
       }
@@ -2349,6 +2383,23 @@
         }
       }
     },
+    "export.sheet.noOverlay": {
+      "comment": "Export Video with Overlay (issue 9.19): note when every widget is switched off; the footage is still exported, with nothing over it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No overlay will be drawn: every widget is off."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nenhuma sobreposição será desenhada: todos os widgets estão desligados."
+          }
+        }
+      }
+    },
     "export.sheet.outsideSession": {
       "comment": "Export Video with Overlay (issue 9.14): toggle: draw the overlay's plates, without data, on footage before or after the session.",
       "localizations": {
@@ -2430,6 +2481,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportar vídeo com sobreposição"
+          }
+        }
+      }
+    },
+    "export.sheet.widgets": {
+      "comment": "Export Video with Overlay (issue 9.19): heading of the list of the chosen overlay's widgets, each with an on/off switch for this export.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widgets"
           }
         }
       }

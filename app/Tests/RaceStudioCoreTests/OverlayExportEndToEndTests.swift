@@ -38,7 +38,7 @@ import Testing
         // 180p footage is never upscaled.
         let input = try #require(sample.data.exportSheetInput(source: sample.footageURL, footage: sample.footage,
                                                               session: sample.session, selectedLaps: [],
-                                                              hasWorkspaceOverlay: false))
+                                                              workspaceOverlay: nil))
         let sheet = ExportSheetModel(input: input, preferences: ExportPreferences(), encoders: .system,
                                      locale: Self.english)
         #expect(sheet.range == .bestLap)
@@ -47,7 +47,7 @@ import Testing
         #expect(sheet.suggestedFileName == "Adria Kart – 2016-01-23 – Lap 9 (0'49.765).mp4")
         let plan = try sheet.makePlan().get()
         let overlay = try #require(try await sample.data.exportOverlay(
-            layout: sheet.layout(workspace: nil, locale: Self.english), kart: nil, metadata: sample.session.metadata,
+            layout: sheet.layout(locale: Self.english), kart: nil, metadata: sample.session.metadata,
             analysis: sample.analysis, locale: Self.english))
         let probe = TimingProbe(base: overlay.drawer, origin: sample.lap.start)
 

@@ -20,6 +20,11 @@ import Foundation
 /// - **A sync warning** for a video never synced, or synced only from its
 ///   file date.
 /// - **The file name** the save panel suggests (``suggestedFileName``).
+/// - **The chosen overlay's widgets** (``widgetItems``), each with a switch
+///   that draws it in this export or leaves it out (issue 9.19) — applied to
+///   a copy of the layout (``layout(locale:)``), so the workspace's overlay,
+///   the presets and the live HUD never change. A widget the session can't
+///   feed can't be switched on.
 ///
 /// It opens on the last-used choices (``ExportPreferences``), each falling
 /// back to its default where it doesn't apply: the best lap when the footage
@@ -39,6 +44,9 @@ public final class ExportSheetModel: ObservableObject {
     @Published public var overlay: ExportOverlayChoice
     /// The output's resolution, codec, sound and out-of-session overlay.
     @Published public var settings: ExportSettings { didSet { changed() } }
+    /// The widgets switched on or off for export, per overlay choice, by
+    /// widget id — only where a switch differs from the overlay's own state.
+    @Published public private(set) var widgetSwitches: [ExportOverlayChoice: [OverlayWidget.ID: Bool]]
     /// The duration and size of the export as it stands, or `nil` when it
     /// can't run — re-planned ``estimateDelay`` after each change.
     @Published public private(set) var estimate: ExportEstimate?
@@ -83,6 +91,7 @@ public final class ExportSheetModel: ObservableObject {
         let windowPicks = Set(input.selectedLaps).intersection(covered)
         pickedLaps = windowPicks.isEmpty ? Set([best].compactMap { $0 }).intersection(covered) : windowPicks
         settings = preferences.settings
+        widgetSwitches = preferences.widgetSwitches
         overlay = Self.overlay(preferences.overlay, hasWorkspaceOverlay: input.hasWorkspaceOverlay)
         range = Self.range(preferences.range, problems: problems)
         estimate = currentPlan().map(ExportEstimate.init(plan:))
@@ -114,7 +123,50 @@ public final class ExportSheetModel: ObservableObject {
 
     /// The choices to remember for the next export.
     public var preferences: ExportPreferences {
-        ExportPreferences(range: range, overlay: overlay, settings: settings)
+        ExportPreferences(range: range, overlay: overlay, settings: settings, widgetSwitches: widgetSwitches)
+    }
+
+    // MARK: - The overlay's widgets
+
+    /// The chosen overlay's widgets, in layout order, each with its switch:
+    /// on when this export draws it — never for a widget the session can't
+    /// feed.
+    public var widgetItems: [ExportWidgetItem] {
+        let switches = widgetSwitches[overlay] ?? [:]
+        return chosenLayout(locale: locale).widgets.map { widget in
+            let availability = availability(of: widget)
+            return ExportWidgetItem(id: widget.id, kind: widget.kind,
+                                    isOn: availability.isDrawable && (switches[widget.id] ?? widget.isVisible),
+                                    availability: availability)
+        }
+    }
+
+    /// Switch the chosen overlay's widget `id` on or off for export. A widget
+    /// the session can't feed can't be switched on; switching a widget back
+    /// to the overlay's own state forgets the switch.
+    public func setWidget(_ id: OverlayWidget.ID, isOn: Bool) {
+        guard let widget = chosenLayout(locale: locale).widgets.first(where: { $0.id == id }),
+              !isOn || availability(of: widget).isDrawable else { return }
+        var switches = widgetSwitches[overlay] ?? [:]
+        switches[id] = isOn == widget.isVisible ? nil : isOn
+        widgetSwitches[overlay] = switches.isEmpty ? nil : switches
+    }
+
+    /// *Show all*: switch on every widget the session can feed.
+    public func showAllWidgets() {
+        for item in widgetItems where item.canSwitchOn { setWidget(item.id, isOn: true) }
+    }
+
+    /// *Hide all*: switch every widget off.
+    public func hideAllWidgets() {
+        for item in widgetItems { setWidget(item.id, isOn: false) }
+    }
+
+    /// The note that no overlay will be drawn — every widget off — or `nil`
+    /// while one is on. The export still runs: the footage, with nothing
+    /// over it.
+    public func noOverlayMessage(locale: Locale = .current) -> String? {
+        widgetItems.contains(where: \.isOn) ? nil : L10n.string(.exportSheetNoOverlay, locale: locale)
     }
 
     // MARK: - The export
@@ -184,14 +236,15 @@ public final class ExportSheetModel: ObservableObject {
         }
     }
 
-    /// The layout the export draws: the workspace's (Kart coaching without
-    /// one) or the chosen preset — always shown, even when the HUD is hidden
-    /// in Video + Data.
-    public func layout(workspace: OverlayLayout?, locale: Locale = .current) -> OverlayLayout {
-        var layout: OverlayLayout
-        switch overlay {
-        case .workspace: layout = workspace ?? OverlayPreset.kartCoaching.layout(locale: locale)
-        case .preset(let preset): layout = preset.layout(locale: locale)
+    /// The layout the export draws: a copy of the workspace's (Kart coaching
+    /// without one) or of the chosen preset, with the widget switches applied
+    /// — always shown, even when the HUD is hidden in Video + Data. A switch
+    /// for a widget the overlay doesn't have is ignored.
+    public func layout(locale: Locale = .current) -> OverlayLayout {
+        var layout = chosenLayout(locale: locale)
+        let switches = widgetSwitches[overlay] ?? [:]
+        for index in layout.widgets.indices {
+            if let isOn = switches[layout.widgets[index].id] { layout.widgets[index].isVisible = isOn }
         }
         layout.isEnabled = true
         return layout
@@ -214,6 +267,20 @@ public final class ExportSheetModel: ObservableObject {
     }
 
     // MARK: - Internals
+
+    /// The chosen overlay as it stands, before the switches.
+    private func chosenLayout(locale: Locale) -> OverlayLayout {
+        switch overlay {
+        case .workspace: return input.workspaceOverlay ?? OverlayPreset.kartCoaching.layout(locale: locale)
+        case .preset(let preset): return preset.layout(locale: locale)
+        }
+    }
+
+    /// Whether the session can feed `widget` — every widget, without a
+    /// session context.
+    private func availability(of widget: OverlayWidget) -> WidgetAvailability {
+        input.overlaySession.map { widget.kind.availability(for: $0) } ?? .available
+    }
 
     /// What the file name says was exported.
     private var subject: String {

@@ -6,22 +6,26 @@ import Foundation
 public extension VideoDataViewModel {
 
     /// The export sheet's input: `footage` (probed from `source`) with the
-    /// review's sync, sync status, laps and section under review, and the
-    /// session's span from its telemetry — or `nil` before the telemetry is in.
+    /// review's sync, sync status, laps and section under review, the
+    /// session's span from its telemetry, and what the session can feed an
+    /// overlay — or `nil` before the telemetry is in.
     ///
     /// - Parameters:
     ///   - session: the decoded session — its laps, for the best lap and the
     ///     lap times, and its track and date, for the file name.
     ///   - selectedLaps: the laps selected in the window.
-    ///   - hasWorkspaceOverlay: whether the workspace has an overlay of its own.
+    ///   - workspaceOverlay: the workspace's own overlay, or `nil` without one.
+    ///   - kart: the garage kart assigned to the session — the kart badge's.
     func exportSheetInput(source: URL, footage: FootageInfo, session: Session, selectedLaps: [LapID],
-                          hasWorkspaceOverlay: Bool) -> ExportSheetInput? {
-        guard let span = telemetry?.timeRange else { return nil }
+                          workspaceOverlay: OverlayLayout?, kart: Kart? = nil) -> ExportSheetInput? {
+        guard let telemetry, let span = telemetry.timeRange else { return nil }
         return ExportSheetInput(source: source, footage: footage, sync: review.sync, status: review.status,
                                 timeline: review.timeline, laps: session.laps,
                                 session: SessionTimeSpan(start: span.lowerBound, end: span.upperBound),
                                 selection: review.selectedSpan, selectedLaps: selectedLaps,
-                                metadata: session.metadata, hasWorkspaceOverlay: hasWorkspaceOverlay)
+                                metadata: session.metadata, workspaceOverlay: workspaceOverlay,
+                                overlaySession: overlayContext(kart: kart, metadata: session.metadata,
+                                                               telemetry: telemetry))
     }
 
     /// The overlay an export of `layout` burns in: the shared renderer drawing
