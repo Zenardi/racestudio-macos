@@ -91,7 +91,8 @@ struct OverlayWidgetContext: Sendable {
         L10n.string(key, locale: formatter.locale)
     }
 
-    /// Fill the widget's plate, if it has one: a rounded rect over the whole rect.
+    /// Fill the widget's plate, if it has one: a rounded rect over `area` —
+    /// the whole rect unless the widget draws a smaller plate.
     ///
     /// The plate is the first thing in a static layer, drawn over nothing, so
     /// it is *copied* rather than blended — the same pixels. Blending a wide
@@ -99,12 +100,13 @@ struct OverlayWidgetContext: Sendable {
     /// translucent fills on other threads: its last few columns took the other
     /// fill's colour. Copying takes another path, and keeps renders on several
     /// threads at once byte-identical (`OverlayRendererTests`).
-    func drawPlate(in graphics: CGContext) {
+    func drawPlate(in graphics: CGContext, over area: CGRect? = nil) {
         guard let plate = palette.plate else { return }
-        let radius = min(min(rect.width, rect.height) * 0.14, 14 * scale)
+        let area = area ?? rect
+        let radius = min(min(area.width, area.height) * 0.14, 14 * scale)
         graphics.saveGState()
         graphics.setBlendMode(.copy)
-        graphics.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        graphics.addPath(CGPath(roundedRect: area, cornerWidth: radius, cornerHeight: radius, transform: nil))
         graphics.setFillColor(plate)
         graphics.fillPath()
         graphics.restoreGState()
@@ -133,6 +135,10 @@ struct OverlayPalette: @unchecked Sendable {
     let loss: CGColor
     /// The shift light.
     let warning: CGColor
+    /// A sector at or under the best so far.
+    let sectorBest: CGColor
+    /// A sector over the best so far.
+    let sectorSlower: CGColor
     /// The dark outline round text and marks — the plate's colour, opaque.
     let outline: CGColor
     /// Unlit bars, guides and rings.
@@ -149,6 +155,8 @@ struct OverlayPalette: @unchecked Sendable {
         gain = Self.color(theme.gain)
         loss = Self.color(theme.loss)
         warning = Self.color(theme.warning)
+        sectorBest = Self.color(theme.sectorBest)
+        sectorSlower = Self.color(theme.sectorSlower)
         outline = Self.color(theme.plate.withAlpha(1))
         guide = Self.color(theme.secondaryText.withAlpha(0.35))
         plate = theme.plateFill(style).map(Self.color)

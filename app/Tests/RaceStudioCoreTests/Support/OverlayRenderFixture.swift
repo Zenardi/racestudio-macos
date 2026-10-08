@@ -124,9 +124,11 @@ enum OverlayRenderFixture {
         return LapSpan(lap: LapID(index), span: SessionTimeSpan(start: start, end: cursor), sectors: sectors)
     }
 
+    /// Lap 5's reading: lap 4's sectors are the bests so far.
     private static func reading(elapsed: Double, sector: Int) -> LapClockReading {
         LapClockReading(lap: LapID(4), number: 5, elapsed: elapsed, last: lastLap, best: bestLap, bestSoFar: bestLap,
-                        isOutLap: false, isInLap: false, sector: sectors.laps[1].sectors[sector])
+                        isOutLap: false, isInLap: false, sector: sectors.laps[1].sectors[sector],
+                        sectorBestsSoFar: [0: 15.8, 1: 16.1, 2: 16.012])
     }
 
     /// One second of G samples at 10 Hz swinging round the ball, oldest first.

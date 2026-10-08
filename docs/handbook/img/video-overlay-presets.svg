@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 510" role="img" aria-label="The three built-in video overlay presets drawn in a 16:9 frame: Minimal (speed, lap timer, delta bar), Kart coaching (kart badge, delta bar, the running lap timer over lap info, G-ball, the speed and RPM dials side by side, track map) and Full telemetry (kart coaching plus session info, sector times, temperatures and pedals), each inside the 3% safe area, with the anchor each widget keeps its margin to.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 510" role="img" aria-label="The three built-in video overlay presets drawn in a 16:9 frame: Minimal (speed, lap timer, delta bar), Kart coaching (kart badge with the sector splits under it, delta bar, the running lap timer over lap info, G-ball, the speed and RPM dials side by side, track map) and Full telemetry (kart coaching plus session info between the badge and the sector splits, temperatures and pedals), each inside the 3% safe area, with the anchor each widget keeps its margin to.">
   <style>
     .frame{fill:#1b2330;stroke:#3b6bd6;stroke-width:1.5}
     .safe{fill:none;stroke:#8fa3c4;stroke-width:1;stroke-dasharray:4 3}
@@ -27,6 +27,9 @@
   <rect class="w" x="398.6" y="49.9" width="84.5" height="11.9" rx="2"/>
   <text class="t" x="401.6" y="58.8">Kart badge</text>
   <circle class="a" cx="398.6" cy="49.9" r="2.6"/>
+  <rect class="w" x="398.6" y="63.8" width="84.5" height="59.4" rx="2"/>
+  <text class="t" x="401.6" y="73.8">Sector splits</text>
+  <circle class="a" cx="398.6" cy="63.8" r="2.6"/>
   <rect class="w" x="511.2" y="49.9" width="105.6" height="13.9" rx="2"/>
   <text class="t" x="514.2" y="59.9">Delta bar</text>
   <circle class="a" cx="564.0" cy="49.9" r="2.6"/>
@@ -78,12 +81,12 @@
   <rect class="w" x="30.6" y="309.8" width="84.5" height="9.9" rx="2"/>
   <text class="t" x="33.6" y="316.7">Session info</text>
   <circle class="a" cx="30.6" cy="309.8" r="2.6"/>
-  <rect class="w" x="298.1" y="343.5" width="63.4" height="31.7" rx="2"/>
-  <text class="t" x="301.1" y="353.5">Sectors</text>
+  <rect class="w" x="30.6" y="321.7" width="84.5" height="59.4" rx="2"/>
+  <text class="t" x="33.6" y="331.7">Sector splits</text>
+  <circle class="a" cx="30.6" cy="321.7" r="2.6"/>
+  <rect class="w" x="319.2" y="343.5" width="42.2" height="19.8" rx="2"/>
+  <text class="t" x="322.2" y="353.5">Temps</text>
   <circle class="a" cx="361.4" cy="343.5" r="2.6"/>
-  <rect class="w" x="319.2" y="379.1" width="42.2" height="19.8" rx="2"/>
-  <text class="t" x="322.2" y="389.1">Temps</text>
-  <circle class="a" cx="361.4" cy="379.1" r="2.6"/>
   <rect class="w" x="86.9" y="452.4" width="21.1" height="29.7" rx="2"/>
   <text class="t" x="89.9" y="462.4">Ped.</text>
   <circle class="a" cx="86.9" cy="482.1" r="2.6"/>

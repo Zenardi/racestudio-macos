@@ -232,8 +232,8 @@ Three presets are built in:
 | Preset | Widgets |
 |---|---|
 | **Minimal** | speed, lap timer, delta bar |
-| **Kart coaching** | speed and RPM as needle dials side by side, delta bar, the running lap timer over lap info (lap n · last · best), G-ball, mini track map, kart badge |
-| **Full telemetry** | everything in Kart coaching, plus session info, sector times, temperatures and pedals |
+| **Kart coaching** | speed and RPM as needle dials side by side, delta bar, the running lap timer over lap info (lap n · last · best), G-ball, mini track map, kart badge, F1-style sector splits |
+| **Full telemetry** | everything in Kart coaching, plus session info, temperatures and pedals |
 
 - **Any frame shape.** Layouts are drawn in a 16:9 frame. For a 4:3, square
   (1:1) or vertical (9:16) video, each widget keeps its distance to its
@@ -283,6 +283,30 @@ Three presets are built in:
     percentage of travel. For a brake logged in bar, or a throttle in mm, set
     the pedals' **Brake full scale** or **Throttle full scale** in the overlay
     editor — for example the pressure at full braking.
+  - The sector splits work like an F1 broadcast's. They sit in the top-left
+    corner, under the kart badge (under session info in *Full telemetry*),
+    one row per sector in track order.
+    - **A finished sector** shows its time and its gap to the best time in
+      that sector so far, for example *24.312 −0.105*.
+      - **Purple:** at or under the best so far. The gap is negative, or
+        *0.000* for an equal time.
+      - **Yellow:** slower. The gap is positive, for example *+0.400*.
+    - **The sector you are in** counts up in the accent colour. Sectors
+      still to come show a dash. Everything starts again on the first
+      frame past the line, with the lap timer.
+    - **"Best so far"** only counts laps finished before that moment, so the
+      video never shows a best that hasn't happened yet. The out-lap and the
+      in-lap are shown but never set or beat a best.
+    - **Nothing to compare with yet:** a finished sector on the first flying
+      lap, the out-lap or the in-lap shows its time alone, in white, with no
+      gap. The colour is never the only signal: the gap's sign says the same.
+    - **Up to eight sectors** fit. A lap cut finer shows its first eight.
+    - **Adding splits.** The sectors are the splits of the **Split Times**
+      report. Set **Splits** there to the number of sectors you want (three
+      for S1, S2 and S3), and rename a split in the list under the table to
+      change its name on the video. A session without splits has no sector
+      splits: the widget is left out, saying *No sectors in this session*.
+      A lap the splits can't divide shows a single dash.
   - The G-ball shows lateral G across and acceleration upwards (braking
     downwards), with rings at 0.5 g and 1 g and a one-second trail.
     - **The scale.** Each ring is marked with its value, for example *0.5*,
@@ -320,7 +344,7 @@ Three presets are built in:
   in the [parity matrix](../PARITY_MATRIX.md).
 - Video + Data uses the split layout from the **Splits** report, so changing
   the split count there re-cuts the review grid, the map's sector marks and the
-  HUD's sector times too.
+  HUD's sector splits too.
 
 ## Next
 

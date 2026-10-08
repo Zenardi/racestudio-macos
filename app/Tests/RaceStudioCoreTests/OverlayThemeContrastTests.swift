@@ -31,6 +31,18 @@ import Foundation
         #expect(theme.warning.contrastRatio(against: theme.accent) > 2)
     }
 
+    /// The sector splits (issue 9.17) use F1's colours: purple for the best so
+    /// far, yellow for slower — two hues apart from each other and from the
+    /// delta's gain green and loss red.
+    @Test func test_sector_colours_are_purple_and_yellow() {
+        let best = theme.sectorBest, slower = theme.sectorSlower
+
+        #expect(best.blue > best.red && best.red > best.green, "purple: \(best)")
+        #expect(slower.red > 0.9 && slower.green > 0.75 && slower.blue < 0.2, "yellow: \(slower)")
+        #expect(theme.color(.sectorBest) == best && theme.color(.sectorSlower) == slower)
+        #expect(Set([best, slower, theme.gain, theme.loss, theme.accent]).count == 5)
+    }
+
     /// A solid plate is opaque, a translucent one lets the footage through, and
     /// no plate has no fill.
     @Test func test_plate_fills() {

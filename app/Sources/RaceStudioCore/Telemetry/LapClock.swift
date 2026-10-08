@@ -38,9 +38,15 @@ public struct LapClockReading: Equatable, Sendable {
     public let isInLap: Bool
     /// The sector under the instant, when the split timeline divided this lap.
     public let sector: SectorSpan?
+    /// Each sector's fastest time (seconds) over the laps completed *before*
+    /// this one, by ``Split/id`` (issue 9.17) — what the sector splits compare
+    /// with. Only flying laps count: not the out-lap, not the in-lap, and not
+    /// a sector with no time. Empty until such a lap has been completed.
+    public let sectorBestsSoFar: [Int: Double]
 
     public init(lap: LapID, number: Int, elapsed: Double, last: LapTiming?, best: LapTiming?,
-                bestSoFar: LapTiming?, isOutLap: Bool, isInLap: Bool, sector: SectorSpan?) {
+                bestSoFar: LapTiming?, isOutLap: Bool, isInLap: Bool, sector: SectorSpan?,
+                sectorBestsSoFar: [Int: Double] = [:]) {
         self.lap = lap
         self.number = number
         self.elapsed = elapsed
@@ -50,11 +56,13 @@ public struct LapClockReading: Equatable, Sendable {
         self.isOutLap = isOutLap
         self.isInLap = isInLap
         self.sector = sector
+        self.sectorBestsSoFar = sectorBestsSoFar
     }
 }
 
-/// Lap number, running time, last/best lap, out/in-lap flags and sector at any
-/// session time (issue 9.9) — the lap timer and lap-info widgets' data.
+/// Lap number, running time, last/best lap, out/in-lap flags, sector and the
+/// sector bests so far at any session time (issues 9.9, 9.17) — the lap timer,
+/// lap-info and sector widgets' data.
 ///
 /// Built once from the session's laps and the split timeline; a read is a
 /// binary search over the lap windows, or O(1) with a carried hint. Lap windows
@@ -81,6 +89,7 @@ public struct LapClock: Equatable, Sendable {
         let isOutLap: Bool
         let isInLap: Bool
         let sectors: LapSpan?
+        let sectorBestsSoFar: [Int: Double]
     }
 
     private let entries: [Entry]
@@ -94,13 +103,18 @@ public struct LapClock: Equatable, Sendable {
         var entries: [Entry] = []
         var lastValid: Lap?
         var bestSoFar: Lap?
+        var sectorBests: [Int: Double] = [:]
         for (position, lap) in laps.enumerated() {
+            let id = LapID(Int(lap.index))
+            let isOutLap = position == 0, isInLap = laps.count > 1 && position == laps.count - 1
             if let window = LapSectorTimeline.window(of: lap), window.end > window.start {
-                let id = LapID(Int(lap.index))
                 entries.append(Entry(lap: id, number: Int(lap.index) + 1, window: window,
                                      last: Self.timing(lastValid), bestSoFar: Self.timing(bestSoFar),
-                                     isOutLap: position == 0, isInLap: laps.count > 1 && position == laps.count - 1,
-                                     sectors: sectors.lapSpan(id)))
+                                     isOutLap: isOutLap, isInLap: isInLap, sectors: sectors.lapSpan(id),
+                                     sectorBestsSoFar: sectorBests))
+            }
+            if lap.hasValidDuration, !isOutLap, !isInLap, let span = sectors.lapSpan(id) {
+                Self.record(span.sectors, into: &sectorBests)
             }
             if lap.hasValidDuration { lastValid = lap }
             // The shared rule over (best so far, this lap) — the earlier wins a
@@ -127,7 +141,8 @@ public struct LapClock: Equatable, Sendable {
             lap: entry.lap, number: entry.number, elapsed: t - entry.window.start,
             last: entry.last, best: best, bestSoFar: entry.bestSoFar,
             isOutLap: entry.isOutLap, isInLap: entry.isInLap,
-            sector: entry.sectors.flatMap { LapSectorTimeline.sector(in: $0, at: t) })
+            sector: entry.sectors.flatMap { LapSectorTimeline.sector(in: $0, at: t) },
+            sectorBestsSoFar: entry.sectorBestsSoFar)
     }
 
     // MARK: - Internals
@@ -177,7 +192,15 @@ public struct LapClock: Equatable, Sendable {
             return Entry(lap: entry.lap, number: entry.number,
                          window: SessionTimeSpan(start: entry.window.start, end: end), last: entry.last,
                          bestSoFar: entry.bestSoFar, isOutLap: entry.isOutLap, isInLap: entry.isInLap,
-                         sectors: entry.sectors)
+                         sectors: entry.sectors, sectorBestsSoFar: entry.sectorBestsSoFar)
+        }
+    }
+
+    /// Keep in `bests` each of `sectors`' times that beats its split's best; a
+    /// sector with no time (a split with no cells) never counts.
+    private static func record(_ sectors: [SectorSpan], into bests: inout [Int: Double]) {
+        for sector in sectors where sector.duration > 0 && sector.duration.isFinite {
+            bests[sector.splitID] = Swift.min(bests[sector.splitID] ?? .infinity, sector.duration)
         }
     }
 

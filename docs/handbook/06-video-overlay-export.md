@@ -1,9 +1,9 @@
 # Video sync and overlay export
 
 Turn a session and its onboard video into one MP4 with the telemetry burned
-in — speed, RPM, lap timer, delta, G-ball, track map — ready to share with a
-coach or a team. You sync the video to the session once, arrange the overlay,
-and export a lap, several laps or the whole session.
+in — speed, RPM, lap timer, delta, sector splits, G-ball, track map — ready
+to share with a coach or a team. You sync the video to the session once,
+arrange the overlay, and export a lap, several laps or the whole session.
 
 ![Export Video with Overlay: sync in Video + Data, choose what to export in the sheet while the estimate updates, then save and watch the progress, and reveal the finished file.](img/video-overlay-export.svg)
 

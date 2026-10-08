@@ -31,12 +31,33 @@ import Foundation
     }
 
     /// Kart coaching: speed, RPM bar, delta bar, the running lap time, lap info,
-    /// G-ball, mini map and the kart badge.
+    /// G-ball, mini map, the kart badge and the sector splits.
     @Test func test_kart_coaching_holds_the_coaching_widgets() {
-        #expect(kinds(.kartCoaching) == [.kartBadge, .delta, .lapTimer, .lapInfo, .gForce, .speed, .rpm, .trackMap])
+        #expect(kinds(.kartCoaching) == [.kartBadge, .delta, .lapTimer, .lapInfo, .gForce, .speed, .rpm, .trackMap,
+                                         .sectorTimes])
         #expect(anchors(.kartCoaching) == ["kartBadge": .topLeading, "delta": .top, "lapTimer": .topTrailing,
                                            "lapInfo": .topTrailing, "gForce": .bottomLeading,
-                                           "speed": .bottom, "rpm": .bottom, "trackMap": .bottomTrailing])
+                                           "speed": .bottom, "rpm": .bottom, "trackMap": .bottomTrailing,
+                                           "sectorTimes": .topLeading])
+    }
+
+    /// Kart coaching and Full telemetry (issue 9.17): the sector splits sit in
+    /// the top-left corner, in one column with the kart badge, right under it —
+    /// or under session info, in Full telemetry — and the same size in both.
+    @Test(arguments: [(OverlayPreset.kartCoaching, OverlayWidgetKind.kartBadge), (.fullTelemetry, .sessionInfo)])
+    func test_the_sector_splits_sit_top_left(preset: OverlayPreset, above: OverlayWidgetKind) throws {
+        let widgets = preset.layout(locale: en).widgets
+        let splits = try #require(widgets.first { $0.kind == .sectorTimes })
+        let over = try #require(widgets.first { $0.kind == above })
+        let reference = try #require(OverlayPreset.kartCoaching.layout(locale: en).widgets
+            .first { $0.kind == .sectorTimes })
+
+        #expect(splits.anchor == .topLeading)
+        #expect(abs(splits.frame.x - over.frame.x) < 1e-9 && abs(splits.frame.width - over.frame.width) < 1e-9,
+                "one column with the \(above)")
+        #expect(over.frame.y + over.frame.height <= splits.frame.y, "under the \(above)")
+        #expect(splits.frame.y - (over.frame.y + over.frame.height) <= 0.02, "right under it")
+        #expect(splits.frame.width == reference.frame.width && splits.frame.height == reference.frame.height)
     }
 
     /// Kart coaching and Full telemetry (issue 9.15): speed and RPM are needle
@@ -85,12 +106,14 @@ import Foundation
         #expect(timer.frame.height > info.frame.height / 3, "larger than a lap-info row")
     }
 
-    /// Full telemetry: kart coaching plus pedals, temperatures, sector times and
-    /// session info.
+    /// Full telemetry: kart coaching plus pedals, temperatures and session info,
+    /// with the sector splits under session info.
     @Test func test_full_telemetry_adds_the_detail_widgets() {
-        #expect(kinds(.fullTelemetry) == kinds(.kartCoaching) + [.sessionInfo, .sectorTimes, .temperature, .pedals])
+        #expect(kinds(.fullTelemetry) == [.kartBadge, .delta, .lapTimer, .lapInfo, .gForce, .speed, .rpm, .trackMap,
+                                          .sessionInfo, .sectorTimes, .temperature, .pedals])
+        #expect(Set(kinds(.kartCoaching)).isSubset(of: Set(kinds(.fullTelemetry))))
         #expect(anchors(.fullTelemetry)["sessionInfo"] == .topLeading)
-        #expect(anchors(.fullTelemetry)["sectorTimes"] == .topTrailing)
+        #expect(anchors(.fullTelemetry)["sectorTimes"] == .topLeading)
         #expect(anchors(.fullTelemetry)["temperature"] == .topTrailing)
         #expect(anchors(.fullTelemetry)["pedals"] == .bottomLeading)
     }
