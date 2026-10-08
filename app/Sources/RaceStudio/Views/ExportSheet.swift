@@ -150,8 +150,8 @@ struct ExportSheet: View {
             HStack {
                 Text(L10n.string(.exportSheetWidgets))
                 Spacer()
-                Button(L10n.string(.exportControlShowAll), action: model.showAllWidgets)
-                Button(L10n.string(.exportControlHideAll), action: model.hideAllWidgets)
+                Button(L10n.string(.exportControlShowAll)) { model.showAllWidgets() }
+                Button(L10n.string(.exportControlHideAll)) { model.hideAllWidgets() }
             }
         }
     }

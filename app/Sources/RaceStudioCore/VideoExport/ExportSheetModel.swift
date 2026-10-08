@@ -145,21 +145,17 @@ public final class ExportSheetModel: ObservableObject {
     /// the session can't feed can't be switched on; switching a widget back
     /// to the overlay's own state forgets the switch.
     public func setWidget(_ id: OverlayWidget.ID, isOn: Bool) {
-        guard let widget = chosenLayout(locale: locale).widgets.first(where: { $0.id == id }),
-              !isOn || availability(of: widget).isDrawable else { return }
-        var switches = widgetSwitches[overlay] ?? [:]
-        switches[id] = isOn == widget.isVisible ? nil : isOn
-        widgetSwitches[overlay] = switches.isEmpty ? nil : switches
+        switchWidgets { $0.id == id ? isOn : nil }
     }
 
     /// *Show all*: switch on every widget the session can feed.
     public func showAllWidgets() {
-        for item in widgetItems where item.canSwitchOn { setWidget(item.id, isOn: true) }
+        switchWidgets { _ in true }
     }
 
     /// *Hide all*: switch every widget off.
     public func hideAllWidgets() {
-        for item in widgetItems { setWidget(item.id, isOn: false) }
+        switchWidgets { _ in false }
     }
 
     /// The note that no overlay will be drawn — every widget off — or `nil`
@@ -274,6 +270,21 @@ public final class ExportSheetModel: ObservableObject {
         case .workspace: return input.workspaceOverlay ?? OverlayPreset.kartCoaching.layout(locale: locale)
         case .preset(let preset): return preset.layout(locale: locale)
         }
+    }
+
+    /// Switch each widget of the chosen overlay to `state(widget)` (`nil`
+    /// leaves it as it is) in one change, so the sheet redraws once. A widget
+    /// the session can't feed is never switched on, and a switch back to the
+    /// overlay's own state is forgotten.
+    private func switchWidgets(_ state: (OverlayWidget) -> Bool?) {
+        let current = widgetSwitches[overlay] ?? [:]
+        var switches = current
+        for widget in chosenLayout(locale: locale).widgets {
+            guard let isOn = state(widget), !isOn || availability(of: widget).isDrawable else { continue }
+            switches[widget.id] = isOn == widget.isVisible ? nil : isOn
+        }
+        guard switches != current else { return }
+        widgetSwitches[overlay] = switches.isEmpty ? nil : switches
     }
 
     /// Whether the session can feed `widget` — every widget, without a

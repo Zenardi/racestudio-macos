@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Testing
 @testable import RaceStudioCore
@@ -121,6 +122,20 @@ import Testing
         #expect(model.widgetItems.filter(\.canSwitchOn).allSatisfy { $0.isOn })
         #expect(try item("pedals", in: model).isOn == false)
         #expect(try item("kartBadge", in: model).isOn == false, "no kart: the badge can't be fed")
+    }
+
+    /// *Show all* and *Hide all* change every switch in one go: the sheet
+    /// redraws once, not once per widget.
+    @Test func test_show_all_and_hide_all_change_the_switches_at_once() {
+        let model = model()
+        var changes = 0
+        let watch = model.objectWillChange.sink { changes += 1 }
+
+        model.hideAllWidgets()
+        model.showAllWidgets()
+
+        #expect(changes == 2)
+        watch.cancel()
     }
 
     /// With every widget off the sheet says no overlay will be drawn, and the
