@@ -10,9 +10,9 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
     /// Speed, the lap timer and the delta — the least on screen.
     case minimal
     /// The speed and RPM dials side by side, delta bar, the running lap time
-    /// over lap info, G-ball, mini map and the kart badge.
+    /// over lap info, G-ball, mini map, the kart badge and the sector splits.
     case kartCoaching
-    /// Kart coaching plus session info, sector times, temperatures and pedals.
+    /// Kart coaching plus session info, temperatures and pedals.
     case fullTelemetry
 
     /// The preset's name in `locale`, as the preset menu shows it.
@@ -41,8 +41,9 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
     private var widgets: [OverlayWidget] {
         switch self {
         case .minimal: return [Self.speed, Self.lapTimerAlone, Self.delta]
-        case .kartCoaching: return Self.coaching
-        case .fullTelemetry: return Self.coaching + [Self.sessionInfo, Self.sectorTimes, Self.temperature, Self.pedals]
+        case .kartCoaching: return Self.coaching + [Self.sectorSplits]
+        case .fullTelemetry:
+            return Self.coaching + [Self.sessionInfo, Self.sectorSplitsUnderInfo, Self.temperature, Self.pedals]
         }
     }
 
@@ -56,10 +57,14 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
     private static let lapTimer = widget(.lapTimer, .topTrailing, box(0.75, 0.03, 0.22, 0.09))
     private static let lapInfo = widget(.lapInfo, .topTrailing, box(0.75, 0.13, 0.22, 0.12))
     private static let lapTimerAlone = widget(.lapTimer, .topTrailing, box(0.79, 0.03, 0.18, 0.09))
-    // Under them: session details on the left, sectors and temperatures on the right.
+    // Down the left, in the kart badge's column: session details, then the F1-
+    // style sector splits (issue 9.17) — right under the badge in Kart
+    // coaching. Their box holds eight sectors; the plate fits the session's.
+    // The temperatures sit under lap info on the right.
     private static let sessionInfo = widget(.sessionInfo, .topLeading, box(0.03, 0.10, 0.24, 0.05))
-    private static let sectorTimes = widget(.sectorTimes, .topTrailing, box(0.79, 0.27, 0.18, 0.16))
-    private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.45, 0.12, 0.10))
+    private static let sectorSplits = widget(.sectorTimes, .topLeading, box(0.03, 0.10, 0.24, 0.30))
+    private static let sectorSplitsUnderInfo = widget(.sectorTimes, .topLeading, box(0.03, 0.16, 0.24, 0.30))
+    private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.27, 0.12, 0.10))
     // Bottom row: the G-ball and the pedals on the left, the speed and RPM dials
     // side by side in the centre like a car's instrument cluster (issue 9.15) —
     // each square at 16:9, so round — and the map on the right. The G-ball is

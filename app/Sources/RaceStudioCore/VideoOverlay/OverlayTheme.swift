@@ -13,13 +13,15 @@ public enum OverlayPlateStyle: String, Codable, CaseIterable, Sendable {
 }
 
 /// The video overlay's colours (issue 9.10): the plate, the text, the accent the
-/// RPM bar and map dot are drawn in, the delta's gain green and loss red, and the
-/// shift light's warning — shared by the live HUD and the export.
+/// RPM bar and map dot are drawn in, the delta's gain green and loss red, the
+/// shift light's warning, and the sector splits' purple and yellow — shared by
+/// the live HUD and the export.
 ///
 /// The colours are the brand's ``Theme`` tokens in their **dark** appearance (a
-/// HUD over footage is always "dark mode"). Only ``warning`` is the overlay's
-/// own: the brand palette has no warning role, and the shift light needs a hue
-/// apart from both the accent-red bar and the gain/loss pair.
+/// HUD over footage is always "dark mode"). Only ``warning``, ``sectorBest`` and
+/// ``sectorSlower`` are the overlay's own: the brand palette has no warning
+/// role, and the shift light needs a hue apart from both the accent-red bar and
+/// the gain/loss pair; the sector colours are F1's (issue 9.17).
 ///
 /// ``raceStudio`` is *proven* by `OverlayThemeContrastTests` to keep every
 /// ``TextRole`` at WCAG AA (≥ 4.5:1) on a solid plate, and on the translucent
@@ -39,6 +41,10 @@ public struct OverlayTheme: Equatable, Sendable {
         case loss
         /// The shift light's call-out.
         case warning
+        /// A sector at or under the best so far.
+        case sectorBest
+        /// A sector over the best so far.
+        case sectorSlower
     }
 
     /// The name the theme persists under.
@@ -60,10 +66,16 @@ public struct OverlayTheme: Equatable, Sendable {
     public let loss: BrandColor
     /// The shift light.
     public let warning: BrandColor
+    /// A sector at or under the best so far: F1's purple, lightened to read on
+    /// the plate.
+    public let sectorBest: BrandColor
+    /// A sector over the best so far: F1's yellow.
+    public let sectorSlower: BrandColor
 
     /// The overlay theme drawn from `brand`'s dark-appearance tokens.
     public init(id: String, brand: Theme, translucentPlateOpacity: Double = 0.88,
-                warning: BrandColor = .rgb(255, 184, 0)) {
+                warning: BrandColor = .rgb(255, 184, 0), sectorBest: BrandColor = .rgb(179, 136, 255),
+                sectorSlower: BrandColor = .rgb(255, 214, 10)) {
         let palette = brand.palette
         self.id = id
         self.plate = palette.background.dark
@@ -74,6 +86,8 @@ public struct OverlayTheme: Equatable, Sendable {
         self.gain = palette.positive.dark
         self.loss = palette.negative.dark
         self.warning = warning
+        self.sectorBest = sectorBest
+        self.sectorSlower = sectorSlower
     }
 
     /// The RaceStudio HUD.
@@ -90,6 +104,8 @@ public struct OverlayTheme: Equatable, Sendable {
         case .gain: return gain
         case .loss: return loss
         case .warning: return warning
+        case .sectorBest: return sectorBest
+        case .sectorSlower: return sectorSlower
         }
     }
 

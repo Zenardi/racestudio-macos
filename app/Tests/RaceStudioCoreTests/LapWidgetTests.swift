@@ -113,7 +113,7 @@ import Testing
         let context = OverlayRenderFixture.context(.sectorTimes)
 
         #expect(SectorTimesWidget().readouts(OverlayRenderFixture.midLap, context: context)
-            == ["S1", "15.532", "S2", "2.900", "S3", "—"])
+            == ["S1", "15.532", "\u{2212}0.268", "S2", "2.900", "S3", "—"])
     }
 
     @Test func test_sector_times_at_the_start_of_a_lap_run_the_first_sector() {
@@ -149,12 +149,12 @@ import Testing
     @Test func test_the_running_sector_is_highlighted() {
         let context = OverlayRenderFixture.context(.sectorTimes, rect: CGRect(x: 0, y: 0, width: 240, height: 150),
                                                    plate: .none)
-        let rows = SectorTimesWidget().layout(in: context).rows(for: 3)
+        let rows = SectorTimesWidget().layout(in: context).rows
 
         let bitmap = OverlayRenderFixture.render(SectorTimesWidget(), OverlayRenderFixture.midLap, context: context)
 
         let accent = OverlayTheme.raceStudio.accent
-        #expect(bitmap.count(in: rows[1]) { $0.resembles(accent) } > 20)
-        #expect(bitmap.count(in: rows[0]) { $0.resembles(accent) } == 0)
+        #expect(bitmap.count(in: rows[1].frame) { $0.resembles(accent) } > 20)
+        #expect(bitmap.count(in: rows[0].frame) { $0.resembles(accent) } == 0)
     }
 }
