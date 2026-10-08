@@ -61,7 +61,7 @@ import Foundation
 
         let result = OverlayPreset.fullTelemetry.layout(locale: en).availability(for: session)
 
-        #expect(result.count == 11)
+        #expect(result.count == 12)
         #expect(result.values.allSatisfy { $0 == .available })
     }
 

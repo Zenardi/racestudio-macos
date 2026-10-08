@@ -228,7 +228,7 @@ Three presets are built in:
 | Preset | Widgets |
 |---|---|
 | **Minimal** | speed, lap timer, delta bar |
-| **Kart coaching** | speed, RPM bar, delta bar, lap info (lap n · last · best), G-ball, mini track map, kart badge |
+| **Kart coaching** | speed, RPM bar, delta bar, the running lap timer over lap info (lap n · last · best), G-ball, mini track map, kart badge |
 | **Full telemetry** | everything in Kart coaching, plus session info, sector times, temperatures and pedals |
 
 - **Any frame shape.** Layouts are drawn in a 16:9 frame. For a 4:3, square
@@ -257,6 +257,10 @@ Three presets are built in:
   - Numbers use the decimal mark of the language chosen for the export:
     *1:02.345* in English, *1:02,345* in Brazilian Portuguese. The labels
     follow it too: *LAST / BEST*, or *ÚLTIMA / MELHOR*.
+  - The lap timer counts up from the lap's beacon and starts again from
+    *0:00.000* on the first frame past the line. From that frame on, lap info's
+    **Last** shows the lap just finished. A clip that starts mid-lap shows that
+    lap's real time from its first frame.
   - The delta bar fills right in red while you lose time and left in green
     while you gain it.
   - The RPM bar's shift light comes on at the widget's shift RPM.
@@ -270,7 +274,11 @@ Three presets are built in:
   workspace saved before overlays existed opens with the overlay off. If part
   of a saved overlay can't be read (say, a widget a newer version added), the
   rest opens and the workspace bar says *Opened with 1 warning*; click it to
-  see what was skipped.
+  see what was skipped. A saved overlay keeps the widgets it was saved with,
+  even when a newer version changes a built-in preset. For example, an overlay
+  saved before the running lap timer joined *Kart coaching* has no lap timer.
+  To pick up a preset's changes, choose it again from the overlay editor's
+  **Preset** menu, or choose the preset in the export sheet.
 - **Your own presets.** Your own layouts are kept in `OverlayPresets.json` in
   RaceStudio's Application Support folder; for the sandboxed app that is
   `~/Library/Containers/com.racestudio.RaceStudio/Data/Library/Application Support/RaceStudio/`.

@@ -9,7 +9,8 @@ import Foundation
 public enum OverlayPreset: String, CaseIterable, Sendable {
     /// Speed, the lap timer and the delta — the least on screen.
     case minimal
-    /// Speed, RPM bar, delta bar, lap info, G-ball, mini map and the kart badge.
+    /// Speed, RPM bar, delta bar, the running lap time over lap info, G-ball,
+    /// mini map and the kart badge.
     case kartCoaching
     /// Kart coaching plus session info, sector times, temperatures and pedals.
     case fullTelemetry
@@ -39,23 +40,26 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
 
     private var widgets: [OverlayWidget] {
         switch self {
-        case .minimal: return [Self.speed, Self.lapTimer, Self.delta]
+        case .minimal: return [Self.speed, Self.lapTimerAlone, Self.delta]
         case .kartCoaching: return Self.coaching
         case .fullTelemetry: return Self.coaching + [Self.sessionInfo, Self.sectorTimes, Self.temperature, Self.pedals]
         }
     }
 
-    private static let coaching = [kartBadge, delta, lapInfo, gForce, speed, rpm, trackMap]
+    private static let coaching = [kartBadge, delta, lapTimer, lapInfo, gForce, speed, rpm, trackMap]
 
-    // Top row: the kart, the delta bar centred, the lap readouts on the right.
+    // Top row: the kart, the delta bar centred, the lap readouts on the right —
+    // the running lap time over lap info, in one column (issue 9.16). Minimal's
+    // lap timer stands alone in the corner.
     private static let kartBadge = widget(.kartBadge, .topLeading, box(0.03, 0.03, 0.24, 0.06), plate: .solid)
     private static let delta = widget(.delta, .top, box(0.35, 0.03, 0.30, 0.07))
-    private static let lapTimer = widget(.lapTimer, .topTrailing, box(0.79, 0.03, 0.18, 0.09))
-    private static let lapInfo = widget(.lapInfo, .topTrailing, box(0.75, 0.03, 0.22, 0.12))
+    private static let lapTimer = widget(.lapTimer, .topTrailing, box(0.75, 0.03, 0.22, 0.09))
+    private static let lapInfo = widget(.lapInfo, .topTrailing, box(0.75, 0.13, 0.22, 0.12))
+    private static let lapTimerAlone = widget(.lapTimer, .topTrailing, box(0.79, 0.03, 0.18, 0.09))
     // Under them: session details on the left, sectors and temperatures on the right.
     private static let sessionInfo = widget(.sessionInfo, .topLeading, box(0.03, 0.10, 0.24, 0.05))
-    private static let sectorTimes = widget(.sectorTimes, .topTrailing, box(0.79, 0.17, 0.18, 0.16))
-    private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.35, 0.12, 0.10))
+    private static let sectorTimes = widget(.sectorTimes, .topTrailing, box(0.79, 0.27, 0.18, 0.16))
+    private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.45, 0.12, 0.10))
     // Bottom row: G-ball over the speed and pedals, the RPM bar centred, the map.
     private static let gForce = widget(.gForce, .bottomLeading, box(0.03, 0.59, 0.12, 0.21))
     private static let speed = widget(.speed, .bottomLeading, box(0.03, 0.82, 0.14, 0.15))
