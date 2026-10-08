@@ -30,13 +30,32 @@ import Foundation
         #expect(anchors(.minimal) == ["speed": .bottomLeading, "lapTimer": .topTrailing, "delta": .top])
     }
 
-    /// Kart coaching: speed, RPM bar, delta bar, lap info, G-ball, mini map and
-    /// the kart badge.
+    /// Kart coaching: speed, RPM bar, delta bar, the running lap time, lap info,
+    /// G-ball, mini map and the kart badge.
     @Test func test_kart_coaching_holds_the_coaching_widgets() {
-        #expect(kinds(.kartCoaching) == [.kartBadge, .delta, .lapInfo, .gForce, .speed, .rpm, .trackMap])
-        #expect(anchors(.kartCoaching) == ["kartBadge": .topLeading, "delta": .top, "lapInfo": .topTrailing,
-                                           "gForce": .bottomLeading, "speed": .bottomLeading, "rpm": .bottom,
-                                           "trackMap": .bottomTrailing])
+        #expect(kinds(.kartCoaching) == [.kartBadge, .delta, .lapTimer, .lapInfo, .gForce, .speed, .rpm, .trackMap])
+        #expect(anchors(.kartCoaching) == ["kartBadge": .topLeading, "delta": .top, "lapTimer": .topTrailing,
+                                           "lapInfo": .topTrailing, "gForce": .bottomLeading,
+                                           "speed": .bottomLeading, "rpm": .bottom, "trackMap": .bottomTrailing])
+    }
+
+    /// Kart coaching and Full telemetry (issue 9.16): the running lap time sits
+    /// at the top of the right corner, larger than a lap-info row, with lap info
+    /// right under it in the same column.
+    @Test(arguments: [OverlayPreset.kartCoaching, .fullTelemetry])
+    func test_the_running_lap_time_tops_the_right_corner_above_lap_info(preset: OverlayPreset) throws {
+        let widgets = preset.layout(locale: en).widgets
+        let timer = try #require(widgets.first { $0.kind == .lapTimer })
+        let info = try #require(widgets.first { $0.kind == .lapInfo })
+        let safe = NormalizedRect.safeArea(margin: OverlayLayout.safeMargin)
+
+        #expect(timer.anchor == .topTrailing)
+        #expect(abs(timer.frame.y - safe.y) < 1e-9, "at the top of the safe area")
+        #expect(abs(timer.frame.x - info.frame.x) < 1e-9 && abs(timer.frame.width - info.frame.width) < 1e-9,
+                "one column with lap info")
+        #expect(timer.frame.y + timer.frame.height <= info.frame.y, "above lap info")
+        #expect(info.frame.y - (timer.frame.y + timer.frame.height) <= 0.02, "right above it")
+        #expect(timer.frame.height > info.frame.height / 3, "larger than a lap-info row")
     }
 
     /// Full telemetry: kart coaching plus pedals, temperatures, sector times and
