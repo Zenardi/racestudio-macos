@@ -93,6 +93,18 @@ import Foundation
         #expect(english.delta(.infinity) == "—")
     }
 
+    // MARK: - Signed values
+
+    /// A signed value (issue 9.18, the G-ball's lateral and longitudinal G)
+    /// always shows its sign, except when it rounds to zero.
+    @Test func test_a_signed_value_always_shows_its_sign() {
+        #expect(english.signed(0.62, decimals: 2) == "+0.62")
+        #expect(english.signed(-0.35, decimals: 2) == "\u{2212}0.35")
+        #expect(english.signed(-0.004, decimals: 2) == "0.00")
+        #expect(brazilian.signed(1.5, decimals: 1) == "+1,5")
+        #expect(english.signed(nil, decimals: 2) == "—")
+    }
+
     // MARK: - Numbers
 
     @Test func test_a_whole_number_rounds_half_away_from_zero() {

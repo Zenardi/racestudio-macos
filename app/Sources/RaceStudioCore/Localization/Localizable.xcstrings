@@ -3187,6 +3187,40 @@
         }
       }
     },
+    "overlay.label.lateral": {
+      "comment": "Video overlay label beside the lateral G under the G-ball (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LAT"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LAT"
+          }
+        }
+      }
+    },
+    "overlay.label.longitudinal": {
+      "comment": "Video overlay label beside the longitudinal (accelerating/braking) G under the G-ball (capitals, short).",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LON"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LONG"
+          }
+        }
+      }
+    },
     "overlay.label.throttle": {
       "comment": "Video overlay label under the throttle bar (one capital letter).",
       "localizations": {
