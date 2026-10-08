@@ -14,9 +14,9 @@ import Foundation
 /// Each row starts with a bar in its colour. Outside a lap, or on a lap the
 /// split timeline does not divide, a single `—`.
 ///
-/// Rows keep one size, an eighth of the widget's height, whatever the count,
-/// so the widget's rect holds ``maximumRows`` of them; the plate covers only
-/// the top rows the session's sectors need.
+/// Rows keep one size whatever the count — the widget's rect holds
+/// ``maximumRows`` of them inside the plate's padding — and the plate covers
+/// only the top rows the session's sectors need.
 struct SectorTimesWidget: OverlayWidgetDrawer {
 
     /// The most rows drawn; a lap cut finer shows its first sectors.
@@ -96,11 +96,7 @@ struct SectorTimesWidget: OverlayWidgetDrawer {
             return
         }
         for (entry, row) in zip(rows, layout.rows) {
-            let bar = row.bar.pixelAligned
-            graphics.addPath(CGPath(roundedRect: bar, cornerWidth: bar.width / 2, cornerHeight: bar.width / 2,
-                                    transform: nil))
-            graphics.setFillColor(entry.bar)
-            graphics.fillPath()
+            Self.fill(row.bar, entry.bar, in: graphics)
             context.draw(entry.name, layout.styles.name, in: row.name, alignment: .leading,
                          color: context.palette.secondary, in: graphics)
             context.draw(entry.time, layout.styles.time, in: row.time, alignment: .trailing, color: entry.color,
@@ -151,6 +147,17 @@ struct SectorTimesWidget: OverlayWidgetDrawer {
                              bar: palette.guide)
             }
         }
+    }
+
+    /// Fill `bar` with round ends — never rounder than it is wide or tall, so a
+    /// row a pixel tall still draws — or nothing when it has no pixels.
+    private static func fill(_ bar: CGRect, _ color: CGColor, in graphics: CGContext) {
+        let bar = bar.pixelAligned
+        guard !bar.isEmpty else { return }
+        let radius = min(bar.width, bar.height) / 2
+        graphics.addPath(CGPath(roundedRect: bar, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        graphics.setFillColor(color)
+        graphics.fillPath()
     }
 
     /// A done sector's colour: purple, yellow, or the readout colour.

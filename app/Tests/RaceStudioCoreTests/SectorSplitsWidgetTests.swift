@@ -165,6 +165,18 @@ import Foundation
         #expect(readouts.filter { $0.hasPrefix("S") } == (1...8).map { "S\($0)" })
     }
 
+    /// A widget at the smallest size, in a small output, still draws: rows a
+    /// pixel or two tall, or none, never a bar rounder than it is tall.
+    @Test(arguments: [5.0, 10, 18, 22, 27])
+    func test_a_tiny_widget_draws(height: Double) {
+        let context = OverlayRenderFixture.context(.sectorTimes, rect: CGRect(x: 0, y: 0, width: 60, height: height),
+                                                   outputHeight: 720)
+
+        let bitmap = OverlayRenderFixture.render(SectorTimesWidget(), lateLap, context: context)
+
+        #expect(bitmap.paintedPixels(outside: [context.rect]) == 0)
+    }
+
     /// Without sectors, the plate holds one row, and the dash.
     @Test func test_without_sectors_the_plate_holds_one_row() {
         let context = OverlayRenderFixture.context(.sectorTimes, rect: presetRect, sectors: .empty)
