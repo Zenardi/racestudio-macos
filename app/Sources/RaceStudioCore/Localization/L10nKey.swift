@@ -199,6 +199,8 @@ extension L10n {
         case overlayLabelGear = "overlay.label.gear"
         case overlayLabelLap = "overlay.label.lap"
         case overlayLabelLast = "overlay.label.last"
+        case overlayLabelLateral = "overlay.label.lateral"
+        case overlayLabelLongitudinal = "overlay.label.longitudinal"
         case overlayLabelThrottle = "overlay.label.throttle"
         case overlayLabelWater = "overlay.label.water"
         case overlayOptionBrakeFullScale = "overlay.option.brakeFullScale"

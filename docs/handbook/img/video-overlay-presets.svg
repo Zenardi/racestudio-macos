@@ -36,8 +36,8 @@
   <rect class="w" x="652.0" y="69.7" width="77.4" height="23.8" rx="2"/>
   <text class="t" x="655.0" y="79.7">Lap info</text>
   <circle class="a" cx="729.4" cy="69.7" r="2.6"/>
-  <rect class="w" x="398.6" y="160.8" width="42.2" height="41.6" rx="2"/>
-  <text class="t" x="401.6" y="170.8">G-ball</text>
+  <rect class="w" x="398.6" y="141.0" width="49.3" height="61.4" rx="2"/>
+  <text class="t" x="401.6" y="151.0">G-ball</text>
   <circle class="a" cx="398.6" cy="202.4" r="2.6"/>
   <rect class="w" x="398.6" y="206.4" width="49.3" height="29.7" rx="2"/>
   <text class="t" x="401.6" y="216.4">Speed</text>
@@ -63,8 +63,8 @@
   <rect class="w" x="284.0" y="315.7" width="77.4" height="23.8" rx="2"/>
   <text class="t" x="287.0" y="325.7">Lap info</text>
   <circle class="a" cx="361.4" cy="315.7" r="2.6"/>
-  <rect class="w" x="30.6" y="406.8" width="42.2" height="41.6" rx="2"/>
-  <text class="t" x="33.6" y="416.8">G-ball</text>
+  <rect class="w" x="30.6" y="387.0" width="49.3" height="61.4" rx="2"/>
+  <text class="t" x="33.6" y="397.0">G-ball</text>
   <circle class="a" cx="30.6" cy="448.4" r="2.6"/>
   <rect class="w" x="30.6" y="452.4" width="49.3" height="29.7" rx="2"/>
   <text class="t" x="33.6" y="462.4">Speed</text>

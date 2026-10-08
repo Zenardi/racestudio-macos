@@ -68,6 +68,16 @@ import Foundation
         #expect(anchors(.fullTelemetry)["pedals"] == .bottomLeading)
     }
 
+    /// Kart coaching and Full telemetry (issue 9.18): the G-ball is taller than
+    /// wide in pixels, so its numbers fit under a ball as wide as the widget.
+    @Test(arguments: [OverlayPreset.kartCoaching, .fullTelemetry])
+    func test_the_g_ball_has_room_for_its_numbers(preset: OverlayPreset) throws {
+        let ball = try #require(preset.layout(locale: en).widgets.first { $0.kind == .gForce })
+
+        #expect(ball.frame.height * 9 > ball.frame.width * 16, "taller than wide at 16:9")
+        #expect(ball.anchor == .bottomLeading)
+    }
+
     /// A preset is shown, metric, in the RaceStudio theme.
     @Test(arguments: OverlayPreset.allCases)
     func test_presets_start_shown_metric_and_branded(preset: OverlayPreset) {

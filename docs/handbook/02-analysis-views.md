@@ -270,6 +270,16 @@ Three presets are built in:
     editor — for example the pressure at full braking.
   - The G-ball shows lateral G across and acceleration upwards (braking
     downwards), with rings at 0.5 g and 1 g and a one-second trail.
+    - **The scale.** Each ring is marked with its value, for example *0.5*,
+      *1* and *2 g*. The outer ring is the widget's G range, 2 g unless you
+      change it in the overlay editor. When rings sit too close for their
+      marks, as with a 5 g range, the inner marks are left out.
+    - **The numbers.** Under the ball is the total G, for example *0.71 g*,
+      with its two parts. **LAT** is positive when the dot is right of
+      centre. **LON** is positive when accelerating (dot up) and negative
+      when braking (dot down).
+    - **Past the outer ring.** The dot stops at the ring, but the numbers
+      still show the real G.
 - **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
   workspace saved before overlays existed opens with the overlay off. If part
   of a saved overlay can't be read (say, a widget a newer version added), the

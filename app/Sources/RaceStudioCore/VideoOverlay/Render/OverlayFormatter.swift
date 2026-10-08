@@ -45,7 +45,14 @@ public struct OverlayFormatter: Equatable, Sendable {
     /// signed — `+0.23` losing, `−0.41` gaining — except a delta that rounds to
     /// zero, which is `0.00`.
     public func delta(_ seconds: Double?) -> String {
-        format(seconds, decimals: 2, signsPositive: true)
+        signed(seconds, decimals: 2)
+    }
+
+    /// `value` with `decimals` places and always its sign — `+0.62`, `−0.35` —
+    /// except a value that rounds to zero, which has none (issue 9.18); `—` as
+    /// for ``number(_:decimals:)``.
+    public func signed(_ value: Double?, decimals: Int) -> String {
+        format(value, decimals: decimals, signsPositive: true)
     }
 
     /// `value` with `decimals` places (clamped to `0…`` ``maximumDecimals``),

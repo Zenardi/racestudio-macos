@@ -61,7 +61,8 @@ public enum OverlayPreset: String, CaseIterable, Sendable {
     private static let sectorTimes = widget(.sectorTimes, .topTrailing, box(0.79, 0.27, 0.18, 0.16))
     private static let temperature = widget(.temperature, .topTrailing, box(0.85, 0.45, 0.12, 0.10))
     // Bottom row: G-ball over the speed and pedals, the RPM bar centred, the map.
-    private static let gForce = widget(.gForce, .bottomLeading, box(0.03, 0.59, 0.12, 0.21))
+    // The G-ball is taller than wide: its numbers go under the ball (issue 9.18).
+    private static let gForce = widget(.gForce, .bottomLeading, box(0.03, 0.49, 0.14, 0.31))
     private static let speed = widget(.speed, .bottomLeading, box(0.03, 0.82, 0.14, 0.15))
     private static let pedals = widget(.pedals, .bottomLeading, box(0.19, 0.82, 0.06, 0.15))
     private static let rpm = widget(.rpm, .bottom, box(0.30, 0.89, 0.40, 0.08))
