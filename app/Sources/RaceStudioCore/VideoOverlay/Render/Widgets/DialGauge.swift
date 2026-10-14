@@ -72,6 +72,12 @@ enum Dial {
     /// A dial laid out in `context`'s content: the largest circle that fits,
     /// its major ticks labelled by `label`, and room in its open bottom for
     /// digits as wide as `valueTemplate` over `caption`.
+    ///
+    /// Past a 100 % text size (issue 9.21) every text's slot grows with it, and
+    /// each text then keeps the largest size — never below its 100 % one — at
+    /// which it clears the rest: the scale numbers stay inside the ticks and
+    /// clear of each other; the readout stays under the hub and clear of the
+    /// numbers; the caption clears both; all of them stay in the widget.
     static func layout(in context: OverlayWidgetContext, scale: DialScale, label: (Double) -> String,
                        caption: String, valueTemplate: String) -> DialLayout {
         let content = context.content
@@ -82,21 +88,52 @@ enum Dial {
         if let last = scale.values.last, last + scale.step / 2 <= scale.maximum {
             minors.append((last + scale.step / 2) / scale.maximum)
         }
-        let size = CGSize(width: radius * 0.24, height: radius * 0.13)
+        let grow = max(context.textSize, 1)
+        let base = CGSize(width: radius * 0.24, height: radius * 0.13)
+        let size = CGSize(width: base.width * grow, height: base.height * grow)
         let labels = zip(scale.values, majors).map { value, fraction -> DialLabel in
             let place = point(fraction, 0.68, centre: centre, radius: radius)
             return DialLabel(text: label(value), slot: CGRect(x: place.x - size.width / 2, y: place.y - size.height / 2,
                                                               width: size.width, height: size.height))
         }
-        let value = CGRect(x: centre.x - radius * 0.4, y: centre.y - radius * 0.58, width: radius * 0.8,
-                           height: radius * 0.26)
-        let captionSlot = CGRect(x: centre.x - radius * 0.45, y: centre.y - radius * 0.86, width: radius * 0.9,
+        let valueBase = CGRect(x: centre.x - radius * 0.4, y: centre.y - radius * 0.58, width: radius * 0.8,
+                               height: radius * 0.26)
+        let captionBase = CGRect(x: centre.x - radius * 0.45, y: centre.y - radius * 0.86, width: radius * 0.9,
                                  height: radius * 0.15)
+        let value = scaled(valueBase, by: grow), captionSlot = scaled(captionBase, by: grow)
         let widest = labels.map(\.text).max { $0.count < $1.count } ?? ""
+        var labelStyle = context.style(for: CGRect(origin: .zero, size: base), fitting: widest, room: size)
+        var valueStyle = context.style(for: valueBase, fitting: valueTemplate, room: value.size)
+        var captionStyle = context.style(for: captionBase, fitting: caption, room: captionSlot.size)
+        if grow > 1 {
+            let ticks = radius * 0.86, hub = centre.y - radius * 0.06
+            labelStyle = largest(labelStyle, grownBy: grow) { style in
+                let boxes = labels.map { textBox($0.text, style, in: $0.slot) }
+                return boxes.allSatisfy { content.contains($0) && farthest($0, from: centre) <= ticks }
+                    && zip(boxes, boxes.dropFirst()).allSatisfy { !overlaps($0, $1) }
+            }
+            let labelBoxes = labels.map { textBox($0.text, labelStyle, in: $0.slot) }
+            valueStyle = largest(valueStyle, grownBy: grow) { style in
+                let box = textBox(valueTemplate, style, in: value)
+                return content.contains(box) && box.maxY <= hub && labelBoxes.allSatisfy { !overlaps($0, box) }
+            }
+            let valueBox = textBox(valueTemplate, valueStyle, in: value)
+            captionStyle = largest(captionStyle, grownBy: grow) { style in
+                let box = textBox(caption, style, in: captionSlot)
+                return content.contains(box) && !overlaps(box, valueBox) && labelBoxes.allSatisfy { !overlaps($0, box) }
+            }
+        }
         return DialLayout(centre: centre, radius: radius, majors: majors, minors: minors, labels: labels,
-                          labelStyle: context.style(for: labels.first?.slot ?? .zero, fitting: widest),
-                          value: value, valueStyle: context.style(for: value, fitting: valueTemplate),
-                          caption: captionSlot, captionStyle: context.style(for: captionSlot, fitting: caption))
+                          labelStyle: labelStyle, value: value, valueStyle: valueStyle,
+                          caption: captionSlot, captionStyle: captionStyle)
+    }
+
+    /// The box `text` takes drawn in `style` centred in `slot`: its advance
+    /// by its capitals, with the outline round them.
+    static func textBox(_ text: String, _ style: OverlayTextStyle, in slot: CGRect) -> CGRect {
+        let width = style.width(of: text) + 2 * style.outline
+        let height = style.capHeight + 2 * style.outline
+        return CGRect(x: slot.midX - width / 2, y: slot.midY - height / 2, width: width, height: height)
     }
 
     /// Draw `dial`'s face: the scale's guide arc, a red zone over `redZone`
@@ -158,6 +195,36 @@ enum Dial {
     }
 
     // MARK: - Internals
+
+    /// `style` — grown by `grow` — shrunk 5 % at a time until `fits` holds,
+    /// but never below its size before growing.
+    private static func largest(_ style: OverlayTextStyle, grownBy grow: CGFloat,
+                                where fits: (OverlayTextStyle) -> Bool) -> OverlayTextStyle {
+        let floor = style.capHeight / grow
+        var style = style
+        while !fits(style), style.capHeight > floor {
+            style = OverlayTextStyle(capHeight: max(style.capHeight * 0.95, floor), outline: style.outline)
+        }
+        return style
+    }
+
+    /// `rect` scaled by `factor` about its centre — `rect` itself at `1`.
+    private static func scaled(_ rect: CGRect, by factor: CGFloat) -> CGRect {
+        guard factor != 1 else { return rect }
+        return rect.insetBy(dx: -rect.width * (factor - 1) / 2, dy: -rect.height * (factor - 1) / 2)
+    }
+
+    /// How far `box`'s farthest corner is from `centre`.
+    private static func farthest(_ box: CGRect, from centre: CGPoint) -> CGFloat {
+        hypot(max(abs(box.minX - centre.x), abs(box.maxX - centre.x)),
+              max(abs(box.minY - centre.y), abs(box.maxY - centre.y)))
+    }
+
+    /// Whether two boxes share any area — touching edges do not count.
+    private static func overlaps(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        let shared = lhs.intersection(rhs)
+        return !shared.isNull && shared.width * shared.height > 1e-9
+    }
 
     /// The point `share` of `radius` out from `centre` at `fraction` of the scale.
     private static func point(_ fraction: Double, _ share: CGFloat, centre: CGPoint, radius: CGFloat) -> CGPoint {

@@ -139,6 +139,11 @@ public struct OverlayWidget: Equatable, Hashable, Identifiable, Sendable {
     public var opacity: Double
     public var plate: OverlayPlateStyle
     public var sizeClass: OverlaySizeClass
+    /// How big the widget's numbers and labels are drawn, as a fraction of
+    /// their own size — `1` is 100 % (issue 9.21). It multiplies the
+    /// ``sizeClass``; growing, text fills its place at most, so it never runs
+    /// into the next. Kept within ``textSizes``.
+    public var textSize: Double
     /// This widget's units, or `nil` to follow the layout's.
     public var units: UnitSystem?
     /// Whether it is drawn — a widget toggled off keeps its place.
@@ -146,11 +151,21 @@ public struct OverlayWidget: Equatable, Hashable, Identifiable, Sendable {
     /// Kind-specific settings (shift light, delta range, …).
     public var options: OverlayWidgetOptions
 
+    /// The text sizes a widget can take: 50 % to 200 %.
+    public static let textSizes: ClosedRange<Double> = 0.5...2
+
+    /// `size` held to ``textSizes`` and to whole percent — so steps of 10 %
+    /// save as `1.5`, not `1.5000000000000004`; one that isn't a number is 100 %.
+    public static func textSize(_ size: Double) -> Double {
+        guard !size.isNaN else { return 1 }
+        return (min(max(size, textSizes.lowerBound), textSizes.upperBound) * 100).rounded() / 100
+    }
+
     /// - Parameter id: the widget's id; `nil` takes the kind's ``OverlayWidgetKind/key``.
     public init(id: String? = nil, kind: OverlayWidgetKind, frame: NormalizedRect, anchor: OverlayAnchor = .topLeading,
                 z: Int = 0, opacity: Double = 1, plate: OverlayPlateStyle = .translucent,
-                sizeClass: OverlaySizeClass = .medium, units: UnitSystem? = nil, isVisible: Bool = true,
-                options: OverlayWidgetOptions = OverlayWidgetOptions()) {
+                sizeClass: OverlaySizeClass = .medium, textSize: Double = 1, units: UnitSystem? = nil,
+                isVisible: Bool = true, options: OverlayWidgetOptions = OverlayWidgetOptions()) {
         self.id = id ?? kind.key
         self.kind = kind
         self.frame = frame
@@ -159,6 +174,7 @@ public struct OverlayWidget: Equatable, Hashable, Identifiable, Sendable {
         self.opacity = opacity
         self.plate = plate
         self.sizeClass = sizeClass
+        self.textSize = textSize
         self.units = units
         self.isVisible = isVisible
         self.options = options
@@ -168,7 +184,7 @@ public struct OverlayWidget: Equatable, Hashable, Identifiable, Sendable {
 extension OverlayWidget: Codable {
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, frame, anchor, z, opacity, plate, sizeClass, units, isVisible, options
+        case id, kind, frame, anchor, z, opacity, plate, sizeClass, textSize, units, isVisible, options
     }
 
     /// Only the kind and the rect are required; anything else missing or
@@ -188,6 +204,7 @@ extension OverlayWidget: Codable {
                   opacity: container.lenient(Double.self, forKey: .opacity) ?? 1,
                   plate: container.lenient(OverlayPlateStyle.self, forKey: .plate) ?? .translucent,
                   sizeClass: container.lenient(OverlaySizeClass.self, forKey: .sizeClass) ?? .medium,
+                  textSize: container.lenient(Double.self, forKey: .textSize) ?? 1,
                   units: container.lenient(UnitSystem.self, forKey: .units),
                   isVisible: container.lenient(Bool.self, forKey: .isVisible) ?? true,
                   options: container.lenient(OverlayWidgetOptions.self, forKey: .options) ?? OverlayWidgetOptions())

@@ -222,6 +222,12 @@ becomes the editor:
 - **Widgets**: a toggle for each widget. A widget the session cannot feed shows
   a warning sign; its tooltip says why (for example *No RPM channel*).
 - **Options** for the selected widget:
+  - **Text size**, from 50% to 200% in steps of 10%: the widget's numbers and
+    labels get bigger or smaller while its box stays the same. Text grows only
+    as far as its place in the widget allows, so it never runs into the next
+    text. On the needle speedometer and tachometer, the scale numbers, the
+    readout and the caption all grow; each stops at the size where it would
+    touch the tick marks, the needle's hub or another number.
   - for speed and RPM, **Needle gauge**, which draws the widget as a dial
     instead of digits or a bar;
   - the RPM widget's full scale and shift light, and the speed dial's full

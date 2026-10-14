@@ -78,12 +78,25 @@ struct OverlayWidgetContext: Sendable {
     /// The rect the widget's content is laid out in.
     var content: CGRect { rect.insetBy(dx: padding, dy: padding) }
 
-    /// A text style for `slot`: capitals fill their share of its height (by the
-    /// widget's size class), shrunk so `template` — the widest text the slot
-    /// shows — fits its width.
-    func style(for slot: CGRect, fitting template: String) -> OverlayTextStyle {
-        OverlayTextStyle.fitting(height: slot.height, sizeClass: widget.sizeClass, outline: outline)
-            .shrunk(toFit: template, width: max(slot.width - 2 * outline, 1))
+    /// The widget's text size (issue 9.21), held to ``OverlayWidget/textSizes``.
+    var textSize: CGFloat { CGFloat(OverlayWidget.textSize(widget.textSize)) }
+
+    /// A text style for `slot`: capitals fill their share of its height — by
+    /// the widget's size class and text size — shrunk so `template`, the widest
+    /// text the slot shows, fits its width.
+    ///
+    /// Grown past 100 %, the capitals fill at most `room` — the slot itself
+    /// unless the drawer grows its slots with the text — so text never runs
+    /// into its neighbours; they never shrink below their 100 % size for it.
+    func style(for slot: CGRect, fitting template: String, room: CGSize? = nil) -> OverlayTextStyle {
+        let room = room ?? slot.size
+        var style = OverlayTextStyle.fitting(height: slot.height, sizeClass: widget.sizeClass, outline: outline)
+        if textSize != 1 {
+            let wanted = style.capHeight * textSize
+            let capHeight = textSize < 1 ? wanted : min(wanted, max(style.capHeight, room.height - 2 * outline))
+            style = OverlayTextStyle(capHeight: capHeight, outline: outline)
+        }
+        return style.shrunk(toFit: template, width: max(room.width - 2 * outline, 1))
     }
 
     /// A label in the export language (the formatter's locale).
