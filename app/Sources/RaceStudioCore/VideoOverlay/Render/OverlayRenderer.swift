@@ -51,7 +51,8 @@ public struct OverlayRenderer: Sendable {
 
     /// - Parameters:
     ///   - layout: the overlay to draw.
-    ///   - theme: its colours; `nil` for the layout's own theme.
+    ///   - theme: its colours; `nil` for the layout's own theme. Either way its
+    ///     translucent plates take the layout's background opacity.
     ///   - units: the units its widgets show unless they set their own; `nil`
     ///     for the layout's.
     ///   - formatter: how numbers are written — fixed for an export.
@@ -64,7 +65,7 @@ public struct OverlayRenderer: Sendable {
         var layout = layout
         if let units { layout.units = units }
         self.layout = layout
-        self.theme = theme ?? layout.theme
+        self.theme = (theme ?? layout.theme).withPlateOpacity(OverlayLayout.plateOpacity(layout.plateOpacity))
         self.formatter = formatter
         self.session = session
         self.track = track

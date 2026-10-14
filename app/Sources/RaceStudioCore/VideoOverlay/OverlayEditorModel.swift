@@ -141,6 +141,15 @@ public final class OverlayEditorModel: ObservableObject {
         }
     }
 
+    /// Set the HUD's background opacity (issue 9.24), held to `0…1` in whole
+    /// percent. Inside a gesture — a slider drag — the HUD follows at once and
+    /// the drag is recorded as one step when it ends; otherwise it is one step.
+    public func setPlateOpacity(_ opacity: Double) {
+        let opacity = OverlayLayout.plateOpacity(opacity)
+        guard gestureStart == nil else { return layout.plateOpacity = opacity }
+        commit { $0.plateOpacity = opacity }
+    }
+
     /// Set widget `id`'s text size (issue 9.21), held to
     /// ``OverlayWidget/textSizes``.
     public func setTextSize(_ size: Double, for id: OverlayWidget.ID) {

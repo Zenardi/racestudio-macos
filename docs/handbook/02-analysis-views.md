@@ -227,6 +227,14 @@ becomes the editor:
 
 - **Show HUD**, a **Preset** menu (the three built-in presets and your own),
   and the **Units** (metric or imperial).
+- **Background opacity**, from 0% to 100% (88% to start): how much of every
+  widget's translucent background covers the video. Drag it and the HUD follows
+  as you go, the whole drag one undo step; the arrow keys move it 5% at a time.
+  At 0% there is no background at all. Widgets with a solid background keep it,
+  and widgets without one stay without. Text stays readable at any setting: at
+  88% and above the background gives it WCAG AA contrast (4.5:1 or more) over
+  the brightest or darkest video, and below that the dark outline drawn round
+  every letter and digit does.
 - **Widgets**: a toggle for each widget. A widget the session cannot feed shows
   a warning sign; its tooltip says why (for example *No RPM channel*).
 - **Options** for the selected widget:

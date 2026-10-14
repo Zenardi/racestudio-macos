@@ -3102,6 +3102,23 @@
         }
       }
     },
+    "overlay.editor.plateOpacity": {
+      "comment": "Overlay editor: the HUD's background opacity — how much of every translucent widget plate covers the footage.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background opacity"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opacidade do fundo"
+          }
+        }
+      }
+    },
     "overlay.editor.preset": {
       "comment": "Overlay editor: the preset menu.",
       "localizations": {

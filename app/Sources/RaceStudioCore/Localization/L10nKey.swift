@@ -194,6 +194,7 @@ extension L10n {
         case overlayEditorHint = "overlay.editor.hint"
         case overlayEditorNoSelection = "overlay.editor.noSelection"
         case overlayEditorOptions = "overlay.editor.options"
+        case overlayEditorPlateOpacity = "overlay.editor.plateOpacity"
         case overlayEditorPreset = "overlay.editor.preset"
         case overlayEditorTextSize = "overlay.editor.textSize"
         case overlayEditorUndoAction = "overlay.editor.undoAction"
