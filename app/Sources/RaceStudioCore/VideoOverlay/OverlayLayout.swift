@@ -35,14 +35,30 @@ public struct OverlayLayout: Equatable, Sendable {
     public var theme: OverlayTheme
     /// Whether the overlay is shown — *Show HUD*. Off hides it, layout kept.
     public var isEnabled: Bool
+    /// The HUD's background opacity (issue 9.24): how much of every
+    /// translucent plate covers the footage, `0…1` in whole percent, `0` for
+    /// none. Solid plates stay opaque; widgets without one stay without.
+    public var plateOpacity: Double
+
+    /// The background opacity a HUD starts with — the plate as it always was.
+    public static let defaultPlateOpacity = 0.88
 
     public init(name: String, widgets: [OverlayWidget] = [], units: UnitSystem = .metric,
-                theme: OverlayTheme = .raceStudio, isEnabled: Bool = true) {
+                theme: OverlayTheme = .raceStudio, isEnabled: Bool = true,
+                plateOpacity: Double = OverlayLayout.defaultPlateOpacity) {
         self.name = name
         self.widgets = widgets
         self.units = units
         self.theme = theme
         self.isEnabled = isEnabled
+        self.plateOpacity = plateOpacity
+    }
+
+    /// `opacity` held to `0…1` and whole percent; one that isn't a number is
+    /// ``defaultPlateOpacity``.
+    public static func plateOpacity(_ opacity: Double) -> Double {
+        guard !opacity.isNaN else { return defaultPlateOpacity }
+        return (min(max(opacity, 0), 1) * 100).rounded() / 100
     }
 
     /// The units `widget` shows: its own, else the layout's.
@@ -78,6 +94,8 @@ public struct OverlayLayout: Equatable, Sendable {
     /// - opacity is clamped to `0…1` (NaN reads as opaque), the text size to
     ///   ``OverlayWidget/textSizes`` (NaN reads as 100 %), and the options are
     ///   ``OverlayWidgetOptions/validated()``;
+    /// - the background opacity is held to `0…1` in whole percent (NaN reads as
+    ///   ``defaultPlateOpacity``);
     /// - a blank id takes the kind's key, and a repeated id is renamed
     ///   (`speed` → `speed-2`) — never an id another widget already holds — so
     ///   no widget the operator placed is lost.
@@ -86,6 +104,7 @@ public struct OverlayLayout: Equatable, Sendable {
     public func validated() -> OverlayLayout {
         let safeArea = NormalizedRect.safeArea(margin: Self.safeMargin)
         var copy = self
+        copy.plateOpacity = Self.plateOpacity(plateOpacity)
         copy.widgets = Self.uniquingIDs(widgets.filter(\.frame.isFinite).map { widget in
             var valid = widget
             valid.frame = widget.frame.clamped(to: safeArea, minimumSize: Self.minimumWidgetSize)
@@ -138,7 +157,7 @@ public struct ResolvedOverlayWidget: Equatable, Sendable {
 extension OverlayLayout: Codable {
 
     private enum CodingKeys: String, CodingKey {
-        case schema, name, widgets, units, theme, isEnabled
+        case schema, name, widgets, units, theme, isEnabled, plateOpacity
     }
 
     /// Reads leniently, then validates: a widget this build can't read is
@@ -152,7 +171,8 @@ extension OverlayLayout: Codable {
             widgets: container.lenient(LossyList<OverlayWidget>.self, forKey: .widgets)?.elements ?? [],
             units: container.lenient(UnitSystem.self, forKey: .units) ?? .metric,
             theme: container.lenient(OverlayTheme.self, forKey: .theme) ?? .raceStudio,
-            isEnabled: container.lenient(Bool.self, forKey: .isEnabled) ?? true)
+            isEnabled: container.lenient(Bool.self, forKey: .isEnabled) ?? true,
+            plateOpacity: container.lenient(Double.self, forKey: .plateOpacity) ?? Self.defaultPlateOpacity)
         self = raw.validated()
     }
 
@@ -168,5 +188,6 @@ extension OverlayLayout: Codable {
         try container.encode(valid.units, forKey: .units)
         try container.encode(valid.theme, forKey: .theme)
         try container.encode(valid.isEnabled, forKey: .isEnabled)
+        try container.encode(valid.plateOpacity, forKey: .plateOpacity)
     }
 }

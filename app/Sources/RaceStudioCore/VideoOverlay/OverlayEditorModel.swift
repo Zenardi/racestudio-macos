@@ -40,6 +40,8 @@ public final class OverlayEditorModel: ObservableObject {
     @Published private var redoStack: [OverlayLayout] = []
     /// The layout when the gesture in progress began, or `nil` between gestures.
     var gestureStart: OverlayLayout?
+    /// Whether the background opacity slider is held (issue 9.24).
+    private var adjustingPlate = false
 
     /// - Parameter layout: the workspace's overlay; `nil` (none chosen yet)
     ///   starts on Kart coaching with the HUD off.
@@ -55,6 +57,7 @@ public final class OverlayEditorModel: ObservableObject {
         self.layout = Self.startingLayout(layout)
         selection = nil
         gestureStart = nil
+        adjustingPlate = false
         undoStack.removeAll()
         redoStack.removeAll()
         undoManager?.removeAllActions(withTarget: self)
@@ -66,6 +69,7 @@ public final class OverlayEditorModel: ObservableObject {
     /// window hears it and a save keeps it.
     public func resetHistory() {
         closeOpenGesture()
+        adjustingPlate = false
         undoStack.removeAll()
         redoStack.removeAll()
         undoManager?.removeAllActions(withTarget: self)
@@ -141,6 +145,32 @@ public final class OverlayEditorModel: ObservableObject {
         }
     }
 
+    /// Set the HUD's background opacity (issue 9.24), held to `0…1` in whole
+    /// percent: one step — or, while the slider is held
+    /// (``beginPlateAdjustment()``), at once, the HUD following, the whole drag
+    /// recorded as one step when it ends.
+    public func setPlateOpacity(_ opacity: Double) {
+        let opacity = OverlayLayout.plateOpacity(opacity)
+        guard adjustingPlate else { return commit { $0.plateOpacity = opacity } }
+        // An undo mid-drag closed the drag's step; the rest is a step of its own.
+        if gestureStart == nil { gestureStart = layout }
+        layout.plateOpacity = opacity
+    }
+
+    /// The background opacity slider is grabbed: what it sets until
+    /// ``endPlateAdjustment()`` is one step.
+    public func beginPlateAdjustment() {
+        beginGesture()
+        adjustingPlate = true
+    }
+
+    /// The slider is let go — or went away: its drag is recorded as one step.
+    public func endPlateAdjustment() {
+        guard adjustingPlate else { return }
+        adjustingPlate = false
+        endGesture()
+    }
+
     /// Set widget `id`'s text size (issue 9.21), held to
     /// ``OverlayWidget/textSizes``.
     public func setTextSize(_ size: Double, for id: OverlayWidget.ID) {
@@ -156,7 +186,8 @@ public final class OverlayEditorModel: ObservableObject {
     }
 
     /// Take `preset`'s name and widgets and switch the HUD on — choosing a preset
-    /// is asking to see it. The operator's units and theme are kept.
+    /// is asking to see it. The operator's units, theme and background opacity
+    /// are kept: they are the HUD's, not the preset's.
     public func apply(_ preset: OverlayLayout) {
         commit { layout in
             layout.name = preset.name
@@ -192,7 +223,7 @@ public final class OverlayEditorModel: ObservableObject {
 
     /// Record a drag still in progress as its own step, so what follows lands
     /// after it in the history.
-    private func closeOpenGesture() {
+    func closeOpenGesture() {
         if gestureStart != nil { endGesture() }
     }
 

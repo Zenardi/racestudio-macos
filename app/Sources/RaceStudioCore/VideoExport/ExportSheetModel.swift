@@ -268,7 +268,11 @@ public final class ExportSheetModel: ObservableObject {
     private func chosenLayout(locale: Locale) -> OverlayLayout {
         switch overlay {
         case .workspace: return input.workspaceOverlay ?? OverlayPreset.kartCoaching.layout(locale: locale)
-        case .preset(let preset): return preset.layout(locale: locale)
+        case .preset(let preset):
+            // A preset is drawn with the HUD's background opacity (issue 9.24).
+            var layout = preset.layout(locale: locale)
+            layout.plateOpacity = input.workspaceOverlay?.plateOpacity ?? OverlayLayout.defaultPlateOpacity
+            return layout
         }
     }
 

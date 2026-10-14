@@ -55,6 +55,7 @@ struct OverlayWidgetContext: Sendable {
         self.rect = rect
         self.outputHeight = outputHeight
         self.palette = OverlayPalette(theme: theme, plate: widget.plate)
+        self.plateFade = OverlayPalette.fade(of: widget.plate, in: theme)
         self.formatter = formatter
         self.units = units
         self.session = session
@@ -69,8 +70,13 @@ struct OverlayWidgetContext: Sendable {
     var scale: CGFloat { max(outputHeight, 1) / 1080 }
 
     /// The dark legibility outline round text and marks: one pixel at 1080p,
-    /// never thinner than a pixel.
-    var outline: CGFloat { max(1, scale) }
+    /// never thinner than a pixel — up to twice that as a translucent plate
+    /// fades away (``plateFade``).
+    var outline: CGFloat { max(1, scale) * (1 + plateFade) }
+
+    /// How far the widget's translucent plate has faded below the default
+    /// (issue 9.24): `0` at the default or above, `1` with no plate at all.
+    let plateFade: CGFloat
 
     /// The gap between the plate's edge and the widget's content.
     var padding: CGFloat { (min(rect.width, rect.height) * 0.1).rounded() }
@@ -179,7 +185,7 @@ struct OverlayPalette: @unchecked Sendable {
         sectorBest = Self.color(theme.sectorBest)
         sectorSlower = Self.color(theme.sectorSlower)
         outline = Self.color(theme.plate.withAlpha(1))
-        guide = Self.color(theme.secondaryText.withAlpha(0.35))
+        guide = Self.color(theme.secondaryText.withAlpha(0.35 * (1 + Double(Self.fade(of: style, in: theme)))))
         plate = theme.plateFill(style).map(Self.color)
     }
 
@@ -189,6 +195,16 @@ struct OverlayPalette: @unchecked Sendable {
     }
 
     /// `color` as an sRGB `CGColor`.
+    /// How far a translucent plate has faded below the default (issue 9.24):
+    /// `0` at the default or above — and for a solid plate or none — rising to
+    /// `1` with no plate. What thickens the text's outline and strengthens the
+    /// guides, so the HUD still reads over bright footage.
+    static func fade(of style: OverlayPlateStyle, in theme: OverlayTheme) -> CGFloat {
+        guard style == .translucent else { return 0 }
+        let full = OverlayLayout.defaultPlateOpacity
+        return CGFloat(max(0, full - theme.translucentPlateOpacity) / full)
+    }
+
     static func color(_ color: BrandColor) -> CGColor {
         CGColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
     }

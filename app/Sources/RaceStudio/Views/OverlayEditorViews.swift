@@ -217,6 +217,7 @@ struct OverlayEditorInspector: View {
                 Text(L10n.string(.overlayUnitsMetric)).tag(UnitSystem.metric)
                 Text(L10n.string(.overlayUnitsImperial)).tag(UnitSystem.imperial)
             }
+            PlateOpacitySlider(editor: editor)
             Section(L10n.string(.overlayEditorWidgets)) {
                 ForEach(editor.layout.widgets) { widget in
                     widgetRow(widget)
@@ -311,5 +312,30 @@ private struct BadgeTextField: View {
             .onDisappear { draft.commit() }
             .help(L10n.string(.overlayEditorBadgeTextHint))
             .accessibilityHint(L10n.string(.overlayEditorBadgeTextHint))
+    }
+}
+
+/// The HUD's background opacity (issue 9.24): a drag is one undoable step,
+/// the HUD following as it moves; the arrow keys and VoiceOver step it 5 % at
+/// a time, a step each.
+private struct PlateOpacitySlider: View {
+    @ObservedObject var editor: OverlayEditorModel
+
+    var body: some View {
+        let percent = editor.layout.plateOpacity.formatted(.percent.precision(.fractionLength(0)))
+        HStack {
+            Slider(value: Binding(get: { editor.layout.plateOpacity }, set: { editor.setPlateOpacity($0) }),
+                   in: 0...1, step: 0.05) {
+                Text(L10n.string(.overlayEditorPlateOpacity))
+            } onEditingChanged: { editing in
+                if editing { editor.beginPlateAdjustment() } else { editor.endPlateAdjustment() }
+            }
+            .accessibilityValue(percent)
+            .onDisappear { editor.endPlateAdjustment() }
+            Text(percent)
+                .monospacedDigit()
+                .frame(minWidth: 40, alignment: .trailing)
+                .accessibilityHidden(true)
+        }
     }
 }

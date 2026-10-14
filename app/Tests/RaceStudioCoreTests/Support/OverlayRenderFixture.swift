@@ -83,10 +83,11 @@ enum OverlayRenderFixture {
                         options: OverlayWidgetOptions = OverlayWidgetOptions(),
                         formatter: OverlayFormatter = OverlayFormatter(),
                         session: OverlaySessionContext = session(), track: OverlayTrackMap = track,
-                        sectors: LapSectorTimeline = sectors) -> OverlayWidgetContext {
+                        sectors: LapSectorTimeline = sectors,
+                        theme: OverlayTheme = .raceStudio) -> OverlayWidgetContext {
         let widget = OverlayWidget(kind: kind, frame: .unit, plate: plate, sizeClass: sizeClass, textSize: textSize,
                                    options: options)
-        return OverlayWidgetContext(widget: widget, rect: rect, outputHeight: outputHeight, theme: .raceStudio,
+        return OverlayWidgetContext(widget: widget, rect: rect, outputHeight: outputHeight, theme: theme,
                                     formatter: formatter, units: units, session: session, track: track,
                                     sectors: sectors)
     }

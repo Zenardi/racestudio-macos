@@ -52,8 +52,9 @@ public struct OverlayTheme: Equatable, Sendable {
     /// The plate's colour (opaque).
     public let plate: BrandColor
     /// How much of the plate covers the footage when it is
-    /// ``OverlayPlateStyle/translucent``.
-    public let translucentPlateOpacity: Double
+    /// ``OverlayPlateStyle/translucent`` — the HUD's background opacity
+    /// (``withPlateOpacity(_:)``, issue 9.24); none at `0`.
+    public private(set) var translucentPlateOpacity: Double
     /// Readout text.
     public let text: BrandColor
     /// Labels and units.
@@ -72,7 +73,9 @@ public struct OverlayTheme: Equatable, Sendable {
     /// A sector over the best so far: F1's yellow.
     public let sectorSlower: BrandColor
 
-    /// The overlay theme drawn from `brand`'s dark-appearance tokens.
+    /// The overlay theme drawn from `brand`'s dark-appearance tokens. Its
+    /// `translucentPlateOpacity` is a starting point only: the renderer draws
+    /// with the layout's background opacity (``OverlayLayout/plateOpacity``).
     public init(id: String, brand: Theme, translucentPlateOpacity: Double = 0.88,
                 warning: BrandColor = .rgb(255, 184, 0), sectorBest: BrandColor = .rgb(179, 136, 255),
                 sectorSlower: BrandColor = .rgb(255, 214, 10)) {
@@ -109,11 +112,20 @@ public struct OverlayTheme: Equatable, Sendable {
         }
     }
 
-    /// The plate's fill for `style`, with its opacity as alpha; `nil` for no plate.
+    /// This theme with its translucent plates drawn at `opacity` (issue 9.24):
+    /// the HUD's background opacity, `0` for no plate at all.
+    public func withPlateOpacity(_ opacity: Double) -> OverlayTheme {
+        var theme = self
+        theme.translucentPlateOpacity = OverlayLayout.plateOpacity(opacity)
+        return theme
+    }
+
+    /// The plate's fill for `style`, with its opacity as alpha; `nil` for no
+    /// plate — a translucent one at no opacity included.
     public func plateFill(_ style: OverlayPlateStyle) -> BrandColor? {
         switch style {
         case .none: return nil
-        case .translucent: return plate.withAlpha(translucentPlateOpacity)
+        case .translucent: return translucentPlateOpacity > 0 ? plate.withAlpha(translucentPlateOpacity) : nil
         case .solid: return plate.withAlpha(1)
         }
     }
