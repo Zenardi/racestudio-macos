@@ -3119,23 +3119,6 @@
         }
       }
     },
-    "overlay.editor.unsaved": {
-      "comment": "Overlay editor: the overlay was edited since the workspace was last saved.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unsaved overlay changes"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alterações na sobreposição não salvas"
-          }
-        }
-      }
-    },
     "overlay.editor.widgets": {
       "comment": "Overlay editor: the list of widgets with their toggles.",
       "localizations": {
@@ -4156,40 +4139,6 @@
         }
       }
     },
-    "project.saveFailed.message": {
-      "comment": "Alert message when a workspace could not be saved.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The workspace could not be written there."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível gravar o espaço de trabalho nesse local."
-          }
-        }
-      }
-    },
-    "project.saveFailed.title": {
-      "comment": "Alert title when a workspace could not be saved. %1$@ = the file name.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn’t save “%1$@”"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Não foi possível salvar “%1$@”"
-          }
-        }
-      }
-    },
     "project.warning.clampedLaps": {
       "comment": "Project load warning: saved lap numbers beyond the session's laps were dropped. %1$@ = the session's content id.",
       "localizations": {
@@ -4203,6 +4152,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Algumas voltas salvas da sessão %1$@ não existem mais e foram ignoradas"
+          }
+        }
+      }
+    },
+    "project.warning.openInAnotherWindow": {
+      "comment": "Workspace load warning: the session is also open in another window, which saves its workspace; this window doesn't save.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session is also open in another window, so changes made here aren’t saved"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta sessão também está aberta em outra janela, então as alterações feitas aqui não são salvas"
           }
         }
       }
@@ -4258,6 +4224,40 @@
         }
       }
     },
+    "project.warning.unreadableWorkspace": {
+      "comment": "Workspace load warning: the session's saved workspace could not be read; it was moved aside and the session opened with its defaults.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved workspace couldn’t be read; it was kept aside and the session opened with its defaults"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler o espaço de trabalho salvo; ele foi guardado à parte e a sessão abriu com os padrões"
+          }
+        }
+      }
+    },
+    "project.warning.unreadableWorkspaceInPlace": {
+      "comment": "Workspace load warning: the session's saved workspace could not be read nor moved aside, so nothing is saved over it.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved workspace couldn’t be read or kept aside, so this session’s changes aren’t being saved"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ler nem guardar à parte o espaço de trabalho salvo, então as alterações desta sessão não estão sendo salvas"
+          }
+        }
+      }
+    },
     "project.warning.unresolvedSession": {
       "comment": "Project load warning: a session the workspace references is not in the library. %1$@ = its content id.",
       "localizations": {
@@ -4271,6 +4271,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uma sessão usada por este espaço de trabalho não está na biblioteca (%1$@)"
+          }
+        }
+      }
+    },
+    "project.warning.unrestoredMathChannel": {
+      "comment": "Workspace load warning: a saved math channel could not be re-created for this session; it stays in the saved workspace. %1$@ = channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The math channel “%1$@” couldn’t be re-created for this session; it is kept with the workspace"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível recriar o canal matemático “%1$@” para esta sessão; ele foi mantido no espaço de trabalho"
           }
         }
       }
@@ -5279,6 +5296,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sincronizado nas voltas %1$@ + %2$@"
+          }
+        }
+      }
+    },
+    "workspace.saveFailed": {
+      "comment": "Workspace bar notice: the automatic save of the session's workspace failed; it is retried on the next change.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t save this workspace. It will try again on the next change."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar este espaço de trabalho. Uma nova tentativa será feita na próxima alteração."
           }
         }
       }

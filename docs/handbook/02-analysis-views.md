@@ -11,11 +11,46 @@ engine and **M4** analysis UI, issues 3.1–3.8 and 4.1–4.7).
 
 1. In the **library**, select a session and open it (double-click, or ⌘O on the
    selection).
-2. The **workspace** opens with the default tiles laid out and a lap selected.
+2. The **workspace** opens as you last left that session — or, the first time,
+   with the default tiles laid out and a lap selected.
 3. **Move the cursor** — hover or click in any tile. The delta strip, readouts,
    track-map dot, and tables all follow the same cursor position.
 4. **Pick laps to compare** in the lap overlay; the delta-t strip shows where time
    is won or lost between them.
+
+## Your workspace saves itself
+
+There is no Save. Everything you set up for a session is saved on its own,
+about a second after each change, and comes back the next time you open that
+session — from the library, *Open…* or *Open Recent*:
+
+- the selected channels, laps and reference lap, and the view you were on;
+- the Video + Data pane arrangement and the HUD (overlay);
+- the attached **video** with its sync — offset, clock rate and status — so it
+  plays in step without importing or syncing it again;
+- the Log Sheet, the math channels and the Split Times splits, which also cut
+  the HUD's sectors.
+
+Going **Home**, opening another session or quitting writes anything still
+pending first. Each session's workspace is one file in the `Workspaces` folder
+of RaceStudio's Application Support folder; for the sandboxed app that is
+`~/Library/Containers/com.racestudio.RaceStudio/Data/Library/Application Support/RaceStudio/Workspaces/`.
+Deleting a session from the library deletes its workspace too.
+
+- **A save fails** (a full disk, say): the workspace bar says *Couldn't save this
+  workspace*. Nothing is lost from the window, and the next change tries again.
+- **A saved workspace can't be read** (damaged, or saved by a newer RaceStudio):
+  the session opens with its defaults and the workspace bar says *Opened with 1
+  warning*. The file is kept beside the others as `….unreadable.rsproj`, never
+  saved over.
+- **A math channel can't be re-created** (the session lacks a channel it
+  uses): it is kept with the workspace and tried again next time, and the
+  workspace bar says so. Adding a channel of the same name replaces it.
+- **Two windows show the same session** (say, a `.xrk` opened from the
+  Finder): only the first one saves; the other says *changes made here aren't
+  saved*, so the two never write over each other.
+- **Not kept yet:** pinned channels, the Stats and report panels' settings,
+  loops and the cursor position.
 
 ## The views
 
@@ -69,9 +104,8 @@ view, all on one clock.
 
 1. **Attach the footage.** Pick **Video + Data** in the left rail (or the
    workspace bar), then **Import Video…** and choose the file. It is remembered
-   by bookmark, so saving the workspace (`.rsproj`) and reopening it later brings
-   the same video back, aligned exactly as you left it. A workspace saved on the
-   old *Video* panel opens here.
+   by bookmark with the session's workspace, so opening the session later brings
+   the same video back, aligned exactly as you left it.
 2. **Sync it to the track data.** If the camera stamped a creation time and the
    log carries a date, an opening alignment is proposed automatically from those
    two clocks. Otherwise — or to correct it — select a lap or sector, scrub the
@@ -175,8 +209,8 @@ view, all on one clock.
   *Synced on lap 3 + lap 14*, or *Synced from engine sound (91%)*. It also says
   how many laps the footage covers in
   full, for example *footage covers laps 2–15 (14 of 16)*. It updates after every
-  sync action. Saving the workspace keeps the offset, the clock rate and the
-  status.
+  sync action. The workspace keeps the offset, the clock rate and the status,
+  so reopening the session brings the sync back.
 
 ### The overlay editor
 
@@ -207,8 +241,8 @@ session). Click one to select it.
   another view: leaving Video + Data clears the overlay's undo history, so ⌘Z
   in another view never changes a HUD you can't see. The arrow keys don't
   nudge while you are still dragging.
-- Every edit is saved with the workspace. Opening another workspace starts its
-  overlay with a fresh undo history.
+- Every edit is saved with the workspace on its own. Opening another session
+  starts its overlay with a fresh undo history.
 
 The **Video** menu lists Play Lap, Loop Lap, Show HUD and Edit Overlay with
 their shortcuts.
@@ -304,7 +338,8 @@ Three presets are built in:
     - **Adding splits.** The sectors are the splits of the **Split Times**
       report. Set **Splits** there to the number of sectors you want (three
       for S1, S2 and S3), and rename a split in the list under the table to
-      change its name on the video. A session without splits has no sector
+      change its name on the video. The splits are kept with the session's
+      workspace. A session without splits has no sector
       splits: the widget is left out, saying *No sectors in this session*.
       A lap the splits can't divide shows a single dash.
   - The G-ball shows lateral G across and acceleration upwards (braking
@@ -319,9 +354,9 @@ Three presets are built in:
       when braking (dot down).
     - **Past the outer ring.** The dot stops at the ring, but the numbers
       still show the real G.
-- **Saved with the workspace.** The overlay is saved in the `.rsproj`. A
-  workspace saved before overlays existed opens with the overlay off. If part
-  of a saved overlay can't be read (say, a widget a newer version added), the
+- **Saved with the workspace.** The overlay is saved with the session's
+  workspace (see *Your workspace saves itself*). If part of a saved overlay
+  can't be read (say, a widget a newer version added), the
   rest opens and the workspace bar says *Opened with 1 warning*; click it to
   see what was skipped. A saved overlay keeps the widgets it was saved with,
   even when a newer version changes a built-in preset. For example, an overlay

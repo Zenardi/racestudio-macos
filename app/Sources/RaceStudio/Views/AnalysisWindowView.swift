@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import RaceStudioCore
 
 /// The RaceStudio-3-style analysis window (issue 8.3): a left layout-selector
@@ -37,6 +38,10 @@ struct AnalysisWindowView: View {
     // Export Video with Overlay (issue 9.14): the sheets this window shows for the
     // app's export. The export itself is the app's, so it outlives the window.
     @StateObject private var exporter = VideoExportCoordinator()
+    // The session's workspace (issue 9.20): restored when the window opens and
+    // saved on its own after every change, with no Open or Save.
+    @StateObject private var workspace = WorkspaceAutosave(store: WorkspaceStore(
+        directory: WorkspaceStore.defaultDirectory(), validator: FFIExpressionValidator()))
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
@@ -53,8 +58,7 @@ struct AnalysisWindowView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                WorkspaceBar(model: model, mathManager: mathManager, logSheet: logSheet,
-                             video: video.controller, overlayEditor: video.editor)
+                WorkspaceBar(model: model, workspace: workspace)
                 ExportStatusButton(flow: exporter.flow)
                     .padding(.trailing, 10)
             }
@@ -86,6 +90,21 @@ struct AnalysisWindowView: View {
             // The window keeps the workspace's copy of the overlay the editor edits,
             // so a save captures every committed edit.
             video.editor.onCommit = { [weak model] layout in model?.videoOverlay = layout }
+        }
+        .task {
+            await workspace.open(WorkspaceAutosave.Parts(
+                window: model, overlay: video.editor, logSheet: logSheet, mathChannels: mathManager,
+                splits: splitReport, video: video.controller))
+        }
+        // Closing the session (Home, another session), closing its window or
+        // quitting writes what is still pending — `onDisappear` alone isn't
+        // sent for every window close.
+        .onDisappear { workspace.flush() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in
+            workspace.flush()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            workspace.flush()
         }
     }
 }

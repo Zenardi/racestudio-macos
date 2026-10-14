@@ -11,7 +11,7 @@ import Foundation
 public struct ProjectDocument: Codable, Equatable, Sendable {
 
     /// The schema version this build reads and writes.
-    public static let currentSchemaVersion = 8
+    public static let currentSchemaVersion = 9
 
     /// On-disk schema version of this document.
     public var schemaVersion: Int
@@ -46,6 +46,11 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
     /// which panes are shown (issue 9.12). Added in schema v8; a migrated pre-9.12
     /// project opens with ``VideoDataPaneLayout/default``.
     public var videoData: VideoDataPaneLayout
+    /// The Split Times splits — their count, boundaries, names, types and locks
+    /// (issue 8.11) — which also cut the HUD's sectors, so a reopened workspace
+    /// times the same sectors (issue 9.20). Added in schema v9; `nil` (a migrated
+    /// pre-9.20 workspace, or one never split by hand) opens the report's default.
+    public var splits: SplitLayout?
 
     /// Non-fatal, typed issues found during load — e.g.
     /// ``ProjectError/invalidMathChannel(name:)``. Transient (not persisted).
@@ -66,7 +71,8 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         logSheet: LogSheet = LogSheet(),
         video: VideoAttachment? = nil,
         overlay: OverlayLayout? = nil,
-        videoData: VideoDataPaneLayout = .default
+        videoData: VideoDataPaneLayout = .default,
+        splits: SplitLayout? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.sessionRefs = sessionRefs
@@ -78,13 +84,14 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
         self.video = video
         self.overlay = overlay
         self.videoData = videoData
+        self.splits = splits
     }
 
     /// `diagnostics`/`warnings` are intentionally omitted — they are transient
     /// load results, so they are never encoded and default to empty on decode.
     private enum CodingKeys: String, CodingKey {
         case schemaVersion, sessionRefs, layout, selectedLaps, mathChannels, activeLayout, logSheet, video, overlay
-        case videoData
+        case videoData, splits
     }
 
     /// Value-equality compares the persisted content only. `diagnostics` and
@@ -101,6 +108,7 @@ public struct ProjectDocument: Codable, Equatable, Sendable {
             && lhs.video == rhs.video
             && lhs.overlay == rhs.overlay
             && lhs.videoData == rhs.videoData
+            && lhs.splits == rhs.splits
     }
 }
 
@@ -116,6 +124,8 @@ extension ProjectDocument {
     /// - the 9.12 ``videoData``: missing (a v7 file) or unreadable, the panel
     ///   opens at ``VideoDataPaneLayout/default``. Its fields are read leniently
     ///   too, so it never needs a warning.
+    /// - the 9.20 ``splits``: missing (a v8 file) or not a valid layout, the
+    ///   report opens with its default splits.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -134,5 +144,6 @@ extension ProjectDocument {
         if let panes = try? container.decodeIfPresent(VideoDataPaneLayout.self, forKey: .videoData) {
             videoData = panes
         }
+        splits = (try? container.decodeIfPresent(SplitLayout.self, forKey: .splits)) ?? nil
     }
 }

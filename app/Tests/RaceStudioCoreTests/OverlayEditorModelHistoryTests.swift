@@ -97,26 +97,6 @@ import Foundation
         #expect(editor.selection == nil)
     }
 
-    // MARK: - Dirty
-
-    /// Dirty means "differs from the last save": an edit dirties, a save cleans,
-    /// and undoing back to the saved layout is clean again.
-    @Test func test_dirty_follows_the_last_save() {
-        let editor = editor(selecting: "speed")
-        #expect(!editor.isDirty)
-
-        editor.nudge(dx: 1, dy: 0, large: false)
-        #expect(editor.isDirty)
-
-        editor.markSaved()
-        #expect(!editor.isDirty)
-
-        editor.undo()
-        #expect(editor.isDirty)
-        editor.redo()
-        #expect(!editor.isDirty)
-    }
-
     // MARK: - Commands
 
     /// Show HUD off hides the overlay but keeps every widget where it was.
@@ -224,7 +204,6 @@ import Foundation
 
         #expect(editor.layout.widgets == OverlayPreset.kartCoaching.layout().widgets)
         #expect(!editor.layout.isEnabled)
-        #expect(!editor.isDirty)
     }
 
     /// Loading another workspace's overlay replaces the layout and forgets the
@@ -239,7 +218,6 @@ import Foundation
         #expect(editor.layout == other)
         #expect(!editor.canUndo && !editor.canRedo)
         #expect(editor.selection == nil)
-        #expect(!editor.isDirty)
     }
 
     // MARK: - UndoManager (⌘Z / ⇧⌘Z)

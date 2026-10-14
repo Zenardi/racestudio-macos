@@ -13,9 +13,15 @@ public struct ProjectLoadNotice: Equatable, Sendable {
 
     /// The notice for a loaded `document`, or `nil` when it loaded cleanly.
     public init?(document: ProjectDocument) {
-        guard !document.loadWarnings.isEmpty || !document.diagnostics.isEmpty else { return nil }
-        self.warnings = document.loadWarnings
-        self.diagnostics = document.diagnostics
+        self.init(warnings: document.loadWarnings, diagnostics: document.diagnostics)
+    }
+
+    /// The notice for `warnings` and `diagnostics`, or `nil` when there are none
+    /// — e.g. a saved workspace that couldn't be read at all (issue 9.20).
+    public init?(warnings: [ProjectLoadWarning], diagnostics: [ProjectError] = []) {
+        guard !warnings.isEmpty || !diagnostics.isEmpty else { return nil }
+        self.warnings = warnings
+        self.diagnostics = diagnostics
     }
 
     /// "Opened with 3 warnings".

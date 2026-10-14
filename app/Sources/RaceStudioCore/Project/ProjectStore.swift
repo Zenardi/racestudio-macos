@@ -107,11 +107,15 @@ public final class ProjectStore {
     private static func decode(_ data: Data, version: Int) throws -> ProjectDocument {
         switch version {
         case ProjectDocument.currentSchemaVersion:
-            return try decodeWithOverlay(data, keepingVideoData: true)
+            return try decodeWithOverlay(data, keeping: [.videoData, .splits])
+        case 8:
+            // v8 is the current shape without the 9.20 splits, which the current
+            // decoder already reads as the default when absent.
+            return try decodeWithOverlay(data, keeping: [.videoData])
         case 7:
             // v7 is the current shape without the 9.12 pane layout, which the
             // current decoder already reads as its default when absent.
-            return try decodeWithOverlay(data, keepingVideoData: false)
+            return try decodeWithOverlay(data, keeping: [])
         case 6:
             return migrate(try shape(ProjectDocumentV6.self, from: data))
         case 5:
@@ -127,19 +131,28 @@ public final class ProjectStore {
         }
     }
 
+    /// The parts a file reads only from the schema that added them.
+    private enum VersionedPart {
+        /// The 9.12 Video + Data pane layout (v8).
+        case videoData
+        /// The 9.20 Split Times splits (v9).
+        case splits
+    }
+
     /// Decode `data` in the current shape (v7 and later carry a video overlay,
     /// whose unreadable entries are skipped leniently — count them, so the load
-    /// says so), stamped with the current schema. A v7 file's pane layout key
-    /// means nothing at that version, so `keepingVideoData` is `false` for it and
-    /// the panel opens at its default.
-    private static func decodeWithOverlay(_ data: Data, keepingVideoData: Bool) throws -> ProjectDocument {
+    /// says so), stamped with the current schema. A part's key means nothing
+    /// before the version that added it, so only the parts in `keeping` are
+    /// read; the others open at their defaults.
+    private static func decodeWithOverlay(_ data: Data, keeping parts: Set<VersionedPart>) throws -> ProjectDocument {
         let counter = SkippedElementCounter()
         var document = try shape(ProjectDocument.self, from: data, counting: counter)
         if counter.total > 0 {
             document.loadWarnings.append(.skippedOverlayEntries(counter.total))
         }
         document.schemaVersion = ProjectDocument.currentSchemaVersion
-        if !keepingVideoData { document.videoData = .default }
+        if !parts.contains(.videoData) { document.videoData = .default }
+        if !parts.contains(.splits) { document.splits = nil }
         return document
     }
 

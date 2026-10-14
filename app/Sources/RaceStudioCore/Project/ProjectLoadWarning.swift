@@ -12,6 +12,16 @@ public enum ProjectLoadWarning: Equatable, Sendable {
     case unreadableOverlay
     /// This many widgets or settings of the overlay could not be read.
     case skippedOverlayEntries(Int)
+    /// The session's saved workspace could not be read (issue 9.20). Kept aside,
+    /// it is out of harm's way and the session opened with its defaults; left in
+    /// place, nothing is saved over it.
+    case unreadableWorkspace(keptAside: Bool)
+    /// The session is also open in another window, which saves its workspace;
+    /// this window doesn't, so the two never write over each other.
+    case openInAnotherWindow
+    /// This saved math channel couldn't be re-created for the session; it is
+    /// kept in the saved workspace and tried again on the next open.
+    case unrestoredMathChannel(String)
 
     /// The warning as the store has always logged it, in English.
     public var text: String {
@@ -21,6 +31,13 @@ public enum ProjectLoadWarning: Equatable, Sendable {
         case .unreadableOverlay: return "unreadable video overlay; opened with the overlay off"
         case .skippedOverlayEntries(let count):
             return "video overlay: \(count) unreadable \(count == 1 ? "entry" : "entries") skipped"
+        case .unreadableWorkspace(let keptAside):
+            return keptAside ? "unreadable saved workspace; kept aside, opened with the defaults"
+                : "unreadable saved workspace; left in place, not saving over it"
+        case .openInAnotherWindow:
+            return "session open in another window; this window does not save"
+        case .unrestoredMathChannel(let name):
+            return "math channel \(name) could not be re-created; kept in the workspace"
         }
     }
 
@@ -34,6 +51,14 @@ public enum ProjectLoadWarning: Equatable, Sendable {
             return count == 1
                 ? L10n.string(.projectWarningSkippedOverlayOne, locale: locale)
                 : L10n.format(.projectWarningSkippedOverlayOther, locale: locale, String(count))
+        case .unreadableWorkspace(keptAside: true):
+            return L10n.string(.projectWarningUnreadableWorkspace, locale: locale)
+        case .unreadableWorkspace(keptAside: false):
+            return L10n.string(.projectWarningUnreadableWorkspaceInPlace, locale: locale)
+        case .openInAnotherWindow:
+            return L10n.string(.projectWarningOpenInAnotherWindow, locale: locale)
+        case .unrestoredMathChannel(let name):
+            return L10n.format(.projectWarningUnrestoredMathChannel, locale: locale, name)
         }
     }
 }

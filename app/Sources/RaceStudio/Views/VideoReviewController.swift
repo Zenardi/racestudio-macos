@@ -74,6 +74,10 @@ final class VideoReviewController: ObservableObject {
     /// when the footage is replaced or removed never writes into the new state.
     private var openGeneration = 0
     private let videos = VideoAttachmentStore(bookmarks: SecurityScopedBookmarkStore())
+    /// The restored footage's file, held inside its security scope while it is
+    /// attached (issue 9.20): after a relaunch, a file reopened from its
+    /// bookmark is readable only inside that scope.
+    private var scopedFile: URL?
     private static let log = Logger(subsystem: "com.aim.racestudio", category: "VideoReview")
 
     init(data: VideoDataViewModel) {
@@ -88,6 +92,7 @@ final class VideoReviewController: ObservableObject {
         // A closed window stops decoding and matching rather than finishing for
         // no one.
         autoSyncRun?.cancel()
+        scopedFile?.stopAccessingSecurityScopedResource()
     }
 
     // MARK: - Attaching
@@ -111,6 +116,8 @@ final class VideoReviewController: ObservableObject {
     func attach(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
         let relinking = attachment != nil && loadFailure != nil
         if !relinking { review.detachVideo() }
+        // A picked file is readable through the open panel's grant.
+        holdScope(of: nil)
         do {
             attachment = try videos.attach(url, offset: review.sync.offset)
         } catch {
@@ -125,10 +132,10 @@ final class VideoReviewController: ObservableObject {
         await open(url, sessionStartEpoch: sessionStartEpoch, sessionDuration: sessionDuration)
     }
 
-    /// Re-open the footage a loaded `.rsproj` carries (issue 9.6's persistence),
-    /// restoring the offset, rate and sync status it was saved with (9.7). A moved
-    /// or deleted file leaves the panel in a stated failure rather than aborting
-    /// the project load.
+    /// Re-open the footage the session's saved workspace carries (issues 9.6,
+    /// 9.20), inside its file's security scope, restoring the offset, rate and
+    /// sync status it was saved with (9.7). A moved or deleted file leaves the
+    /// panel in a stated failure rather than aborting the workspace's restore.
     func restore(_ attachment: VideoAttachment, sessionStartEpoch: Double) async {
         self.attachment = attachment
         review.restore(attachment)
@@ -136,13 +143,16 @@ final class VideoReviewController: ObservableObject {
         twoPointError = nil
         do {
             let url = try videos.resolve(attachment)
+            holdScope(of: url)
             loadFailure = nil
             // The saved sync is authoritative — do not re-guess from wall clocks.
             await open(url, sessionStartEpoch: 0, sessionDuration: 0)
         } catch VideoAttachmentError.stale {
+            holdScope(of: nil)
             clearPlayer()
             loadFailure = "“\(attachment.displayName)” has moved. Attach it again to re-link the video."
         } catch {
+            holdScope(of: nil)
             clearPlayer()
             loadFailure = "“\(attachment.displayName)” could not be opened. It may have been deleted."
         }
@@ -154,6 +164,7 @@ final class VideoReviewController: ObservableObject {
         openGeneration += 1
         player.pause()
         player.replaceCurrentItem(with: nil)
+        holdScope(of: nil)
         attachment = nil
         loadFailure = nil
         autoOffsetOutcome = nil
@@ -265,6 +276,13 @@ final class VideoReviewController: ObservableObject {
     }
 
     // MARK: - Internals
+
+    /// Hold `url`'s security scope from now on — releasing the file held
+    /// before — or none for `nil`.
+    private func holdScope(of url: URL?) {
+        scopedFile?.stopAccessingSecurityScopedResource()
+        scopedFile = url.flatMap { $0.startAccessingSecurityScopedResource() ? $0 : nil }
+    }
 
     private func open(_ url: URL, sessionStartEpoch: Double, sessionDuration: Double) async {
         openGeneration += 1

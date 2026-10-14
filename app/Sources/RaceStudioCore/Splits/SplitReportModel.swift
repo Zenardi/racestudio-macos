@@ -47,6 +47,17 @@ public final class SplitReportModel: ObservableObject {
         focusedSplit = nil
     }
 
+    /// Take back the layout saved with the workspace (issue 9.20). The count
+    /// control follows its splits, within ``splitCountRange``, and the focus is
+    /// cleared. A layout over another base grid can't be read by this report,
+    /// so it is ignored.
+    public func restore(_ saved: SplitLayout) {
+        guard saved.base == Self.baseResolution else { return }
+        layout = saved
+        splitCount = saved.splits.count.clamped(to: Self.splitCountRange)
+        focusedSplit = nil
+    }
+
     /// Merge the split with `id` into its neighbour (issue 8.11).
     public func merge(_ id: Int) {
         layout = layout.merging(id)
