@@ -297,43 +297,19 @@ final class VideoReviewController: ObservableObject {
             guard let self, generation == self.openGeneration else { return }
             self.hasAudioTrack = hasAudio
         }
-        // Each await below may outlive this footage (re-attached or removed in
-        // the meantime); a superseded open stops rather than writing stale state.
-        do {
-            let duration = try await asset.load(.duration).seconds
-            guard generation == openGeneration else { return }
-            review.setVideoDuration(duration)
-        } catch {
-            Self.log.warning("Could not read video duration: \(error.localizedDescription, privacy: .public)")
-        }
-        let frameRate = await nominalFrameRate(of: asset)
+        // The await may outlive this footage (re-attached or removed in the
+        // meantime); a superseded open stops rather than writing stale state.
+        let footage = await asset.openedFootage(sessionStartEpoch: sessionStartEpoch,
+                                                sessionDuration: sessionDuration)
         guard generation == openGeneration else { return }
-        review.setFrameRate(frameRate)
+        let opening = data.footageOpened(footage, cursorTime: cursor?.timePosition, isPlaying: isPlaying)
+        if let outcome = opening.autoOffset { autoOffsetOutcome = outcome }
         // Observe the playhead once per frame of this footage.
         attachObservers()
-        // A camera that stamps its start time gives a usable first alignment for
-        // free; without one — or when the date cannot be right for this session —
-        // the operator anchors to a lap by hand.
-        guard sessionStartEpoch > 0,
-              let created = try? await asset.load(.creationDate)?.load(.dateValue),
-              generation == openGeneration else { return }
-        autoOffsetOutcome = review.applyAutoOffset(sessionStartEpoch: sessionStartEpoch,
-                                                   videoStartEpoch: created.timeIntervalSince1970,
-                                                   sessionDuration: sessionDuration)
-    }
-
-    /// The first video track's nominal frame rate (issue 9.7), so a frame step is
-    /// exactly one of this footage's frames — or `0`, which the model reads as
-    /// "unknown" and replaces with its 30 fps fallback, so a clip without a
-    /// readable track never keeps the previous clip's grid.
-    private func nominalFrameRate(of asset: AVURLAsset) async -> Double {
-        do {
-            guard let track = try await asset.loadTracks(withMediaType: .video).first else { return 0 }
-            return Double(try await track.load(.nominalFrameRate))
-        } catch {
-            Self.log.warning("Could not read the frame rate: \(error.localizedDescription, privacy: .public)")
-            return 0
-        }
+        // The panel may have asked to follow the cursor before the footage had
+        // loaded, which could not seek: show the cursor's frame now, so reopened
+        // footage matches its data instead of standing on its first frame.
+        if let playhead = opening.playhead { seek(to: playhead) }
     }
 
     /// Drop the player's footage after a failed restore, so no stale frame (or
