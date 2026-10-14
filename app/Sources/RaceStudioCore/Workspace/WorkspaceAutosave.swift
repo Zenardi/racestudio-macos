@@ -42,8 +42,11 @@ public protocol WorkspaceVideo: AnyObject {
 ///   so — so they never write over each other.
 ///
 /// It also keeps the last HUD (issue 9.22): every HUD change the window hears
-/// after the open — each committed edit — is saved as the last HUD, and a
-/// session that opens without a HUD of its own starts with it.
+/// once the open has its layouts — each committed edit — is saved as the last
+/// HUD, a burst once. A session that opens without a HUD of its own starts
+/// with it and follows it — it is saved without one, so it shows the newest
+/// last HUD each time — until its HUD is edited, which makes it the session's
+/// own.
 @MainActor
 public final class WorkspaceAutosave: ObservableObject {
 
@@ -97,6 +100,8 @@ public final class WorkspaceAutosave: ObservableObject {
     /// so a window torn down mid-open never leaves a half-restored workspace
     /// to be saved.
     private var opening: Task<Void, Never>?
+    /// The window's parts, from the start of the open.
+    private var opened: Parts?
     /// The window being saved and its session's content id — set once its
     /// workspace is restored, and never when it mustn't be written.
     private var saving: (parts: Parts, session: String)?
@@ -107,6 +112,12 @@ public final class WorkspaceAutosave: ObservableObject {
     private var pending: AnyCancellable?
     private var watches: [AnyCancellable] = []
     private var lastHUDWatch: AnyCancellable?
+    /// Whether the window shows the last HUD it opened with, unedited — then
+    /// the session is saved without a HUD of its own.
+    private var followsLastHUD = false
+    /// The last HUD waiting to be written, and its timer.
+    private var pendingLastHUD: OverlayLayout?
+    private var lastHUDWrite: AnyCancellable?
     private static let logger = Logger(subsystem: "com.racestudio.core", category: "workspace")
 
     /// Which window saves each workspace file in this process.
@@ -145,26 +156,31 @@ public final class WorkspaceAutosave: ObservableObject {
     }
 
     private func restoreAndWatch(_ parts: Parts) async {
+        opened = parts
         let session = parts.window.contentID
         let owns = claim(store.url(forSession: session))
         var warnings: [ProjectLoadWarning] = owns ? [] : [.openInAnotherWindow]
         var diagnostics: [ProjectError] = []
         var saved: ProjectDocument?
         var mayWrite = owns
-        switch store.load(session: session) {
+        let loaded = store.load(session: session)
+        // The layouts first, so the HUD is settled — and its edits heard —
+        // before the channels and the footage are awaited.
+        if case .document(let document) = loaded { applyLayouts(document, to: parts) }
+        startWithTheLastHUD(parts)
+        rememberHUDChanges(parts)
+        switch loaded {
         case .none:
             break
         case .document(let document):
             warnings += document.loadWarnings
             diagnostics = document.diagnostics
-            warnings += await restore(document, into: parts)
+            warnings += await restoreChannelsAndFootage(document, into: parts)
             saved = document
         case .unreadable(let keptAside):
             warnings.append(.unreadableWorkspace(keptAside: keptAside))
             mayWrite = mayWrite && keptAside
         }
-        startWithTheLastHUD(parts)
-        rememberHUDChanges(parts)
         notice = ProjectLoadNotice(warnings: warnings, diagnostics: diagnostics)
         guard mayWrite else { return }
         saving = (parts, session)
@@ -176,15 +192,20 @@ public final class WorkspaceAutosave: ObservableObject {
         if snapshot(of: parts) != lastWritten { noteChange() }
     }
 
-    /// Apply a saved `document` to the window, the editor, the log sheet, the
-    /// splits, the math channels and the footage. Returns a warning for each
-    /// math channel that couldn't be re-created and isn't already said to be
-    /// invalid.
-    private func restore(_ document: ProjectDocument, into parts: Parts) async -> [ProjectLoadWarning] {
+    /// Apply a saved `document`'s selection, layouts, HUD, log sheet and
+    /// splits — everything that needs no waiting.
+    private func applyLayouts(_ document: ProjectDocument, to parts: Parts) {
         parts.window.restore(from: document)
         parts.overlay.load(document.overlay)
         parts.logSheet.apply(document.logSheet)
         if let splits = document.splits { parts.splits.restore(splits) }
+    }
+
+    /// Re-create a saved `document`'s math channels and re-open its footage.
+    /// Returns a warning for each math channel that couldn't be re-created and
+    /// isn't already said to be invalid.
+    private func restoreChannelsAndFootage(_ document: ProjectDocument,
+                                           into parts: Parts) async -> [ProjectLoadWarning] {
         var warnings: [ProjectLoadWarning] = []
         for channel in document.mathChannels {
             guard !(await parts.mathChannels.restore(channel)) else { continue }
@@ -205,18 +226,34 @@ public final class WorkspaceAutosave: ObservableObject {
         guard parts.window.videoOverlay == nil, let last = lastOverlay?.load() else { return }
         parts.window.videoOverlay = last
         parts.overlay.load(last)
+        followsLastHUD = true
     }
 
     /// Keep every HUD change the window hears from now on — each committed
-    /// edit, never the open's own — as the last HUD.
+    /// edit, never the open's own — as the last HUD, a burst once; an edit
+    /// also makes the HUD the session's own.
     private func rememberHUDChanges(_ parts: Parts) {
-        guard let lastOverlay else { return }
-        lastHUDWatch = parts.window.$videoOverlay.dropFirst().compactMap { $0 }.sink { layout in
-            do {
-                try lastOverlay.save(layout)
-            } catch {
-                Self.logger.error("could not keep the last HUD: \(String(describing: error), privacy: .public)")
+        guard lastOverlay != nil else { return }
+        lastHUDWatch = parts.window.$videoOverlay.dropFirst().compactMap { $0 }.sink { [weak self] layout in
+            guard let self else { return }
+            followsLastHUD = false
+            pendingLastHUD = layout
+            guard lastHUDWrite == nil else { return }
+            lastHUDWrite = scheduler.schedule(after: delay) { [weak self] in
+                self?.lastHUDWrite = nil
+                self?.writeLastHUD()
             }
+        }
+    }
+
+    /// Write the last HUD waiting to be written, if any.
+    private func writeLastHUD() {
+        guard let layout = pendingLastHUD, let lastOverlay else { return }
+        pendingLastHUD = nil
+        do {
+            try lastOverlay.save(layout)
+        } catch {
+            Self.logger.error("could not keep the last HUD: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -245,20 +282,27 @@ public final class WorkspaceAutosave: ObservableObject {
     }
 
     /// Write what is pending now — the session is closing or the app quitting.
-    /// A HUD drag still open is recorded first, so it is kept.
+    /// A HUD drag still open is recorded first, so it is kept — in the last HUD
+    /// too, even in a window that doesn't save its workspace.
     public func flush() {
         pending = nil
-        saving?.parts.overlay.endGesture()
+        opened?.overlay.endGesture()
         write()
+        lastHUDWrite = nil
+        writeLastHUD()
     }
 
-    /// The workspace as it stands, with the math channels kept from the file.
+    /// The workspace as it stands, with the math channels kept from the file —
+    /// and no HUD while it follows the last one.
     private func snapshot(of parts: Parts) -> ProjectDocument {
         let live = parts.mathChannels.definitions
         let liveNames = Set(live.map(\.name))
         let kept = keptMathChannels.filter { !liveNames.contains($0.name) }
-        return parts.window.projectDocument(mathChannels: live + kept, logSheet: parts.logSheet.sheet,
-                                            video: parts.video.attachmentForSaving, splits: parts.splits.layout)
+        var document = parts.window.projectDocument(mathChannels: live + kept, logSheet: parts.logSheet.sheet,
+                                                    video: parts.video.attachmentForSaving,
+                                                    splits: parts.splits.layout)
+        if followsLastHUD { document.overlay = nil }
+        return document
     }
 
     /// Write the workspace when it differs from what the file holds.

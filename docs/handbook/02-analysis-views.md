@@ -153,8 +153,11 @@ view, all on one clock.
 - **The last HUD carries over.** Every change you make to the HUD is also
   remembered as the *last HUD*. A session opened without a HUD of its own (a
   new import, say) starts with it: the same widgets, places, sizes and
-  settings, and *Show HUD* as you left it. A session that already has its own
-  HUD keeps it. Before you have arranged any HUD, a session starts with the HUD
+  settings, and *Show HUD* as you left it. Until you change its HUD, such a
+  session keeps following the last HUD, so it shows your newest arrangement
+  each time it opens; your first change makes that HUD the session's own. A
+  session that already has its own HUD keeps it. Before you have arranged any
+  HUD, a session starts with the HUD
   off, on the *Kart coaching* preset. The last HUD is kept in
   `LastOverlay.json` in RaceStudio's Application Support folder.
 

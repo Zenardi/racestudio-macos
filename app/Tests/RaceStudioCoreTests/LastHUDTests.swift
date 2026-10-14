@@ -22,12 +22,12 @@ import Testing
 
     /// Every write the last-HUD store makes.
     private final class Writes {
-        var count = 0
+        var made = 0
     }
 
     private func lastStore(in dir: URL, writes: Writes = Writes()) -> LastOverlayStore {
         LastOverlayStore(directory: dir, write: { data, url in
-            writes.count += 1
+            writes.made += 1
             try data.write(to: url, options: .atomic)
         })
     }
@@ -68,19 +68,36 @@ import Testing
 
     // MARK: - Remembering
 
-    /// Each committed HUD edit is remembered as the last HUD.
-    @Test func test_each_hud_edit_is_remembered() async throws {
+    /// Each committed HUD edit is remembered as the last HUD — a burst of
+    /// them written once, a second after.
+    @Test func test_each_hud_edit_is_remembered_once_per_burst() async throws {
+        let dir = try makeTempDir()
+        let writes = Writes(), last = lastStore(in: dir, writes: writes)
+        let scheduler = ManualScheduler(), window = window()
+        let saver = autosave(in: dir, last: last, scheduler: scheduler)
+        await saver.open(window.parts)
+
+        window.overlay.apply(arranged)
+        window.overlay.setTextSize(2, for: window.overlay.layout.widgets[1].id)
+        #expect(writes.made == 0)
+        scheduler.advance()
+
+        #expect(writes.made == 1)
+        #expect(last.load() == window.overlay.layout)
+        #expect(!saver.saveFailed)
+    }
+
+    /// Closing writes a remembered HUD still waiting for its second.
+    @Test func test_closing_writes_the_last_hud_at_once() async throws {
         let dir = try makeTempDir()
         let last = lastStore(in: dir), window = window()
         let saver = autosave(in: dir, last: last)
         await saver.open(window.parts)
 
         window.overlay.apply(arranged)
-        #expect(last.load() == window.overlay.layout)
+        saver.flush()
 
-        window.overlay.setTextSize(2, for: window.overlay.layout.widgets[1].id)
         #expect(last.load() == window.overlay.layout)
-        #expect(!saver.saveFailed)
     }
 
     /// A last HUD that can't be written costs only itself: the edit stands
@@ -113,7 +130,7 @@ import Testing
         let saver = autosave(in: dir, last: last)
         await saver.open(window.parts)
 
-        #expect(writes.count == 1)
+        #expect(writes.made == 1)
         #expect(last.load() == arranged)
     }
 
@@ -138,8 +155,8 @@ import Testing
         #expect(disk.writes == 0)
     }
 
-    /// A saved workspace without a HUD starts with the last one, and keeps it
-    /// from then on.
+    /// A saved workspace without a HUD starts with the last one — and the
+    /// open writes nothing for it.
     @Test func test_a_workspace_without_a_hud_starts_with_the_last_one() async throws {
         let dir = try makeTempDir()
         var document = try await savedWorkspace(in: dir)
@@ -147,15 +164,15 @@ import Testing
         try store(in: dir).save(document, session: contentID)
         let last = lastStore(in: dir)
         try last.save(arranged)
-        let scheduler = ManualScheduler(), window = window()
+        let disk = Disk(), scheduler = ManualScheduler(), window = window()
 
-        let saver = autosave(in: dir, last: last, scheduler: scheduler)
+        let saver = WorkspaceAutosave(store: store(in: dir, disk: disk), lastOverlay: last, scheduler: scheduler)
         await saver.open(window.parts)
         scheduler.advance()
 
         #expect(window.model.videoOverlay == arranged)
-        #expect(saved(in: dir)?.overlay == arranged)
-        #expect(!saver.saveFailed)
+        #expect(disk.writes == 0)
+        #expect(saved(in: dir)?.overlay == nil)
     }
 
     /// A session with its own HUD opens with it, not the last one.
@@ -196,12 +213,14 @@ import Testing
         let dir = try makeTempDir()
         let last = lastStore(in: dir)
         try last.save(arranged)
-        let first = window(), second = window()
-        let firstSave = autosave(in: dir, last: last), secondSave = autosave(in: dir, last: last)
+        let first = window(), second = window(), scheduler = ManualScheduler()
+        let firstSave = autosave(in: dir, last: last)
+        let secondSave = autosave(in: dir, last: last, scheduler: scheduler)
         await firstSave.open(first.parts)
         await secondSave.open(second.parts)
 
         second.overlay.setShowsHUD(false)
+        scheduler.advance()
 
         #expect(second.model.videoOverlay?.widgets == arranged.widgets)
         #expect(last.load()?.isEnabled == false)
