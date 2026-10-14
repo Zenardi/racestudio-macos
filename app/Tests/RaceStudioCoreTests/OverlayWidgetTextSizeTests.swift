@@ -112,6 +112,16 @@ import Testing
         #expect(unit.maxY <= max(unitAtBase.maxY, grown.unit.maxY) + 0.01)
     }
 
+    /// A style without capitals measures any text as plain capitals; one with
+    /// them sees a descender.
+    @Test func test_a_texts_ink_is_measured_against_the_capitals() {
+        let none = OverlayTextStyle(capHeight: 0, outline: 1).ink(of: "mph")
+        let sized = OverlayTextStyle(capHeight: 40, outline: 1).ink(of: "mph")
+
+        #expect(none.below == 0 && none.above == 1)
+        #expect(sized.below > 0.1 && sized.above >= 1)
+    }
+
     /// The G-ball's total, whose *g* dips below its digits, never runs into
     /// the row under it.
     @Test func test_the_g_balls_total_never_runs_into_the_row_under_it() {

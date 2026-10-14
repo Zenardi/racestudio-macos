@@ -224,10 +224,13 @@ becomes the editor:
 - **Options** for the selected widget:
   - **Text size**, from 50% to 200% in steps of 10%: the widget's numbers and
     labels get bigger or smaller while its box stays the same. Text grows only
-    as far as its place in the widget allows, so it never runs into the next
-    text. On the needle speedometer and tachometer, the scale numbers, the
+    as far as its place in the widget allows, keeping a small gap, so it never
+    touches the next text: digits can grow by about half again, while a label
+    with a letter that hangs below the line, like the *p* of *mph*, keeps its
+    size. On the needle speedometer and tachometer, the scale numbers, the
     readout and the caption all grow; each stops at the size where it would
-    touch the tick marks, the needle's hub or another number.
+    touch the tick marks, the needle or another number. The track map, which
+    only ever writes a dash, has no text size.
   - for speed and RPM, **Needle gauge**, which draws the widget as a dial
     instead of digits or a bar;
   - the RPM widget's full scale and shift light, and the speed dial's full
