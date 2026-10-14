@@ -244,7 +244,9 @@ becomes the editor:
   - the RPM widget's full scale and shift light, and the speed dial's full
     scale (in km/h);
   - the delta bar's range, the G-ball's range and the map's rotation;
-  - the **throttle and brake full scales** of the pedals.
+  - the **throttle and brake full scales** of the pedals;
+  - the kart badge's **Badge text**, kept when you press Return or leave the
+    field (one undo step); its placeholder is what the badge says without it.
 
 On the video, every widget is outlined (dashed when it won't draw for this
 session). Click one to select it.
@@ -295,7 +297,11 @@ Three presets are built in:
   overlap in 16:9 therefore never overlap in another shape.
 - **Only what the session has.** Each widget needs data: the RPM bar needs an
   RPM channel, the map a GPS track, and the kart badge a kart from your garage
-  (it reads, for example, *F4 · Thunder · RBC Honda · 18 HP*). A widget the
+  (it reads, for example, *F4 · Thunder · RBC Honda · 18 HP*) — unless you give
+  the badge its own text in the overlay editor (**Badge text**: a driver, a
+  team, a car number — one line of up to 60 characters). A badge with its own
+  text shows it, with or without a kart; clear the field to show the kart's
+  text again. A widget the
   session cannot feed is left out instead of being drawn empty, and the reason is
   given, for example *No throttle or brake channel*. A widget with half its data
   shows that half, saying so: a kart with only a brake sensor gets *No throttle

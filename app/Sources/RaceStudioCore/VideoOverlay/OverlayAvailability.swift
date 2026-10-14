@@ -39,6 +39,13 @@ public struct OverlaySessionContext: Equatable, Sendable {
         return kart.specification.isEmpty ? kart.displayName : kart.specification
     }
 
+    /// What the kart badge says without its own text (issue 9.23) — the
+    /// kart's text, or *No kart* — as the editor's field shows it before
+    /// anything is typed.
+    public func kartBadgePlaceholder(locale: Locale = .current) -> String {
+        kartBadgeText ?? L10n.string(.overlayEditorBadgeNoKart, locale: locale)
+    }
+
     /// Whether the session has anything for the session-info widget to show — its
     /// venue, date or session name.
     var hasSessionDetails: Bool {
@@ -218,7 +225,7 @@ extension OverlayLayout {
     /// not draw. The renderer skips every widget that is not
     /// ``WidgetAvailability/isDrawable`` (``drawable(for:session:)``).
     public func availability(for session: OverlaySessionContext) -> [OverlayWidget.ID: WidgetAvailability] {
-        Dictionary(uniqueKeysWithValues: validated().widgets.map { ($0.id, $0.kind.availability(for: session)) })
+        Dictionary(uniqueKeysWithValues: validated().widgets.map { ($0.id, $0.availability(for: session)) })
     }
 
     /// What the renderer draws for `session` in an output of `aspect`: the
@@ -227,7 +234,7 @@ extension OverlayLayout {
     /// validates the layout, so compute it once per layout, session and output
     /// size, not per frame.
     public func drawable(for aspect: OverlayAspect, session: OverlaySessionContext) -> [ResolvedOverlayWidget] {
-        resolved(for: aspect).filter { $0.widget.kind.availability(for: session).isDrawable }
+        resolved(for: aspect).filter { $0.widget.availability(for: session).isDrawable }
     }
 }
 
@@ -245,5 +252,14 @@ extension TelemetryRole {
         case .waterTemp: return L10n.string(.overlayRoleWaterTemp, locale: locale)
         case .exhaustTemp: return L10n.string(.overlayRoleExhaustTemp, locale: locale)
         }
+    }
+}
+
+public extension OverlayWidget {
+    /// What this widget can draw for `session`: its kind's need — except that a
+    /// kart badge with its own text (issue 9.23) needs no kart.
+    func availability(for session: OverlaySessionContext) -> WidgetAvailability {
+        if kind == .kartBadge, options.validated().badgeText != nil { return .available }
+        return kind.availability(for: session)
     }
 }

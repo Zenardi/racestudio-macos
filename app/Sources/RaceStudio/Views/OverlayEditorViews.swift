@@ -200,6 +200,8 @@ struct OverlayEditorInspector: View {
     @ObservedObject var editor: OverlayEditorModel
     let presets: [OverlayLayout]
     let availability: [OverlayWidget.ID: WidgetAvailability]
+    /// What the kart badge says without its own text (issue 9.23).
+    let badgePlaceholder: String
 
     var body: some View {
         Form {
@@ -221,7 +223,7 @@ struct OverlayEditorInspector: View {
                 }
             }
             Section(L10n.string(.overlayEditorOptions)) {
-                OverlayWidgetOptionsEditor(editor: editor)
+                OverlayWidgetOptionsEditor(editor: editor, badgePlaceholder: badgePlaceholder)
             }
             Text(L10n.string(.overlayEditorHint))
                 .font(.caption)
@@ -248,11 +250,12 @@ struct OverlayEditorInspector: View {
     }
 }
 
-/// The selected widget's own settings: its text size (issue 9.21), whether
-/// speed and RPM are needle dials, and its ``OverlayWidget/editableOptions`` —
-/// each an undoable step.
+/// The selected widget's own settings: its text size (issue 9.21), the kart
+/// badge's own text (9.23), whether speed and RPM are needle dials, and its
+/// ``OverlayWidget/editableOptions`` — each an undoable step.
 private struct OverlayWidgetOptionsEditor: View {
     @ObservedObject var editor: OverlayEditorModel
+    let badgePlaceholder: String
 
     var body: some View {
         if let id = editor.selection, let widget = editor.layout.widgets.first(where: { $0.id == id }) {
@@ -263,6 +266,10 @@ private struct OverlayWidgetOptionsEditor: View {
                     Text(L10n.string(.overlayEditorTextSize) + ": " + percent)
                 }
                 .accessibilityValue(percent)
+            }
+            if widget.kind == .kartBadge {
+                BadgeTextField(editor: editor, id: id, text: widget.options.badgeText,
+                               placeholder: badgePlaceholder)
             }
             if widget.kind.offersGaugeStyle {
                 Toggle(L10n.string(.overlayOptionNeedleGauge), isOn: Binding(
@@ -277,5 +284,36 @@ private struct OverlayWidgetOptionsEditor: View {
         } else {
             Text(L10n.string(.overlayEditorNoSelection)).foregroundStyle(.secondary)
         }
+    }
+}
+
+/// The kart badge's own text (issue 9.23). What is typed is kept as a draft
+/// and given to the editor on Return or when the field loses focus — one
+/// undoable step, never a step per key — and held to the badge's limit as it
+/// is typed. An undo puts the badge's text back in the field.
+private struct BadgeTextField: View {
+    let editor: OverlayEditorModel
+    let id: OverlayWidget.ID
+    let text: String?
+    let placeholder: String
+    @State private var draft = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField(L10n.string(.overlayEditorBadgeText), text: $draft, prompt: Text(placeholder))
+            .focused($isFocused)
+            .onAppear { draft = text ?? "" }
+            .onChange(of: text) { draft = $0 ?? "" }
+            .onChange(of: draft) { typed in
+                if typed.count > OverlayWidgetOptions.badgeTextLimit {
+                    draft = String(typed.prefix(OverlayWidgetOptions.badgeTextLimit))
+                }
+            }
+            .onChange(of: isFocused) { focused in if !focused { commit() } }
+            .onSubmit(commit)
+    }
+
+    private func commit() {
+        editor.setBadgeText(draft, for: id)
     }
 }

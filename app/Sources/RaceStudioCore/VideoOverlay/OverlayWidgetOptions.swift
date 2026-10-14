@@ -37,6 +37,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let pedalFullScaleLimits: ClosedRange<Double> = 0.1...10_000
     /// The speed dial's full scales it can draw, km/h.
     public static let maxSpeedLimits: ClosedRange<Double> = 20...400
+    /// How many characters the kart badge's own text keeps (issue 9.23).
+    public static let badgeTextLimit = 60
 
     /// RPM bar: the rpm at the full bar.
     public var maxRPM: Double
@@ -58,6 +60,10 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public var gaugeStyle: OverlayGaugeStyle
     /// Speed dial: the speed at full scale, km/h (shown in the layout's units).
     public var maxSpeed: Double
+    /// The kart badge's own text (issue 9.23) — what it says instead of the
+    /// kart's, or `nil` for the kart's. Kept to one line of ``badgeTextLimit``
+    /// characters, trimmed; blank is `nil`.
+    public var badgeText: String?
 
     public init(maxRPM: Double = OverlayWidgetOptions.defaultMaxRPM,
                 shiftLightRPM: Double = OverlayWidgetOptions.defaultShiftLightRPM,
@@ -67,7 +73,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
                 throttleFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
                 brakeFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
                 gaugeStyle: OverlayGaugeStyle = .classic,
-                maxSpeed: Double = OverlayWidgetOptions.defaultMaxSpeed) {
+                maxSpeed: Double = OverlayWidgetOptions.defaultMaxSpeed,
+                badgeText: String? = nil) {
         self.maxRPM = maxRPM
         self.shiftLightRPM = shiftLightRPM
         self.deltaRange = deltaRange
@@ -77,11 +84,13 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
         self.brakeFullScale = brakeFullScale
         self.gaugeStyle = gaugeStyle
         self.maxSpeed = maxSpeed
+        self.badgeText = badgeText
     }
 
     /// These options with every value drawable: a non-finite value takes its
     /// default, a finite one is clamped to its limits, the shift light to the
-    /// bar's scale, and the rotation into one turn.
+    /// bar's scale, the rotation into one turn, and the badge's text to one
+    /// tidy line (``badgeText``).
     public func validated() -> OverlayWidgetOptions {
         let maxRPM = Self.usable(maxRPM, default: Self.defaultMaxRPM, in: Self.maxRPMLimits)
         return OverlayWidgetOptions(
@@ -95,7 +104,18 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
             brakeFullScale: Self.usable(brakeFullScale, default: Self.defaultPedalFullScale,
                                         in: Self.pedalFullScaleLimits),
             gaugeStyle: gaugeStyle,
-            maxSpeed: Self.usable(maxSpeed, default: Self.defaultMaxSpeed, in: Self.maxSpeedLimits))
+            maxSpeed: Self.usable(maxSpeed, default: Self.defaultMaxSpeed, in: Self.maxSpeedLimits),
+            badgeText: Self.oneLine(badgeText))
+    }
+
+    /// `text` on one line — line breaks become spaces — trimmed, cut to
+    /// ``badgeTextLimit`` characters; blank is `nil`.
+    private static func oneLine(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let joined = text.split(whereSeparator: \.isNewline).joined(separator: " ")
+        let kept = String(joined.trimmingCharacters(in: .whitespacesAndNewlines).prefix(badgeTextLimit))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return kept.isEmpty ? nil : kept
     }
 
     /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below
@@ -117,7 +137,7 @@ extension OverlayWidgetOptions: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case maxRPM, shiftLightRPM, deltaRange, gForceMax, trackMapRotation, throttleFullScale, brakeFullScale
-        case gaugeStyle, maxSpeed
+        case gaugeStyle, maxSpeed, badgeText
     }
 
     /// Each option is read on its own — missing or malformed takes its default —
@@ -134,6 +154,7 @@ extension OverlayWidgetOptions: Codable {
                     ?? Self.defaultPedalFullScale,
                   brakeFullScale: container.lenient(Double.self, forKey: .brakeFullScale) ?? Self.defaultPedalFullScale,
                   gaugeStyle: container.lenient(OverlayGaugeStyle.self, forKey: .gaugeStyle) ?? .classic,
-                  maxSpeed: container.lenient(Double.self, forKey: .maxSpeed) ?? Self.defaultMaxSpeed)
+                  maxSpeed: container.lenient(Double.self, forKey: .maxSpeed) ?? Self.defaultMaxSpeed,
+                  badgeText: container.lenient(String.self, forKey: .badgeText))
     }
 }

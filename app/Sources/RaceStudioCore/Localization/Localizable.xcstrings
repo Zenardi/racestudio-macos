@@ -3000,6 +3000,40 @@
         }
       }
     },
+    "overlay.editor.badgeNoKart": {
+      "comment": "Overlay editor: the badge text field's placeholder when the session has no kart.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No kart"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem kart"
+          }
+        }
+      }
+    },
+    "overlay.editor.badgeText": {
+      "comment": "Overlay editor: the field for the kart badge's own text, shown instead of the kart's.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Badge text"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto da identificação"
+          }
+        }
+      }
+    },
     "overlay.editor.hint": {
       "comment": "Overlay editor help line.",
       "localizations": {

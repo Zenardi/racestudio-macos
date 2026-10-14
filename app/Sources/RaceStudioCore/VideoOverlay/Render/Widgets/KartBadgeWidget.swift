@@ -11,10 +11,10 @@ struct KartBadgeWidget: OverlayWidgetDrawer {
         let style: OverlayTextStyle
     }
 
-    /// What the badge says (``OverlaySessionContext/kartBadgeText``), or nothing
-    /// without a kart.
+    /// What the badge says: its own text (issue 9.23), else the kart's
+    /// (``OverlaySessionContext/kartBadgeText``), else nothing.
     static func text(_ context: OverlayWidgetContext) -> String {
-        context.session.kartBadgeText ?? ""
+        context.options.badgeText ?? context.session.kartBadgeText ?? ""
     }
 
     func layout(in context: OverlayWidgetContext) -> Layout {

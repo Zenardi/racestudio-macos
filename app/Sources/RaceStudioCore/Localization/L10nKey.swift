@@ -188,6 +188,8 @@ extension L10n {
         case menuHelp = "menu.help"
         case menuVideo = "menu.video"
         case menuView = "menu.view"
+        case overlayEditorBadgeNoKart = "overlay.editor.badgeNoKart"
+        case overlayEditorBadgeText = "overlay.editor.badgeText"
         case overlayEditorHint = "overlay.editor.hint"
         case overlayEditorNoSelection = "overlay.editor.noSelection"
         case overlayEditorOptions = "overlay.editor.options"
