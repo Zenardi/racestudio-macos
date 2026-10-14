@@ -245,8 +245,9 @@ becomes the editor:
     scale (in km/h);
   - the delta bar's range, the G-ball's range and the map's rotation;
   - the **throttle and brake full scales** of the pedals;
-  - the kart badge's **Badge text**, kept when you press Return or leave the
-    field (one undo step); its placeholder is what the badge says without it.
+  - the kart badge's **Badge text**, kept when you press Return, leave the
+    field, select another widget or close the editor (one undo step); its
+    placeholder is what the badge says without it.
 
 On the video, every widget is outlined (dashed when it won't draw for this
 session). Click one to select it.
@@ -299,7 +300,8 @@ Three presets are built in:
   RPM channel, the map a GPS track, and the kart badge a kart from your garage
   (it reads, for example, *F4 · Thunder · RBC Honda · 18 HP*) — unless you give
   the badge its own text in the overlay editor (**Badge text**: a driver, a
-  team, a car number — one line of up to 60 characters). A badge with its own
+  team, a car number — one line of up to 60 characters; line breaks and tabs
+  become spaces, and text with nothing visible counts as empty). A badge with its own
   text shows it, with or without a kart; clear the field to show the kart's
   text again. A widget the
   session cannot feed is left out instead of being drawn empty, and the reason is

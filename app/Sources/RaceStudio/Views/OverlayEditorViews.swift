@@ -268,8 +268,8 @@ private struct OverlayWidgetOptionsEditor: View {
                 .accessibilityValue(percent)
             }
             if widget.kind == .kartBadge {
-                BadgeTextField(editor: editor, id: id, text: widget.options.badgeText,
-                               placeholder: badgePlaceholder)
+                BadgeTextField(editor: editor, id: id, placeholder: badgePlaceholder)
+                    .id(id)
             }
             if widget.kind.offersGaugeStyle {
                 Toggle(L10n.string(.overlayOptionNeedleGauge), isOn: Binding(
@@ -287,33 +287,29 @@ private struct OverlayWidgetOptionsEditor: View {
     }
 }
 
-/// The kart badge's own text (issue 9.23). What is typed is kept as a draft
-/// and given to the editor on Return or when the field loses focus — one
-/// undoable step, never a step per key — and held to the badge's limit as it
-/// is typed. An undo puts the badge's text back in the field.
+/// The kart badge's own text (issue 9.23), on ``BadgeTextDraft``: the draft
+/// is given to the editor on Return, when the field loses focus, and when it
+/// goes away — another widget selected, the editor closed — so nothing typed
+/// is lost; one step, for the badge it was typed for (the field is rebuilt per
+/// badge).
 private struct BadgeTextField: View {
-    let editor: OverlayEditorModel
-    let id: OverlayWidget.ID
-    let text: String?
+    @StateObject private var draft: BadgeTextDraft
     let placeholder: String
-    @State private var draft = ""
     @FocusState private var isFocused: Bool
 
-    var body: some View {
-        TextField(L10n.string(.overlayEditorBadgeText), text: $draft, prompt: Text(placeholder))
-            .focused($isFocused)
-            .onAppear { draft = text ?? "" }
-            .onChange(of: text) { draft = $0 ?? "" }
-            .onChange(of: draft) { typed in
-                if typed.count > OverlayWidgetOptions.badgeTextLimit {
-                    draft = String(typed.prefix(OverlayWidgetOptions.badgeTextLimit))
-                }
-            }
-            .onChange(of: isFocused) { focused in if !focused { commit() } }
-            .onSubmit(commit)
+    init(editor: OverlayEditorModel, id: OverlayWidget.ID, placeholder: String) {
+        _draft = StateObject(wrappedValue: BadgeTextDraft(editor: editor, id: id))
+        self.placeholder = placeholder
     }
 
-    private func commit() {
-        editor.setBadgeText(draft, for: id)
+    var body: some View {
+        TextField(L10n.string(.overlayEditorBadgeText),
+                  text: Binding(get: { draft.text }, set: { draft.type($0) }), prompt: Text(placeholder))
+            .focused($isFocused)
+            .onChange(of: isFocused) { focused in if !focused { draft.commit() } }
+            .onSubmit { draft.commit() }
+            .onDisappear { draft.commit() }
+            .help(L10n.string(.overlayEditorBadgeTextHint))
+            .accessibilityHint(L10n.string(.overlayEditorBadgeTextHint))
     }
 }

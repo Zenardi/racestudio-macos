@@ -39,6 +39,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let maxSpeedLimits: ClosedRange<Double> = 20...400
     /// How many characters the kart badge's own text keeps (issue 9.23).
     public static let badgeTextLimit = 60
+    /// How many code points it keeps, whatever marks are stacked on them.
+    public static let badgeTextScalarLimit = 240
 
     /// RPM bar: the rpm at the full bar.
     public var maxRPM: Double
@@ -108,14 +110,32 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
             badgeText: Self.oneLine(badgeText))
     }
 
-    /// `text` on one line — line breaks become spaces — trimmed, cut to
-    /// ``badgeTextLimit`` characters; blank is `nil`.
+    /// `text` as one tidy line: direction overrides dropped, so it can't flip
+    /// what follows; line breaks, tabs and other controls turned to spaces;
+    /// trimmed; cut to ``badgeTextLimit`` characters and
+    /// ``badgeTextScalarLimit`` code points. One with nothing visible — blank,
+    /// or only invisible marks — is `nil`.
     private static func oneLine(_ text: String?) -> String? {
         guard let text else { return nil }
-        let joined = text.split(whereSeparator: \.isNewline).joined(separator: " ")
-        let kept = String(joined.trimmingCharacters(in: .whitespacesAndNewlines).prefix(badgeTextLimit))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return kept.isEmpty ? nil : kept
+        var scalars = String.UnicodeScalarView()
+        scalars.append(contentsOf: text.unicodeScalars.filter { !directionControls.contains($0.value) })
+        let pieces = String(scalars).split { character in
+            character.isNewline || character.unicodeScalars.allSatisfy { $0.properties.generalCategory == .control }
+        }
+        var kept = String(pieces.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(badgeTextLimit))
+        while kept.unicodeScalars.count > badgeTextScalarLimit { kept.removeLast() }
+        kept = kept.trimmingCharacters(in: .whitespacesAndNewlines)
+        return kept.contains(where: isVisible) ? kept : nil
+    }
+
+    /// The direction embedding, override and isolate controls.
+    private static let directionControls: Set<UInt32> = [0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                                                         0x2066, 0x2067, 0x2068, 0x2069]
+
+    /// Whether `character` shows: anything but white space and invisible marks.
+    private static func isVisible(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { !$0.properties.isWhitespace && !$0.properties.isDefaultIgnorableCodePoint }
     }
 
     /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below

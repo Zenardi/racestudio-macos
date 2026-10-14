@@ -60,6 +60,46 @@ import Testing
         #expect(OverlayWidgetOptions(badgeText: given).validated().badgeText == kept)
     }
 
+    /// Every line break, tab or control becomes a space; direction overrides
+    /// are dropped, so the badge can't be flipped; right-to-left text is kept.
+    @Test(arguments: zip(["Car\u{2028}7", "Car\u{2029}7", "Car\u{0085}7", "Car\t7", "Car\u{0}7",
+                          "\u{202E}7 raC", "Car \u{2066}7\u{2069}", "سيارة ٧"],
+                         ["Car 7", "Car 7", "Car 7", "Car 7", "Car 7", "7 raC", "Car 7", "سيارة ٧"]))
+    func test_breaks_controls_and_overrides_are_tidied(given: String, kept: String) {
+        #expect(OverlayWidgetOptions(badgeText: given).validated().badgeText == kept)
+    }
+
+    /// A text with nothing visible — only zero-width or invisible marks — is
+    /// blank, so the badge shows the kart's text.
+    @Test(arguments: ["\u{200B}\u{200D}\u{FEFF}", "\u{00AD}", " \u{2060} "])
+    func test_invisible_text_is_blank(given: String) {
+        #expect(OverlayWidgetOptions(badgeText: given).validated().badgeText == nil)
+    }
+
+    /// An emoji joined from several marks counts as one character, and stays
+    /// whole at the limit.
+    @Test func test_a_joined_emoji_stays_whole_at_the_limit() {
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"
+        let text = String(repeating: "x", count: OverlayWidgetOptions.badgeTextLimit - 1) + family + "y"
+
+        let kept = OverlayWidgetOptions(badgeText: text).validated().badgeText
+
+        #expect(kept?.count == OverlayWidgetOptions.badgeTextLimit)
+        #expect(kept?.hasSuffix(family) == true)
+    }
+
+    /// Characters stacked with marks are held to a bound in code points, so a
+    /// short text can't grow huge.
+    @Test func test_stacked_marks_are_held_to_a_bound() {
+        let stacked = String(repeating: "e" + String(repeating: "\u{0301}", count: 20),
+                             count: OverlayWidgetOptions.badgeTextLimit)
+
+        let kept = OverlayWidgetOptions(badgeText: stacked).validated().badgeText
+
+        #expect((kept?.unicodeScalars.count ?? 0) <= OverlayWidgetOptions.badgeTextScalarLimit)
+        #expect(kept?.isEmpty == false)
+    }
+
     /// A text past the limit is cut to it.
     @Test func test_a_text_past_the_limit_is_cut() {
         let long = String(repeating: "é", count: 500)
