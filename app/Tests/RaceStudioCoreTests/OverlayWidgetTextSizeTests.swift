@@ -79,13 +79,71 @@ import Testing
         #expect(layout.valueStyle.capHeight == expected.capHeight)
     }
 
-    /// The text grows and shrinks by the text size where it has room.
-    @Test(arguments: [0.5, 0.8, 1.2, 1.5])
+    /// The digits grow and shrink by the text size where they have room.
+    @Test(arguments: [0.5, 0.8, 1.2, 1.4])
     func test_the_text_follows_the_text_size(size: Double) {
         let base = speed(textSize: 1), sized = speed(textSize: size)
 
         #expect(abs(sized.valueStyle.capHeight / base.valueStyle.capHeight - CGFloat(size)) < 0.001)
+    }
+
+    /// Every text shrinks by a smaller text size.
+    @Test(arguments: [0.5, 0.8])
+    func test_every_text_shrinks_by_a_smaller_text_size(size: Double) {
+        let base = speed(textSize: 1), sized = speed(textSize: size)
+
         #expect(abs(sized.unitStyle.capHeight / base.unitStyle.capHeight - CGFloat(size)) < 0.001)
+    }
+
+    /// Grown, digits keep a twentieth of their place clear above and below,
+    /// and text with a descender — the `p` of *mph* — reaches no further out
+    /// than it does at 100 %, so nothing touches the next text.
+    @Test func test_grown_text_keeps_clear_of_the_next() {
+        let context = { (size: Double) in
+            OverlayRenderFixture.context(.speed, rect: self.roomy, textSize: size, units: .imperial)
+        }
+        let base = SpeedWidget().layout(in: context(1)), grown = SpeedWidget().layout(in: context(2))
+        let digits = grown.value.insetBy(dx: 0, dy: grown.value.height * 0.05 - 0.01)
+        let unit = grown.unitStyle.box(of: "mph", centredIn: grown.unit)
+        let unitAtBase = base.unitStyle.box(of: "mph", centredIn: base.unit)
+
+        #expect(digits.contains(grown.valueStyle.box(of: "888", centredIn: grown.value)))
+        #expect(unit.minY >= min(unitAtBase.minY, grown.unit.minY) - 0.01)
+        #expect(unit.maxY <= max(unitAtBase.maxY, grown.unit.maxY) + 0.01)
+    }
+
+    /// The G-ball's total, whose *g* dips below its digits, never runs into
+    /// the row under it.
+    @Test func test_the_g_balls_total_never_runs_into_the_row_under_it() {
+        let context = OverlayRenderFixture.context(.gForce, rect: CGRect(x: 0, y: 0, width: 240, height: 320),
+                                                   textSize: 2)
+        let layout = GForceWidget().layout(in: context)
+
+        let total = layout.combinedStyle.box(of: "88.88 g", centredIn: layout.combined)
+        let row = zip(GForceWidget.labels(context), layout.axisLabels).map { text, slot in
+            layout.axisLabelStyle.box(of: text, centredIn: slot)
+        } + layout.axisValues.map { layout.axisValueStyle.box(of: "\u{2212}88.88", centredIn: $0) }
+
+        #expect(row.allSatisfy { !$0.intersects(total) })
+    }
+
+    /// The track map's dash is sized for the place it is drawn in.
+    @Test func test_the_track_maps_dash_is_sized_for_where_it_is_drawn() {
+        let layout = TrackMapWidget().layout(in: OverlayRenderFixture.context(.trackMap, rect: roomy, textSize: 2))
+
+        #expect(layout.missing.contains(layout.missingStyle.box(of: OverlayFormatter.missing,
+                                                                centredIn: layout.missing)))
+    }
+
+    /// Every widget but the track map, which only ever writes a dash, offers
+    /// a text size.
+    @Test func test_every_widget_with_text_offers_a_text_size() {
+        let kinds: [OverlayWidgetKind] = [.speed, .rpm, .gear, .lapTimer, .lapInfo, .delta, .gForce, .pedals,
+                                          .temperature, .sectorTimes, .kartBadge, .sessionInfo,
+                                          .channelValue(.role(.waterTemp))]
+
+        #expect(kinds.allSatisfy { $0.offersTextSize })
+        #expect(!OverlayWidgetKind.trackMap.offersTextSize)
     }
 
     /// Growing, the text fills its place at most — it never spills into the
@@ -108,9 +166,9 @@ import Testing
     /// The classic RPM's digits and label grow too.
     @Test func test_the_classic_rpm_text_grows() {
         let base = RPMWidget().layout(in: OverlayRenderFixture.context(.rpm, rect: wide))
-        let sized = RPMWidget().layout(in: OverlayRenderFixture.context(.rpm, rect: wide, textSize: 1.5))
+        let sized = RPMWidget().layout(in: OverlayRenderFixture.context(.rpm, rect: wide, textSize: 1.3))
 
-        #expect(abs(sized.valueStyle.capHeight / base.valueStyle.capHeight - 1.5) < 0.001)
+        #expect(abs(sized.valueStyle.capHeight / base.valueStyle.capHeight - 1.3) < 0.001)
         #expect(sized.labelStyle.capHeight > base.labelStyle.capHeight)
     }
 

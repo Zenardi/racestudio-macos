@@ -76,8 +76,9 @@ enum Dial {
     /// Past a 100 % text size (issue 9.21) every text's slot grows with it, and
     /// each text then keeps the largest size — never below its 100 % one — at
     /// which it clears the rest: the scale numbers stay inside the ticks and
-    /// clear of each other; the readout stays under the hub and clear of the
-    /// numbers; the caption clears both; all of them stay in the widget.
+    /// clear of each other; the readout stays clear of the numbers and under
+    /// the needle's tail, which points straight down into it at mid-scale; the
+    /// caption clears both; all of them stay in the widget.
     static func layout(in context: OverlayWidgetContext, scale: DialScale, label: (Double) -> String,
                        caption: String, valueTemplate: String) -> DialLayout {
         let content = context.content
@@ -106,20 +107,24 @@ enum Dial {
         var valueStyle = context.style(for: valueBase, fitting: valueTemplate, room: value.size)
         var captionStyle = context.style(for: captionBase, fitting: caption, room: captionSlot.size)
         if grow > 1 {
-            let ticks = radius * 0.86, hub = centre.y - radius * 0.06
-            labelStyle = largest(labelStyle, grownBy: grow) { style in
-                let boxes = labels.map { textBox($0.text, style, in: $0.slot) }
+            let ticks = radius * 0.86
+            let tail = centre.y - radius * 0.12 - needleWidth(radius: radius) / 2 - context.outline
+            let unsized = { (slot: CGRect, template: String) in
+                context.style(for: slot, fitting: template, textSize: 1).capHeight
+            }
+            labelStyle = largest(labelStyle, floor: unsized(CGRect(origin: .zero, size: base), widest)) { style in
+                let boxes = labels.map { style.box(of: $0.text, centredIn: $0.slot) }
                 return boxes.allSatisfy { content.contains($0) && farthest($0, from: centre) <= ticks }
                     && zip(boxes, boxes.dropFirst()).allSatisfy { !overlaps($0, $1) }
             }
-            let labelBoxes = labels.map { textBox($0.text, labelStyle, in: $0.slot) }
-            valueStyle = largest(valueStyle, grownBy: grow) { style in
-                let box = textBox(valueTemplate, style, in: value)
-                return content.contains(box) && box.maxY <= hub && labelBoxes.allSatisfy { !overlaps($0, box) }
+            let labelBoxes = labels.map { labelStyle.box(of: $0.text, centredIn: $0.slot) }
+            valueStyle = largest(valueStyle, floor: unsized(valueBase, valueTemplate)) { style in
+                let box = style.box(of: valueTemplate, centredIn: value)
+                return content.contains(box) && box.maxY <= tail && labelBoxes.allSatisfy { !overlaps($0, box) }
             }
-            let valueBox = textBox(valueTemplate, valueStyle, in: value)
-            captionStyle = largest(captionStyle, grownBy: grow) { style in
-                let box = textBox(caption, style, in: captionSlot)
+            let valueBox = valueStyle.box(of: valueTemplate, centredIn: value)
+            captionStyle = largest(captionStyle, floor: unsized(captionBase, caption)) { style in
+                let box = style.box(of: caption, centredIn: captionSlot)
                 return content.contains(box) && !overlaps(box, valueBox) && labelBoxes.allSatisfy { !overlaps($0, box) }
             }
         }
@@ -128,12 +133,9 @@ enum Dial {
                           caption: captionSlot, captionStyle: captionStyle)
     }
 
-    /// The box `text` takes drawn in `style` centred in `slot`: its advance
-    /// by its capitals, with the outline round them.
-    static func textBox(_ text: String, _ style: OverlayTextStyle, in slot: CGRect) -> CGRect {
-        let width = style.width(of: text) + 2 * style.outline
-        let height = style.capHeight + 2 * style.outline
-        return CGRect(x: slot.midX - width / 2, y: slot.midY - height / 2, width: width, height: height)
+    /// The needle's width on a dial of `radius`.
+    static func needleWidth(radius: CGFloat) -> CGFloat {
+        max(2, (radius * 0.035).rounded())
     }
 
     /// Draw `dial`'s face: the scale's guide arc, a red zone over `redZone`
@@ -170,7 +172,7 @@ enum Dial {
         let angle = angle(fraction: fraction)
         let tip = point(atAngle: angle, 0.80, centre: dial.centre, radius: dial.radius)
         let tail = point(atAngle: angle + .pi, 0.12, centre: dial.centre, radius: dial.radius)
-        let width = max(2, (dial.radius * 0.035).rounded())
+        let width = needleWidth(radius: dial.radius)
         graphics.saveGState()
         graphics.setLineCap(.round)
         for (colour, lineWidth) in [(context.palette.outline, width + 2 * context.outline),
@@ -196,11 +198,10 @@ enum Dial {
 
     // MARK: - Internals
 
-    /// `style` — grown by `grow` — shrunk 5 % at a time until `fits` holds,
-    /// but never below its size before growing.
-    private static func largest(_ style: OverlayTextStyle, grownBy grow: CGFloat,
+    /// `style` shrunk 5 % at a time until `fits` holds, but never below
+    /// `floor` — its capitals at 100 %.
+    private static func largest(_ style: OverlayTextStyle, floor: CGFloat,
                                 where fits: (OverlayTextStyle) -> Bool) -> OverlayTextStyle {
-        let floor = style.capHeight / grow
         var style = style
         while !fits(style), style.capHeight > floor {
             style = OverlayTextStyle(capHeight: max(style.capHeight * 0.95, floor), outline: style.outline)

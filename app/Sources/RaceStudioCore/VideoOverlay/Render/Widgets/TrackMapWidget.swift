@@ -16,6 +16,8 @@ struct TrackMapWidget: OverlayWidgetDrawer {
         let line: CGFloat
         /// The position dot's radius.
         let dot: CGFloat
+        /// Where the dash goes when the position is unknown, and its style.
+        let missing: CGRect
         let missingStyle: OverlayTextStyle
     }
 
@@ -75,7 +77,7 @@ struct TrackMapWidget: OverlayWidgetDrawer {
         return Layout(area: area,
                       projection: Projection(fitting: context.track.racingLine,
                                              turnedBy: context.options.trackMapRotation, into: area),
-                      line: max(1.5, 2.5 * context.scale), dot: dot,
+                      line: max(1.5, 2.5 * context.scale), dot: dot, missing: missing,
                       missingStyle: context.style(for: missing, fitting: OverlayFormatter.missing))
     }
 
@@ -104,9 +106,7 @@ struct TrackMapWidget: OverlayWidgetDrawer {
                      context: OverlayWidgetContext) {
         guard let point = Self.place(of: frame) else {
             for text in readouts(frame, context: context) {
-                let slot = CGRect(x: context.content.minX, y: layout.area.midY - layout.area.height * 0.15,
-                                  width: context.content.width, height: layout.area.height * 0.3)
-                context.draw(text, layout.missingStyle, in: slot, in: graphics)
+                context.draw(text, layout.missingStyle, in: layout.missing, in: graphics)
             }
             return
         }

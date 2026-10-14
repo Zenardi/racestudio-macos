@@ -256,10 +256,13 @@ private struct OverlayWidgetOptionsEditor: View {
 
     var body: some View {
         if let id = editor.selection, let widget = editor.layout.widgets.first(where: { $0.id == id }) {
-            Stepper(value: Binding(get: { widget.textSize }, set: { editor.setTextSize($0, for: id) }),
-                    in: OverlayWidget.textSizes, step: 0.1) {
-                Text(L10n.string(.overlayEditorTextSize) + ": "
-                     + widget.textSize.formatted(.percent.precision(.fractionLength(0))))
+            if widget.kind.offersTextSize {
+                let percent = widget.textSize.formatted(.percent.precision(.fractionLength(0)))
+                Stepper(value: Binding(get: { widget.textSize }, set: { editor.setTextSize($0, for: id) }),
+                        in: OverlayWidget.textSizes, step: 0.1) {
+                    Text(L10n.string(.overlayEditorTextSize) + ": " + percent)
+                }
+                .accessibilityValue(percent)
             }
             if widget.kind.offersGaugeStyle {
                 Toggle(L10n.string(.overlayOptionNeedleGauge), isOn: Binding(

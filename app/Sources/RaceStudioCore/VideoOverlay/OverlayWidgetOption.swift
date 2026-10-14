@@ -66,6 +66,13 @@ public extension OverlayWidgetKind {
     var offersGaugeStyle: Bool {
         self == .rpm || self == .speed
     }
+
+    /// Whether the editor offers this kind a text size (issue 9.21): every
+    /// kind that writes text — all but the track map, which only ever writes
+    /// a dash.
+    var offersTextSize: Bool {
+        self != .trackMap
+    }
 }
 
 public extension OverlayWidget {
