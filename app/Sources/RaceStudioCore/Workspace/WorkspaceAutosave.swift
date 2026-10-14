@@ -40,6 +40,10 @@ public protocol WorkspaceVideo: AnyObject {
 ///   over it;
 /// - when two windows show one session, only the first saves — the other says
 ///   so — so they never write over each other.
+///
+/// It also keeps the last HUD (issue 9.22): every HUD change the window hears
+/// after the open — each committed edit — is saved as the last HUD, and a
+/// session that opens without a HUD of its own starts with it.
 @MainActor
 public final class WorkspaceAutosave: ObservableObject {
 
@@ -86,6 +90,7 @@ public final class WorkspaceAutosave: ObservableObject {
     @Published public private(set) var saveFailed = false
 
     private let store: WorkspaceStore
+    private let lastOverlay: LastOverlayStore?
     private let scheduler: DelayScheduling
     private let delay: Duration
     /// The restore under way or done — owned here, not by the caller's task,
@@ -101,6 +106,7 @@ public final class WorkspaceAutosave: ObservableObject {
     private var keptMathChannels: [MathChannelDef] = []
     private var pending: AnyCancellable?
     private var watches: [AnyCancellable] = []
+    private var lastHUDWatch: AnyCancellable?
     private static let logger = Logger(subsystem: "com.racestudio.core", category: "workspace")
 
     /// Which window saves each workspace file in this process.
@@ -114,11 +120,13 @@ public final class WorkspaceAutosave: ObservableObject {
 
     /// - Parameters:
     ///   - store: where the session's workspace is kept.
+    ///   - lastOverlay: where the last HUD is kept, or `nil` to keep none.
     ///   - scheduler: runs the delayed write (the tests advance a manual clock).
     ///   - delay: how long after a change the workspace is written.
-    public init(store: WorkspaceStore, scheduler: DelayScheduling = TaskDelayScheduler(),
-                delay: Duration = WorkspaceAutosave.delay) {
+    public init(store: WorkspaceStore, lastOverlay: LastOverlayStore? = nil,
+                scheduler: DelayScheduling = TaskDelayScheduler(), delay: Duration = WorkspaceAutosave.delay) {
         self.store = store
+        self.lastOverlay = lastOverlay
         self.scheduler = scheduler
         self.delay = delay
     }
@@ -155,6 +163,8 @@ public final class WorkspaceAutosave: ObservableObject {
             warnings.append(.unreadableWorkspace(keptAside: keptAside))
             mayWrite = mayWrite && keptAside
         }
+        startWithTheLastHUD(parts)
+        rememberHUDChanges(parts)
         notice = ProjectLoadNotice(warnings: warnings, diagnostics: diagnostics)
         guard mayWrite else { return }
         saving = (parts, session)
@@ -187,6 +197,27 @@ public final class WorkspaceAutosave: ObservableObject {
             await parts.video.restore(video, sessionStartEpoch: Double(parts.window.session.metadata.datetimeUtc))
         }
         return warnings
+    }
+
+    /// A window without a HUD of its own takes the last one, with a fresh
+    /// history — in the window too, so the export's *Current overlay* draws it.
+    private func startWithTheLastHUD(_ parts: Parts) {
+        guard parts.window.videoOverlay == nil, let last = lastOverlay?.load() else { return }
+        parts.window.videoOverlay = last
+        parts.overlay.load(last)
+    }
+
+    /// Keep every HUD change the window hears from now on — each committed
+    /// edit, never the open's own — as the last HUD.
+    private func rememberHUDChanges(_ parts: Parts) {
+        guard let lastOverlay else { return }
+        lastHUDWatch = parts.window.$videoOverlay.dropFirst().compactMap { $0 }.sink { layout in
+            do {
+                try lastOverlay.save(layout)
+            } catch {
+                Self.logger.error("could not keep the last HUD: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 
     /// Make this window the one saving `file`, unless a live window already is.

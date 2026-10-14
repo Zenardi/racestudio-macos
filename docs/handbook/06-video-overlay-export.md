@@ -52,9 +52,9 @@ this happens in [Video + Data](02-analysis-views.md#video--data):
    lap list, a lap the video doesn't hold in full can't be ticked, and says why.
 3. **Choose the overlay:** the workspace's own (**Current overlay**, as you
    arranged it in the editor) or a preset — *Minimal*, *Kart coaching* or
-   *Full telemetry*. Without an overlay of its own, the workspace starts on
-   *Kart coaching*. The overlay is drawn even if the HUD is hidden in Video +
-   Data.
+   *Full telemetry*. Without an overlay of its own, a session starts with the
+   last HUD you arranged, or on *Kart coaching* before you have arranged any.
+   The overlay is drawn even if the HUD is hidden in Video + Data.
    - **Turn widgets on or off.** Under the overlay, **Widgets** lists its
      widgets — *Speed*, *RPM bar*, *Lap timer*, *G-ball*, *Track map* and so on —
      each with a switch. Turn one off to leave it out of this export; every
