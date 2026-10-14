@@ -229,8 +229,12 @@ The app is a **Rust core** exposed to a **SwiftUI** frontend through **UniFFI**:
   A `Workspace/StoryBoardModel` derives the lap strip (shown laps in order, reference
   marked); `LapSelectionModel.move(from:to:)` reorders it and every panel follows via
   `AnalysisWindowModel.reorderSelectedLap`. The thin `WorkspaceBar` / `StoryBoardView`
-  surface File-style Open/Save `.rsproj` commands and the reorderable strip; `make run`
-  builds + launches the app.
+  surface the reorderable strip; `make run` builds + launches the app. Since 9.20
+  ([#219](https://github.com/Zenardi/racestudio-macos/issues/219)) there is no Open/Save:
+  `WorkspaceAutosave` restores each session's workspace when it opens and writes it a
+  second after every change (and on close/quit), through `WorkspaceStore` — one
+  `.rsproj` (schema **v9**, which adds the Split Times splits) per session content id
+  in Application Support's `Workspaces/`.
   8.14 adds the `Library/LibraryBrowserModel` — the RaceStudio 3 **session library
   browser**, and makes it the app's landing window. Over the 5.3
   `SessionIndex`/`LibraryStore` it lists indexed sessions date-descending; imports add

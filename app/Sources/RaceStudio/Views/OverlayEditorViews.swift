@@ -223,11 +223,6 @@ struct OverlayEditorInspector: View {
             Section(L10n.string(.overlayEditorOptions)) {
                 OverlayWidgetOptionsEditor(editor: editor)
             }
-            if editor.isDirty {
-                Label(L10n.string(.overlayEditorUnsaved), systemImage: "circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             Text(L10n.string(.overlayEditorHint))
                 .font(.caption)
                 .foregroundStyle(.secondary)

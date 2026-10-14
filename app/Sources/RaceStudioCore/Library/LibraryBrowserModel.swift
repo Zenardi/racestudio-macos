@@ -48,6 +48,9 @@ public final class LibraryBrowserModel: ObservableObject {
     /// non-filesystem test configuration). Deleting can only offer to remove a file
     /// this store owns.
     private let files: ManagedFileStore?
+    /// The sessions' saved workspaces (issue 9.20), or `nil` when the browser
+    /// keeps none (list-only tests). Deleting a session deletes its workspace.
+    private let workspaces: WorkspaceStore?
 
     /// The visible (filtered) sessions, date-descending.
     @Published public private(set) var sessions: [SessionSummary]
@@ -77,11 +80,14 @@ public final class LibraryBrowserModel: ObservableObject {
     ///     (then ``loadPreview()`` is a no-op — e.g. list-only tests).
     ///   - files: the store holding RaceStudio's own copy of each imported file, or
     ///     `nil` when the browser owns no files (then nothing is discardable).
+    ///   - workspaces: the sessions' saved workspaces, deleted with their
+    ///     session, or `nil` when there are none to delete.
     public init(index: SessionIndex = SessionIndex(), loader: SessionLoading? = nil,
-                files: ManagedFileStore? = nil) {
+                files: ManagedFileStore? = nil, workspaces: WorkspaceStore? = nil) {
         self.index = index
         self.loader = loader
         self.files = files
+        self.workspaces = workspaces
         self.sessions = index.summaries
     }
 
@@ -94,8 +100,9 @@ public final class LibraryBrowserModel: ObservableObject {
     public convenience init(loadingFrom url: URL,
                             store: LibraryStore = LibraryStore(),
                             loader: SessionLoading? = nil,
-                            files: ManagedFileStore? = nil) {
-        self.init(index: store.load(from: url), loader: loader, files: files)
+                            files: ManagedFileStore? = nil,
+                            workspaces: WorkspaceStore? = nil) {
+        self.init(index: store.load(from: url), loader: loader, files: files, workspaces: workspaces)
         autosave = (url, store)
     }
 
@@ -298,8 +305,9 @@ public final class LibraryBrowserModel: ObservableObject {
         return files.isManaged(summary.sourceURL)
     }
 
-    /// Remove the session with `id` from the library, and — with
-    /// ``SessionDeletion/discardingCopy`` — delete RaceStudio's own copy of its file.
+    /// Remove the session with `id` from the library, with its saved workspace
+    /// (issue 9.20), and — with ``SessionDeletion/discardingCopy`` — delete
+    /// RaceStudio's own copy of its file.
     ///
     /// The row is **always** removed, including when discarding the file fails: the
     /// error is thrown afterwards so the caller can report it without the row
@@ -311,6 +319,7 @@ public final class LibraryBrowserModel: ObservableObject {
         if selectedID == id { select(nil) }
         refresh()
         persist()
+        workspaces?.delete(session: id)
         guard deletion == .discardingCopy else { return }
         guard let files else { throw ManagedFileStore.StorageError.notManaged }
         try files.discard(summary.sourceURL)

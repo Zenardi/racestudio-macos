@@ -64,7 +64,11 @@ final class AppModel: ObservableObject {
         self.libraryURL = libraryURL
         self.files = files
         self.followUpPolicy = ImportFollowUpPolicy(store: UserDefaultsKeyValueStore())
-        let library = LibraryBrowserModel(loadingFrom: libraryURL, loader: loader, files: files)
+        // Deleting a session deletes the workspace saved for it (issue 9.20).
+        let workspaces = WorkspaceStore(directory: WorkspaceStore.defaultDirectory(),
+                                        validator: FFIExpressionValidator())
+        let library = LibraryBrowserModel(loadingFrom: libraryURL, loader: loader, files: files,
+                                          workspaces: workspaces)
         self.library = library
         self.coordinator = ImportCoordinator(store: store, recents: recents)
         #if canImport(RaceStudioFFIBindings)

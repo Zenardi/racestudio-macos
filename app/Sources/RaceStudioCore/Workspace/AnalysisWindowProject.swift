@@ -17,12 +17,14 @@ public extension AnalysisWindowModel {
     /// indices under the session's content id, the active layout, the window's
     /// 9.10 ``AnalysisWindowModel/videoOverlay`` and 9.12
     /// ``AnalysisWindowModel/videoDataPanes``, and the supplied `mathChannels`
-    /// + `logSheet` + `video` (all owned outside the window — the 8.8 manager, the
-    /// 8.17 log-sheet model, and the 9.6 video-review player — so they are passed
-    /// in). The result is what the 5.4 ``ProjectStore`` saves.
+    /// + `logSheet` + `video` + `splits` (all owned outside the window — the 8.8
+    /// manager, the 8.17 log-sheet model, the 9.6 video-review player and the
+    /// 8.11 Split Times report — so they are passed in). The result is what the
+    /// 5.4 ``ProjectStore`` saves.
     func projectDocument(mathChannels: [MathChannelDef] = [],
                          logSheet: LogSheet = LogSheet(),
-                         video: VideoAttachment? = nil) -> ProjectDocument {
+                         video: VideoAttachment? = nil,
+                         splits: SplitLayout? = nil) -> ProjectDocument {
         let id = sessionContentID
         return ProjectDocument(
             sessionRefs: [SessionRef(id: id, displayName: sessionDisplayName)],
@@ -35,7 +37,8 @@ public extension AnalysisWindowModel {
             logSheet: logSheet,
             video: video,
             overlay: videoOverlay,
-            videoData: videoDataPanes)
+            videoData: videoDataPanes,
+            splits: splits)
     }
 
     /// Restore the window from a loaded ``ProjectDocument`` (issue 8.13): re-select
@@ -44,8 +47,8 @@ public extension AnalysisWindowModel {
     /// Data pane layout. The lap
     /// selection for this session is matched by content id, falling back to the
     /// document's first lap selection when the ids differ (e.g. a project reopened
-    /// against a re-imported session). Math channels are restored by the caller
-    /// through the 8.8 manager, which owns them.
+    /// against a re-imported session). Math channels, the log sheet, the video and
+    /// the splits are restored by their owners (see ``WorkspaceAutosave``).
     func restore(from document: ProjectDocument) {
         let channelNames = document.layout.panes.flatMap(\.channelNames)
         let lapSelection = document.selectedLaps.first { $0.sessionID == sessionContentID }

@@ -284,3 +284,44 @@ import Testing
         #expect(model.sessions[0].sourceURL.lastPathComponent == "b.xrk", "the re-import still wins the URL")
     }
 }
+
+/// Deleting a session also deletes the workspace saved for it (issue 9.20), so
+/// no analysis outlives the session it was made on.
+@MainActor @Suite struct LibraryDeleteWorkspaceTests {
+
+    private func workspaces() throws -> WorkspaceStore {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("rs-delete-workspace-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return WorkspaceStore(directory: dir, validator: FakeExpressionValidator())
+    }
+
+    private let document = ProjectDocument(layout: AnalysisLayout(panes: [], xAxisMode: .time),
+                                           activeLayout: .trackMap)
+
+    @Test(arguments: [SessionDeletion.removeFromLibrary, .discardingCopy])
+    func test_deleting_a_session_deletes_its_workspace(deletion: SessionDeletion) throws {
+        let workspaces = try workspaces()
+        let model = LibraryBrowserModel(workspaces: workspaces)
+        let summary = model.add(SessionFixture.make(), sourceURL: URL(fileURLWithPath: "/tmp/a.xrk"))
+        let other = model.add(SessionFixture.make(track: "Other"), sourceURL: URL(fileURLWithPath: "/tmp/b.xrk"))
+        try workspaces.save(document, session: summary.id)
+        try workspaces.save(document, session: other.id)
+
+        try? model.delete(id: summary.id, deletion)
+
+        #expect(workspaces.load(session: summary.id) == .none)
+        #expect(workspaces.load(session: other.id) == .document(document))
+    }
+
+    /// Deleting a session that isn't in the library touches no workspace.
+    @Test func test_deleting_an_unknown_session_keeps_every_workspace() throws {
+        let workspaces = try workspaces()
+        let model = LibraryBrowserModel(workspaces: workspaces)
+        try workspaces.save(document, session: "abc123")
+
+        try model.delete(id: "abc123", .removeFromLibrary)
+
+        #expect(workspaces.load(session: "abc123") == .document(document))
+    }
+}

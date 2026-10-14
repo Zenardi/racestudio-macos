@@ -130,8 +130,9 @@ import Foundation
         #expect(loaded.warnings.isEmpty)
     }
 
-    /// The schema was bumped for the pane layout: a save is stamped v8 on disk.
-    @Test func test_saved_projects_are_stamped_v8() throws {
+    /// The schema was bumped for the pane layout: a save is stamped v8 or later
+    /// on disk.
+    @Test func test_saved_projects_are_stamped_v8_or_later() throws {
         let dir = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appendingPathComponent("stamp.rsproj")
@@ -139,7 +140,7 @@ import Foundation
 
         let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
 
-        #expect(json?["schemaVersion"] as? Int == 8)
+        #expect((json?["schemaVersion"] as? Int ?? 0) >= 8)
         #expect(json?["videoData"] != nil)
     }
 

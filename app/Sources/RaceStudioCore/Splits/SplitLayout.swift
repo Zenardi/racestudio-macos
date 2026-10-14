@@ -158,3 +158,84 @@ public struct SplitLayout: Equatable, Sendable {
         return SplitLayout(base: base, splits: next, nextID: nextID)
     }
 }
+
+// MARK: - Persistence (issue 9.20)
+
+/// A layout is saved with the workspace as its base grid, its id source and
+/// each split's id, name, type, lock and cell range. Reading one back refuses a
+/// layout whose splits don't tile `[0, base)` exactly once each with unique
+/// ids — every edit relies on that — reads an unknown type as a straight, and
+/// moves a stale id source past the live ids.
+extension SplitLayout: Codable {
+
+    private enum CodingKeys: String, CodingKey {
+        case base, nextID, splits
+    }
+
+    private enum SplitKeys: String, CodingKey {
+        case id, name, kind, locked, start, end
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let base = try container.decode(Int.self, forKey: .base)
+        var entries = try container.nestedUnkeyedContainer(forKey: .splits)
+        var splits: [Split] = []
+        while !entries.isAtEnd {
+            let entry = try entries.nestedContainer(keyedBy: SplitKeys.self)
+            let start = try entry.decode(Int.self, forKey: .start)
+            let end = try entry.decode(Int.self, forKey: .end)
+            guard start < end else {
+                throw DecodingError.dataCorruptedError(forKey: .end, in: entry,
+                                                       debugDescription: "A split spans at least one cell.")
+            }
+            let kind = Self.optional(String.self, .kind, in: entry).flatMap(SplitKind.init(rawValue:))
+            splits.append(Split(id: try entry.decode(Int.self, forKey: .id),
+                                name: Self.optional(String.self, .name, in: entry) ?? "S\(splits.count + 1)",
+                                kind: kind ?? .straight,
+                                locked: Self.optional(Bool.self, .locked, in: entry) ?? false,
+                                range: start..<end))
+        }
+        guard Self.tile(base, exactly: splits) else {
+            throw DecodingError.dataCorruptedError(forKey: .splits, in: container,
+                                                   debugDescription: "The splits must tile the grid once each.")
+        }
+        let firstFreeID = (splits.map(\.id).max() ?? -1) + 1
+        let nextID = (try? container.decodeIfPresent(Int.self, forKey: .nextID)) ?? nil
+        self.init(base: base, splits: splits, nextID: max(nextID ?? 0, firstFreeID))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(base, forKey: .base)
+        try container.encode(nextID, forKey: .nextID)
+        var entries = container.nestedUnkeyedContainer(forKey: .splits)
+        for split in splits {
+            var entry = entries.nestedContainer(keyedBy: SplitKeys.self)
+            try entry.encode(split.id, forKey: .id)
+            try entry.encode(split.name, forKey: .name)
+            try entry.encode(split.kind.rawValue, forKey: .kind)
+            try entry.encode(split.locked, forKey: .locked)
+            try entry.encode(split.range.lowerBound, forKey: .start)
+            try entry.encode(split.range.upperBound, forKey: .end)
+        }
+    }
+
+    /// The value at `key`, or `nil` when it is missing or malformed.
+    private static func optional<Value: Decodable>(_ type: Value.Type, _ key: SplitKeys,
+                                                   in entry: KeyedDecodingContainer<SplitKeys>) -> Value? {
+        (try? entry.decodeIfPresent(type, forKey: key)) ?? nil
+    }
+
+    /// Whether `splits`, in order, cover `[0, base)` with no gap or overlap, and
+    /// carry distinct ids.
+    private static func tile(_ base: Int, exactly splits: [Split]) -> Bool {
+        guard base > 0, !splits.isEmpty, Set(splits.map(\.id)).count == splits.count else { return false }
+        var cursor = 0
+        for split in splits {
+            guard split.range.lowerBound == cursor else { return false }
+            cursor = split.range.upperBound
+        }
+        return cursor == base
+    }
+}

@@ -12,6 +12,10 @@ public enum ProjectLoadWarning: Equatable, Sendable {
     case unreadableOverlay
     /// This many widgets or settings of the overlay could not be read.
     case skippedOverlayEntries(Int)
+    /// The session's saved workspace could not be read (issue 9.20). Kept aside,
+    /// it is out of harm's way and the session opened with its defaults; left in
+    /// place, nothing is saved over it.
+    case unreadableWorkspace(keptAside: Bool)
 
     /// The warning as the store has always logged it, in English.
     public var text: String {
@@ -21,6 +25,9 @@ public enum ProjectLoadWarning: Equatable, Sendable {
         case .unreadableOverlay: return "unreadable video overlay; opened with the overlay off"
         case .skippedOverlayEntries(let count):
             return "video overlay: \(count) unreadable \(count == 1 ? "entry" : "entries") skipped"
+        case .unreadableWorkspace(let keptAside):
+            return keptAside ? "unreadable saved workspace; kept aside, opened with the defaults"
+                : "unreadable saved workspace; left in place, not saving over it"
         }
     }
 
@@ -34,6 +41,10 @@ public enum ProjectLoadWarning: Equatable, Sendable {
             return count == 1
                 ? L10n.string(.projectWarningSkippedOverlayOne, locale: locale)
                 : L10n.format(.projectWarningSkippedOverlayOther, locale: locale, String(count))
+        case .unreadableWorkspace(keptAside: true):
+            return L10n.string(.projectWarningUnreadableWorkspace, locale: locale)
+        case .unreadableWorkspace(keptAside: false):
+            return L10n.string(.projectWarningUnreadableWorkspaceInPlace, locale: locale)
         }
     }
 }

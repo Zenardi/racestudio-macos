@@ -27,9 +27,6 @@ public final class OverlayEditorModel: ObservableObject {
     /// The selected widget, or `nil`.
     @Published public private(set) var selection: OverlayWidget.ID?
 
-    /// Whether the layout differs from the one last loaded or saved.
-    @Published public private(set) var isDirty = false
-
     /// Told the layout after every committed edit, undo and redo — not during a
     /// gesture's live updates — so the window can keep its workspace copy.
     public var onCommit: ((OverlayLayout) -> Void)?
@@ -41,32 +38,26 @@ public final class OverlayEditorModel: ObservableObject {
 
     @Published private var undoStack: [OverlayLayout] = []
     @Published private var redoStack: [OverlayLayout] = []
-    private var savedLayout: OverlayLayout
     /// The layout when the gesture in progress began, or `nil` between gestures.
     var gestureStart: OverlayLayout?
 
     /// - Parameter layout: the workspace's overlay; `nil` (none chosen yet)
     ///   starts on Kart coaching with the HUD off.
     public init(layout: OverlayLayout?) {
-        let start = Self.startingLayout(layout)
-        self.layout = start
-        self.savedLayout = start
+        self.layout = Self.startingLayout(layout)
     }
 
     // MARK: - Loading and saving
 
     /// Edit another workspace's overlay (`nil` for none yet): the layout is
-    /// replaced, and the history, the selection and the dirty flag start afresh.
+    /// replaced, and the history and the selection start afresh.
     public func load(_ layout: OverlayLayout?) {
-        let start = Self.startingLayout(layout)
-        self.layout = start
-        savedLayout = start
+        self.layout = Self.startingLayout(layout)
         selection = nil
         gestureStart = nil
         undoStack.removeAll()
         redoStack.removeAll()
         undoManager?.removeAllActions(withTarget: self)
-        isDirty = false
     }
 
     /// Forget the edit history — here and in the ``undoManager`` — keeping the
@@ -78,12 +69,6 @@ public final class OverlayEditorModel: ObservableObject {
         undoStack.removeAll()
         redoStack.removeAll()
         undoManager?.removeAllActions(withTarget: self)
-    }
-
-    /// Record that the workspace was saved with the current layout.
-    public func markSaved() {
-        savedLayout = layout
-        isDirty = false
     }
 
     // MARK: - Selection
@@ -200,7 +185,6 @@ public final class OverlayEditorModel: ObservableObject {
 
     private func didCommit() {
         if let selection, !layout.widgets.contains(where: { $0.id == selection }) { self.selection = nil }
-        isDirty = layout != savedLayout
         onCommit?(layout)
     }
 
