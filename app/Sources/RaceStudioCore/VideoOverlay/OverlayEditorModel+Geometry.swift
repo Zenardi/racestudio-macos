@@ -68,8 +68,10 @@ public extension OverlayEditorModel {
     // MARK: - Gestures
 
     /// Start a drag or resize: its updates are measured from the layout now,
-    /// and ``endGesture()`` records the whole gesture as one step.
+    /// and ``endGesture()`` records the whole gesture as one step. A gesture
+    /// still open — a slider let go out of sight — is recorded first.
     func beginGesture() {
+        closeOpenGesture()
         gestureStart = layout
     }
 

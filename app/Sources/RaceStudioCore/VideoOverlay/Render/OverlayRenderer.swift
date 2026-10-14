@@ -65,7 +65,7 @@ public struct OverlayRenderer: Sendable {
         var layout = layout
         if let units { layout.units = units }
         self.layout = layout
-        self.theme = (theme ?? layout.theme).withPlateOpacity(OverlayLayout.plateOpacity(layout.plateOpacity))
+        self.theme = (theme ?? layout.theme).withPlateOpacity(layout.plateOpacity)
         self.formatter = formatter
         self.session = session
         self.track = track

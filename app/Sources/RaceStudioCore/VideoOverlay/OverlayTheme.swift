@@ -73,7 +73,9 @@ public struct OverlayTheme: Equatable, Sendable {
     /// A sector over the best so far: F1's yellow.
     public let sectorSlower: BrandColor
 
-    /// The overlay theme drawn from `brand`'s dark-appearance tokens.
+    /// The overlay theme drawn from `brand`'s dark-appearance tokens. Its
+    /// `translucentPlateOpacity` is a starting point only: the renderer draws
+    /// with the layout's background opacity (``OverlayLayout/plateOpacity``).
     public init(id: String, brand: Theme, translucentPlateOpacity: Double = 0.88,
                 warning: BrandColor = .rgb(255, 184, 0), sectorBest: BrandColor = .rgb(179, 136, 255),
                 sectorSlower: BrandColor = .rgb(255, 214, 10)) {
@@ -114,7 +116,7 @@ public struct OverlayTheme: Equatable, Sendable {
     /// the HUD's background opacity, `0` for no plate at all.
     public func withPlateOpacity(_ opacity: Double) -> OverlayTheme {
         var theme = self
-        theme.translucentPlateOpacity = opacity
+        theme.translucentPlateOpacity = OverlayLayout.plateOpacity(opacity)
         return theme
     }
 

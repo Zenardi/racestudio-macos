@@ -328,9 +328,10 @@ private struct PlateOpacitySlider: View {
                    in: 0...1, step: 0.05) {
                 Text(L10n.string(.overlayEditorPlateOpacity))
             } onEditingChanged: { editing in
-                if editing { editor.beginGesture() } else { editor.endGesture() }
+                if editing { editor.beginPlateAdjustment() } else { editor.endPlateAdjustment() }
             }
             .accessibilityValue(percent)
+            .onDisappear { editor.endPlateAdjustment() }
             Text(percent)
                 .monospacedDigit()
                 .frame(minWidth: 40, alignment: .trailing)

@@ -231,10 +231,14 @@ becomes the editor:
   widget's translucent background covers the video. Drag it and the HUD follows
   as you go, the whole drag one undo step; the arrow keys move it 5% at a time.
   At 0% there is no background at all. Widgets with a solid background keep it,
-  and widgets without one stay without. Text stays readable at any setting: at
-  88% and above the background gives it WCAG AA contrast (4.5:1 or more) over
-  the brightest or darkest video, and below that the dark outline drawn round
-  every letter and digit does.
+  and widgets without one stay without. It belongs to the HUD, not to a preset:
+  choosing a preset keeps it, and the export's presets are drawn with it too.
+  At 88% and above, the background gives every text WCAG AA contrast (4.5:1 or
+  more) over the brightest or darkest video. Below that, every letter and digit
+  keeps a dark outline that meets the same ratio, and the outline grows thicker
+  as the background fades (twice as thick at 0%), as do the unlit bars and guide
+  rings, so the HUD stays readable. Over busy, mid-grey video a fainter
+  background is still harder to read than the default.
 - **Widgets**: a toggle for each widget. A widget the session cannot feed shows
   a warning sign; its tooltip says why (for example *No RPM channel*).
 - **Options** for the selected widget:

@@ -157,12 +157,12 @@ import Testing
         var heard: [Double] = []
         editor.onCommit = { heard.append($0.plateOpacity) }
 
-        editor.beginGesture()
+        editor.beginPlateAdjustment()
         editor.setPlateOpacity(0.7)
         editor.setPlateOpacity(0.4)
         #expect(editor.layout.plateOpacity == 0.4)
         #expect(heard.isEmpty)
-        editor.endGesture()
+        editor.endPlateAdjustment()
 
         #expect(heard == [0.4])
         editor.undo()
