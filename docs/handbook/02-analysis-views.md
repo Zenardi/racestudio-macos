@@ -149,9 +149,17 @@ view, all on one clock.
 - **VoiceOver.** The HUD reads as one sentence, for example *Lap 7, 1:02.3,
   speed 84 km/h, delta minus 0.21*, leaving out anything the session cannot say
   at that moment.
-- **Show HUD** (⇧⌘H) hides or shows the overlay without losing its layout. A
-  workspace with no overlay yet starts with the HUD off, on the *Kart coaching*
-  preset.
+- **Show HUD** (⇧⌘H) hides or shows the overlay without losing its layout.
+- **The last HUD carries over.** Every change you make to the HUD is also
+  remembered as the *last HUD*. A session opened without a HUD of its own (a
+  new import, say) starts with it: the same widgets, places, sizes and
+  settings, and *Show HUD* as you left it. Until you change its HUD, such a
+  session keeps following the last HUD, so it shows your newest arrangement
+  each time it opens; your first change makes that HUD the session's own. A
+  session that already has its own HUD keeps it. Before you have arranged any
+  HUD, a session starts with the HUD
+  off, on the *Kart coaching* preset. The last HUD is kept in
+  `LastOverlay.json` in RaceStudio's Application Support folder.
 
 ### Syncing the video precisely
 

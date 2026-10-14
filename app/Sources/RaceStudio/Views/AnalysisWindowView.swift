@@ -39,9 +39,11 @@ struct AnalysisWindowView: View {
     // app's export. The export itself is the app's, so it outlives the window.
     @StateObject private var exporter = VideoExportCoordinator()
     // The session's workspace (issue 9.20): restored when the window opens and
-    // saved on its own after every change, with no Open or Save.
-    @StateObject private var workspace = WorkspaceAutosave(store: WorkspaceStore(
-        directory: WorkspaceStore.defaultDirectory(), validator: FFIExpressionValidator()))
+    // saved on its own after every change, with no Open or Save. It keeps the
+    // last HUD too (issue 9.22), which a session without its own starts with.
+    @StateObject private var workspace = WorkspaceAutosave(
+        store: WorkspaceStore(directory: WorkspaceStore.defaultDirectory(), validator: FFIExpressionValidator()),
+        lastOverlay: LastOverlayStore(directory: LastOverlayStore.defaultDirectory()))
     // The live analysis pump the Split Times panel reads the per-lap base grid from
     // (issue 8.11); nil in a non-FFI build/preview, which then shows an empty report.
     private let analysis: AnalysisSession?
