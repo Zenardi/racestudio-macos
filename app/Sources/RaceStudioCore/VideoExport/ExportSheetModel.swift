@@ -290,7 +290,7 @@ public final class ExportSheetModel: ObservableObject {
     /// Whether the session can feed `widget` — every widget, without a
     /// session context.
     private func availability(of widget: OverlayWidget) -> WidgetAvailability {
-        input.overlaySession.map { widget.kind.availability(for: $0) } ?? .available
+        input.overlaySession.map { widget.availability(for: $0) } ?? .available
     }
 
     /// What the file name says was exported.

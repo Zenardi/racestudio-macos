@@ -131,6 +131,16 @@ public final class OverlayEditorModel: ObservableObject {
         }
     }
 
+    /// Set the kart badge `id`'s own text (issue 9.23), kept to one tidy line;
+    /// a blank text goes back to the kart's.
+    public func setBadgeText(_ text: String, for id: OverlayWidget.ID) {
+        commit { layout in
+            guard let index = layout.widgets.firstIndex(where: { $0.id == id }) else { return }
+            layout.widgets[index].options.badgeText = text
+            layout.widgets[index].options = layout.widgets[index].options.validated()
+        }
+    }
+
     /// Set widget `id`'s text size (issue 9.21), held to
     /// ``OverlayWidget/textSizes``.
     public func setTextSize(_ size: Double, for id: OverlayWidget.ID) {

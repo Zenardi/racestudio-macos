@@ -112,7 +112,8 @@ struct VideoDataPanel: View {
 
     @ViewBuilder private var sideColumn: some View {
         if isEditing {
-            OverlayEditorInspector(editor: editor, presets: presets, availability: availability)
+            OverlayEditorInspector(editor: editor, presets: presets, availability: availability,
+                                   badgePlaceholder: badgePlaceholder)
         } else {
             FractionSplit(axis: .vertical, divider: .map, panes: $model.videoDataPanes,
                           showsLeading: model.videoDataPanes.isVisible(.map),
@@ -177,6 +178,12 @@ struct VideoDataPanel: View {
     // MARK: - Session facts
 
     private var kart: Kart? { app.library.kart(forSession: model.contentID) }
+
+    /// What the kart badge says without its own text: the kart's, or *No kart*.
+    private var badgePlaceholder: String {
+        data.overlayContext(kart: kart, metadata: model.session.metadata)?.kartBadgePlaceholder()
+            ?? L10n.string(.overlayEditorBadgeNoKart)
+    }
 
     private var availability: [OverlayWidget.ID: WidgetAvailability] {
         guard hasTelemetry, let context = data.overlayContext(kart: kart, metadata: model.session.metadata) else {

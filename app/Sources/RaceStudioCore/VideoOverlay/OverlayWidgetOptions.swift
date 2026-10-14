@@ -37,6 +37,10 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public static let pedalFullScaleLimits: ClosedRange<Double> = 0.1...10_000
     /// The speed dial's full scales it can draw, km/h.
     public static let maxSpeedLimits: ClosedRange<Double> = 20...400
+    /// How many characters the kart badge's own text keeps (issue 9.23).
+    public static let badgeTextLimit = 60
+    /// How many code points it keeps, whatever marks are stacked on them.
+    public static let badgeTextScalarLimit = 240
 
     /// RPM bar: the rpm at the full bar.
     public var maxRPM: Double
@@ -58,6 +62,10 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
     public var gaugeStyle: OverlayGaugeStyle
     /// Speed dial: the speed at full scale, km/h (shown in the layout's units).
     public var maxSpeed: Double
+    /// The kart badge's own text (issue 9.23) — what it says instead of the
+    /// kart's, or `nil` for the kart's. Kept to one line of ``badgeTextLimit``
+    /// characters, trimmed; blank is `nil`.
+    public var badgeText: String?
 
     public init(maxRPM: Double = OverlayWidgetOptions.defaultMaxRPM,
                 shiftLightRPM: Double = OverlayWidgetOptions.defaultShiftLightRPM,
@@ -67,7 +75,8 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
                 throttleFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
                 brakeFullScale: Double = OverlayWidgetOptions.defaultPedalFullScale,
                 gaugeStyle: OverlayGaugeStyle = .classic,
-                maxSpeed: Double = OverlayWidgetOptions.defaultMaxSpeed) {
+                maxSpeed: Double = OverlayWidgetOptions.defaultMaxSpeed,
+                badgeText: String? = nil) {
         self.maxRPM = maxRPM
         self.shiftLightRPM = shiftLightRPM
         self.deltaRange = deltaRange
@@ -77,11 +86,13 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
         self.brakeFullScale = brakeFullScale
         self.gaugeStyle = gaugeStyle
         self.maxSpeed = maxSpeed
+        self.badgeText = badgeText
     }
 
     /// These options with every value drawable: a non-finite value takes its
     /// default, a finite one is clamped to its limits, the shift light to the
-    /// bar's scale, and the rotation into one turn.
+    /// bar's scale, the rotation into one turn, and the badge's text to one
+    /// tidy line (``badgeText``).
     public func validated() -> OverlayWidgetOptions {
         let maxRPM = Self.usable(maxRPM, default: Self.defaultMaxRPM, in: Self.maxRPMLimits)
         return OverlayWidgetOptions(
@@ -95,7 +106,36 @@ public struct OverlayWidgetOptions: Equatable, Hashable, Sendable {
             brakeFullScale: Self.usable(brakeFullScale, default: Self.defaultPedalFullScale,
                                         in: Self.pedalFullScaleLimits),
             gaugeStyle: gaugeStyle,
-            maxSpeed: Self.usable(maxSpeed, default: Self.defaultMaxSpeed, in: Self.maxSpeedLimits))
+            maxSpeed: Self.usable(maxSpeed, default: Self.defaultMaxSpeed, in: Self.maxSpeedLimits),
+            badgeText: Self.oneLine(badgeText))
+    }
+
+    /// `text` as one tidy line: direction overrides dropped, so it can't flip
+    /// what follows; line breaks, tabs and other controls turned to spaces;
+    /// trimmed; cut to ``badgeTextLimit`` characters and
+    /// ``badgeTextScalarLimit`` code points. One with nothing visible — blank,
+    /// or only invisible marks — is `nil`.
+    private static func oneLine(_ text: String?) -> String? {
+        guard let text else { return nil }
+        var scalars = String.UnicodeScalarView()
+        scalars.append(contentsOf: text.unicodeScalars.filter { !directionControls.contains($0.value) })
+        let pieces = String(scalars).split { character in
+            character.isNewline || character.unicodeScalars.allSatisfy { $0.properties.generalCategory == .control }
+        }
+        var kept = String(pieces.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(badgeTextLimit))
+        while kept.unicodeScalars.count > badgeTextScalarLimit { kept.removeLast() }
+        kept = kept.trimmingCharacters(in: .whitespacesAndNewlines)
+        return kept.contains(where: isVisible) ? kept : nil
+    }
+
+    /// The direction embedding, override and isolate controls.
+    private static let directionControls: Set<UInt32> = [0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                                                         0x2066, 0x2067, 0x2068, 0x2069]
+
+    /// Whether `character` shows: anything but white space and invisible marks.
+    private static func isVisible(_ character: Character) -> Bool {
+        character.unicodeScalars.contains { !$0.properties.isWhitespace && !$0.properties.isDefaultIgnorableCodePoint }
     }
 
     /// `degrees` as an angle in `0..<360`; a non-finite one is `0`. A hair below
@@ -117,7 +157,7 @@ extension OverlayWidgetOptions: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case maxRPM, shiftLightRPM, deltaRange, gForceMax, trackMapRotation, throttleFullScale, brakeFullScale
-        case gaugeStyle, maxSpeed
+        case gaugeStyle, maxSpeed, badgeText
     }
 
     /// Each option is read on its own — missing or malformed takes its default —
@@ -134,6 +174,7 @@ extension OverlayWidgetOptions: Codable {
                     ?? Self.defaultPedalFullScale,
                   brakeFullScale: container.lenient(Double.self, forKey: .brakeFullScale) ?? Self.defaultPedalFullScale,
                   gaugeStyle: container.lenient(OverlayGaugeStyle.self, forKey: .gaugeStyle) ?? .classic,
-                  maxSpeed: container.lenient(Double.self, forKey: .maxSpeed) ?? Self.defaultMaxSpeed)
+                  maxSpeed: container.lenient(Double.self, forKey: .maxSpeed) ?? Self.defaultMaxSpeed,
+                  badgeText: container.lenient(String.self, forKey: .badgeText))
     }
 }
