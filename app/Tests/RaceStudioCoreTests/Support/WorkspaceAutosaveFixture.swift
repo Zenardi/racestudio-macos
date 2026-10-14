@@ -17,10 +17,22 @@ final class WorkspaceDisk {
 /// The failure a failing ``WorkspaceDisk`` throws.
 struct WorkspaceDiskFull: Error {}
 
-/// An evaluator that gives every expression two samples.
+/// An evaluator that gives every expression two samples, except those in
+/// `failing`, which it can't evaluate.
 struct TwoSampleEvaluator: ExpressionEvaluating {
+    var failing: Set<String> = []
+
     func evaluate(_ expression: String) async throws -> [MathSample] {
-        [MathSample(time: 0, value: 1), MathSample(time: 1, value: 2)]
+        if failing.contains(expression) { throw ExpressionEngineError.missingChannel(message: expression) }
+        return [MathSample(time: 0, value: 1), MathSample(time: 1, value: 2)]
+    }
+}
+
+/// An evaluator that stops when its task is cancelled, as the engine does.
+struct CancellableEvaluator: ExpressionEvaluating {
+    func evaluate(_ expression: String) async throws -> [MathSample] {
+        try Task.checkCancellation()
+        return [MathSample(time: 0, value: 1), MathSample(time: 1, value: 2)]
     }
 }
 
@@ -30,6 +42,8 @@ struct TwoSampleEvaluator: ExpressionEvaluating {
 final class FakeWorkspaceVideo: WorkspaceVideo {
     @Published var attachment: VideoAttachment?
     private(set) var restored: [(attachment: VideoAttachment, epoch: Double)] = []
+    /// Run while the footage restores — what the operator does meanwhile.
+    var onRestore: (() -> Void)?
 
     var attachmentForSaving: VideoAttachment? { attachment }
     var attachmentChanges: AnyPublisher<Void, Never> {
@@ -38,6 +52,7 @@ final class FakeWorkspaceVideo: WorkspaceVideo {
 
     func restore(_ attachment: VideoAttachment, sessionStartEpoch: Double) async {
         restored.append((attachment, sessionStartEpoch))
+        onRestore?()
         self.attachment = attachment
     }
 }
@@ -46,11 +61,16 @@ final class FakeWorkspaceVideo: WorkspaceVideo {
 @MainActor
 struct WorkspaceWindow {
     let model: AnalysisWindowModel
+    let math: MathChannelsManagerModel
     let overlay = OverlayEditorModel(layout: nil)
     let logSheet = LogSheetModel()
-    let math = MathChannelsManagerModel(evaluator: TwoSampleEvaluator())
     let splits = SplitReportModel()
     let video = FakeWorkspaceVideo()
+
+    init(model: AnalysisWindowModel, evaluator: ExpressionEvaluating = TwoSampleEvaluator()) {
+        self.model = model
+        self.math = MathChannelsManagerModel(evaluator: evaluator)
+    }
 
     var parts: WorkspaceAutosave.Parts {
         WorkspaceAutosave.Parts(window: model, overlay: overlay, logSheet: logSheet, mathChannels: math,
@@ -82,8 +102,8 @@ extension WorkspaceAutosaveFixture {
     var contentID: String { SessionIndex.contentID(for: session) }
 
     /// A new window on the session, its editor feeding the window's overlay.
-    func window() -> Window {
-        let window = Window(model: AnalysisWindowModel(session: session, analysis: nil))
+    func window(evaluator: ExpressionEvaluating = TwoSampleEvaluator()) -> Window {
+        let window = Window(model: AnalysisWindowModel(session: session, analysis: nil), evaluator: evaluator)
         let model = window.model
         window.overlay.onCommit = { [weak model] layout in model?.videoOverlay = layout }
         return window

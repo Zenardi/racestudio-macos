@@ -87,44 +87,58 @@ public final class MathChannelsManagerModel: ObservableObject {
     @discardableResult
     public func add(name: String, unit: String, expression: String) async -> Bool {
         rejection = nil
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else {
-            rejection = ExpressionDiagnostic(message: "Name the math channel before adding it.")
+        if let failure = await insert(name: name, unit: unit, expression: expression) {
+            rejection = failure
             return false
         }
-        guard !rejectDuplicate(trimmedName) else { return false }
+        editor.update(text: "") // consume the draft so the next channel starts clean
+        return true
+    }
+
+    /// Re-create a channel saved with the workspace (issue 9.20): validated and
+    /// added exactly like ``add(name:unit:expression:)``, but the draft being
+    /// typed and the add form's ``rejection`` are left alone — the workspace
+    /// says what couldn't be re-created. Returns whether it was added.
+    @discardableResult
+    public func restore(_ definition: MathChannelDef) async -> Bool {
+        await insert(name: definition.name, unit: definition.unit, expression: definition.expression) == nil
+    }
+
+    /// Add the channel and fire the persist hook, or say why it can't be added.
+    private func insert(name: String, unit: String, expression: String) async -> ExpressionDiagnostic? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            return ExpressionDiagnostic(message: "Name the math channel before adding it.")
+        }
+        if let duplicate = duplicate(trimmedName) { return duplicate }
 
         let samples: [MathSample]
         do {
             samples = try await evaluator.evaluate(expression)
         } catch {
-            rejection = .map(evaluationError: error)
-            return false
+            return .map(evaluationError: error)
         }
         // A reference-free (constant) expression has no timebase, so the engine
         // returns no samples — that cannot be a plottable channel.
         guard !samples.isEmpty else {
-            rejection = ExpressionDiagnostic(
+            return ExpressionDiagnostic(
                 message: "This expression produces no samples — reference at least one channel.")
-            return false
         }
         // `evaluate` suspended above; a concurrent add may have taken the name while
         // we awaited, so re-check before committing (both adds pass the pre-check).
-        guard !rejectDuplicate(trimmedName) else { return false }
+        if let duplicate = duplicate(trimmedName) { return duplicate }
 
         let definition = MathChannelDef(name: trimmedName, unit: unit, expression: expression)
         channels.append(DefinedMathChannel(definition: definition,
                                            trace: .mathChannel(named: trimmedName, samples: samples)))
         onChange(definitions)
-        editor.update(text: "") // consume the draft so the next channel starts clean
-        return true
+        return nil
     }
 
-    /// Set ``rejection`` and return `true` when a channel already carries `name`.
-    private func rejectDuplicate(_ name: String) -> Bool {
-        guard channels.contains(where: { $0.definition.name == name }) else { return false }
-        rejection = ExpressionDiagnostic(message: "A math channel named “\(name)” already exists.")
-        return true
+    /// Why `name` can't be added: a channel already carries it — or `nil`.
+    private func duplicate(_ name: String) -> ExpressionDiagnostic? {
+        guard channels.contains(where: { $0.definition.name == name }) else { return nil }
+        return ExpressionDiagnostic(message: "A math channel named “\(name)” already exists.")
     }
 
     /// Remove `channel` and fire the persist hook.

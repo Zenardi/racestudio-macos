@@ -4156,6 +4156,23 @@
         }
       }
     },
+    "project.warning.openInAnotherWindow": {
+      "comment": "Workspace load warning: the session is also open in another window, which saves its workspace; this window doesn't save.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session is also open in another window, so changes made here aren’t saved"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta sessão também está aberta em outra janela, então as alterações feitas aqui não são salvas"
+          }
+        }
+      }
+    },
     "project.warning.skippedOverlayOne": {
       "comment": "Project load warning: one widget or setting of the saved video overlay could not be read.",
       "localizations": {
@@ -4254,6 +4271,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uma sessão usada por este espaço de trabalho não está na biblioteca (%1$@)"
+          }
+        }
+      }
+    },
+    "project.warning.unrestoredMathChannel": {
+      "comment": "Workspace load warning: a saved math channel could not be re-created for this session; it stays in the saved workspace. %1$@ = channel name.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The math channel “%1$@” couldn’t be re-created for this session; it is kept with the workspace"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível recriar o canal matemático “%1$@” para esta sessão; ele foi mantido no espaço de trabalho"
           }
         }
       }

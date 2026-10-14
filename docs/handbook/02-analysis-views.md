@@ -43,6 +43,12 @@ Deleting a session from the library deletes its workspace too.
   the session opens with its defaults and the workspace bar says *Opened with 1
   warning*. The file is kept beside the others as `….unreadable.rsproj`, never
   saved over.
+- **A math channel can't be re-created** (the session lacks a channel it
+  uses): it is kept with the workspace and tried again next time, and the
+  workspace bar says so. Adding a channel of the same name replaces it.
+- **Two windows show the same session** (say, a `.xrk` opened from the
+  Finder): only the first one saves; the other says *changes made here aren't
+  saved*, so the two never write over each other.
 - **Not kept yet:** pinned channels, the Stats and report panels' settings,
   loops and the cursor position.
 

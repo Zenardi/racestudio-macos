@@ -96,9 +96,13 @@ struct AnalysisWindowView: View {
                 window: model, overlay: video.editor, logSheet: logSheet, mathChannels: mathManager,
                 splits: splitReport, video: video.controller))
         }
-        // Closing the session (Home, another session) or quitting writes what
-        // is still pending.
+        // Closing the session (Home, another session), closing its window or
+        // quitting writes what is still pending — `onDisappear` alone isn't
+        // sent for every window close.
         .onDisappear { workspace.flush() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in
+            workspace.flush()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
             workspace.flush()
         }

@@ -27,10 +27,19 @@ public protocol WorkspaceVideo: AnyObject {
 /// writes nothing, and ``flush()`` writes what is pending at once when the
 /// session closes or the app quits.
 ///
-/// A write that fails is said (``saveFailed``) and tried again on the next
-/// change or the close; the window keeps its state meanwhile. A saved workspace
-/// that couldn't be read opens the defaults and says so (``notice``); when it
-/// couldn't even be kept aside, nothing is ever written over it.
+/// Nothing the operator made is lost on the way:
+/// - a change made while the workspace is still restoring is written once the
+///   restore ends;
+/// - a math channel that can't be re-created for the session stays in the saved
+///   workspace (and is tried again on the next open) until one of the same name
+///   replaces it;
+/// - a write that fails is said (``saveFailed``) and tried again on the next
+///   change or the close;
+/// - a saved workspace that couldn't be read opens the defaults and says so
+///   (``notice``); when it couldn't even be kept aside, nothing is written
+///   over it;
+/// - when two windows show one session, only the first saves — the other says
+///   so — so they never write over each other.
 @MainActor
 public final class WorkspaceAutosave: ObservableObject {
 
@@ -57,17 +66,17 @@ public final class WorkspaceAutosave: ObservableObject {
             self.video = video
         }
 
-        /// The workspace as it stands.
-        var document: ProjectDocument {
-            window.projectDocument(mathChannels: mathChannels.definitions, logSheet: logSheet.sheet,
-                                   video: video.attachmentForSaving, splits: splits.layout)
+        /// What changes when the workspace does — the saved state only, so a
+        /// channel search, a sort or a split's zoom never arms a write.
+        var changes: [AnyPublisher<Void, Never>] {
+            [Self.signal(window.$activeLayout), Self.signal(window.$selection), Self.signal(window.$videoOverlay),
+             Self.signal(window.$videoDataPanes), Self.signal(logSheet.$sheet),
+             Self.signal(mathChannels.$channels), Self.signal(splits.$layout), video.attachmentChanges]
         }
 
-        /// Everything that changes when the workspace does.
-        var changes: [AnyPublisher<Void, Never>] {
-            [window.objectWillChange.eraseToAnyPublisher(), logSheet.objectWillChange.eraseToAnyPublisher(),
-             mathChannels.objectWillChange.eraseToAnyPublisher(), splits.objectWillChange.eraseToAnyPublisher(),
-             video.attachmentChanges]
+        /// `values` after the current one, as plain change signals.
+        private static func signal<Value>(_ values: Published<Value>.Publisher) -> AnyPublisher<Void, Never> {
+            values.dropFirst().map { _ in () }.eraseToAnyPublisher()
         }
     }
 
@@ -79,16 +88,29 @@ public final class WorkspaceAutosave: ObservableObject {
     private let store: WorkspaceStore
     private let scheduler: DelayScheduling
     private let delay: Duration
+    /// The restore under way or done — owned here, not by the caller's task,
+    /// so a window torn down mid-open never leaves a half-restored workspace
+    /// to be saved.
+    private var opening: Task<Void, Never>?
     /// The window being saved and its session's content id — set once its
-    /// workspace is restored, and never when it mustn't be written over.
+    /// workspace is restored, and never when it mustn't be written.
     private var saving: (parts: Parts, session: String)?
-    /// Whether ``open(_:)`` has run.
-    private var isOpened = false
     /// What the file holds, as far as this window knows.
     private var lastWritten: ProjectDocument?
+    /// Saved math channels this session couldn't re-create, kept in the file.
+    private var keptMathChannels: [MathChannelDef] = []
     private var pending: AnyCancellable?
     private var watches: [AnyCancellable] = []
     private static let logger = Logger(subsystem: "com.racestudio.core", category: "workspace")
+
+    /// Which window saves each workspace file in this process.
+    private static var savers: [URL: Saver] = [:]
+
+    /// A window saving a workspace file, held weakly so a closed window frees it.
+    private final class Saver {
+        weak var autosave: WorkspaceAutosave?
+        init(_ autosave: WorkspaceAutosave) { self.autosave = autosave }
+    }
 
     /// - Parameters:
     ///   - store: where the session's workspace is kept.
@@ -104,42 +126,74 @@ public final class WorkspaceAutosave: ObservableObject {
     // MARK: - Opening
 
     /// Restore the saved workspace of `parts`' session into `parts`, then save
-    /// every change from now on. Nothing is written by the open itself. Called
-    /// once per window; a second call does nothing.
+    /// every change from now on. Nothing is written for the open itself. The
+    /// restore runs once per window, to the end even when the caller is
+    /// cancelled; a second call waits for it.
     public func open(_ parts: Parts) async {
-        guard !isOpened else { return }
-        isOpened = true
+        if opening == nil {
+            opening = Task { [weak self] in await self?.restoreAndWatch(parts) }
+        }
+        await opening?.value
+    }
+
+    private func restoreAndWatch(_ parts: Parts) async {
         let session = parts.window.contentID
+        let owns = claim(store.url(forSession: session))
+        var warnings: [ProjectLoadWarning] = owns ? [] : [.openInAnotherWindow]
+        var diagnostics: [ProjectError] = []
+        var saved: ProjectDocument?
+        var mayWrite = owns
         switch store.load(session: session) {
         case .none:
             break
         case .document(let document):
-            await restore(document, into: parts)
-            notice = ProjectLoadNotice(document: document)
+            warnings += document.loadWarnings
+            diagnostics = document.diagnostics
+            warnings += await restore(document, into: parts)
+            saved = document
         case .unreadable(let keptAside):
-            notice = ProjectLoadNotice(warnings: [.unreadableWorkspace(keptAside: keptAside)])
-            guard keptAside else { return }
+            warnings.append(.unreadableWorkspace(keptAside: keptAside))
+            mayWrite = mayWrite && keptAside
         }
-        lastWritten = parts.document
+        notice = ProjectLoadNotice(warnings: warnings, diagnostics: diagnostics)
+        guard mayWrite else { return }
         saving = (parts, session)
+        // The file's own content, so a change made while restoring is written.
+        lastWritten = saved ?? snapshot(of: parts)
         watches = parts.changes.map { change in
             change.sink { [weak self] in self?.noteChange() }
         }
+        if snapshot(of: parts) != lastWritten { noteChange() }
     }
 
     /// Apply a saved `document` to the window, the editor, the log sheet, the
-    /// splits, the math channels and the footage.
-    private func restore(_ document: ProjectDocument, into parts: Parts) async {
+    /// splits, the math channels and the footage. Returns a warning for each
+    /// math channel that couldn't be re-created and isn't already said to be
+    /// invalid.
+    private func restore(_ document: ProjectDocument, into parts: Parts) async -> [ProjectLoadWarning] {
         parts.window.restore(from: document)
         parts.overlay.load(document.overlay)
         parts.logSheet.apply(document.logSheet)
         if let splits = document.splits { parts.splits.restore(splits) }
+        var warnings: [ProjectLoadWarning] = []
         for channel in document.mathChannels {
-            _ = await parts.mathChannels.add(name: channel.name, unit: channel.unit, expression: channel.expression)
+            guard !(await parts.mathChannels.restore(channel)) else { continue }
+            keptMathChannels.append(channel)
+            if !document.diagnostics.contains(.invalidMathChannel(name: channel.name)) {
+                warnings.append(.unrestoredMathChannel(channel.name))
+            }
         }
         if let video = document.video {
             await parts.video.restore(video, sessionStartEpoch: Double(parts.window.session.metadata.datetimeUtc))
         }
+        return warnings
+    }
+
+    /// Make this window the one saving `file`, unless a live window already is.
+    private func claim(_ file: URL) -> Bool {
+        if let saver = Self.savers[file]?.autosave, saver !== self { return false }
+        Self.savers[file] = Saver(self)
+        return true
     }
 
     /// Forget the open's notice.
@@ -160,15 +214,26 @@ public final class WorkspaceAutosave: ObservableObject {
     }
 
     /// Write what is pending now — the session is closing or the app quitting.
+    /// A HUD drag still open is recorded first, so it is kept.
     public func flush() {
         pending = nil
+        saving?.parts.overlay.endGesture()
         write()
+    }
+
+    /// The workspace as it stands, with the math channels kept from the file.
+    private func snapshot(of parts: Parts) -> ProjectDocument {
+        let live = parts.mathChannels.definitions
+        let liveNames = Set(live.map(\.name))
+        let kept = keptMathChannels.filter { !liveNames.contains($0.name) }
+        return parts.window.projectDocument(mathChannels: live + kept, logSheet: parts.logSheet.sheet,
+                                            video: parts.video.attachmentForSaving, splits: parts.splits.layout)
     }
 
     /// Write the workspace when it differs from what the file holds.
     private func write() {
         guard let saving else { return }
-        let document = saving.parts.document
+        let document = snapshot(of: saving.parts)
         guard document != lastWritten else { return }
         do {
             try store.save(document, session: saving.session)

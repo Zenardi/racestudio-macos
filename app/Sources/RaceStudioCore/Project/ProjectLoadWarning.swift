@@ -16,6 +16,12 @@ public enum ProjectLoadWarning: Equatable, Sendable {
     /// it is out of harm's way and the session opened with its defaults; left in
     /// place, nothing is saved over it.
     case unreadableWorkspace(keptAside: Bool)
+    /// The session is also open in another window, which saves its workspace;
+    /// this window doesn't, so the two never write over each other.
+    case openInAnotherWindow
+    /// This saved math channel couldn't be re-created for the session; it is
+    /// kept in the saved workspace and tried again on the next open.
+    case unrestoredMathChannel(String)
 
     /// The warning as the store has always logged it, in English.
     public var text: String {
@@ -28,6 +34,10 @@ public enum ProjectLoadWarning: Equatable, Sendable {
         case .unreadableWorkspace(let keptAside):
             return keptAside ? "unreadable saved workspace; kept aside, opened with the defaults"
                 : "unreadable saved workspace; left in place, not saving over it"
+        case .openInAnotherWindow:
+            return "session open in another window; this window does not save"
+        case .unrestoredMathChannel(let name):
+            return "math channel \(name) could not be re-created; kept in the workspace"
         }
     }
 
@@ -45,6 +55,10 @@ public enum ProjectLoadWarning: Equatable, Sendable {
             return L10n.string(.projectWarningUnreadableWorkspace, locale: locale)
         case .unreadableWorkspace(keptAside: false):
             return L10n.string(.projectWarningUnreadableWorkspaceInPlace, locale: locale)
+        case .openInAnotherWindow:
+            return L10n.string(.projectWarningOpenInAnotherWindow, locale: locale)
+        case .unrestoredMathChannel(let name):
+            return L10n.format(.projectWarningUnrestoredMathChannel, locale: locale, name)
         }
     }
 }
