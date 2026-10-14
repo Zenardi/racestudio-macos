@@ -3017,23 +3017,6 @@
         }
       }
     },
-    "overlay.editor.noOptions": {
-      "comment": "Overlay editor: the selected widget has no options.",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This widget has no options"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este widget não tem opções"
-          }
-        }
-      }
-    },
     "overlay.editor.noSelection": {
       "comment": "Overlay editor options placeholder.",
       "localizations": {
@@ -3081,6 +3064,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Predefinição"
+          }
+        }
+      }
+    },
+    "overlay.editor.textSize": {
+      "comment": "Overlay editor: the selected widget's text size, a percentage of its own size, e.g. 'Text size: 150%'.",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text size"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamanho do texto"
           }
         }
       }

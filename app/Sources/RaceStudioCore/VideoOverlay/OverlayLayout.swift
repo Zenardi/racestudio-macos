@@ -75,7 +75,8 @@ public struct OverlayLayout: Equatable, Sendable {
     /// - a widget whose rect has a NaN or infinity is dropped (it has no place);
     /// - every rect is sized to at least ``minimumWidgetSize`` and moved inside
     ///   the ``safeMargin`` safe area;
-    /// - opacity is clamped to `0…1` (NaN reads as opaque) and the options are
+    /// - opacity is clamped to `0…1` (NaN reads as opaque), the text size to
+    ///   ``OverlayWidget/textSizes`` (NaN reads as 100 %), and the options are
     ///   ``OverlayWidgetOptions/validated()``;
     /// - a blank id takes the kind's key, and a repeated id is renamed
     ///   (`speed` → `speed-2`) — never an id another widget already holds — so
@@ -89,6 +90,7 @@ public struct OverlayLayout: Equatable, Sendable {
             var valid = widget
             valid.frame = widget.frame.clamped(to: safeArea, minimumSize: Self.minimumWidgetSize)
             valid.opacity = widget.opacity.isNaN ? 1 : min(max(widget.opacity, 0), 1)
+            valid.textSize = OverlayWidget.textSize(widget.textSize)
             valid.options = widget.options.validated()
             return valid
         })

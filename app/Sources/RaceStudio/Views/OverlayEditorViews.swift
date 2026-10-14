@@ -248,26 +248,31 @@ struct OverlayEditorInspector: View {
     }
 }
 
-/// The selected widget's own settings (``OverlayWidget/editableOptions``) and,
-/// for speed and RPM, whether it is a needle dial — each an undoable step.
+/// The selected widget's own settings: its text size (issue 9.21), whether
+/// speed and RPM are needle dials, and its ``OverlayWidget/editableOptions`` —
+/// each an undoable step.
 private struct OverlayWidgetOptionsEditor: View {
     @ObservedObject var editor: OverlayEditorModel
 
     var body: some View {
         if let id = editor.selection, let widget = editor.layout.widgets.first(where: { $0.id == id }) {
+            if widget.kind.offersTextSize {
+                let percent = widget.textSize.formatted(.percent.precision(.fractionLength(0)))
+                Stepper(value: Binding(get: { widget.textSize }, set: { editor.setTextSize($0, for: id) }),
+                        in: OverlayWidget.textSizes, step: 0.1) {
+                    Text(L10n.string(.overlayEditorTextSize) + ": " + percent)
+                }
+                .accessibilityValue(percent)
+            }
             if widget.kind.offersGaugeStyle {
                 Toggle(L10n.string(.overlayOptionNeedleGauge), isOn: Binding(
                     get: { widget.options.gaugeStyle == .needle },
                     set: { editor.setGaugeStyle($0 ? .needle : .classic, for: id) }))
             }
-            if widget.editableOptions.isEmpty && !widget.kind.offersGaugeStyle {
-                Text(L10n.string(.overlayEditorNoOptions)).foregroundStyle(.secondary)
-            } else {
-                ForEach(widget.editableOptions, id: \.self) { option in
-                    TextField(option.title(), value: Binding(
-                        get: { widget.options[keyPath: option.keyPath] },
-                        set: { editor.setOption(option, to: $0, for: id) }), format: .number)
-                }
+            ForEach(widget.editableOptions, id: \.self) { option in
+                TextField(option.title(), value: Binding(
+                    get: { widget.options[keyPath: option.keyPath] },
+                    set: { editor.setOption(option, to: $0, for: id) }), format: .number)
             }
         } else {
             Text(L10n.string(.overlayEditorNoSelection)).foregroundStyle(.secondary)

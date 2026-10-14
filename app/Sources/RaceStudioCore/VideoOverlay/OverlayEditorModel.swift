@@ -131,6 +131,15 @@ public final class OverlayEditorModel: ObservableObject {
         }
     }
 
+    /// Set widget `id`'s text size (issue 9.21), held to
+    /// ``OverlayWidget/textSizes``.
+    public func setTextSize(_ size: Double, for id: OverlayWidget.ID) {
+        commit { layout in
+            guard let index = layout.widgets.firstIndex(where: { $0.id == id }) else { return }
+            layout.widgets[index].textSize = OverlayWidget.textSize(size)
+        }
+    }
+
     /// Show every widget's numbers in `units`, unless the widget sets its own.
     public func setUnits(_ units: UnitSystem) {
         commit { $0.units = units }

@@ -78,12 +78,33 @@ struct OverlayWidgetContext: Sendable {
     /// The rect the widget's content is laid out in.
     var content: CGRect { rect.insetBy(dx: padding, dy: padding) }
 
-    /// A text style for `slot`: capitals fill their share of its height (by the
-    /// widget's size class), shrunk so `template` — the widest text the slot
-    /// shows — fits its width.
-    func style(for slot: CGRect, fitting template: String) -> OverlayTextStyle {
-        OverlayTextStyle.fitting(height: slot.height, sizeClass: widget.sizeClass, outline: outline)
-            .shrunk(toFit: template, width: max(slot.width - 2 * outline, 1))
+    /// The widget's text size (issue 9.21), held to ``OverlayWidget/textSizes``.
+    var textSize: CGFloat { CGFloat(OverlayWidget.textSize(widget.textSize)) }
+
+    /// A text style for `slot`: capitals fill their share of its height — by
+    /// the widget's size class and text size (`textSize` instead, when given)
+    /// — shrunk so `template`, the widest text the slot shows, fits its width.
+    ///
+    /// Grown past 100 %, `template`'s ink — descenders and all, with its
+    /// outline — stays inside `room` (the slot itself unless the drawer grows
+    /// its slots with the text) with a twentieth of it clear above and below,
+    /// so text never touches its neighbours. It never shrinks below its 100 %
+    /// size for that.
+    func style(for slot: CGRect, fitting template: String, room: CGSize? = nil,
+               textSize size: CGFloat? = nil) -> OverlayTextStyle {
+        let room = room ?? slot.size, size = size ?? textSize
+        var style = OverlayTextStyle.fitting(height: slot.height, sizeClass: widget.sizeClass, outline: outline)
+        if size != 1 {
+            let wanted = style.capHeight * size
+            var capHeight = wanted
+            if size > 1 {
+                let ink = style.ink(of: template)
+                let reach = (room.height * 0.45 - outline) / max(0.5 + ink.below, ink.above - 0.5)
+                capHeight = min(wanted, max(style.capHeight, reach))
+            }
+            style = OverlayTextStyle(capHeight: capHeight, outline: outline)
+        }
+        return style.shrunk(toFit: template, width: max(room.width - 2 * outline, 1))
     }
 
     /// A label in the export language (the formatter's locale).

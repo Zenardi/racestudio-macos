@@ -81,6 +81,26 @@ struct OverlayTextStyle: @unchecked Sendable {
         CGFloat(CTLineGetTypographicBounds(line(text), nil, nil, nil))
     }
 
+    /// How far `text`'s ink reaches from its baseline, as shares of the cap
+    /// height (issue 9.21): `below`, how deep its descenders dip (`0` without
+    /// any), and `above`, how high it rises (at least `1`, the capitals).
+    func ink(of text: String) -> (below: CGFloat, above: CGFloat) {
+        let bounds = CTLineGetBoundsWithOptions(line(text), .useGlyphPathBounds)
+        guard !bounds.isNull, capHeight > 0 else { return (0, 1) }
+        return (max(-bounds.minY, 0) / capHeight, max(bounds.maxY / capHeight, 1))
+    }
+
+    /// The box `text` takes drawn centred in `slot`, as ``draw(_:in:alignment:color:outlineColor:in:)``
+    /// places it: its advance across, its ink from the lowest descender to
+    /// the top of its capitals or higher up and down, the outline all round.
+    func box(of text: String, centredIn slot: CGRect) -> CGRect {
+        let width = width(of: text), ink = ink(of: text)
+        let baseline = slot.midY - capHeight / 2
+        let bottom = baseline - ink.below * capHeight, top = baseline + ink.above * capHeight
+        return CGRect(x: slot.midX - width / 2 - outline, y: bottom - outline, width: width + 2 * outline,
+                      height: top - bottom + 2 * outline)
+    }
+
     /// Draw `text` in `rect`: aligned horizontally, its capitals centred
     /// vertically, the outline under the fill.
     func draw(_ text: String, in rect: CGRect, alignment: OverlayTextAlignment = .center, color: CGColor,

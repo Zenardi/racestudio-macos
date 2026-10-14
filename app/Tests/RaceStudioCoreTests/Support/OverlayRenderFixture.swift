@@ -79,12 +79,13 @@ enum OverlayRenderFixture {
     /// The context a widget of `kind` draws with, in `rect` (pixels, drawing space).
     static func context(_ kind: OverlayWidgetKind, rect: CGRect = CGRect(x: 0, y: 0, width: 240, height: 140),
                         outputHeight: CGFloat = 1080, plate: OverlayPlateStyle = .translucent,
-                        sizeClass: OverlaySizeClass = .medium, units: UnitSystem = .metric,
+                        sizeClass: OverlaySizeClass = .medium, textSize: Double = 1, units: UnitSystem = .metric,
                         options: OverlayWidgetOptions = OverlayWidgetOptions(),
                         formatter: OverlayFormatter = OverlayFormatter(),
                         session: OverlaySessionContext = session(), track: OverlayTrackMap = track,
                         sectors: LapSectorTimeline = sectors) -> OverlayWidgetContext {
-        let widget = OverlayWidget(kind: kind, frame: .unit, plate: plate, sizeClass: sizeClass, options: options)
+        let widget = OverlayWidget(kind: kind, frame: .unit, plate: plate, sizeClass: sizeClass, textSize: textSize,
+                                   options: options)
         return OverlayWidgetContext(widget: widget, rect: rect, outputHeight: outputHeight, theme: .raceStudio,
                                     formatter: formatter, units: units, session: session, track: track,
                                     sectors: sectors)
