@@ -208,9 +208,7 @@ final class VideoReviewController: ObservableObject {
     /// so the cursor move that follows seeks the footage (only a paused player
     /// follows the cursor) instead of being overridden by the next frame.
     func pauseForScrub() {
-        // Waiting to play (just after Play, or buffering) counts as playing: it
-        // is about to drive the cursor again.
-        guard isPlaying || player.timeControlStatus != .paused else { return }
+        guard isPlayingOrAboutTo else { return }
         player.pause()
         isPlaying = false
     }
@@ -277,6 +275,11 @@ final class VideoReviewController: ObservableObject {
 
     // MARK: - Internals
 
+    /// Whether the footage plays or is about to. Waiting to play — just after
+    /// Play, while the footage loads, or buffering — counts: it is about to
+    /// drive the cursor, so nothing must move the player under it.
+    private var isPlayingOrAboutTo: Bool { isPlaying || player.timeControlStatus != .paused }
+
     /// Hold `url`'s security scope from now on — releasing the file held
     /// before — or none for `nil`.
     private func holdScope(of url: URL?) {
@@ -302,7 +305,7 @@ final class VideoReviewController: ObservableObject {
         let footage = await asset.openedFootage(sessionStartEpoch: sessionStartEpoch,
                                                 sessionDuration: sessionDuration)
         guard generation == openGeneration else { return }
-        let opening = data.footageOpened(footage, cursorTime: cursor?.timePosition, isPlaying: isPlaying)
+        let opening = data.footageOpened(footage, cursorTime: cursor?.timePosition, isPlaying: isPlayingOrAboutTo)
         if let outcome = opening.autoOffset { autoOffsetOutcome = outcome }
         // Observe the playhead once per frame of this footage.
         attachObservers()

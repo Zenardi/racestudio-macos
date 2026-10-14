@@ -19,8 +19,10 @@ public struct OpenedFootage: Equatable, Sendable {
         }
     }
 
-    /// The footage's length in seconds, or `nil` when it could not be read —
-    /// the footage then stays unplayable.
+    /// The footage's length in seconds, or `nil` when it could not be read. An
+    /// unread length leaves the length as it was — none for footage being
+    /// opened, so it stays unplayable — and a length that is no number reads as
+    /// none (``VideoSyncModel`` sanitizes it).
     public let duration: Double?
     /// The first video track's nominal frame rate, or `0` when unknown.
     public let nominalFrameRate: Double

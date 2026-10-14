@@ -218,7 +218,8 @@ view, all on one clock.
   how many laps the footage covers in
   full, for example *footage covers laps 2–15 (14 of 16)*. It updates after every
   sync action. The workspace keeps the offset, the clock rate and the status,
-  so reopening the session brings the sync back.
+  so reopening the session brings the sync back, with the footage on the frame
+  at the cursor.
 
 ### The overlay editor
 
